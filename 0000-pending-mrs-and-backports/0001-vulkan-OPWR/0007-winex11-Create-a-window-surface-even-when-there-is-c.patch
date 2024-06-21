@@ -1,0 +1,25 @@
+From 94e0cba5d1b6e1377ff677af9c434f671b5fa777 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 3 May 2024 10:50:10 +0200
+Subject: [PATCH 07/10] winex11: Create a window surface even when there is
+ client window.
+
+---
+ dlls/winex11.drv/window.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index c173375694d..3a93ed89afe 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2653,7 +2653,6 @@ BOOL BOOL X11DRV_CreateWindowSurface( HWND hwnd, UINT swp_flags, const RECT 
+ 
+     if (data->embedded) goto done; /* draw directly to the window */
+     if (data->whole_window == root_window) goto done; /* draw directly to the window */
+-    if (data->client_window) goto done; /* draw directly to the window */
+     if (!client_side_graphics && !layered) goto done; /* draw directly to the window */
+ 
+     if (!get_surface_rect( visible_rect, &surface_rect )) goto done;
+-- 
+2.45.1
+

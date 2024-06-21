@@ -1,0 +1,53 @@
+From 6e409dc56342398f0319341a60ac0c3ba5581fb5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 13 Jun 2024 10:05:34 +0200
+Subject: [PATCH 7/7] win32u: Avoid changing thread DPI context in
+ process_hardware_message.
+
+---
+ dlls/win32u/message.c | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index c0f6cb2e7ec..d70edf0bc48 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2434,8 +2434,6 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+         return FALSE;
+     }
+ 
+-    set_thread_dpi_awareness_context( get_window_dpi_awareness_context( msg->hwnd ));
+-
+     /* FIXME: is this really the right place for this hook? */
+     event.message = msg->message;
+     event.time    = msg->time;
+@@ -2607,7 +2605,6 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+ {
+     struct ntuser_thread_info *thread_info = NtUserGetThreadInfo();
+     GUITHREADINFO info = {.cbSize = sizeof(info)};
+-    UINT context;
+     BOOL ret = FALSE;
+     INT hittest;
+ 
+@@ -2618,9 +2615,6 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+     msg->hwnd = find_hardware_message_window( msg, &info, &hittest );
+     msg->pt = point_phys_to_win_dpi( msg->hwnd, msg->pt );
+ 
+-    /* hardware messages are always in physical coords */
+-    context = set_thread_dpi_awareness_context( NTUSER_DPI_PER_MONITOR_AWARE );
+-
+     if (msg->message == WM_INPUT || msg->message == WM_INPUT_DEVICE_CHANGE)
+         ret = process_rawinput_message( msg, hw_id, msg_data );
+     else if (is_keyboard_message( msg->message ))
+@@ -2635,7 +2629,7 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+         process_wine_setcursor( msg->hwnd, (HWND)msg->wParam, (HCURSOR)msg->lParam );
+     else
+         ERR( "unknown message type %x\n", msg->message );
+-    set_thread_dpi_awareness_context( context );
++
+     return ret;
+ }
+ 
+-- 
+2.45.2
+

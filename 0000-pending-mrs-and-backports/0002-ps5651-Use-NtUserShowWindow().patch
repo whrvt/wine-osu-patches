@@ -1,0 +1,66 @@
+From 3401f533b334d859129dac1871d9cf82df582733 Mon Sep 17 00:00:00 2001
+From: Dmitry Timoshkov <dmitry@baikal.ru>
+Date: Wed, 15 May 2024 12:26:28 +0300
+Subject: [PATCH] winex11.drv: Use NtUserShowWindow() instead of WM_SYSCOMMAND
+ to synchronize window state.
+
+DefWindowProc(WM_SYSCOMMAND) handler ignores commands for a WS_DISABLED window
+which leads to window state/size mismatch on X11 and win32 sides.
+
+Signed-off-by: Dmitry Timoshkov <dmitry@baikal.ru>
+---
+ dlls/winex11.drv/event.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 2070d942056..0d4e200cb91 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1131,7 +1131,7 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+             {
+                 TRACE( "win %p/%lx is maximized\n", data->hwnd, data->whole_window );
+                 release_win_data( data );
+-                send_message( data->hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0 );
++                NtUserShowWindow( hwnd, SW_MAXIMIZE );
+                 return TRUE;
+             }
+         }
+@@ -1139,7 +1139,7 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+         {
+             TRACE( "window %p/%lx is no longer maximized\n", data->hwnd, data->whole_window );
+             release_win_data( data );
+-            send_message( data->hwnd, WM_SYSCOMMAND, SC_RESTORE, 0 );
++            NtUserShowWindow( hwnd, SW_RESTORE );
+             return TRUE;
+         }
+     }
+@@ -1266,7 +1266,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+             {
+                 TRACE( "restoring to max %p/%lx\n", data->hwnd, data->whole_window );
+                 release_win_data( data );
+-                send_message( hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0 );
++                NtUserShowWindow( hwnd, SW_MAXIMIZE );
+                 return;
+             }
+             TRACE( "not restoring to max win %p/%lx style %08x\n", data->hwnd, data->whole_window, style );
+@@ -1279,7 +1279,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+                 release_win_data( data );
+                 if ((style & (WS_MINIMIZE | WS_VISIBLE)) == (WS_MINIMIZE | WS_VISIBLE))
+                     NtUserSetActiveWindow( hwnd );
+-                send_message( hwnd, WM_SYSCOMMAND, SC_RESTORE, 0 );
++                NtUserShowWindow( hwnd, SW_RESTORE );
+                 return;
+             }
+             TRACE( "not restoring win %p/%lx style %08x\n", data->hwnd, data->whole_window, style );
+@@ -1292,7 +1292,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+         {
+             TRACE( "minimizing win %p/%lx\n", data->hwnd, data->whole_window );
+             release_win_data( data );
+-            send_message( hwnd, WM_SYSCOMMAND, SC_MINIMIZE, 0 );
++            NtUserShowWindow( hwnd, SW_MINIMIZE );
+             return;
+         }
+         TRACE( "not minimizing win %p/%lx style %08x\n", data->hwnd, data->whole_window, style );
+-- 
+GitLab
+

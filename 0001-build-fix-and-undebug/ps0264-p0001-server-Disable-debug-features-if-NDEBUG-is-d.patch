@@ -1,0 +1,70 @@
+From 77563dc4b72b25c9c0072384dbc8286dd0cc6d69 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <openglfreak@googlemail.com>
+Date: 20 Jun 2024
+Subject: [PATCH 1/3] server: Disable debug features if NDEBUG is defined. (updated for shared memory upstream)
+
+Signed-off-by: Torge Matthies <openglfreak@googlemail.com>
+---
+ server/object.c | 8 ++++++--
+ server/object.h | 2 ++
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/server/object.c b/server/object.c
+index 11111111111..11111111111 100644
+--- a/server/object.c
++++ b/server/object.c
+@@ -102,6 +102,7 @@ void close_objects(void)
+ 
+ /*****************************************************************/
+ 
++#ifndef NDEBUG
+ /* mark a block of memory as uninitialized for debugging purposes */
+ static inline void mark_block_uninitialized( void *ptr, size_t size )
+ {
+@@ -112,13 +113,16 @@ static inline void mark_block_uninitialized( void *ptr, size_t size )
+     VALGRIND_DISCARD( VALGRIND_MAKE_WRITABLE( ptr, size ));
+ #endif
+ }
++#endif
+ 
+ /* malloc replacement */
+ void *mem_alloc( size_t size )
+ {
+     void *ptr = malloc( size );
+-    if (ptr) mark_block_uninitialized( ptr, size );
+-    else set_error( STATUS_NO_MEMORY );
++    if (!ptr) set_error( STATUS_NO_MEMORY );
++#ifndef NDEBUG
++    else mark_block_uninitialized( ptr, size );
++#endif
+     return ptr;
+ }
+ 
+diff --git a/server/object.h b/server/object.h
+index 11111111111..11111111111 100644
+--- a/server/object.h
++++ b/server/object.h
+@@ -26,7 +26,9 @@
+ #include "wine/server_protocol.h"
+ #include "wine/list.h"
+ 
++#ifndef NDEBUG
+ #define DEBUG_OBJECTS
++#endif
+ 
+ /* kernel objects */
+ 
+diff --git a/server/mapping.c b/server/mapping.c
+index 71dfaae..035d45c 100644
+--- a/server/mapping.c
++++ b/server/mapping.c
+@@ -1391,7 +1391,9 @@ const volatile void *alloc_shared_object(void)
+     SHARED_WRITE_BEGIN( &object->obj.shm, object_shm_t )
+     {
+         /* mark the object data as uninitialized */
++#ifndef NDEBUG
+         mark_block_uninitialized( (void *)shared, sizeof(*shared) );
++#endif
+         CONTAINING_RECORD( shared, shared_object_t, shm )->id = ++session.last_object_id;
+     }
+     SHARED_WRITE_END;

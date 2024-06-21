@@ -1,0 +1,57 @@
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index d1a5a75..668058d 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -1938,7 +1938,7 @@ static void add_virtual_modes( struct device_manager_ctx *ctx, const DEVMODEW *c
+         {
+             .dmSize = sizeof(mode),
+             .dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS | DM_DISPLAYFREQUENCY,
+-            .dmDisplayFrequency = 60,
++            .dmDisplayFrequency = 280,
+             .dmBitsPerPel = depths[i],
+         };
+ 
+@@ -2003,7 +2003,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
+     if (!read_source_mode( ctx->source_key, ENUM_CURRENT_SETTINGS, &current ))
+     {
+         current = ctx->primary;
+-        current.dmDisplayFrequency = 60;
++        current.dmDisplayFrequency = 280;
+         current.dmPelsWidth = initial.dmPelsWidth;
+         current.dmPelsHeight = initial.dmPelsHeight;
+     }
+diff --git a/dlls/wined3d/directx.c b/dlls/wined3d/directx.c
+index a05082e..2527ba2 100644
+--- a/dlls/wined3d/directx.c
++++ b/dlls/wined3d/directx.c
+@@ -1812,7 +1812,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d_output *outp
+     if (FAILED(wined3d_output_get_display_mode(output, &mode, NULL)))
+         return WINED3DERR_INVALIDCALL;
+     if (mode.refresh_rate == DEFAULT_REFRESH_RATE)
+-        mode.refresh_rate = 60;
++        mode.refresh_rate = 280;
+ 
+     freq_per_frame = freq_per_sec.QuadPart / mode.refresh_rate;
+     /* Assume 20 scan lines in the vertical blank. */
+diff --git a/dlls/winex11.drv/display.c b/dlls/winex11.drv/display.c
+index 6b92e04..e9b3d88 100644
+--- a/dlls/winex11.drv/display.c
++++ b/dlls/winex11.drv/display.c
+@@ -95,7 +95,7 @@ static BOOL nores_get_modes( x11drv_settings_id id, DWORD flags, DEVMODEW **new_
+     modes[0].dmPelsWidth = primary.right;
+     modes[0].dmPelsHeight = primary.bottom;
+     modes[0].dmDisplayFlags = 0;
+-    modes[0].dmDisplayFrequency = 60;
++    modes[0].dmDisplayFrequency = 280;
+ 
+     *new_modes = modes;
+     *mode_count = 1;
+@@ -131,7 +131,7 @@ static BOOL nores_get_current_mode(x11drv_settings_id id, DEVMODEW *mode)
+     mode->dmBitsPerPel = screen_bpp;
+     mode->dmPelsWidth = primary.right;
+     mode->dmPelsHeight = primary.bottom;
+-    mode->dmDisplayFrequency = 60;
++    mode->dmDisplayFrequency = 280;
+     return TRUE;
+ }
+ 

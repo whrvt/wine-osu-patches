@@ -1,0 +1,334 @@
+From 486cb5988128505e459032563da1648035fc1ae5 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Wed, 10 Apr 2024 22:40:07 +0900
+Subject: [PATCH 1/4] include: Fix type of TYPE_ALIGNMENT() macro expression.
+
+TYPE_ALIGNMENT() should return size_t, but FIELD_OFFSET() returns LONG.
+
+Fix this by using offsetof() directly, which does return size_t.
+
+Fixes: b3c989e6b24 (Added some more useful macros., 2002-10-02)
+---
+ include/winnt.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/winnt.h b/include/winnt.h
+index e7c322fd127..5318f9c42ba 100644
+--- a/include/winnt.h
++++ b/include/winnt.h
+@@ -406,7 +406,7 @@ extern "C" {
+ #elif defined(__GNUC__)
+ # define TYPE_ALIGNMENT(t) __alignof__(t)
+ #else
+-# define TYPE_ALIGNMENT(t) FIELD_OFFSET(struct { char x; t test; }, test)
++# define TYPE_ALIGNMENT(t) offsetof(struct { char x; t test; }, test)
+ #endif
+ 
+ #ifdef _WIN64
+-- 
+GitLab
+
+
+From 7fde8c717261b19f4f939aaf7f648503ec24504c Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Wed, 10 Apr 2024 22:41:59 +0900
+Subject: [PATCH 2/4] include: Fix TYPE_ALIGNMENT() on GCC and Clang.
+
+__alignof__() is unsuitable for TYPE_ALIGNMENT() implementation: it
+returns the "preferred" alignment (on-stack alignment for automatic
+variables) which may be bigger than the standard minimum alignment
+(pointer alignment).
+
+| Target Arch | Type Name | Standard  | __alignof__() |
+| / platform  | (C ABI)   | alignment |               |
+|-------------|-----------|-----------|---------------|
+| i386 / SysV | long long |         4 |             8 |
+| i386 / SysV | double    |         4 |             8 |
+
+Fix this by using _Alignof(), or the offsetof() fallback on older
+GCC/Clang versions.
+
+Fixes: b3c989e6b24 (Added some more useful macros., 2002-10-02)
+---
+ include/winnt.h | 25 ++++++++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/include/winnt.h b/include/winnt.h
+index 5318f9c42ba..9f5d39f641c 100644
+--- a/include/winnt.h
++++ b/include/winnt.h
+@@ -401,10 +401,29 @@ extern "C" {
+ #define MEMORY_ALLOCATION_ALIGNMENT 8
+ #endif
+ 
+-#if defined(_MSC_VER) && (_MSC_VER >= 1300) && defined(__cplusplus)
++#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
++# if (defined(__clang__) && (__clang_major__ < 8)) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 9) && !defined(__clang__))
++/*
++ * _Alignof() is noncompliant on GCC <4.9 as well as Clang <8.0: it returns the
++ * "preferred" alignment (on-stack alignment for automatic variables) which may
++ * be bigger than the standard minimum alignment (pointer alignment).
++ *
++ * | Target Arch | Type Name |      _Alignof()     | Standard  |
++ * | / platform  | (C ABI)   | GCC <4.8 | GCC 4.9+ | alignment |
++ * |-------------|-----------|----------|----------|-----------|
++ * | i386 / SysV | long long |        8 |        4 |         4 |
++ * | i386 / SysV | double    |        8 |        4 |         4 |
++ *
++ * See also:
++ * - GCC bug 52023 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52023)
++ * - LLVM issue #26921 (https://github.com/llvm/llvm-project/issues/26921)
++ */
++#  define TYPE_ALIGNMENT(t) offsetof(struct { char x; t test; }, test)
++# else
++#  define TYPE_ALIGNMENT(t) _Alignof(t)
++# endif
++#elif defined(_MSC_VER) && (_MSC_VER >= 1300) && defined(__cplusplus)
+ # define TYPE_ALIGNMENT(t) __alignof(t)
+-#elif defined(__GNUC__)
+-# define TYPE_ALIGNMENT(t) __alignof__(t)
+ #else
+ # define TYPE_ALIGNMENT(t) offsetof(struct { char x; t test; }, test)
+ #endif
+-- 
+GitLab
+
+
+From dc7b1f1eb852b3c51827e7fba1288014cd55ac53 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Tue, 9 Apr 2024 23:44:26 +0900
+Subject: [PATCH 3/4] make_requests: Emit assertions for type alignment.
+
+---
+ tools/make_requests | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/tools/make_requests b/tools/make_requests
+index e3eaaf45b6f..6148f072919 100755
+--- a/tools/make_requests
++++ b/tools/make_requests
+@@ -501,6 +501,11 @@ foreach my $type (sort keys %formats)
+     my ($size, $align) = @{$formats{$type}};
+     die "$type: invalid size $size for alignment $align" if $size % $align;
+     push @request_lines, "C_ASSERT( sizeof($type) == $size );\n";
++    if ($align == 8) {
++        # Use alignment of long long (== 4 on i386 psABI)
++        $align = "TYPE_ALIGNMENT(long long)";
++    }
++    push @request_lines, "C_ASSERT( TYPE_ALIGNMENT($type) == $align );\n";
+ }
+ push @request_lines, @asserts;
+ push @request_lines, "\n#endif  /* WANT_REQUEST_HANDLERS */\n";
+-- 
+GitLab
+
+
+From fb6d253d7eadca66e5bbccd0674e36cb1f868395 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Wed, 10 Apr 2024 23:58:01 +0900
+Subject: [PATCH 4/4] server: Correctly align 64-bit integer types in
+ protocol.def.
+
+__int64 has an inconsistent alignment: 4 bytes on Unix, 8 bytes on PE.
+
+Fix this by using INT64/UINT64 which has consistent alignment on both
+Unix and PE side.
+
+This allows adding 64-bit fields at unaligned offset in the future,
+without triggering struct layout mismatch between Unix and PE due to
+inserted padding (which exists on PE but not on Unix).
+---
+ server/protocol.def | 38 +++++++++++++++++++-------------------
+ server/trace.c      | 18 +++++++++---------
+ tools/make_requests |  4 ----
+ 3 files changed, 28 insertions(+), 32 deletions(-)
+
+diff --git a/server/protocol.def b/server/protocol.def
+index 55dda2d7636..1fcde5704ce 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -39,13 +39,13 @@ typedef unsigned int process_id_t;
+ typedef unsigned int thread_id_t;
+ typedef unsigned int data_size_t;
+ typedef unsigned int ioctl_code_t;
+-typedef unsigned __int64 lparam_t;
+-typedef unsigned __int64 apc_param_t;
+-typedef unsigned __int64 mem_size_t;
+-typedef unsigned __int64 file_pos_t;
+-typedef unsigned __int64 client_ptr_t;
+-typedef unsigned __int64 affinity_t;
+-typedef unsigned __int64 object_id_t;
++typedef UINT64 lparam_t;
++typedef UINT64 apc_param_t;
++typedef UINT64 mem_size_t;
++typedef UINT64 file_pos_t;
++typedef UINT64 client_ptr_t;
++typedef UINT64 affinity_t;
++typedef UINT64 object_id_t;
+ typedef client_ptr_t mod_handle_t;
+ 
+ struct request_header
+@@ -134,18 +134,18 @@ typedef struct
+     union
+     {
+         struct { unsigned int eip, ebp, esp, eflags, cs, ss; } i386_regs;
+-        struct { unsigned __int64 rip, rbp, rsp;
++        struct { UINT64 rip, rbp, rsp;
+                  unsigned int cs, ss, flags, __pad; } x86_64_regs;
+         struct { unsigned int sp, lr, pc, cpsr; } arm_regs;
+-        struct { unsigned __int64 sp, pc, pstate; } arm64_regs;
++        struct { UINT64 sp, pc, pstate; } arm64_regs;
+     } ctl;  /* selected by SERVER_CTX_CONTROL */
+     union
+     {
+         struct { unsigned int eax, ebx, ecx, edx, esi, edi; } i386_regs;
+-        struct { unsigned __int64 rax,rbx, rcx, rdx, rsi, rdi,
+-                                  r8, r9, r10, r11, r12, r13, r14, r15; } x86_64_regs;
++        struct { UINT64 rax,rbx, rcx, rdx, rsi, rdi,
++                        r8, r9, r10, r11, r12, r13, r14, r15; } x86_64_regs;
+         struct { unsigned int r[13]; } arm_regs;
+-        struct { unsigned __int64 x[31]; } arm64_regs;
++        struct { UINT64 x[31]; } arm64_regs;
+     } integer;  /* selected by SERVER_CTX_INTEGER */
+     union
+     {
+@@ -156,16 +156,16 @@ typedef struct
+     {
+         struct { unsigned int ctrl, status, tag, err_off, err_sel, data_off, data_sel, cr0npx;
+                  unsigned char regs[80]; } i386_regs;
+-        struct { struct { unsigned __int64 low, high; } fpregs[32]; } x86_64_regs;
+-        struct { unsigned __int64 d[32]; unsigned int fpscr; } arm_regs;
+-        struct { struct { unsigned __int64 low, high; } q[32]; unsigned int fpcr, fpsr; } arm64_regs;
++        struct { struct { UINT64 low, high; } fpregs[32]; } x86_64_regs;
++        struct { UINT64 d[32]; unsigned int fpscr; } arm_regs;
++        struct { struct { UINT64 low, high; } q[32]; unsigned int fpcr, fpsr; } arm64_regs;
+     } fp;  /* selected by SERVER_CTX_FLOATING_POINT */
+     union
+     {
+         struct { unsigned int dr0, dr1, dr2, dr3, dr6, dr7; } i386_regs;
+-        struct { unsigned __int64 dr0, dr1, dr2, dr3, dr6, dr7; } x86_64_regs;
++        struct { UINT64 dr0, dr1, dr2, dr3, dr6, dr7; } x86_64_regs;
+         struct { unsigned int bvr[8], bcr[8], wvr[1], wcr[1]; } arm_regs;
+-        struct { unsigned __int64 bvr[8], wvr[2]; unsigned int bcr[8], wcr[2]; } arm64_regs;
++        struct { UINT64 bvr[8], wvr[2]; unsigned int bcr[8], wcr[2]; } arm64_regs;
+     } debug;  /* selected by SERVER_CTX_DEBUG_REGISTERS */
+     union
+     {
+@@ -173,7 +173,7 @@ typedef struct
+     } ext;                       /* selected by SERVER_CTX_EXTENDED_REGISTERS */
+     union
+     {
+-        struct { struct { unsigned __int64 low, high; } ymm_high[16]; } regs;
++        struct { struct { UINT64 low, high; } ymm_high[16]; } regs;
+     } ymm;                       /* selected by SERVER_CTX_YMM_REGISTERS */
+ } context_t;
+ 
+@@ -201,11 +201,11 @@ struct wake_up_reply
+ };
+ 
+ /* NT-style timeout, in 100ns units, negative means relative timeout */
+-typedef __int64 timeout_t;
++typedef INT64 timeout_t;
+ #define TIMEOUT_INFINITE (((timeout_t)0x7fffffff) << 32 | 0xffffffff)
+ 
+ /* absolute timeout, negative means that monotonic clock is used */
+-typedef __int64 abstime_t;
++typedef INT64 abstime_t;
+ 
+ /* structure for process startup info */
+ typedef struct
+diff --git a/server/trace.c b/server/trace.c
+index efb4bb03c4a..c88006cbecb 100644
+--- a/server/trace.c
++++ b/server/trace.c
+@@ -95,7 +95,7 @@ static void dump_abstime( const char *prefix, const abstime_t *when )
+     dump_timeout( prefix, &timeout );
+ }
+ 
+-static void dump_uint64( const char *prefix, const unsigned __int64 *val )
++static void dump_uint64( const char *prefix, const UINT64 *val )
+ {
+     if ((unsigned int)*val != *val)
+         fprintf( stderr, "%s%x%08x", prefix, (unsigned int)(*val >> 32), (unsigned int)*val );
+@@ -103,9 +103,9 @@ static void dump_uint64( const char *prefix, const unsigned __int64 *val )
+         fprintf( stderr, "%s%08x", prefix, (unsigned int)*val );
+ }
+ 
+-static void dump_uint128( const char *prefix, const unsigned __int64 val[2] )
++static void dump_uint128( const char *prefix, const UINT64 val[2] )
+ {
+-    unsigned __int64 low = val[0], high = val[1];
++    UINT64 low = val[0], high = val[1];
+ 
+     if ((unsigned int)high != high)
+         fprintf( stderr, "%s%x%08x%08x%08x", prefix, (unsigned int)(high >> 32), (unsigned int)high,
+@@ -119,7 +119,7 @@ static void dump_uint128( const char *prefix, const unsigned __int64 val[2] )
+         fprintf( stderr, "%s%x", prefix, (unsigned int)low );
+ }
+ 
+-static void dump_uints64( const char *prefix, const unsigned __int64 *ptr, int len )
++static void dump_uints64( const char *prefix, const UINT64 *ptr, int len )
+ {
+     fprintf( stderr, "%s{", prefix );
+     if (len-- > 0) dump_uint64( "", ptr++ );
+@@ -503,7 +503,7 @@ static void dump_varargs_uints( const char *prefix, data_size_t size )
+ 
+ static void dump_varargs_uints64( const char *prefix, data_size_t size )
+ {
+-    const unsigned __int64 *data = cur_data;
++    const UINT64 *data = cur_data;
+ 
+     dump_uints64( prefix, data, size / sizeof(*data) );
+     remove_data( size );
+@@ -682,7 +682,7 @@ static void dump_varargs_context( const char *prefix, data_size_t size )
+                      ctx.fp.i386_regs.data_off, ctx.fp.i386_regs.data_sel, ctx.fp.i386_regs.cr0npx );
+             for (i = 0; i < 8; i++)
+             {
+-                unsigned __int64 reg[2];
++                UINT64 reg[2];
+                 memset( reg, 0, sizeof(reg) );
+                 memcpy( reg, &ctx.fp.i386_regs.regs[10 * i], 10 );
+                 fprintf( stderr, ",fp.reg%u=", i );
+@@ -696,7 +696,7 @@ static void dump_varargs_context( const char *prefix, data_size_t size )
+             for (i = 0; i < 16; i++)
+             {
+                 fprintf( stderr, ",ymm%u=", i );
+-                dump_uint128( "", (const unsigned __int64 *)&ctx.ymm.regs.ymm_high[i] );
++                dump_uint128( "", (const UINT64 *)&ctx.ymm.regs.ymm_high[i] );
+             }
+         break;
+     case IMAGE_FILE_MACHINE_AMD64:
+@@ -743,13 +743,13 @@ static void dump_varargs_context( const char *prefix, data_size_t size )
+             for (i = 0; i < 32; i++)
+             {
+                 fprintf( stderr, ",fp%u=", i );
+-                dump_uint128( "", (const unsigned __int64 *)&ctx.fp.x86_64_regs.fpregs[i] );
++                dump_uint128( "", (const UINT64 *)&ctx.fp.x86_64_regs.fpregs[i] );
+             }
+         if (ctx.flags & SERVER_CTX_YMM_REGISTERS)
+             for (i = 0; i < 16; i++)
+             {
+                 fprintf( stderr, ",ymm%u=", i );
+-                dump_uint128( "", (const unsigned __int64 *)&ctx.ymm.regs.ymm_high[i] );
++                dump_uint128( "", (const UINT64 *)&ctx.ymm.regs.ymm_high[i] );
+             }
+         break;
+     case IMAGE_FILE_MACHINE_ARMNT:
+diff --git a/tools/make_requests b/tools/make_requests
+index 6148f072919..ea3a4978305 100755
+--- a/tools/make_requests
++++ b/tools/make_requests
+@@ -501,10 +501,6 @@ foreach my $type (sort keys %formats)
+     my ($size, $align) = @{$formats{$type}};
+     die "$type: invalid size $size for alignment $align" if $size % $align;
+     push @request_lines, "C_ASSERT( sizeof($type) == $size );\n";
+-    if ($align == 8) {
+-        # Use alignment of long long (== 4 on i386 psABI)
+-        $align = "TYPE_ALIGNMENT(long long)";
+-    }
+     push @request_lines, "C_ASSERT( TYPE_ALIGNMENT($type) == $align );\n";
+ }
+ push @request_lines, @asserts;
+-- 
+GitLab
+

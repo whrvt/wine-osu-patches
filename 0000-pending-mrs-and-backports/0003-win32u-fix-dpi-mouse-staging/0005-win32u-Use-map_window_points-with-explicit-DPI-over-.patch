@@ -1,0 +1,34 @@
+From 7cc8450e36f4f6bb6c78e8a37411500639126aee Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 13 Jun 2024 10:04:44 +0200
+Subject: [PATCH 5/7] win32u: Use map_window_points with explicit DPI over
+ screen_to_client.
+
+---
+ dlls/win32u/message.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 7ff38a923fa..210885d59d1 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2460,12 +2460,11 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+             message += WM_NCMOUSEMOVE - WM_MOUSEMOVE;
+             wparam = hittest;
+         }
+-        else
++        /* coordinates don't get translated while tracking a menu */
++        /* FIXME: should differentiate popups and top-level menus */
++        else if (!(info->flags & GUI_INMENUMODE))
+         {
+-            /* coordinates don't get translated while tracking a menu */
+-            /* FIXME: should differentiate popups and top-level menus */
+-            if (!(info->flags & GUI_INMENUMODE))
+-                screen_to_client( msg->hwnd, &pt );
++            map_window_points( 0, msg->hwnd, &pt, 1, get_dpi_for_window( msg->hwnd ) );
+         }
+     }
+     msg->lParam = MAKELONG( pt.x, pt.y );
+-- 
+2.45.2
+

@@ -1,0 +1,36 @@
+From 1ee9763731bb7eea3ee901548094b090e96519fd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 10 Jun 2024 12:11:20 +0200
+Subject: [PATCH 3/7] win32u: Use per-monitor DPI window_from_point in
+ process_mouse_message.
+
+---
+ dlls/win32u/message.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 049773fe7e3..9117979422f 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2424,16 +2424,15 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     else
+     {
+         HWND orig = msg->hwnd;
+-        UINT dpi = get_thread_dpi();
+ 
+-        msg->hwnd = window_from_point( 0, msg->pt, &hittest, dpi );
++        msg->hwnd = window_from_point( 0, msg->pt, &hittest, 0 /* per-monitor DPI */ );
+         if (!msg->hwnd) /* As a heuristic, try the next window if it's the owner of orig */
+         {
+             HWND next = get_window_relative( orig, GW_HWNDNEXT );
+ 
+             if (next && get_window_relative( orig, GW_OWNER ) == next &&
+                 is_current_thread_window( next ))
+-                msg->hwnd = window_from_point( next, msg->pt, &hittest, dpi );
++                msg->hwnd = window_from_point( next, msg->pt, &hittest, 0 /* per-monitor DPI */ );
+         }
+     }
+ 
+-- 
+2.45.2
+

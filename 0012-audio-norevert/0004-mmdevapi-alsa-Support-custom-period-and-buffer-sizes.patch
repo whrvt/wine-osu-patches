@@ -1,0 +1,148 @@
+From d330b2b142aedf06cc54bfa3fe5f750d2ed31bbf Mon Sep 17 00:00:00 2001
+From: whrvt <william@horvath.blog>
+Date: 
+Subject: [PATCH] mmdevapi+alsa: Support custom period and buffer sizes.
+
+Relevant environment variables are: 
+ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)
+STAGING_AUDIO_PERIOD (units: usecs*10)
+STAGING_AUDIO_DURATION (units: usecs*10)
+
+Also, silence pcm.c underrun errors.
+
+diff --git a/dlls/winealsa.drv/alsa.c b/dlls/winealsa.drv/alsa.c
+index 11111111111..11111111111 100644
+--- a/dlls/winealsa.drv/alsa.c
++++ b/dlls/winealsa.drv/alsa.c
+@@ -82,10 +82,10 @@ struct alsa_stream
+     pthread_mutex_t lock;
+ };
+ 
+-#define EXTRA_SAFE_RT 40000
++REFERENCE_TIME EXTRA_SAFE_RT = 40000;
+ 
+-static const REFERENCE_TIME def_period = 100000;
+-static const REFERENCE_TIME min_period = 50000;
++REFERENCE_TIME def_period = 1000;
++REFERENCE_TIME min_period = 500;
+ 
+ static const WCHAR drv_keyW[] = {'S','o','f','t','w','a','r','e','\\',
+     'W','i','n','e','\\','D','r','i','v','e','r','s','\\',
+@@ -810,6 +810,19 @@ static NTSTATUS alsa_create_stream(void *args)
+ 
+     params->result = S_OK;
+ 
++    const char* esrtenv = getenv("ALSA_EXTRA_PAD");
++
++    REFERENCE_TIME esrtval;
++
++    if (esrtenv) {
++        esrtval = atol(esrtenv);
++        if (esrtval >= 0) EXTRA_SAFE_RT = esrtval; // failsafe
++        MESSAGE("ALSA padding:\t%llu\n", EXTRA_SAFE_RT);
++    }
++    else {
++        TRACE("ALSA padding:\t%llu\t(default)\n", EXTRA_SAFE_RT);
++    }
++
+     stream = calloc(1, sizeof(*stream));
+     if(!stream){
+         params->result = E_OUTOFMEMORY;
+@@ -1008,10 +1021,10 @@ static NTSTATUS alsa_create_stream(void *args)
+ 
+     pthread_mutex_init(&stream->lock, NULL);
+ 
+-    TRACE("ALSA period: %lu frames\n", stream->alsa_period_frames);
+-    TRACE("ALSA buffer: %lu frames\n", stream->alsa_bufsize_frames);
+-    TRACE("MMDevice period: %u frames\n", stream->mmdev_period_frames);
+-    TRACE("MMDevice buffer: %u frames\n", stream->bufsize_frames);
++    MESSAGE("PIPEWIRE_ALSA period: %lu frames\n", stream->alsa_period_frames);
++    MESSAGE("PIPEWIRE_ALSA buffer: %lu frames\n", stream->alsa_bufsize_frames);
++    MESSAGE("MMDevAPI period: %u frames\n", stream->mmdev_period_frames);
++    MESSAGE("MMDevAPI buffer: %u frames\n", stream->bufsize_frames);
+ 
+ exit:
+     free(sw_params);
+@@ -1280,7 +1295,7 @@ static snd_pcm_sframes_t alsa_write_best_effort(struct alsa_stream *stream, BYTE
+         WARN("writei failed, recovering: %ld (%s)\n", written,
+                 snd_strerror(written));
+ 
+-        ret = snd_pcm_recover(stream->pcm_handle, written, 0);
++        ret = snd_pcm_recover(stream->pcm_handle, written, 1);
+         if(ret < 0){
+             WARN("Could not recover: %d (%s)\n", ret, snd_strerror(ret));
+             return ret;
+@@ -1454,7 +1469,7 @@ static void alsa_read_data(struct alsa_stream *stream)
+ 
+         WARN("read failed, recovering: %ld (%s)\n", nread, snd_strerror(nread));
+ 
+-        ret = snd_pcm_recover(stream->pcm_handle, nread, 0);
++        ret = snd_pcm_recover(stream->pcm_handle, nread, 1);
+         if(ret < 0){
+             WARN("Recover failed: %d (%s)\n", ret, snd_strerror(ret));
+             return;
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index 0b849e4..7a8a196 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -122,9 +122,23 @@ static HRESULT adjust_timing(struct audio_client *This,
+     TRACE("Device periods: %lu default and %lu minimum\n", (ULONG)def_period, (ULONG)min_period);
+ 
+     if (mode == AUDCLNT_SHAREMODE_SHARED) {
+-        *period = def_period;
+-        if (*duration < 3 * *period)
+-            *duration = 3 * *period;
++        const char* penv = getenv("STAGING_AUDIO_PERIOD");
++        const char* denv = getenv("STAGING_AUDIO_DURATION");
++        int periodval;
++        int durationval;
++        if (!penv) {
++            *period = def_period;
++            if (*duration < 3 * *period)
++                *duration = 3 * *period;
++        } else if ((periodval = atoi(penv)) >= 0) {
++            *period = min_period = def_period = periodval;
++            MESSAGE("MMDevAPI audio period set to %d.\n", periodval);
++            if (denv && (durationval = atoi(denv)) >= 0) {
++                *duration = durationval;
++                MESSAGE("MMDevAPI audio duration set to %d.\n", durationval);
++            }
++        }
++        
+     } else {
+         const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
+         if (fmtex->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index 71d24c3..b626002 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -1009,7 +1009,7 @@ static HRESULT WINAPI client_GetSharedModeEnginePeriod(IAudioClient3 *iface,
+     *default_period_frames =
+         *min_period_frames =
+         *max_period_frames =
+-        format->nSamplesPerSec / 100; /* ~10ms */
++        format->nSamplesPerSec / 1000; /* ~1ms */
+     *unit_period_frames = 1;
+     return S_OK;
+ }
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index b2bb428..8bebfd9 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -1035,7 +1035,15 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
+     if (!format)
+         return E_POINTER;
+ 
+-    duration = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
++    const char* denv = getenv("STAGING_AUDIO_DURATION");
++    int durationval;
++    if (denv && (durationval = atoi(denv)) >= 0) {
++        duration = durationval;
++        TRACE("MMDevAPI audio duration set to %d.\n", durationval);
++    } else {
++        duration = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
++    }
++
+     return client_Initialize(iface, AUDCLNT_SHAREMODE_SHARED, flags, duration, 0, format, session_guid);
+ }
+ 

@@ -1,0 +1,127 @@
+From 234a5006027da75bf6be463e0b33c532face60c3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 1 Jun 2024 23:03:40 +0200
+Subject: [PATCH 2/7] win32u: Parameterize window_from_point dpi.
+
+---
+ dlls/win32u/input.c          |  4 ++--
+ dlls/win32u/message.c        |  5 +++--
+ dlls/win32u/win32u_private.h |  2 +-
+ dlls/win32u/window.c         | 13 ++++++-------
+ 4 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 5b25086cb6f..0d9fe0f1d38 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -1607,7 +1607,7 @@ void update_mouse_tracking_info( HWND hwnd )
+     TRACE( "hwnd %p\n", hwnd );
+ 
+     get_cursor_pos( &pos );
+-    hwnd = window_from_point( hwnd, pos, &hittest );
++    hwnd = window_from_point( hwnd, pos, &hittest, get_thread_dpi() );
+ 
+     TRACE( "point %s hwnd %p hittest %d\n", wine_dbgstr_point(&pos), hwnd, hittest );
+ 
+@@ -1703,7 +1703,7 @@ BOOL WINAPI NtUserTrackMouseEvent( TRACKMOUSEEVENT *info )
+         NtUserSystemParametersInfo( SPI_GETMOUSEHOVERTIME, 0, &hover_time, 0 );
+ 
+     get_cursor_pos( &pos );
+-    hwnd = window_from_point( info->hwndTrack, pos, &hittest );
++    hwnd = window_from_point( info->hwndTrack, pos, &hittest, get_thread_dpi() );
+     TRACE( "point %s hwnd %p hittest %d\n", wine_dbgstr_point(&pos), hwnd, hittest );
+ 
+     if (info->dwFlags & ~(TME_CANCEL | TME_HOVER | TME_LEAVE | TME_NONCLIENT))
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index d1f49ca3ed9..049773fe7e3 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2424,15 +2424,16 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     else
+     {
+         HWND orig = msg->hwnd;
++        UINT dpi = get_thread_dpi();
+ 
+-        msg->hwnd = window_from_point( 0, msg->pt, &hittest );
++        msg->hwnd = window_from_point( 0, msg->pt, &hittest, dpi );
+         if (!msg->hwnd) /* As a heuristic, try the next window if it's the owner of orig */
+         {
+             HWND next = get_window_relative( orig, GW_HWNDNEXT );
+ 
+             if (next && get_window_relative( orig, GW_OWNER ) == next &&
+                 is_current_thread_window( next ))
+-                msg->hwnd = window_from_point( next, msg->pt, &hittest );
++                msg->hwnd = window_from_point( next, msg->pt, &hittest, dpi );
+         }
+     }
+ 
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 96517ef081a..8e33370ee48 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -252,7 +252,7 @@ extern BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y );
+ extern ULONG set_window_style( HWND hwnd, ULONG set_bits, ULONG clear_bits );
+ extern BOOL show_owned_popups( HWND owner, BOOL show );
+ extern void update_window_state( HWND hwnd );
+-extern HWND window_from_point( HWND hwnd, POINT pt, INT *hittest );
++extern HWND window_from_point( HWND hwnd, POINT pt, INT *hittest, UINT dpi );
+ extern HWND get_shell_window(void);
+ extern HWND get_progman_window(void);
+ extern HWND set_progman_window( HWND hwnd );
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 193e7212e02..532bbb6bfec 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2195,7 +2195,7 @@ done:
+  * Point is in screen coordinates.
+  * Returned list must be freed by caller.
+  */
+-static HWND *list_children_from_point( HWND hwnd, POINT pt )
++static HWND *list_children_from_point( HWND hwnd, POINT pt, UINT dpi )
+ {
+     int i, size = 128;
+     HWND *list;
+@@ -2211,7 +2211,7 @@ static HWND *list_children_from_point( HWND hwnd, POINT pt )
+             req->parent = wine_server_user_handle( hwnd );
+             req->x = pt.x;
+             req->y = pt.y;
+-            req->dpi = get_thread_dpi();
++            req->dpi = dpi;
+             wine_server_set_reply( req, list, (size-1) * sizeof(user_handle_t) );
+             if (!wine_server_call( req )) count = reply->count;
+         }
+@@ -2236,19 +2236,18 @@ static HWND *list_children_from_point( HWND hwnd, POINT pt )
+  *
+  * Find the window and hittest for a given point.
+  */
+-HWND window_from_point( HWND hwnd, POINT pt, INT *hittest )
++HWND window_from_point( HWND hwnd, POINT pt, INT *hittest, UINT dpi )
+ {
+     int i, res;
+     HWND ret, *list;
+     POINT win_pt;
+-    int dpi;
+ 
+     if (!hwnd) hwnd = get_desktop_window();
+-    if (!(dpi = get_thread_dpi())) dpi = get_win_monitor_dpi( hwnd );
++    if (!dpi) dpi = get_win_monitor_dpi( hwnd );
+ 
+     *hittest = HTNOWHERE;
+ 
+-    if (!(list = list_children_from_point( hwnd, pt ))) return 0;
++    if (!(list = list_children_from_point( hwnd, pt, dpi ))) return 0;
+ 
+     /* now determine the hittest */
+ 
+@@ -2290,7 +2289,7 @@ HWND WINAPI NtUserWindowFromPoint( LONG x, LONG y )
+ {
+     POINT pt = { .x = x, .y = y };
+     INT hittest;
+-    return window_from_point( 0, pt, &hittest );
++    return window_from_point( 0, pt, &hittest, get_thread_dpi() );
+ }
+ 
+ /*******************************************************************
+-- 
+2.45.2
+

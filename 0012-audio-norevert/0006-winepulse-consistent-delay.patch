@@ -1,0 +1,61 @@
+Don't use clock_nanosleep if that patch is applied; use a slimmed down NtDelayExecution.
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index a8acb6d..d053277 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -1565,6 +1565,46 @@ static void pulse_read(struct pulse_stream *stream)
+     }
+ }
+ 
++typedef INT64 timeout_t;
++#define TIMEOUT_INFINITE (((timeout_t)0x7fffffff) << 32 | 0xffffffff)
++
++static NTSTATUS pulse_delay( const LARGE_INTEGER *timeout )
++{
++    if (!timeout || timeout->QuadPart == TIMEOUT_INFINITE)  /* sleep forever */
++    {
++        for (;;) select( 0, NULL, NULL, NULL, NULL );
++    }
++    else
++    {
++        LARGE_INTEGER now;
++        timeout_t when, diff;
++   
++        if ((when = timeout->QuadPart) < 0)
++        {
++            NtQuerySystemTime( &now );
++            when = now.QuadPart - when;
++        }
++#ifdef HAVE_SCHED_YIELD
++        /* Note that we yield after establishing the desired timeout */
++        NtYieldExecution();
++#endif
++   
++        if (!when) return STATUS_SUCCESS;
++   
++        for (;;)
++        {
++            struct timeval tv;
++            NtQuerySystemTime( &now );
++            diff = (when - now.QuadPart + 9) / 10;
++            if (diff <= 0) break;
++            tv.tv_sec  = diff / 1000000;
++            tv.tv_usec = diff % 1000000;
++            if (select( 0, NULL, NULL, NULL, &tv ) != -1) break;
++        }
++    }
++    return STATUS_SUCCESS;
++}
++
+ static NTSTATUS pulse_timer_loop(void *args)
+ {
+     struct timer_loop_params *params = args;
+@@ -1585,7 +1625,7 @@ static NTSTATUS pulse_timer_loop(void *args)
+         pa_usec_t now, adv_usec = 0;
+         int err;
+ 
+-        NtDelayExecution(FALSE, &delay);
++        pulse_delay(&delay);
+ 
+         pulse_lock();
+ 

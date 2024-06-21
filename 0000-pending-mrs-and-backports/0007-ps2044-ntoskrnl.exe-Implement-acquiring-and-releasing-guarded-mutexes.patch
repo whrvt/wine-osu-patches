@@ -1,0 +1,121 @@
+From 1294c87cb934cdd6b23095ed4a118e13680fc8ea Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty <etaash.mathamsetty@gmail.com>
+Date: Thu, 26 Jan 2023 15:07:16 -0500
+Subject: [PATCH 1/2] ntoskrnl.exe: Implement KeAcquireGuardedMutex.
+
+---
+ dlls/ntoskrnl.exe/ntoskrnl.exe.spec |  2 ++
+ dlls/ntoskrnl.exe/sync.c            | 23 +++++++++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index 2447d01458d..8a67ebdf4c8 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -50,6 +50,8 @@
+ @ stdcall -fastcall IofCompleteRequest(ptr long)
+ @ stdcall -arch=!i386 KeAcquireInStackQueuedSpinLock(ptr ptr)
+ @ stdcall -fastcall KeAcquireInStackQueuedSpinLockAtDpcLevel(ptr ptr)
++@ stdcall KeAcquireGuardedMutexUnsafe(ptr)
++@ stdcall KeAcquireGuardedMutex(ptr)
+ @ stdcall KeEnterGuardedRegion()
+ @ stdcall KeExpandKernelStackAndCallout(ptr ptr long)
+ @ stdcall KeExpandKernelStackAndCalloutEx(ptr ptr long long ptr)
+diff --git a/dlls/ntoskrnl.exe/sync.c b/dlls/ntoskrnl.exe/sync.c
+index d9b5726b920..2c227974cd7 100644
+--- a/dlls/ntoskrnl.exe/sync.c
++++ b/dlls/ntoskrnl.exe/sync.c
+@@ -439,6 +439,29 @@ void WINAPI KeInitializeGuardedMutex(PKGUARDED_MUTEX mutex)
+     KeInitializeEvent(&mutex->Event, SynchronizationEvent, FALSE);
+ }
+ 
++/***********************************************************************
++ *           KeAcquireGuardedMutexUnsafe   (NTOSKRNL.EXE.@)
++ */
++void WINAPI KeAcquireGuardedMutexUnsafe(PKGUARDED_MUTEX mutex)
++{
++    LONG count; 
++
++    TRACE("mutex %p.\n", mutex);
++
++    count = InterlockedDecrement( &mutex->Count );
++    if (count < 0)
++        KeWaitForSingleObject( &mutex->Event, Executive, KernelMode, FALSE, NULL );
++}
++
++/***********************************************************************
++ *           KeAcquireGuardedMutex   (NTOSKRNL.EXE.@)
++ */
++void WINAPI KeAcquireGuardedMutex(PKGUARDED_MUTEX mutex)
++{
++    /* FIXME: Enter Guarded Region */
++    KeAcquireGuardedMutexUnsafe(mutex);
++}
++
+ static void CALLBACK ke_timer_complete_proc(PTP_CALLBACK_INSTANCE instance, void *timer_, PTP_TIMER tp_timer)
+ {
+     KTIMER *timer = timer_;
+-- 
+GitLab
+
+
+From 7f03932d16563eacc19d01859aaf00976dea22f4 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty <etaash.mathamsetty@gmail.com>
+Date: Thu, 26 Jan 2023 15:09:21 -0500
+Subject: [PATCH 2/2] ntoskrnl.exe: Implement KeReleaseGuardedMutex.
+
+---
+ dlls/ntoskrnl.exe/ntoskrnl.exe.spec |  2 ++
+ dlls/ntoskrnl.exe/sync.c            | 23 +++++++++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index 8a67ebdf4c8..4b84f3e304b 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -58,6 +58,8 @@
+ @ stdcall KeLeaveGuardedRegion()
+ @ stdcall -arch=!i386 KeReleaseInStackQueuedSpinLock(ptr)
+ @ stdcall -fastcall KeReleaseInStackQueuedSpinLockFromDpcLevel(ptr)
++@ stdcall KeReleaseGuardedMutexUnsafe(ptr)
++@ stdcall KeReleaseGuardedMutex(ptr)
+ @ stub KeSetTimeUpdateNotifyRoutine
+ @ stub KefAcquireSpinLockAtDpcLevel
+ @ stub KefReleaseSpinLockFromDpcLevel
+diff --git a/dlls/ntoskrnl.exe/sync.c b/dlls/ntoskrnl.exe/sync.c
+index 2c227974cd7..8ff198efc49 100644
+--- a/dlls/ntoskrnl.exe/sync.c
++++ b/dlls/ntoskrnl.exe/sync.c
+@@ -462,6 +462,29 @@ void WINAPI KeAcquireGuardedMutex(PKGUARDED_MUTEX mutex)
+     KeAcquireGuardedMutexUnsafe(mutex);
+ }
+ 
++/***********************************************************************
++ *           KeReleaseGuardedMutexUnsafe   (NTOSKRNL.EXE.@)
++ */
++void WINAPI KeReleaseGuardedMutexUnsafe(PKGUARDED_MUTEX mutex)
++{
++    LONG count;
++
++    TRACE("mutex %p.\n", mutex);
++
++    count = InterlockedIncrement( &mutex->Count );
++    if (count < 1)
++        KeSetEvent( &mutex->Event, IO_NO_INCREMENT, FALSE );
++}
++
++/***********************************************************************
++ *           KeReleaseGuardedMutex   (NTOSKRNL.EXE.@)
++ */
++void WINAPI KeReleaseGuardedMutex(PKGUARDED_MUTEX mutex)
++{
++    KeReleaseGuardedMutexUnsafe(mutex);
++    /* FIXME: Leave Guarded Region */
++}
++
+ static void CALLBACK ke_timer_complete_proc(PTP_CALLBACK_INSTANCE instance, void *timer_, PTP_TIMER tp_timer)
+ {
+     KTIMER *timer = timer_;
+-- 
+GitLab
+

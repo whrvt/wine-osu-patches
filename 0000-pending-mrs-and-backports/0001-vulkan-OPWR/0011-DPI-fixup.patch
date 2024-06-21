@@ -1,0 +1,61 @@
+diff --git a/dlls/win32u/vulkan.c b/dlls/win32u/vulkan.c
+index 29c9dfb..d6900bb 100644
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -155,7 +155,7 @@ static VkResult win32u_vkQueuePresentKHR( VkQueue queue, const VkPresentInfoKHR
+             RECT client_rect;
+             HDC hdc_dst;
+ 
+-            NtUserGetClientRect( surface->hwnd, &client_rect );
++            NtUserGetClientRect( surface->hwnd, &client_rect, get_win_monitor_dpi(surface->hwnd) );
+             width = client_rect.right - client_rect.left;
+             height = client_rect.bottom - client_rect.top;
+ 
+@@ -462,9 +462,9 @@ void vulkan_set_region( HWND toplevel, HRGN region )
+     {
+         RECT client_rect;
+         BOOL is_clipped;
+-
+-        NtUserGetClientRect( surface->hwnd, &client_rect );
+-        NtUserMapWindowPoints( surface->hwnd, toplevel, (POINT *)&client_rect, 2 );
++        
++        NtUserMapWindowPoints( surface->hwnd, toplevel, (POINT *)&client_rect, 2, 0 /* per-monitor DPI */ );
++        NtUserGetClientRect( surface->hwnd, &client_rect, get_win_monitor_dpi(surface->hwnd) );
+         is_clipped = NtGdiRectInRegion( region, &client_rect );
+ 
+         if (is_clipped && !surface->offscreen_dc)
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index e0ac88d..2d425b5 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1684,7 +1684,7 @@ static void sync_client_position( struct x11drv_win_data *data,
+         HWND toplevel = NtUserGetAncestor( data->hwnd, GA_ROOT );
+         POINT pos = {data->client_rect.left, data->client_rect.top};
+ 
+-        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1 );
++        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1, 0 /* per-monitor DPI */ );
+         changes.x = pos.x;
+         changes.y = pos.y;
+     }
+@@ -1861,7 +1861,7 @@ void attach_client_window( struct x11drv_win_data *data, Window client_window )
+ 
+         pos.x = data->client_rect.left;
+         pos.y = data->client_rect.top;
+-        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1 );
++        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1, 0 /* per-monitor DPI */ );
+     }
+     if (!whole_window) whole_window = get_dummy_parent();
+ 
+diff --git a/dlls/winex11.drv/vulkan.c b/dlls/winex11.drv/vulkan.c
+index df68822..c2f32f4 100644
+--- a/dlls/winex11.drv/vulkan.c
++++ b/dlls/winex11.drv/vulkan.c
+@@ -141,7 +141,7 @@ static void X11DRV_vulkan_surface_detach( HWND hwnd, void *private, HDC *hdc )
+         escape.code = X11DRV_SET_DRAWABLE;
+         escape.mode = IncludeInferiors;
+         escape.drawable = client_window;
+-        NtUserGetClientRect( hwnd, &escape.dc_rect );
++        NtUserGetClientRect( hwnd, &escape.dc_rect, get_win_monitor_dpi( hwnd ) );
+         NtGdiExtEscape( *hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+ #ifdef SONAME_LIBXCOMPOSITE
+         if (usexcomposite) pXCompositeRedirectWindow( gdi_display, client_window, CompositeRedirectManual );

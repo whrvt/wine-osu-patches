@@ -1,0 +1,394 @@
+From 24de35d341d9cf3026a02241f5df5e4c82b49661 Mon Sep 17 00:00:00 2001
+From: whrvt <william@horvath.blog>
+Date: Wed, 28 Feb 2024 14:47:53 -0800
+Subject: [PATCH] Revert "makefiles: Remove support for obsolete source
+ variables."
+
+This reverts commit 440771ed41ab8fc8c7f73f59dec2a8bceda7bb50.
+---
+ dlls/apisetschema/Makefile.in    |   3 +-
+ dlls/icmp/Makefile.in            |   3 +-
+ dlls/mferror/Makefile.in         |   3 +-
+ dlls/normaliz/Makefile.in        |   3 +-
+ dlls/ole32/Makefile.in           |   1 -
+ dlls/security/Makefile.in        |   3 +-
+ dlls/sfc/Makefile.in             |   3 +-
+ dlls/usp10/Makefile.in           |   3 +-
+ dlls/wineandroid.drv/Makefile.in |   1 -
+ dlls/wmi/Makefile.in             |   3 +-
+ libs/faudio/Makefile.in          |   3 +-
+ tools/make_makefiles             | 116 +++++++++++++++++++++++++------
+ tools/makedep.c                  |  27 ++++++-
+ 13 files changed, 127 insertions(+), 45 deletions(-)
+
+diff --git a/dlls/apisetschema/Makefile.in b/dlls/apisetschema/Makefile.in
+index 10cfdd54f62..3bc6935f940 100644
+--- a/dlls/apisetschema/Makefile.in
++++ b/dlls/apisetschema/Makefile.in
+@@ -2,5 +2,4 @@ MODULE    = apisetschema.dll
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	apisetschema.spec
++SOURCES = apisetschema.spec
+diff --git a/dlls/icmp/Makefile.in b/dlls/icmp/Makefile.in
+index 42d30b63d8d..86398388d4e 100644
+--- a/dlls/icmp/Makefile.in
++++ b/dlls/icmp/Makefile.in
+@@ -2,5 +2,4 @@ MODULE    = icmp.dll
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	icmp.spec
++SOURCES = icmp.spec
+diff --git a/dlls/mferror/Makefile.in b/dlls/mferror/Makefile.in
+index b680e71f1fb..5ee1b74184b 100644
+--- a/dlls/mferror/Makefile.in
++++ b/dlls/mferror/Makefile.in
+@@ -2,5 +2,4 @@ MODULE    = mferror.dll
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	mferror.mc
++SOURCES = mferror.mc
+diff --git a/dlls/normaliz/Makefile.in b/dlls/normaliz/Makefile.in
+index 3b6f18c792c..4834502ee1d 100644
+--- a/dlls/normaliz/Makefile.in
++++ b/dlls/normaliz/Makefile.in
+@@ -3,5 +3,4 @@ IMPORTLIB = normaliz
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	normaliz.spec
++SOURCES = normaliz.spec
+diff --git a/dlls/ole32/Makefile.in b/dlls/ole32/Makefile.in
+index ee0fcc41f7d..84544a628a8 100644
+--- a/dlls/ole32/Makefile.in
++++ b/dlls/ole32/Makefile.in
+@@ -42,5 +42,4 @@ SOURCES = \
+ 	stg_stream.c \
+ 	storage32.c \
+ 	usrmarshal.c
+-
+ dlldata_EXTRADEFS = -DENTRY_PREFIX=OLE32_ -DPROXY_CLSID=CLSID_PSFactoryBuffer -DWINE_REGISTER_DLL
+diff --git a/dlls/security/Makefile.in b/dlls/security/Makefile.in
+index 23886302dcf..ce96f8e1c52 100644
+--- a/dlls/security/Makefile.in
++++ b/dlls/security/Makefile.in
+@@ -3,5 +3,4 @@ IMPORTS   = secur32
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	security.spec
++SOURCES = security.spec
+diff --git a/dlls/sfc/Makefile.in b/dlls/sfc/Makefile.in
+index f4e3c7cef97..14c2f34b0fa 100644
+--- a/dlls/sfc/Makefile.in
++++ b/dlls/sfc/Makefile.in
+@@ -3,5 +3,4 @@ IMPORTLIB = sfc
+ 
+ EXTRADLLFLAGS = -Wb,--data-only -Wb,--prefer-native
+ 
+-SOURCES = \
+-	sfc.spec
++SOURCES = sfc.spec
+diff --git a/dlls/usp10/Makefile.in b/dlls/usp10/Makefile.in
+index ab6f5b82454..0d8a865b9f0 100644
+--- a/dlls/usp10/Makefile.in
++++ b/dlls/usp10/Makefile.in
+@@ -3,5 +3,4 @@ IMPORTLIB = usp10
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	usp10.spec
++SOURCES = usp10.spec
+diff --git a/dlls/wineandroid.drv/Makefile.in b/dlls/wineandroid.drv/Makefile.in
+index 9a8be0ef90a..1eb209e92ff 100644
+--- a/dlls/wineandroid.drv/Makefile.in
++++ b/dlls/wineandroid.drv/Makefile.in
+@@ -12,5 +12,4 @@ SOURCES = \
+ 	opengl.c \
+ 	window.c \
+ 	wine.svg
+-
+ EXTRA_TARGETS = wine-debug.apk
+diff --git a/dlls/wmi/Makefile.in b/dlls/wmi/Makefile.in
+index 5f1e4516cc7..9b6d56ab3da 100644
+--- a/dlls/wmi/Makefile.in
++++ b/dlls/wmi/Makefile.in
+@@ -4,5 +4,4 @@ IMPORTS   = advapi32
+ 
+ EXTRADLLFLAGS = -Wb,--data-only
+ 
+-SOURCES = \
+-	wmi.spec
++SOURCES = wmi.spec
+diff --git a/libs/faudio/Makefile.in b/libs/faudio/Makefile.in
+index 7be4fe259a4..426f71cdfdf 100644
+--- a/libs/faudio/Makefile.in
++++ b/libs/faudio/Makefile.in
+@@ -19,5 +19,4 @@ SOURCES = \
+ 	src/FAudio_internal.c \
+ 	src/FAudio_internal_simd.c \
+ 	src/FAudio_operationset.c \
+-	src/FAudio_platform_win32.c \
+-	src/matrix_defaults.inl
++	src/FAudio_platform_win32.c
+diff --git a/tools/make_makefiles b/tools/make_makefiles
+index f3f9329fe63..1f4d3ad6d01 100755
+--- a/tools/make_makefiles
++++ b/tools/make_makefiles
+@@ -44,6 +44,24 @@ my %ignored_source_files = (
+     "tools/makedep.c" => 1,
+ );
+ 
++my @source_vars = (
++    "BISON_SRCS",
++    "C_SRCS",
++    "FONT_SRCS",
++    "HEADER_SRCS",
++    "IDL_SRCS",
++    "IN_SRCS",
++    "LEX_SRCS",
++    "MANPAGES",
++    "MC_SRCS",
++    "OBJC_SRCS",
++    "PO_SRCS",
++    "RC_SRCS",
++    "SOURCES",
++    "SVG_SRCS",
++    "XTEMPLATE_SRCS"
++);
++
+ my (@makefiles, %makefiles);
+ my @nls_files;
+ 
+@@ -108,19 +126,34 @@ sub replace_makefile_variables($)
+ {
+     my $file = shift;
+     my $make = $makefiles{$file};
++    my $source_vars_regexp = join "|", @source_vars;
++    my %replaced;
++    my %files;
+     my $old;
+     my $new;
+-    my $replaced = 0;
+-    my $value = "";
+-
+-    $value = "\\\n\t" . join(" \\\n\t", sort @{${$make}{"=SOURCES"}}) if defined ${$make}{"=SOURCES"};
+ 
+     open OLD_FILE, $file or die "cannot open $file";
+     while (<OLD_FILE>)
+     {
+         $old .= $_;
+-        if (/^\s*SOURCES\s*=/)
++        if (/^\s*($source_vars_regexp)(\s*)=/)
+         {
++            # try to preserve formatting
++            my $var = $1;
++            my $spaces = $2;
++            my $replaced = 0;
++            my @values;
++
++            if (defined ${$make}{"=$var"})
++            {
++                @values = @{${$make}{"=$var"}};
++                ${$make}{$var} = \@values;
++            }
++            else
++            {
++                undef ${$make}{$var};
++            }
++            my $multiline = /\\$/ || (@values > 1);
+             my $old_str = $_;
+             while (/\\$/)
+             {
+@@ -129,15 +162,43 @@ sub replace_makefile_variables($)
+                 $old .= $_;
+                 $old_str .= $_;
+             }
+-            $new .= "SOURCES = $value\n" if $value;
+-            $replaced = 1;
++            my $new_str = "";
++            if (!@values)
++            {
++                # nothing
++            }
++            elsif ($multiline)
++            {
++                $new_str = "$var = \\\n\t" . join(" \\\n\t", sort @values) . "\n";
++                $new .= $new_str;
++            }
++            else
++            {
++                $new_str = "$var$spaces= @values\n";
++                $new .= $new_str;
++            }
++            $replaced{$var} = 1;
++            foreach my $val (@values)
++            {
++                die "$file: duplicate file $val" if defined $files{$val};
++                $files{$val} = 1;
++            }
+             next;
+         }
+         $new .= $_;
+     }
+-    unless ($replaced)
++    # if we are using SOURCES, ignore the other variables
++    unless ($replaced{"SOURCES"})
+     {
+-        $new .= "\nSOURCES = $value\n" if $value;
++        foreach my $var (@source_vars)
++        {
++            next if defined $replaced{$var};
++            next if $var eq "SOURCES";
++            next unless defined ${$make}{"=$var"};
++            my @values = @{${$make}{"=$var"}};
++            next unless @values;
++            $new .= "\n$var = \\\n\t" . join(" \\\n\t", sort @values) . "\n";
++        }
+     }
+     close OLD_FILE;
+     update_file($file, $new) if $old ne $new;
+@@ -170,7 +231,8 @@ sub parse_makefile($)
+             $make{$var} = $2;
+             next;
+         }
+-        if (/^\s*(SOURCES|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
++        my $source_vars_regexp = join "|", @source_vars;
++        if (/^\s*($source_vars_regexp|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
+         {
+             my $var = $1;
+             my @list = split(/\s+/, $2);
+@@ -241,19 +303,19 @@ sub get_parent_makefile($)
+ }
+ 
+ # preserve shared source files that are listed in the existing makefile
+-sub preserve_shared_source_files($$)
++sub preserve_shared_source_files($$$)
+ {
+-    my ($make, $parent) = @_;
++    my ($make, $parent, $var) = @_;
+     my %srcs;
+ 
+-    return unless defined ${$parent}{"=SOURCES"};
+-    foreach my $file (@{${$parent}{"=SOURCES"}}) { $srcs{$file} = 1; }
+-    foreach my $file (@{${$make}{"=SOURCES"}}) { $srcs{$file} = 0; }
++    return unless defined ${$parent}{"=$var"};
++    foreach my $file (@{${$parent}{"=$var"}}) { $srcs{$file} = 1; }
++    foreach my $file (@{${$make}{"=$var"}}) { $srcs{$file} = 0; }
+ 
+-    foreach my $file (@{${$make}{SOURCES}})
++    foreach my $file (@{${$make}{$var}})
+     {
+         next unless defined $srcs{$file} && $srcs{$file} == 1;
+-        push @{${$make}{"=SOURCES"}}, $file;
++        push @{${$make}{"=$var"}}, $file;
+     }
+ }
+ 
+@@ -276,13 +338,20 @@ sub assign_sources_to_makefiles(@)
+         my $make = $makefiles{"$dir/Makefile.in"};
+         my $name = substr( $file, length($dir) + 1 );
+ 
+-        if ($name =~ /\.h$/)
++        if ($name =~ /\.(c|in|l|m|mc|po|rc|sfd|svg|y)$/)
++        {
++            push @{${$make}{"=SOURCES"}}, $name;
++            next;
++        }
++        elsif ($name =~ /\.h$/ || $name =~ /\.rh$/ || $name =~ /\.inl$/ || $name =~ /\.x$/)
+         {
+             next if $dir ne "include";
+         }
+         elsif ($name =~ /\.idl$/)
+         {
+             die "no makedep flags specified in $file" unless $dir eq "include" || get_makedep_flags($file);
++            push @{${$make}{"=SOURCES"}}, $name;
++            next;
+         }
+         elsif ($name =~ /\.spec$/)
+         {
+@@ -295,13 +364,14 @@ sub assign_sources_to_makefiles(@)
+         {
+             push @nls_files, $name if $dir eq "nls";
+         }
+-        elsif ($name =~ /\.xml$/)
++        elsif ($name =~ /\.xml$/ && $dir eq "dlls/winewayland.drv")
+         {
+-            next unless $dir eq "dlls/winewayland.drv";
++            push @{${$make}{"=SOURCES"}}, $name;
++            next;
+         }
+-        elsif ($name !~ /\.(c|in|inl|l|m|mc|po|rc|rh|sfd|svg|x|y)$/)
++        elsif ($dir ne "loader")  # loader dir contains misc files
+         {
+-            next unless $dir eq "loader";  # loader dir contains misc files
++            next;
+         }
+         push @{${$make}{"=SOURCES"}}, $name;
+     }
+@@ -312,7 +382,7 @@ sub assign_sources_to_makefiles(@)
+         my $make = $makefiles{$file};
+         my $parent = get_parent_makefile( $file );
+         next unless $parent;
+-        preserve_shared_source_files( $makefiles{$file}, $makefiles{$parent} );
++        preserve_shared_source_files( $makefiles{$file}, $makefiles{$parent}, "SOURCES" );
+     }
+ }
+ 
+diff --git a/tools/makedep.c b/tools/makedep.c
+index 8ce575b15ca..088fc1c1aa3 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -4195,6 +4195,26 @@ static void output_dependencies( struct makefile *make )
+  */
+ static void load_sources( struct makefile *make )
+ {
++    static const char *source_vars[] =
++    {
++        "SOURCES",
++        "C_SRCS",
++        "OBJC_SRCS",
++        "RC_SRCS",
++        "MC_SRCS",
++        "IDL_SRCS",
++        "BISON_SRCS",
++        "LEX_SRCS",
++        "HEADER_SRCS",
++        "XTEMPLATE_SRCS",
++        "SVG_SRCS",
++        "FONT_SRCS",
++        "IN_SRCS",
++        "PO_SRCS",
++        "MANPAGES",
++        NULL
++    };
++    const char **var;
+     unsigned int i, arch;
+     struct strarray value;
+     struct incl_file *file;
+@@ -4282,8 +4302,11 @@ static void load_sources( struct makefile *make )
+     list_init( &make->sources );
+     list_init( &make->includes );
+ 
+-    value = get_expanded_make_var_array( make, "SOURCES" );
+-    for (i = 0; i < value.count; i++) add_src_file( make, value.str[i] );
++    for (var = source_vars; *var; var++)
++    {
++        value = get_expanded_make_var_array( make, *var );
++        for (i = 0; i < value.count; i++) add_src_file( make, value.str[i] );
++    }
+ 
+     add_generated_sources( make );
+ 
+-- 
+2.43.2
+

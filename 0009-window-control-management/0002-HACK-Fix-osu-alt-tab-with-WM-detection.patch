@@ -1,0 +1,52 @@
+From 719056116394fc694ed307352d0ed877aca6ceae Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 11 Jun 2024 17:33:35 +0200
+Subject: [PATCH] HACK: Fix osu! alt-tab with WM detection
+
+Edit of the original patch from openglfreak that fixed focus-in when running osu! as fullscreen:
+adding such flags breaks alt-tabbing in Windowed mode on GNOME and KDE, forcing osu! to stay on top of other apps.
+This depends on Proton's WM detection function.
+---
+ dlls/win32u/window.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 12f2a9027f0..484edd5a761 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -31,6 +31,8 @@
+ #include "ntuser_private.h"
+ #include "wine/server.h"
+ #include "wine/debug.h"
++#include "ntuser.h"
++#include "winuser.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(win);
+ 
+@@ -3391,6 +3393,23 @@ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+     BOOL ret = FALSE;
+ 
+     orig_flags = winpos->flags;
++    LONG_PTR wm = __wine_get_window_manager();
++    
++    /* HACK: fix osu! taking back focus immediately when it is unfocused depending on WM */
++    if (winpos->hwndInsertAfter == HWND_NOTOPMOST &&
++        (get_window_long(winpos->hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST))
++    {
++        /* If on KDE or GNOME, alt-tab on Fullscreen AND Windowed only works without the SWP_NOZORDER flag. */
++        if (wm == WINE_WM_X11_KDE || wm == WINE_WM_X11_MUTTER)
++        {
++            winpos->flags |= SWP_NOACTIVATE | SWP_NOOWNERZORDER;
++        }
++        /* In any other case, SWP_NOZORDER is enough to get the game working fine and not take focus on other apps when windowed. */
++        else
++        {
++            winpos->flags |= SWP_NOACTIVATE | SWP_NOZORDER;
++        }
++    }
+ 
+     /* First, check z-order arguments.  */
+     if (!(winpos->flags & SWP_NOZORDER))
+-- 
+2.45.2
+

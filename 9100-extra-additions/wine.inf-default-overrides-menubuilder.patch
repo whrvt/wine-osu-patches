@@ -1,0 +1,46 @@
+## winemenubuilder is bloat
+## wine(bus/sys/hid) crash after some time and give strange error messages; they are unnecessary for osu anyways 
+diff --git a/loader/wine.inf.in b/loader/wine.inf.in
+index 194c1a7f5c0..c76bcb3d8f3 100644
+--- a/loader/wine.inf.in
++++ b/loader/wine.inf.in
+@@ -98,7 +98,8 @@ AddReg=\
+     Tapi,\
+     ThemeManager,\
+     VersionInfo,\
+-    LicenseInformation
++    LicenseInformation,\
++    Overrides
+ 
+ [DefaultInstall.ntamd64]
+ RegisterDlls=RegisterDllsSection
+@@ -125,7 +126,8 @@ AddReg=\
+     Tapi,\
+     ThemeManager,\
+     VersionInfo,\
+-    LicenseInformation
++    LicenseInformation,\
++    Overrides
+ 
+ [DefaultInstall.ntarm64]
+ RegisterDlls=RegisterDllsSection
+@@ -168,7 +170,8 @@ AddReg=\
+     Packages.wow64,\
+     Tapi,\
+     VersionInfo,\
+-    LicenseInformation
++    LicenseInformation,\
++    Overrides
+ 
+ [Wow64Install.ntarm]
+ RegisterDlls=RegisterDllsSection
+@@ -3025,3 +3028,9 @@ EtcFiles  = 12,etc
+ InfFiles  = 17
+ NlsFiles  = 11
+ SortFiles = 10,globalization\sorting
++
++[Overrides]
++HKCU,Software\Wine\DllOverrides,"winemenubuilder.exe",0x2,""
++
++
++

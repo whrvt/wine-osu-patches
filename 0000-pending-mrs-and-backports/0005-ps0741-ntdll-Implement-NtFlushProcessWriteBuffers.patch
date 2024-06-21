@@ -1,0 +1,346 @@
+From c1720fc3ab35df2aa9c02f14a3214a4cc9370fdd Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Tue, 20 Feb 2024 16:45:49 +0100
+Subject: [PATCH 1/4] ntdll: Add mprotect-based implementation of
+ NtFlushProcessWriteBuffers.
+
+---
+ dlls/ntdll/unix/virtual.c | 51 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 49 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 2b6ce543531..219a0339933 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -219,6 +219,9 @@ struct range_entry
+ static struct range_entry *free_ranges;
+ static struct range_entry *free_ranges_end;
+ 
++static void *dummy_page;
++static pthread_mutex_t dummy_page_mutex = PTHREAD_MUTEX_INITIALIZER;
++
+ 
+ static inline BOOL is_beyond_limit( const void *addr, size_t size, const void *limit )
+ {
+@@ -6073,14 +6076,58 @@ NTSTATUS WINAPI NtFlushInstructionCache( HANDLE handle, const void *addr, SIZE_T
+ }
+ 
+ 
++static BOOL try_mprotect( void )
++{
++#if !defined(__i386__) && !defined(__x86_64__)
++    static int once = 0;
++#endif
++    BOOL success = FALSE;
++    char *mem;
++
++    pthread_mutex_lock(&dummy_page_mutex);
++    mem = dummy_page;
++    if (!mem)
++    {
++        /* Allocate one page of memory that we can call mprotect() on */
++        mem = anon_mmap_alloc( page_size, PROT_READ | PROT_WRITE );
++        if (mem == MAP_FAILED)
++            goto failed;
++        /* Lock page into memory so that it is not unmapped between the calls to mprotect() below */
++        if (mlock( mem, page_size ))
++            goto failed;
++        dummy_page = mem;
++    }
++    /* Make dummy page writable */
++    success = !mprotect( mem, page_size, PROT_READ | PROT_WRITE );
++    if (!success)
++        goto failed;
++    /* Make the page dirty to prevent the kernel from skipping the global TLB flush */
++    InterlockedIncrement((volatile LONG*)mem);
++    /* Change the page protection to PROT_NONE to force the kernel to send an IPI to all threads of this process,
++       which has the side effect of executing a memory barrier in those threads */
++    success = !mprotect( mem, page_size, PROT_NONE );
++#if !defined(__i386__) && !defined(__x86_64__)
++    /* Some ARMv8 processors can broadcast TLB invalidations using the TLBI instruction,
++       the madvise trick does not work on those. Print a fixme on all non-x86 architectures. */
++    if (success && !once++)
++        FIXME( "memory barrier may not work on this platform\n" );
++#endif
++failed:
++    pthread_mutex_unlock(&dummy_page_mutex);
++    return success;
++}
++
++
+ /**********************************************************************
+  *           NtFlushProcessWriteBuffers  (NTDLL.@)
+  */
+ NTSTATUS WINAPI NtFlushProcessWriteBuffers(void)
+ {
+     static int once = 0;
+-    if (!once++) FIXME( "stub\n" );
+-    return STATUS_SUCCESS;
++    if (try_mprotect())
++        return STATUS_SUCCESS;
++    if (!once++) FIXME( "no implementation available on this platform\n" );
++    return STATUS_NOT_IMPLEMENTED;
+ }
+ 
+ 
+-- 
+GitLab
+
+
+From 5014d210649a65e6e46c1dd3363e65d1a304eb5f Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Tue, 20 Feb 2024 16:45:49 +0100
+Subject: [PATCH 2/4] ntdll: Add sys_membarrier-based implementation of
+ NtFlushProcessWriteBuffers.
+
+Uses the MEMBARRIER_CMD_PRIVATE_EXPEDITED membarrier command introduced in Linux 4.14.
+---
+ dlls/ntdll/unix/virtual.c | 47 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 219a0339933..8c53ce00e9f 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -39,6 +39,9 @@
+ #ifdef HAVE_SYS_SYSINFO_H
+ # include <sys/sysinfo.h>
+ #endif
++#ifdef HAVE_SYS_SYSCALL_H
++# include <sys/syscall.h>
++#endif
+ #ifdef HAVE_SYS_SYSCTL_H
+ # include <sys/sysctl.h>
+ #endif
+@@ -219,6 +222,11 @@ struct range_entry
+ static struct range_entry *free_ranges;
+ static struct range_entry *free_ranges_end;
+ 
++#if defined(__linux__) && defined(__NR_membarrier)
++static BOOL membarrier_exp_available;
++static pthread_once_t membarrier_init_once = PTHREAD_ONCE_INIT;
++#endif
++
+ static void *dummy_page;
+ static pthread_mutex_t dummy_page_mutex = PTHREAD_MUTEX_INITIALIZER;
+ 
+@@ -6076,6 +6084,43 @@ NTSTATUS WINAPI NtFlushInstructionCache( HANDLE handle, const void *addr, SIZE_T
+ }
+ 
+ 
++#if defined(__linux__) && defined(__NR_membarrier)
++
++#define MEMBARRIER_CMD_QUERY                        0x00
++#define MEMBARRIER_CMD_PRIVATE_EXPEDITED            0x08
++#define MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   0x10
++
++static int membarrier( int cmd, unsigned int flags, int cpu_id )
++{
++    return syscall( __NR_membarrier, cmd, flags, cpu_id );
++}
++
++static void membarrier_init( void )
++{
++    static const int exp_required_cmds =
++        MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
++    int available_cmds = membarrier( MEMBARRIER_CMD_QUERY, 0, 0 );
++    if (available_cmds == -1)
++        return;
++    if ((available_cmds & exp_required_cmds) == exp_required_cmds)
++        membarrier_exp_available = !membarrier( MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0 );
++}
++
++static BOOL try_exp_membarrier( void )
++{
++    pthread_once(&membarrier_init_once, membarrier_init);
++    if (!membarrier_exp_available)
++        return FALSE;
++    return !membarrier( MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0 );
++}
++
++#else /* defined(__linux__) && defined(__NR_membarrier) */
++
++static BOOL try_exp_membarrier( void ) { return 0; }
++
++#endif /* defined(__linux__) && defined(__NR_membarrier) */
++
++
+ static BOOL try_mprotect( void )
+ {
+ #if !defined(__i386__) && !defined(__x86_64__)
+@@ -6124,6 +6169,8 @@ failed:
+ NTSTATUS WINAPI NtFlushProcessWriteBuffers(void)
+ {
+     static int once = 0;
++    if (try_exp_membarrier())
++        return STATUS_SUCCESS;
+     if (try_mprotect())
+         return STATUS_SUCCESS;
+     if (!once++) FIXME( "no implementation available on this platform\n" );
+-- 
+GitLab
+
+
+From 1dff2a4385d92b9afba435e0a6f2c2116de162a2 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Tue, 20 Feb 2024 16:45:49 +0100
+Subject: [PATCH 3/4] ntdll: Add thread_get_register_pointer_values-based
+ implementation of NtFlushProcessWriteBuffers.
+
+---
+ dlls/ntdll/unix/virtual.c | 64 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 64 insertions(+)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 8c53ce00e9f..155367b605f 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -65,6 +65,9 @@
+ #if defined(__APPLE__)
+ # include <mach/mach_init.h>
+ # include <mach/mach_vm.h>
++# include <mach/task.h>
++# include <mach/thread_state.h>
++# include <mach/vm_map.h>
+ #endif
+ 
+ #include "ntstatus.h"
+@@ -222,6 +225,11 @@ struct range_entry
+ static struct range_entry *free_ranges;
+ static struct range_entry *free_ranges_end;
+ 
++#ifdef __APPLE__
++static kern_return_t (*p_thread_get_register_pointer_values)( thread_t, uintptr_t*, size_t*, uintptr_t* );
++static pthread_once_t tgrpvs_init_once = PTHREAD_ONCE_INIT;
++#endif
++
+ #if defined(__linux__) && defined(__NR_membarrier)
+ static BOOL membarrier_exp_available;
+ static pthread_once_t membarrier_init_once = PTHREAD_ONCE_INIT;
+@@ -6084,6 +6092,60 @@ NTSTATUS WINAPI NtFlushInstructionCache( HANDLE handle, const void *addr, SIZE_T
+ }
+ 
+ 
++#ifdef __APPLE__
++
++static void tgrpvs_init( void )
++{
++    p_thread_get_register_pointer_values = dlsym( RTLD_DEFAULT, "thread_get_register_pointer_values" );
++}
++
++static BOOL try_mach_tgrpvs( void )
++{
++    /* Taken from https://github.com/dotnet/runtime/blob/7be37908e5a1cbb83b1062768c1649827eeaceaa/src/coreclr/pal/src/thread/process.cpp#L2799 */
++    mach_msg_type_number_t count, i = 0;
++    thread_act_array_t threads;
++    BOOL success = TRUE;
++    kern_return_t kret;
++
++    pthread_once(&tgrpvs_init_once, tgrpvs_init);
++    if (!p_thread_get_register_pointer_values)
++        return FALSE;
++
++    /* Get references to all threads of this process */
++    kret = task_threads( mach_task_self(), &threads, &count );
++    if (kret)
++        return FALSE;
++
++    /* Iterate through the threads in the list */
++    while (i < count)
++    {
++        uintptr_t reg_values[128];
++        size_t reg_count = ARRAY_SIZE( reg_values );
++        uintptr_t sp;
++
++        /* Request the thread's register pointer values to force the thread to go through a memory barrier */
++        kret = p_thread_get_register_pointer_values( threads[i], &sp, &reg_count, reg_values );
++        /* This function always fails when querying Rosetta's exception handling thread, so we only treat
++           KERN_INSUFFICIENT_BUFFER_SIZE as an error, like .NET core does. */
++        if (kret == KERN_INSUFFICIENT_BUFFER_SIZE)
++            success = FALSE;
++
++        /* Deallocate thread reference once we're done with it */
++        mach_port_deallocate( mach_task_self(), threads[i++] );
++    }
++
++    /* Deallocate thread list */
++    vm_deallocate( mach_task_self(), (vm_address_t)threads, count * sizeof(threads[0]) );
++    return success;
++}
++
++#else /* defined(__APPLE__) */
++
++static BOOL try_mach_tgrpvs( void ) { return 0; }
++
++#endif /* defined(__APPLE__) */
++
++
+ #if defined(__linux__) && defined(__NR_membarrier)
+ 
+ #define MEMBARRIER_CMD_QUERY                        0x00
+@@ -6169,6 +6231,8 @@ failed:
+ NTSTATUS WINAPI NtFlushProcessWriteBuffers(void)
+ {
+     static int once = 0;
++    if (try_mach_tgrpvs())
++        return STATUS_SUCCESS;
+     if (try_exp_membarrier())
+         return STATUS_SUCCESS;
+     if (try_mprotect())
+-- 
+GitLab
+
+
+From 2249604e53b9f72478d3886f250720db957454cf Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Tue, 20 Feb 2024 16:51:50 +0100
+Subject: [PATCH 4/4] ntdll/tests: Add basic NtFlushProcessWriteBuffers test.
+
+---
+ dlls/ntdll/tests/virtual.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/dlls/ntdll/tests/virtual.c b/dlls/ntdll/tests/virtual.c
+index 3628cec89e8..748ce9c4bb8 100644
+--- a/dlls/ntdll/tests/virtual.c
++++ b/dlls/ntdll/tests/virtual.c
+@@ -46,6 +46,7 @@ static NTSTATUS (WINAPI *pNtMapViewOfSectionEx)(HANDLE, HANDLE, PVOID *, const L
+ static NTSTATUS (WINAPI *pNtSetInformationVirtualMemory)(HANDLE, VIRTUAL_MEMORY_INFORMATION_CLASS,
+                                                          ULONG_PTR, PMEMORY_RANGE_ENTRY,
+                                                          PVOID, ULONG);
++static NTSTATUS (WINAPI *pNtFlushProcessWriteBuffers)(void);
+ 
+ static const BOOL is_win64 = sizeof(void*) != sizeof(int);
+ static BOOL is_wow64;
+@@ -2705,6 +2706,14 @@ static void test_query_image_information(void)
+     NtClose( file );
+ }
+ 
++static void test_flush_write_buffers(void)
++{
++    NTSTATUS status;
++
++    status = pNtFlushProcessWriteBuffers();
++    ok( status == STATUS_SUCCESS, "Unexpected status %08lx\n", status );
++}
++
+ START_TEST(virtual)
+ {
+     HMODULE mod;
+@@ -2737,6 +2746,7 @@ START_TEST(virtual)
+     pNtAllocateVirtualMemoryEx = (void *)GetProcAddress(mod, "NtAllocateVirtualMemoryEx");
+     pNtMapViewOfSectionEx = (void *)GetProcAddress(mod, "NtMapViewOfSectionEx");
+     pNtSetInformationVirtualMemory = (void *)GetProcAddress(mod, "NtSetInformationVirtualMemory");
++    pNtFlushProcessWriteBuffers = (void *)GetProcAddress(mod, "NtFlushProcessWriteBuffers");
+ 
+     NtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi), NULL);
+     trace("system page size %#lx\n", sbi.PageSize);
+@@ -2755,4 +2765,5 @@ START_TEST(virtual)
+     test_syscalls();
+     test_query_region_information();
+     test_query_image_information();
++    test_flush_write_buffers();
+ }
+-- 
+GitLab
+
