@@ -2,15 +2,17 @@ diff --git a/configure.ac b/configure.ac
 index 7b7ac88..27dc88d 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -973,7 +973,7 @@ This is an error since --enable-archs=$wine_arch was requested.])])
+@@ -973,8 +973,8 @@ This is an error since --enable-archs=$wine_arch was requested.])])
      WINE_TRY_PE_CFLAGS([-flarge-source-files -Wmisleading-indentation],[AS_VAR_APPEND(${wine_arch}_EXTRACFLAGS,[" -Wno-misleading-indentation"])])
  
      case $wine_arch in
 -      i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])
+-            WINE_TRY_PE_CFLAGS([-mpreferred-stack-boundary=2])
 +      i386) WINE_TRY_PE_CFLAGS([-fomit-frame-pointer])
-             WINE_TRY_PE_CFLAGS([-mpreferred-stack-boundary=2])
++            WINE_TRY_PE_CFLAGS([-mstack-alignment=2])
              WINE_TRY_PE_CFLAGS([-Wl,--disable-stdcall-fixup],
                                 [AS_VAR_APPEND([${wine_arch}_LDFLAGS],[" -Wl,--disable-stdcall-fixup"])]) ;;
+       x86_64) WINE_TRY_PE_CFLAGS([-Wformat-overflow])
 @@ -1958,7 +1958,7 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
  
    case $HOST_ARCH in

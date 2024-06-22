@@ -1,0 +1,13 @@
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index c162884..62660a1 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -1743,7 +1743,7 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
+                 when.tv_nsec = (long)((ticks % TICKSPERSEC) * 100);
+             }
+ 
+-            usleep(0);
++            NtYieldExecution();
+             while ((err = clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &when, NULL )) == EINTR);
+             if (!err)
+                 return STATUS_SUCCESS;
