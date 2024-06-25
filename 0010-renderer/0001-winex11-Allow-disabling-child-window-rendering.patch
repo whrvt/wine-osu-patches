@@ -1,6 +1,14 @@
-# see: https://github.com/ValveSoftware/wine/commit/afcbb6a2a29de850d58b8b01435db7509d389c64
-#      https://github.com/ValveSoftware/wine/commit/a8514f9606ee3fdc3d912c988f651edc5d7d0d55
-# for other examples of this idea
+From d330b2b142aedf06cc54bfa3fe5f750d2ed31bbf Mon Sep 17 00:00:00 2001
+From: whrvt <william@horvath.blog>
+Date: Tue, 25 Jun 2024 05:30:22 +0000
+Subject: [PATCH] winex11: Allow disabling child window rendering through XComposite.
+
+Improves performance in osu! by ~2x, so disable it by default. Breaks map editor context menus.
+
+See: https://github.com/ValveSoftware/wine/commit/afcbb6a2a29de850d58b8b01435db7509d389c64
+     https://github.com/ValveSoftware/wine/commit/a8514f9606ee3fdc3d912c988f651edc5d7d0d55
+for other examples of this idea.
+
 diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/opengl.c
