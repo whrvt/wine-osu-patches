@@ -1,0 +1,21 @@
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index aaf81bc19cc..51f0549e1e7 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -787,6 +787,7 @@ static void init_pixel_formats( Display *display )
+     int fmt_id, nCfgs, i, run, bmp_formats;
+     GLXFBConfig* cfgs;
+     XVisualInfo *visinfo;
++    int tmp_value;
+ 
+     cfgs = pglXGetFBConfigs(display, DefaultScreen(display), &nCfgs);
+     if (NULL == cfgs || 0 == nCfgs) {
+@@ -830,7 +831,7 @@ static void init_pixel_formats( Display *display )
+                  * As of the introduction of composition managers at least Nvidia now also offers ARGB visuals
+                  * with a depth of 32 in addition to the default 24 bit. In order to prevent BadMatch errors we only
+                  * list formats with the same depth. */
+-                if(visinfo->depth != default_visual.depth)
++                if((visinfo->depth != default_visual.depth) || (gl_disable_child_window_rendering && !pglXGetFBConfigAttrib( display, cfgs[i], GLX_STENCIL_SIZE, &tmp_value ) && tmp_value))
+                 {
+                     XFree(visinfo);
+                     continue;
