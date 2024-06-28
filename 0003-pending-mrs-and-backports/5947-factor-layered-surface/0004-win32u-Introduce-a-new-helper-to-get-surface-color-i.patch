@@ -1,0 +1,427 @@
+From d52b98f5a3e150e865cc8e7dbed08e211aaa81f4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 12 Jun 2024 12:13:00 +0200
+Subject: [PATCH 4/9] win32u: Introduce a new helper to get surface color info
+ and bits.
+
+---
+ dlls/win32u/dce.c                     | 99 ++++++++++++---------------
+ dlls/win32u/dibdrv/dc.c               |  2 +-
+ dlls/win32u/win32u_private.h          |  1 +
+ dlls/wineandroid.drv/window.c         | 15 +---
+ dlls/winemac.drv/surface.c            | 27 +-------
+ dlls/winewayland.drv/window_surface.c | 17 +----
+ dlls/winex11.drv/bitblt.c             | 16 +----
+ include/wine/gdi_driver.h             |  2 -
+ 8 files changed, 50 insertions(+), 129 deletions(-)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index 4020fb833ac..4f86e6fb01d 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -56,24 +56,6 @@ static pthread_mutex_t surfaces_lock = PTHREAD_MUTEX_INITIALIZER;
+  * Dummy window surface for windows that shouldn't get painted.
+  */
+ 
+-static void *dummy_surface_get_bitmap_info( struct window_surface *window_surface, BITMAPINFO *info )
+-{
+-    static DWORD dummy_data;
+-
+-    info->bmiHeader.biSize          = sizeof( info->bmiHeader );
+-    info->bmiHeader.biWidth         = dummy_surface.rect.right;
+-    info->bmiHeader.biHeight        = dummy_surface.rect.bottom;
+-    info->bmiHeader.biPlanes        = 1;
+-    info->bmiHeader.biBitCount      = 32;
+-    info->bmiHeader.biCompression   = BI_RGB;
+-    info->bmiHeader.biSizeImage     = 0;
+-    info->bmiHeader.biXPelsPerMeter = 0;
+-    info->bmiHeader.biYPelsPerMeter = 0;
+-    info->bmiHeader.biClrUsed       = 0;
+-    info->bmiHeader.biClrImportant  = 0;
+-    return &dummy_data;
+-}
+-
+ static void dummy_surface_set_clip( struct window_surface *window_surface, const RECT *rects, UINT count )
+ {
+     /* nothing to do */
+@@ -93,7 +75,6 @@ static void dummy_surface_destroy( struct window_surface *window_surface )
+ 
+ static const struct window_surface_funcs dummy_surface_funcs =
+ {
+-    dummy_surface_get_bitmap_info,
+     dummy_surface_set_clip,
+     dummy_surface_flush,
+     dummy_surface_destroy
+@@ -125,13 +106,6 @@ static struct offscreen_window_surface *impl_from_window_surface( struct window_
+     return CONTAINING_RECORD( base, struct offscreen_window_surface, header );
+ }
+ 
+-static void *offscreen_window_surface_get_bitmap_info( struct window_surface *base, BITMAPINFO *info )
+-{
+-    struct offscreen_window_surface *impl = impl_from_window_surface( base );
+-    info->bmiHeader = impl->info.bmiHeader;
+-    return base->color_bits;
+-}
+-
+ static void offscreen_window_surface_set_clip( struct window_surface *base, const RECT *rects, UINT count )
+ {
+ }
+@@ -150,7 +124,6 @@ static void offscreen_window_surface_destroy( struct window_surface *base )
+ 
+ static const struct window_surface_funcs offscreen_window_surface_funcs =
+ {
+-    offscreen_window_surface_get_bitmap_info,
+     offscreen_window_surface_set_clip,
+     offscreen_window_surface_flush,
+     offscreen_window_surface_destroy
+@@ -224,10 +197,6 @@ static COLORREF get_color_key( const BITMAPINFO *info, COLORREF color_key )
+ W32KAPI BOOL window_surface_init( struct window_surface *surface, const struct window_surface_funcs *funcs,
+                                   HWND hwnd, const RECT *rect, BITMAPINFO *info, HBITMAP bitmap )
+ {
+-    struct bitblt_coords coords = {0};
+-    struct gdi_image_bits bits;
+-    BITMAPOBJ *bmp;
+-
+     surface->funcs = funcs;
+     surface->ref = 1;
+     surface->hwnd = hwnd;
+@@ -239,10 +208,7 @@ W32KAPI BOOL window_surface_init( struct window_surface *surface, const struct w
+     reset_bounds( &surface->bounds );
+ 
+     if (!bitmap) bitmap = NtGdiCreateDIBSection( 0, NULL, 0, info, DIB_RGB_COLORS, 0, 0, 0, NULL );
+-    if (!(surface->color_bitmap = bitmap) || !(bmp = GDI_GetObjPtr( bitmap, NTGDI_OBJ_BITMAP ))) return FALSE;
+-    get_image_from_bitmap( bmp, info, &bits, &coords );
+-    surface->color_bits = bits.ptr;
+-    GDI_ReleaseObj( bitmap );
++    if (!(surface->color_bitmap = bitmap)) return FALSE;
+ 
+     return TRUE;
+ }
+@@ -276,6 +242,29 @@ W32KAPI void window_surface_unlock( struct window_surface *surface )
+     pthread_mutex_unlock( &surface->mutex );
+ }
+ 
++void *window_surface_get_color( struct window_surface *surface, BITMAPINFO *info )
++{
++    struct bitblt_coords coords = {0};
++    struct gdi_image_bits gdi_bits;
++    BITMAPOBJ *bmp;
++
++    if (surface == &dummy_surface)
++    {
++        static BITMAPINFOHEADER header = {.biSize = sizeof(header), .biWidth = 1, .biHeight = 1,
++                                          .biPlanes = 1, .biBitCount = 32, .biCompression = BI_RGB};
++        static DWORD dummy_data;
++
++        info->bmiHeader = header;
++        return &dummy_data;
++    }
++
++    if (!(bmp = GDI_GetObjPtr( surface->color_bitmap, NTGDI_OBJ_BITMAP ))) return NULL;
++    get_image_from_bitmap( bmp, info, &gdi_bits, &coords );
++    GDI_ReleaseObj( surface->color_bitmap );
++
++    return gdi_bits.ptr;
++}
++
+ W32KAPI void window_surface_flush( struct window_surface *surface )
+ {
+     char color_buf[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
+@@ -284,10 +273,9 @@ W32KAPI void window_surface_flush( struct window_surface *surface )
+     void *color_bits;
+ 
+     window_surface_lock( surface );
+-    color_bits = surface->funcs->get_info( surface, color_info );
+ 
+     OffsetRect( &dirty, -dirty.left, -dirty.top );
+-    if (intersect_rect( &dirty, &dirty, &surface->bounds ))
++    if (intersect_rect( &dirty, &dirty, &surface->bounds ) && (color_bits = window_surface_get_color( surface, color_info )))
+     {
+         TRACE( "Flushing hwnd %p, surface %p %s, bounds %s, dirty %s\n", surface->hwnd, surface,
+                wine_dbgstr_rect( &surface->rect ), wine_dbgstr_rect( &surface->bounds ), wine_dbgstr_rect( &dirty ) );
+@@ -301,27 +289,28 @@ W32KAPI void window_surface_set_layered( struct window_surface *surface, COLORRE
+ {
+     char color_buf[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
+     BITMAPINFO *color_info = (BITMAPINFO *)color_buf;
++    void *color_bits;
+ 
+     window_surface_lock( surface );
+-    surface->funcs->get_info( surface, color_info );
+-
+-    color_key = get_color_key( color_info, color_key );
+-    if (color_key != surface->color_key)
+-    {
+-        surface->color_key = color_key;
+-        surface->bounds = surface->rect;
+-    }
+-    if (alpha_bits != surface->alpha_bits)
+-    {
+-        surface->alpha_bits = alpha_bits;
+-        surface->bounds = surface->rect;
+-    }
+-    if (alpha_mask != surface->alpha_mask)
++    if ((color_bits = window_surface_get_color( surface, color_info )))
+     {
+-        surface->alpha_mask = alpha_mask;
+-        surface->bounds = surface->rect;
++        color_key = get_color_key( color_info, color_key );
++        if (color_key != surface->color_key)
++        {
++            surface->color_key = color_key;
++            surface->bounds = surface->rect;
++        }
++        if (alpha_bits != surface->alpha_bits)
++        {
++            surface->alpha_bits = alpha_bits;
++            surface->bounds = surface->rect;
++        }
++        if (alpha_mask != surface->alpha_mask)
++        {
++            surface->alpha_mask = alpha_mask;
++            surface->bounds = surface->rect;
++        }
+     }
+-
+     window_surface_unlock( surface );
+ 
+     window_surface_flush( surface );
+@@ -1293,8 +1282,8 @@ void move_window_bits_surface( HWND hwnd, const RECT *window_rect, struct window
+     OffsetRect( &src, -old_visible_rect->left, -old_visible_rect->top );
+     OffsetRect( &dst, -window_rect->left, -window_rect->top );
+ 
+-    bits = old_surface->funcs->get_info( old_surface, info );
+     window_surface_lock( old_surface );
++    bits = window_surface_get_color( old_surface, info );
+     NtGdiSetDIBitsToDeviceInternal( hdc, dst.left, dst.top, dst.right - dst.left, dst.bottom - dst.top,
+                                     src.left - old_surface->rect.left, old_surface->rect.bottom - src.bottom,
+                                     0, old_surface->rect.bottom - old_surface->rect.top,
+diff --git a/dlls/win32u/dibdrv/dc.c b/dlls/win32u/dibdrv/dc.c
+index ea7512b01ca..ee257db6dd6 100644
+--- a/dlls/win32u/dibdrv/dc.c
++++ b/dlls/win32u/dibdrv/dc.c
+@@ -816,7 +816,7 @@ void dibdrv_set_window_surface( DC *dc, struct window_surface *surface )
+         physdev->surface = surface;
+ 
+         dibdrv = physdev->dibdrv;
+-        bits = surface->funcs->get_info( surface, info );
++        bits = window_surface_get_color( surface, info );
+         init_dib_info_from_bitmapinfo( &dibdrv->dib, info, bits );
+         dibdrv->dib.rect = dc->attr->vis_rect;
+         OffsetRect( &dibdrv->dib.rect, -dc->device_rect.left, -dc->device_rect.top );
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 90166999c6c..0165de27f13 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -55,6 +55,7 @@ extern void move_window_bits_surface( HWND hwnd, const RECT *window_rect, struct
+                                       const RECT *old_visible_rect, const RECT *valid_rects );
+ extern void register_window_surface( struct window_surface *old,
+                                      struct window_surface *new );
++extern void *window_surface_get_color( struct window_surface *surface, BITMAPINFO *info );
+ 
+ /* defwnd.c */
+ extern BOOL adjust_window_rect( RECT *rect, DWORD style, BOOL menu, DWORD ex_style, UINT dpi );
+diff --git a/dlls/wineandroid.drv/window.c b/dlls/wineandroid.drv/window.c
+index 225c6668103..060fa73d15c 100644
+--- a/dlls/wineandroid.drv/window.c
++++ b/dlls/wineandroid.drv/window.c
+@@ -614,17 +614,6 @@ static void apply_line_region( DWORD *dst, int width, int x, int y, const RECT *
+     if (width > 0) memset( dst, 0, width * sizeof(*dst) );
+ }
+ 
+-/***********************************************************************
+- *           android_surface_get_bitmap_info
+- */
+-static void *android_surface_get_bitmap_info( struct window_surface *window_surface, BITMAPINFO *info )
+-{
+-    struct android_window_surface *surface = get_android_surface( window_surface );
+-
+-    memcpy( info, &surface->info, get_dib_info_size( &surface->info, DIB_RGB_COLORS ));
+-    return window_surface->color_bits;
+-}
+-
+ /***********************************************************************
+  *           android_surface_set_clip
+  */
+@@ -725,7 +714,6 @@ static void android_surface_destroy( struct window_surface *window_surface )
+ 
+ static const struct window_surface_funcs android_surface_funcs =
+ {
+-    android_surface_get_bitmap_info,
+     android_surface_set_clip,
+     android_surface_flush,
+     android_surface_destroy
+@@ -761,8 +749,7 @@ static struct window_surface *create_surface( HWND hwnd, const RECT *rect,
+ 
+     surface->window = get_ioctl_window( hwnd );
+ 
+-    TRACE( "created %p hwnd %p %s bits %p-%p\n", surface, hwnd, wine_dbgstr_rect(rect),
+-           surface->header.color_bits, (char *)surface->header.color_bits + info->bmiHeader.biSizeImage );
++    TRACE( "created %p hwnd %p %s\n", surface, hwnd, wine_dbgstr_rect(rect) );
+ 
+     if (src_alpha) window_surface_set_layered( &surface->header, color_key, -1, 0xff000000 );
+     else window_surface_set_layered( &surface->header, color_key, alpha << 24, 0 );
+diff --git a/dlls/winemac.drv/surface.c b/dlls/winemac.drv/surface.c
+index bfd0cb25414..4bc65b957c1 100644
+--- a/dlls/winemac.drv/surface.c
++++ b/dlls/winemac.drv/surface.c
+@@ -31,17 +31,6 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(bitblt);
+ 
+-
+-/* only for use on sanitized BITMAPINFO structures */
+-static inline int get_dib_info_size(const BITMAPINFO *info, UINT coloruse)
+-{
+-    if (info->bmiHeader.biCompression == BI_BITFIELDS)
+-        return sizeof(BITMAPINFOHEADER) + 3 * sizeof(DWORD);
+-    if (coloruse == DIB_PAL_COLORS)
+-        return sizeof(BITMAPINFOHEADER) + info->bmiHeader.biClrUsed * sizeof(WORD);
+-    return FIELD_OFFSET(BITMAPINFO, bmiColors[info->bmiHeader.biClrUsed]);
+-}
+-
+ static inline int get_dib_stride(int width, int bpp)
+ {
+     return ((width * bpp + 31) >> 3) & ~3;
+@@ -79,18 +68,6 @@ static CGDataProviderRef data_provider_create(size_t size, void **bits)
+     return provider;
+ }
+ 
+-/***********************************************************************
+- *              macdrv_surface_get_bitmap_info
+- */
+-static void *macdrv_surface_get_bitmap_info(struct window_surface *window_surface,
+-                                                  BITMAPINFO *info)
+-{
+-    struct macdrv_window_surface *surface = get_mac_surface(window_surface);
+-
+-    memcpy(info, &surface->info, get_dib_info_size(&surface->info, DIB_RGB_COLORS));
+-    return window_surface->color_bits;
+-}
+-
+ /***********************************************************************
+  *              macdrv_surface_set_clip
+  */
+@@ -135,7 +112,6 @@ static void macdrv_surface_destroy(struct window_surface *window_surface)
+ 
+ static const struct window_surface_funcs macdrv_surface_funcs =
+ {
+-    macdrv_surface_get_bitmap_info,
+     macdrv_surface_set_clip,
+     macdrv_surface_flush,
+     macdrv_surface_destroy,
+@@ -201,8 +177,7 @@ static struct window_surface *create_surface(HWND hwnd, macdrv_window window, co
+     window_background = macdrv_window_background_color();
+     memset_pattern4(bits, &window_background, info->bmiHeader.biSizeImage);
+ 
+-    TRACE("created %p for %p %s color_bits %p-%p\n", surface, window, wine_dbgstr_rect(rect),
+-          bits, (char *)bits + info->bmiHeader.biSizeImage);
++    TRACE("created %p for %p %s\n", surface, window, wine_dbgstr_rect(rect));
+ 
+     if (use_alpha) window_surface_set_layered( &surface->header, CLR_INVALID, -1, 0xff000000 );
+     else window_surface_set_layered( &surface->header, CLR_INVALID, -1, 0 );
+diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
+index 5523e18e4f6..7cff84a5bf7 100644
+--- a/dlls/winewayland.drv/window_surface.c
++++ b/dlls/winewayland.drv/window_surface.c
+@@ -209,19 +209,6 @@ static void wayland_buffer_queue_add_damage(struct wayland_buffer_queue *queue,
+     }
+ }
+ 
+-/***********************************************************************
+- *           wayland_window_surface_get_bitmap_info
+- */
+-static void *wayland_window_surface_get_bitmap_info(struct window_surface *window_surface,
+-                                                    BITMAPINFO *info)
+-{
+-    struct wayland_window_surface *surface = wayland_window_surface_cast(window_surface);
+-    /* We don't store any additional information at the end of our BITMAPINFO, so
+-     * just copy the structure itself. */
+-    memcpy(info, &surface->info, sizeof(*info));
+-    return window_surface->color_bits;
+-}
+-
+ /***********************************************************************
+  *           wayland_window_surface_set_clip
+  */
+@@ -443,7 +430,6 @@ static void wayland_window_surface_destroy(struct window_surface *window_surface
+ 
+ static const struct window_surface_funcs wayland_window_surface_funcs =
+ {
+-    wayland_window_surface_get_bitmap_info,
+     wayland_window_surface_set_clip,
+     wayland_window_surface_flush,
+     wayland_window_surface_destroy
+@@ -476,8 +462,7 @@ static struct window_surface *wayland_window_surface_create(HWND hwnd, const REC
+     if (!window_surface_init(&wws->header, &wayland_window_surface_funcs, hwnd, rect, info, 0)) goto failed;
+     wws->info = *info;
+ 
+-    TRACE("created %p hwnd %p %s bits [%p,%p)\n", wws, hwnd, wine_dbgstr_rect(rect),
+-          wws->header.color_bits, (char *)wws->header.color_bits + wws->info.bmiHeader.biSizeImage);
++    TRACE("created %p hwnd %p %s\n", wws, hwnd, wine_dbgstr_rect(rect));
+ 
+     return &wws->header;
+ 
+diff --git a/dlls/winex11.drv/bitblt.c b/dlls/winex11.drv/bitblt.c
+index 8ac1ffead17..f3bb102c033 100644
+--- a/dlls/winex11.drv/bitblt.c
++++ b/dlls/winex11.drv/bitblt.c
+@@ -1905,17 +1905,6 @@ failed:
+     return NULL;
+ }
+ 
+-/***********************************************************************
+- *           x11drv_surface_get_bitmap_info
+- */
+-static void *x11drv_surface_get_bitmap_info( struct window_surface *window_surface, BITMAPINFO *info )
+-{
+-    struct x11drv_window_surface *surface = get_x11_surface( window_surface );
+-
+-    memcpy( info, &surface->info, get_dib_info_size( &surface->info, DIB_RGB_COLORS ));
+-    return window_surface->color_bits;
+-}
+-
+ static XRectangle *xrectangles_from_rects( const RECT *rects, UINT count )
+ {
+     XRectangle *xrects;
+@@ -2024,7 +2013,6 @@ static void x11drv_surface_destroy( struct window_surface *window_surface )
+ 
+ static const struct window_surface_funcs x11drv_surface_funcs =
+ {
+-    x11drv_surface_get_bitmap_info,
+     x11drv_surface_set_clip,
+     x11drv_surface_flush,
+     x11drv_surface_destroy
+@@ -2102,9 +2090,7 @@ static struct window_surface *create_surface( HWND hwnd, Window window, const XV
+     surface->gc = XCreateGC( gdi_display, window, 0, NULL );
+     XSetSubwindowMode( gdi_display, surface->gc, IncludeInferiors );
+ 
+-    TRACE( "created %p for %lx %s bits %p-%p image %p\n", surface, window, wine_dbgstr_rect(rect),
+-           surface->header.color_bits, (char *)surface->header.color_bits + info->bmiHeader.biSizeImage,
+-           surface->image->ximage->data );
++    TRACE( "created %p for %lx %s image %p\n", surface, window, wine_dbgstr_rect(rect), surface->image->ximage->data );
+ 
+     if (use_alpha) window_surface_set_layered( &surface->header, color_key, -1, 0xff000000 );
+     else window_surface_set_layered( &surface->header, color_key, -1, 0 );
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index 4b1ea3c7e33..b1b07f8dc72 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -211,7 +211,6 @@ struct window_surface;
+ 
+ struct window_surface_funcs
+ {
+-    void* (*get_info)( struct window_surface *surface, BITMAPINFO *info );
+     void  (*set_clip)( struct window_surface *surface, const RECT *rects, UINT count );
+     BOOL  (*flush)( struct window_surface *surface, const RECT *rect, const RECT *dirty,
+                     const BITMAPINFO *color_info, const void *color_bits );
+@@ -234,7 +233,6 @@ struct window_surface
+     UINT                               alpha_bits;   /* layered window global alpha bits, invalid if -1 */
+     UINT                               alpha_mask;   /* layered window per-pixel alpha mask, invalid if 0 */
+     HBITMAP                            color_bitmap; /* bitmap for the surface colors */
+-    void                              *color_bits;   /* pixel bits of the color bitmap */
+     /* driver-specific fields here */
+ };
+ 
+-- 
+2.45.2
+

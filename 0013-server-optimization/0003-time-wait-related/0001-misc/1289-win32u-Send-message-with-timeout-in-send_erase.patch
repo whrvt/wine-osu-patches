@@ -1,0 +1,29 @@
+From 410bdc4021dc1dbdc72c7a674dc36ccdf0b15c4c Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 9 Feb 2024 11:33:41 -0600
+Subject: [PATCH 1289/1533] win32u: Send message with timeout in send_erase().
+
+CW-Bug-Id: #23394
+---
+ dlls/win32u/dce.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index d7aa75b3039..3f1e25ae9e2 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -1248,7 +1248,10 @@ static BOOL send_erase( HWND hwnd, UINT flags, HRGN client_rgn,
+             {
+                 /* don't erase if the clip box is empty */
+                 if (type != NULLREGION)
+-                    need_erase = !send_message( hwnd, WM_ERASEBKGND, (WPARAM)hdc, 0 );
++                {
++                    need_erase = !send_message_timeout( hwnd, WM_ERASEBKGND, (WPARAM)hdc, 0, SMTO_ABORTIFHUNG, 1000, FALSE );
++                    if (need_erase && RtlGetLastWin32Error() == ERROR_TIMEOUT) ERR( "timeout.\n" );
++                }
+             }
+             if (!hdc_ret) release_dc( hwnd, hdc, TRUE );
+         }
+-- 
+2.45.0
+

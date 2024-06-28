@@ -23,7 +23,7 @@ index 11111111111..11111111111 100644
      return wine_dbgstr_longlong( timeout->QuadPart );
  }
  
-+#define MAX_ADAPTIVE_SPIN_COUNT 2000
++#define MAX_ADAPTIVE_SPIN_COUNT 4000
 +#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 +
  /******************************************************************

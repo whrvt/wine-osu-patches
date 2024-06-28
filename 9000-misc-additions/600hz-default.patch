@@ -1,3 +1,4 @@
+Only applies for the nodrv/nores backend (i.e. wayland or (UseXRandr = N and UseXVidMode = N))
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
 index d1a5a75..668058d 100644
 --- a/dlls/win32u/sysparams.c
@@ -7,7 +8,7 @@ index d1a5a75..668058d 100644
              .dmSize = sizeof(mode),
              .dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS | DM_DISPLAYFREQUENCY,
 -            .dmDisplayFrequency = 60,
-+            .dmDisplayFrequency = 280,
++            .dmDisplayFrequency = 600,
              .dmBitsPerPel = depths[i],
          };
  
@@ -16,7 +17,7 @@ index d1a5a75..668058d 100644
      {
          current = ctx->primary;
 -        current.dmDisplayFrequency = 60;
-+        current.dmDisplayFrequency = 280;
++        current.dmDisplayFrequency = 600;
          current.dmPelsWidth = initial.dmPelsWidth;
          current.dmPelsHeight = initial.dmPelsHeight;
      }
@@ -29,7 +30,7 @@ index a05082e..2527ba2 100644
          return WINED3DERR_INVALIDCALL;
      if (mode.refresh_rate == DEFAULT_REFRESH_RATE)
 -        mode.refresh_rate = 60;
-+        mode.refresh_rate = 280;
++        mode.refresh_rate = 600;
  
      freq_per_frame = freq_per_sec.QuadPart / mode.refresh_rate;
      /* Assume 20 scan lines in the vertical blank. */
@@ -42,7 +43,7 @@ index 6b92e04..e9b3d88 100644
      modes[0].dmPelsHeight = primary.bottom;
      modes[0].dmDisplayFlags = 0;
 -    modes[0].dmDisplayFrequency = 60;
-+    modes[0].dmDisplayFrequency = 280;
++    modes[0].dmDisplayFrequency = 600;
  
      *new_modes = modes;
      *mode_count = 1;
@@ -51,7 +52,7 @@ index 6b92e04..e9b3d88 100644
      mode->dmPelsWidth = primary.right;
      mode->dmPelsHeight = primary.bottom;
 -    mode->dmDisplayFrequency = 60;
-+    mode->dmDisplayFrequency = 280;
++    mode->dmDisplayFrequency = 600;
      return TRUE;
  }
  

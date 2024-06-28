@@ -1,0 +1,415 @@
+From 1ae39a6df40f562ae54b5326ac44b1d843888a37 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 27 Jun 2024 16:41:44 +0200
+Subject: [PATCH 2/9] win32u: Introduce a new helper to update layered window
+ surface attributes.
+
+---
+ dlls/win32u/dce.c             | 56 ++++++++++++++++++++++++++++++++++
+ dlls/wineandroid.drv/window.c | 53 +++++---------------------------
+ dlls/winemac.drv/surface.c    | 15 +++------
+ dlls/winemac.drv/window.c     |  4 +--
+ dlls/winex11.drv/bitblt.c     | 57 +++--------------------------------
+ dlls/winex11.drv/window.c     |  4 +--
+ dlls/winex11.drv/x11drv.h     |  1 -
+ include/wine/gdi_driver.h     |  1 +
+ 8 files changed, 76 insertions(+), 115 deletions(-)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index 7fb4bbeef62..d5c7eaac101 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -193,6 +193,32 @@ void create_offscreen_window_surface( HWND hwnd, const RECT *surface_rect, struc
+ 
+ /* window surface common helpers */
+ 
++static UINT get_color_component( UINT color, UINT mask )
++{
++    int shift;
++    for (shift = 0; !(mask & 1); shift++) mask >>= 1;
++    return (color * mask / 255) << shift;
++}
++
++static COLORREF get_color_key( const BITMAPINFO *info, COLORREF color_key )
++{
++    if (color_key == CLR_INVALID) return CLR_INVALID;
++    if (info->bmiHeader.biBitCount <= 8) return CLR_INVALID;
++    if (color_key & (1 << 24)) /* PALETTEINDEX */ return 0;
++    if (color_key >> 16 == 0x10ff) /* DIBINDEX */ return 0;
++
++    if (info->bmiHeader.biBitCount == 24) return color_key;
++    if (info->bmiHeader.biCompression == BI_BITFIELDS)
++    {
++        UINT *masks = (UINT *)info->bmiColors;
++        return get_color_component( GetRValue( color_key ), masks[0] ) |
++               get_color_component( GetGValue( color_key ), masks[1] ) |
++               get_color_component( GetBValue( color_key ), masks[2] );
++    }
++
++    return (GetRValue( color_key ) << 16) | (GetGValue( color_key ) << 8) | GetBValue( color_key );
++}
++
+ W32KAPI BOOL window_surface_init( struct window_surface *surface, const struct window_surface_funcs *funcs,
+                                   HWND hwnd, const RECT *rect, BITMAPINFO *info, HBITMAP bitmap )
+ {
+@@ -265,6 +291,36 @@ W32KAPI void window_surface_flush( struct window_surface *surface )
+     window_surface_unlock( surface );
+ }
+ 
++W32KAPI void window_surface_set_layered( struct window_surface *surface, COLORREF color_key, UINT alpha_bits, UINT alpha_mask )
++{
++    char color_buf[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
++    BITMAPINFO *color_info = (BITMAPINFO *)color_buf;
++
++    window_surface_lock( surface );
++    surface->funcs->get_info( surface, color_info );
++
++    color_key = get_color_key( color_info, color_key );
++    if (color_key != surface->color_key)
++    {
++        surface->color_key = color_key;
++        surface->bounds = surface->rect;
++    }
++    if (alpha_bits != surface->alpha_bits)
++    {
++        surface->alpha_bits = alpha_bits;
++        surface->bounds = surface->rect;
++    }
++    if (alpha_mask != surface->alpha_mask)
++    {
++        surface->alpha_mask = alpha_mask;
++        surface->bounds = surface->rect;
++    }
++
++    window_surface_unlock( surface );
++
++    window_surface_flush( surface );
++}
++
+ W32KAPI void window_surface_set_clip( struct window_surface *surface, HRGN clip_region )
+ {
+     window_surface_lock( surface );
+diff --git a/dlls/wineandroid.drv/window.c b/dlls/wineandroid.drv/window.c
+index 8fa87b57807..a8e05832cd9 100644
+--- a/dlls/wineandroid.drv/window.c
++++ b/dlls/wineandroid.drv/window.c
+@@ -735,25 +735,6 @@ static BOOL is_argb_surface( struct window_surface *surface )
+     return surface && surface->funcs == &android_surface_funcs && !!surface->alpha_mask;
+ }
+ 
+-/***********************************************************************
+- *           set_color_key
+- */
+-static void set_color_key( struct android_window_surface *surface, COLORREF key )
+-{
+-    if (key == CLR_INVALID)
+-        surface->header.color_key = CLR_INVALID;
+-    else if (surface->info.bmiHeader.biBitCount <= 8)
+-        surface->header.color_key = CLR_INVALID;
+-    else if (key & (1 << 24))  /* PALETTEINDEX */
+-        surface->header.color_key = 0;
+-    else if (key >> 16 == 0x10ff)  /* DIBINDEX */
+-        surface->header.color_key = 0;
+-    else if (surface->info.bmiHeader.biBitCount == 24)
+-        surface->header.color_key = key;
+-    else
+-        surface->header.color_key = (GetRValue(key) << 16) | (GetGValue(key) << 8) | GetBValue(key);
+-}
+-
+ /***********************************************************************
+  *           create_surface
+  */
+@@ -777,13 +758,14 @@ static struct window_surface *create_surface( HWND hwnd, const RECT *rect,
+     if (!window_surface_init( &surface->header, &android_surface_funcs, hwnd, rect, info, 0 )) goto failed;
+     memcpy( &surface->info, info, get_dib_info_size( info, DIB_RGB_COLORS ) );
+ 
+-    surface->window       = get_ioctl_window( hwnd );
+-    surface->header.alpha_bits = (UINT)alpha << 24;
+-    set_color_key( surface, color_key );
++    surface->window = get_ioctl_window( hwnd );
+ 
+     TRACE( "created %p hwnd %p %s bits %p-%p\n", surface, hwnd, wine_dbgstr_rect(rect),
+            surface->header.color_bits, (char *)surface->header.color_bits + info->bmiHeader.biSizeImage );
+ 
++    if (src_alpha) window_surface_set_layered( &surface->header, color_key, -1, 0xff000000 );
++    else window_surface_set_layered( &surface->header, color_key, alpha << 24, 0 );
++
+     return &surface->header;
+ 
+ failed:
+@@ -791,27 +773,6 @@ failed:
+     return NULL;
+ }
+ 
+-/***********************************************************************
+- *           set_surface_layered
+- */
+-static void set_surface_layered( struct window_surface *window_surface, BYTE alpha, COLORREF color_key )
+-{
+-    struct android_window_surface *surface = get_android_surface( window_surface );
+-    COLORREF prev_key;
+-    BYTE prev_alpha;
+-
+-    if (window_surface->funcs != &android_surface_funcs) return;  /* we may get the null surface */
+-
+-    window_surface_lock( window_surface );
+-    prev_key = surface->header.color_key;
+-    prev_alpha = surface->header.alpha_bits;
+-    surface->header.alpha_bits = (UINT)alpha << 24;
+-    set_color_key( surface, color_key );
+-    if (alpha != prev_alpha || surface->header.color_key != prev_key)  /* refresh */
+-        window_surface->bounds = surface->header.rect;
+-    window_surface_unlock( window_surface );
+-}
+-
+ /***********************************************************************
+  *           get_mono_icon_argb
+  *
+@@ -1342,7 +1303,7 @@ void ANDROID_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+             if (data->surface) window_surface_release( data->surface );
+             data->surface = NULL;
+         }
+-        else if (data->surface) set_surface_layered( data->surface, 255, CLR_INVALID );
++        else if (data->surface) window_surface_set_layered( data->surface, CLR_INVALID, -1, 0 );
+     }
+     release_win_data( data );
+ }
+@@ -1360,7 +1321,7 @@ void ANDROID_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DW
+ 
+     if ((data = get_win_data( hwnd )))
+     {
+-        if (data->surface) set_surface_layered( data->surface, alpha, key );
++        if (data->surface) window_surface_set_layered( data->surface, key, alpha << 24, 0 );
+         release_win_data( data );
+     }
+ }
+@@ -1394,7 +1355,7 @@ BOOL ANDROID_CreateLayeredWindow( HWND hwnd, const RECT *window_rect, COLORREF c
+         if (surface) window_surface_release( surface );
+         surface = data->surface;
+     }
+-    else set_surface_layered( surface, 255, color_key );
++    else window_surface_set_layered( surface, color_key, -1, 0xff000000 );
+ 
+     if ((*window_surface = surface)) window_surface_add_ref( surface );
+     release_win_data( data );
+diff --git a/dlls/winemac.drv/surface.c b/dlls/winemac.drv/surface.c
+index af0042bea39..e3abe7d2753 100644
+--- a/dlls/winemac.drv/surface.c
++++ b/dlls/winemac.drv/surface.c
+@@ -196,7 +196,6 @@ static struct window_surface *create_surface(HWND hwnd, macdrv_window window, co
+ 
+     surface->window = window;
+     if (old_surface) surface->header.bounds = old_surface->bounds;
+-    surface->header.alpha_mask = use_alpha ? 0xff000000 : 0;
+     surface->provider = provider;
+ 
+     window_background = macdrv_window_background_color();
+@@ -205,6 +204,9 @@ static struct window_surface *create_surface(HWND hwnd, macdrv_window window, co
+     TRACE("created %p for %p %s color_bits %p-%p\n", surface, window, wine_dbgstr_rect(rect),
+           surface->header.color_bits, (char *)surface->header.color_bits + info->bmiHeader.biSizeImage);
+ 
++    if (use_alpha) window_surface_set_layered( &surface->header, CLR_INVALID, -1, 0xff000000 );
++    else window_surface_set_layered( &surface->header, CLR_INVALID, -1, 0 );
++
+     return &surface->header;
+ 
+ failed:
+@@ -214,15 +216,6 @@ failed:
+     return NULL;
+ }
+ 
+-/***********************************************************************
+- *              set_surface_use_alpha
+- */
+-void set_surface_use_alpha(struct window_surface *window_surface, BOOL use_alpha)
+-{
+-    struct macdrv_window_surface *surface = get_mac_surface(window_surface);
+-    if (surface) surface->header.alpha_mask = use_alpha ? 0xff000000 : 0;
+-}
+-
+ 
+ /***********************************************************************
+  *              CreateWindowSurface   (MACDRV.@)
+@@ -287,7 +280,7 @@ BOOL macdrv_CreateLayeredWindow(HWND hwnd, const RECT *window_rect, COLORREF col
+             data->unminimized_surface = NULL;
+         }
+     }
+-    else set_surface_use_alpha(surface, TRUE);
++    else window_surface_set_layered(surface, color_key, -1, 0xff000000);
+ 
+     if ((*window_surface = surface)) window_surface_add_ref(surface);
+ 
+diff --git a/dlls/winemac.drv/window.c b/dlls/winemac.drv/window.c
+index e772adf29b3..0bbb7e4fc34 100644
+--- a/dlls/winemac.drv/window.c
++++ b/dlls/winemac.drv/window.c
+@@ -1683,7 +1683,7 @@ void macdrv_SetLayeredWindowAttributes(HWND hwnd, COLORREF key, BYTE alpha, DWOR
+     {
+         data->layered = TRUE;
+         data->ulw_layered = FALSE;
+-        if (data->surface) set_surface_use_alpha(data->surface, FALSE);
++        if (data->surface) window_surface_set_layered(data->surface, key, alpha << 24, 0);
+         if (data->cocoa_window)
+         {
+             sync_window_opacity(data, key, alpha, FALSE, flags);
+@@ -1782,7 +1782,7 @@ void macdrv_SetWindowStyle(HWND hwnd, INT offset, STYLESTRUCT *style)
+             data->layered = FALSE;
+             data->ulw_layered = FALSE;
+             sync_window_opacity(data, 0, 0, FALSE, 0);
+-            if (data->surface) set_surface_use_alpha(data->surface, FALSE);
++            if (data->surface) window_surface_set_layered(data->surface, CLR_INVALID, -1, 0);
+         }
+ 
+         if (offset == GWL_EXSTYLE && (changed & WS_EX_LAYOUTRTL))
+diff --git a/dlls/winex11.drv/bitblt.c b/dlls/winex11.drv/bitblt.c
+index 2103949b850..fd350fc6a65 100644
+--- a/dlls/winex11.drv/bitblt.c
++++ b/dlls/winex11.drv/bitblt.c
+@@ -1597,13 +1597,6 @@ static struct x11drv_window_surface *get_x11_surface( struct window_surface *sur
+     return (struct x11drv_window_surface *)surface;
+ }
+ 
+-static inline UINT get_color_component( UINT color, UINT mask )
+-{
+-    int shift;
+-    for (shift = 0; !(mask & 1); shift++) mask >>= 1;
+-    return (color * mask / 255) << shift;
+-}
+-
+ #ifdef HAVE_LIBXSHAPE
+ static inline void flush_rgn_data( HRGN rgn, RGNDATA *data )
+ {
+@@ -1761,31 +1754,6 @@ static void update_surface_region( struct x11drv_window_surface *surface, const
+ #endif
+ }
+ 
+-/***********************************************************************
+- *           set_color_key
+- */
+-static void set_color_key( struct x11drv_window_surface *surface, COLORREF key )
+-{
+-    UINT *masks = (UINT *)surface->info.bmiColors;
+-
+-    if (key == CLR_INVALID)
+-        surface->header.color_key = CLR_INVALID;
+-    else if (surface->info.bmiHeader.biBitCount <= 8)
+-        surface->header.color_key = CLR_INVALID;
+-    else if (key & (1 << 24))  /* PALETTEINDEX */
+-        surface->header.color_key = 0;
+-    else if (key >> 16 == 0x10ff)  /* DIBINDEX */
+-        surface->header.color_key = 0;
+-    else if (surface->info.bmiHeader.biBitCount == 24)
+-        surface->header.color_key = key;
+-    else if (surface->info.bmiHeader.biCompression == BI_RGB)
+-        surface->header.color_key = (GetRValue(key) << 16) | (GetGValue(key) << 8) | GetBValue(key);
+-    else
+-        surface->header.color_key = get_color_component( GetRValue(key), masks[0] ) |
+-                                    get_color_component( GetGValue(key), masks[1] ) |
+-                                    get_color_component( GetBValue(key), masks[2] );
+-}
+-
+ #ifdef HAVE_LIBXXSHM
+ static int xshm_error_handler( Display *display, XErrorEvent *event, void *arg )
+ {
+@@ -2132,9 +2100,6 @@ static struct window_surface *create_surface( HWND hwnd, Window window, const XV
+     memcpy( &surface->info, info, get_dib_info_size( info, DIB_RGB_COLORS ) );
+ 
+     surface->window = window;
+-    if (use_alpha && vis->depth == 32 && info->bmiHeader.biCompression == BI_RGB) surface->header.alpha_mask = 0xff000000;
+-    set_color_key( surface, color_key );
+-
+     surface->gc = XCreateGC( gdi_display, window, 0, NULL );
+     XSetSubwindowMode( gdi_display, surface->gc, IncludeInferiors );
+ 
+@@ -2142,6 +2107,9 @@ static struct window_surface *create_surface( HWND hwnd, Window window, const XV
+            surface->header.color_bits, (char *)surface->header.color_bits + info->bmiHeader.biSizeImage,
+            surface->image->ximage->data );
+ 
++    if (use_alpha) window_surface_set_layered( &surface->header, color_key, -1, 0xff000000 );
++    else window_surface_set_layered( &surface->header, color_key, -1, 0 );
++
+     return &surface->header;
+ 
+ failed:
+@@ -2149,23 +2117,6 @@ failed:
+     return NULL;
+ }
+ 
+-/***********************************************************************
+- *           set_surface_color_key
+- */
+-void set_surface_color_key( struct window_surface *window_surface, COLORREF color_key )
+-{
+-    struct x11drv_window_surface *surface = get_x11_surface( window_surface );
+-    COLORREF prev;
+-
+-    if (window_surface->funcs != &x11drv_surface_funcs) return;  /* we may get the null surface */
+-
+-    window_surface_lock( window_surface );
+-    prev = surface->header.color_key;
+-    set_color_key( surface, color_key );
+-    if (surface->header.color_key != prev) update_surface_region( surface, window_surface->color_bits, surface->header.color_key, surface->header.alpha_mask );
+-    window_surface_unlock( window_surface );
+-}
+-
+ /***********************************************************************
+  *           expose_surface
+  */
+@@ -2263,7 +2214,7 @@ BOOL X11DRV_CreateLayeredWindow( HWND hwnd, const RECT *window_rect, COLORREF co
+         if (surface) window_surface_release( surface );
+         surface = data->surface;
+     }
+-    else set_surface_color_key( surface, color_key );
++    else window_surface_set_layered( surface, color_key, -1, 0xff000000 );
+ 
+     if ((*window_surface = surface)) window_surface_add_ref( surface );
+     release_win_data( data );
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 2a84bc49620..7416164bbb1 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1917,7 +1917,7 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+         data->layered = FALSE;
+         set_window_visual( data, &default_visual, FALSE );
+         sync_window_opacity( data->display, data->whole_window, 0, 0, 0 );
+-        if (data->surface) set_surface_color_key( data->surface, CLR_INVALID );
++        if (data->surface) window_surface_set_layered( data->surface, CLR_INVALID, -1, 0 );
+     }
+ done:
+     release_win_data( data );
+@@ -2889,7 +2889,7 @@ void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWO
+         if (data->whole_window)
+             sync_window_opacity( data->display, data->whole_window, key, alpha, flags );
+         if (data->surface)
+-            set_surface_color_key( data->surface, (flags & LWA_COLORKEY) ? key : CLR_INVALID );
++            window_surface_set_layered( data->surface, (flags & LWA_COLORKEY) ? key : CLR_INVALID, alpha << 24, 0 );
+ 
+         data->layered = TRUE;
+         if (!data->mapped)  /* mapping is delayed until attributes are set */
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 4a9bdafd449..49e4f039b18 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -266,7 +266,6 @@ extern Pixmap create_pixmap_from_image( HDC hdc, const XVisualInfo *vis, const B
+                                         const struct gdi_image_bits *bits, UINT coloruse );
+ extern DWORD get_pixmap_image( Pixmap pixmap, int width, int height, const XVisualInfo *vis,
+                                BITMAPINFO *info, struct gdi_image_bits *bits );
+-extern void set_surface_color_key( struct window_surface *window_surface, COLORREF color_key );
+ extern HRGN expose_surface( struct window_surface *window_surface, const RECT *rect );
+ 
+ extern RGNDATA *X11DRV_GetRegionData( HRGN hrgn, HDC hdc_lptodp );
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index b7c9f273d95..d1e4b304323 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -243,6 +243,7 @@ W32KAPI void window_surface_add_ref( struct window_surface *surface );
+ W32KAPI void window_surface_release( struct window_surface *surface );
+ W32KAPI void window_surface_lock( struct window_surface *surface );
+ W32KAPI void window_surface_unlock( struct window_surface *surface );
++W32KAPI void window_surface_set_layered( struct window_surface *surface, COLORREF color_key, UINT alpha_bits, UINT alpha_mask );
+ W32KAPI void window_surface_flush( struct window_surface *surface );
+ W32KAPI void window_surface_set_clip( struct window_surface *surface, HRGN clip_region );
+ 
+-- 
+2.45.2
+

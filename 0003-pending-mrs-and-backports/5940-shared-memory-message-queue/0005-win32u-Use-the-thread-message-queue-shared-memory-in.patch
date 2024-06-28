@@ -1,0 +1,37 @@
+From 5e025da2f41ee6bbe2c73ca3e774c734e562da08 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 26 Jun 2024 16:18:22 +0200
+Subject: [PATCH 5/6] win32u: Use the thread message queue shared memory in
+ NtUserGetQueueStatus.
+
+---
+ dlls/win32u/input.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 999cce23715..8356e97e238 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -866,7 +866,7 @@ static BOOL get_shared_queue_bits( UINT *wake_bits, UINT *changed_bits )
+  */
+ DWORD WINAPI NtUserGetQueueStatus( UINT flags )
+ {
+-    DWORD ret;
++    UINT ret, wake_bits, changed_bits;
+ 
+     if (flags & ~(QS_ALLINPUT | QS_ALLPOSTMESSAGE | QS_SMRESULT))
+     {
+@@ -876,7 +876,9 @@ DWORD WINAPI NtUserGetQueueStatus( UINT flags )
+ 
+     check_for_events( flags );
+ 
+-    SERVER_START_REQ( get_queue_status )
++    if (get_shared_queue_bits( &wake_bits, &changed_bits ) && !(changed_bits & flags))
++        ret = MAKELONG( changed_bits & flags, wake_bits & flags );
++    else SERVER_START_REQ( get_queue_status )
+     {
+         req->clear_bits = flags;
+         wine_server_call( req );
+-- 
+2.45.2
+

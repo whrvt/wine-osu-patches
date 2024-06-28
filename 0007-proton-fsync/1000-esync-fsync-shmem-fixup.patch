@@ -1,0 +1,24 @@
+diff --git a/server/queue.c b/server/queue.c
+index 45382f39f11..88c2ee33f26 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -4132,8 +4132,7 @@ DECL_HANDLER(esync_msgwait)
+     if (!queue) return;
+     queue->esync_in_msgwait = req->in_msgwait;
+ 
+-    if (current->process->idle_event && !(queue->wake_mask & QS_SMRESULT))
+-        set_event( current->process->idle_event );
++    check_thread_queue_idle(current);
+ 
+     /* and start/stop waiting on the driver */
+     if (queue->fd)
+@@ -4167,8 +4166,7 @@ DECL_HANDLER(fsync_msgwait)
+     if (!queue) return;
+     queue->fsync_in_msgwait = req->in_msgwait;
+ 
+-    if (current->process->idle_event && !(queue->wake_mask & QS_SMRESULT))
+-        set_event( current->process->idle_event );
++    check_thread_queue_idle(current);
+ 
+     /* and start/stop waiting on the driver */
+     if (queue->fd)

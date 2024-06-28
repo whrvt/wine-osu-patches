@@ -15,12 +15,12 @@ index caa3b3aa323..193e7212e02 100644
 +++ b/dlls/win32u/window.c
 @@ -1793,6 +1793,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
      BOOL ret, needs_surface, needs_update = FALSE;
-     RECT visible_rect = *window_rect, old_visible_rect, old_window_rect, old_client_rect, extra_rects[3];
-     struct window_surface *old_surface, *new_surface = NULL;
+     RECT surface_rect, visible_rect = *window_rect, old_visible_rect, old_window_rect, old_client_rect, extra_rects[3];
+     struct window_surface *old_surface, *new_surface;
 +    UINT monitor_dpi;
  
-     needs_surface = user_driver->pWindowPosChanging( hwnd, swp_flags, window_rect, client_rect, &visible_rect );
- 
+     if (!user_driver->pWindowPosChanging( hwnd, swp_flags, window_rect, client_rect, &visible_rect )) needs_surface = FALSE;
+     else if (swp_flags & SWP_HIDEWINDOW) needs_surface = FALSE;
 @@ -1834,11 +1835,14 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
          valid_rects = NULL;
      }

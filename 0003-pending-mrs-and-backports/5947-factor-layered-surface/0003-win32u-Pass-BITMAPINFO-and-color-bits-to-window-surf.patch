@@ -1,0 +1,254 @@
+From 77770c6ec887d69d6e2b64ed6dc96b92259294cf Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 6 Jun 2024 00:24:44 +0200
+Subject: [PATCH 3/9] win32u: Pass BITMAPINFO and color bits to window surface
+ flush.
+
+---
+ dlls/win32u/dce.c                     | 12 +++++++++---
+ dlls/wineandroid.drv/window.c         |  7 ++++---
+ dlls/winemac.drv/surface.c            |  8 ++++----
+ dlls/winewayland.drv/window_surface.c | 14 ++++++++------
+ dlls/winex11.drv/bitblt.c             | 15 +++++++--------
+ include/wine/gdi_driver.h             |  3 ++-
+ 6 files changed, 34 insertions(+), 25 deletions(-)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index d5c7eaac101..4020fb833ac 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -79,7 +79,8 @@ static void dummy_surface_set_clip( struct window_surface *window_surface, const
+     /* nothing to do */
+ }
+ 
+-static BOOL dummy_surface_flush( struct window_surface *window_surface, const RECT *rect, const RECT *dirty )
++static BOOL dummy_surface_flush( struct window_surface *window_surface, const RECT *rect, const RECT *dirty,
++                                 const BITMAPINFO *color_info, const void *color_bits )
+ {
+     /* nothing to do */
+     return TRUE;
+@@ -135,7 +136,8 @@ static void offscreen_window_surface_set_clip( struct window_surface *base, cons
+ {
+ }
+ 
+-static BOOL offscreen_window_surface_flush( struct window_surface *base, const RECT *rect, const RECT *dirty )
++static BOOL offscreen_window_surface_flush( struct window_surface *base, const RECT *rect, const RECT *dirty,
++                                            const BITMAPINFO *color_info, const void *color_bits )
+ {
+     return TRUE;
+ }
+@@ -276,16 +278,20 @@ W32KAPI void window_surface_unlock( struct window_surface *surface )
+ 
+ W32KAPI void window_surface_flush( struct window_surface *surface )
+ {
++    char color_buf[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
++    BITMAPINFO *color_info = (BITMAPINFO *)color_buf;
+     RECT dirty = surface->rect;
++    void *color_bits;
+ 
+     window_surface_lock( surface );
++    color_bits = surface->funcs->get_info( surface, color_info );
+ 
+     OffsetRect( &dirty, -dirty.left, -dirty.top );
+     if (intersect_rect( &dirty, &dirty, &surface->bounds ))
+     {
+         TRACE( "Flushing hwnd %p, surface %p %s, bounds %s, dirty %s\n", surface->hwnd, surface,
+                wine_dbgstr_rect( &surface->rect ), wine_dbgstr_rect( &surface->bounds ), wine_dbgstr_rect( &dirty ) );
+-        if (surface->funcs->flush( surface, &surface->rect, &dirty )) reset_bounds( &surface->bounds );
++        if (surface->funcs->flush( surface, &surface->rect, &dirty, color_info, color_bits )) reset_bounds( &surface->bounds );
+     }
+ 
+     window_surface_unlock( surface );
+diff --git a/dlls/wineandroid.drv/window.c b/dlls/wineandroid.drv/window.c
+index a8e05832cd9..225c6668103 100644
+--- a/dlls/wineandroid.drv/window.c
++++ b/dlls/wineandroid.drv/window.c
+@@ -643,7 +643,8 @@ static void android_surface_set_clip( struct window_surface *window_surface, con
+ /***********************************************************************
+  *           android_surface_flush
+  */
+-static BOOL android_surface_flush( struct window_surface *window_surface, const RECT *rect, const RECT *dirty )
++static BOOL android_surface_flush( struct window_surface *window_surface, const RECT *rect, const RECT *dirty,
++                                   const BITMAPINFO *color_info, const void *color_bits )
+ {
+     struct android_window_surface *surface = get_android_surface( window_surface );
+     ANativeWindow_Buffer buffer;
+@@ -670,7 +671,7 @@ static BOOL android_surface_flush( struct window_surface *window_surface, const
+         locked.bottom = rc.bottom;
+         intersect_rect( &locked, &locked, rect );
+ 
+-        src = (DWORD *)window_surface->color_bits + (locked.top - rect->top) * surface->info.bmiHeader.biWidth +
++        src = (DWORD *)color_bits + (locked.top - rect->top) * color_info->bmiHeader.biWidth +
+               (locked.left - rect->left);
+         dst = (DWORD *)buffer.bits + locked.top * buffer.stride + locked.left;
+         width = min( locked.right - locked.left, buffer.stride );
+@@ -697,7 +698,7 @@ static BOOL android_surface_flush( struct window_surface *window_surface, const
+                 apply_line_region( dst, width, locked.left, y, rgn_rect, end );
+             }
+ 
+-            src += surface->info.bmiHeader.biWidth;
++            src += color_info->bmiHeader.biWidth;
+             dst += buffer.stride;
+         }
+         surface->window->perform( surface->window, NATIVE_WINDOW_UNLOCK_AND_POST );
+diff --git a/dlls/winemac.drv/surface.c b/dlls/winemac.drv/surface.c
+index e3abe7d2753..bfd0cb25414 100644
+--- a/dlls/winemac.drv/surface.c
++++ b/dlls/winemac.drv/surface.c
+@@ -101,11 +101,11 @@ static void macdrv_surface_set_clip(struct window_surface *window_surface, const
+ /***********************************************************************
+  *              macdrv_surface_flush
+  */
+-static BOOL macdrv_surface_flush(struct window_surface *window_surface, const RECT *rect, const RECT *dirty)
++static BOOL macdrv_surface_flush(struct window_surface *window_surface, const RECT *rect, const RECT *dirty,
++                                 const BITMAPINFO *color_info, const void *color_bits)
+ {
+     struct macdrv_window_surface *surface = get_mac_surface(window_surface);
+     CGImageAlphaInfo alpha_info = (window_surface->alpha_mask ? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst);
+-    BITMAPINFO *color_info = &surface->info;
+     CGColorSpaceRef colorspace;
+     CGImageRef image;
+ 
+@@ -199,10 +199,10 @@ static struct window_surface *create_surface(HWND hwnd, macdrv_window window, co
+     surface->provider = provider;
+ 
+     window_background = macdrv_window_background_color();
+-    memset_pattern4(surface->header.color_bits, &window_background, info->bmiHeader.biSizeImage);
++    memset_pattern4(bits, &window_background, info->bmiHeader.biSizeImage);
+ 
+     TRACE("created %p for %p %s color_bits %p-%p\n", surface, window, wine_dbgstr_rect(rect),
+-          surface->header.color_bits, (char *)surface->header.color_bits + info->bmiHeader.biSizeImage);
++          bits, (char *)bits + info->bmiHeader.biSizeImage);
+ 
+     if (use_alpha) window_surface_set_layered( &surface->header, CLR_INVALID, -1, 0xff000000 );
+     else window_surface_set_layered( &surface->header, CLR_INVALID, -1, 0 );
+diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
+index d1ac582e7ec..5523e18e4f6 100644
+--- a/dlls/winewayland.drv/window_surface.c
++++ b/dlls/winewayland.drv/window_surface.c
+@@ -254,7 +254,7 @@ RGNDATA *get_region_data(HRGN region)
+ /**********************************************************************
+  *          copy_pixel_region
+  */
+-static void copy_pixel_region(char *src_pixels, RECT *src_rect,
++static void copy_pixel_region(const char *src_pixels, RECT *src_rect,
+                               char *dst_pixels, RECT *dst_rect,
+                               HRGN region)
+ {
+@@ -274,7 +274,8 @@ static void copy_pixel_region(char *src_pixels, RECT *src_rect,
+ 
+     for (;rgn_rect < rgn_rect_end; rgn_rect++)
+     {
+-        char *src, *dst;
++        const char *src;
++        char *dst;
+         int y, width_bytes, height;
+         RECT rc;
+ 
+@@ -310,7 +311,7 @@ static void copy_pixel_region(char *src_pixels, RECT *src_rect,
+  *          wayland_shm_buffer_copy_data
+  */
+ static void wayland_shm_buffer_copy_data(struct wayland_shm_buffer *buffer,
+-                                         char *bits, RECT *rect,
++                                         const char *bits, RECT *rect,
+                                          HRGN region)
+ {
+     RECT buffer_rect = {0, 0, buffer->width, buffer->height};
+@@ -331,8 +332,10 @@ static void wayland_shm_buffer_copy(struct wayland_shm_buffer *src,
+ /***********************************************************************
+  *           wayland_window_surface_flush
+  */
+-static BOOL wayland_window_surface_flush(struct window_surface *window_surface, const RECT *rect, const RECT *dirty)
++static BOOL wayland_window_surface_flush(struct window_surface *window_surface, const RECT *rect, const RECT *dirty,
++                                         const BITMAPINFO *color_info, const void *color_bits)
+ {
++    RECT surface_rect = {.right = color_info->bmiHeader.biWidth, .bottom = abs(color_info->bmiHeader.biHeight)};
+     struct wayland_window_surface *wws = wayland_window_surface_cast(window_surface);
+     struct wayland_shm_buffer *shm_buffer = NULL;
+     BOOL flushed = FALSE;
+@@ -394,8 +397,7 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+         copy_from_window_region = shm_buffer->damage_region;
+     }
+ 
+-    wayland_shm_buffer_copy_data(shm_buffer, window_surface->color_bits,
+-                                 &window_surface->rect, copy_from_window_region);
++    wayland_shm_buffer_copy_data(shm_buffer, color_bits, &surface_rect, copy_from_window_region);
+ 
+     pthread_mutex_lock(&wws->wayland_surface->mutex);
+     if (wayland_surface_reconfigure(wws->wayland_surface))
+diff --git a/dlls/winex11.drv/bitblt.c b/dlls/winex11.drv/bitblt.c
+index fd350fc6a65..8ac1ffead17 100644
+--- a/dlls/winex11.drv/bitblt.c
++++ b/dlls/winex11.drv/bitblt.c
+@@ -1079,7 +1079,7 @@ static inline BOOL image_needs_byteswap( XImage *image, BOOL is_r8g8b8, int bit_
+ }
+ 
+ /* copy image bits with byte swapping and/or pixel mapping */
+-static void copy_image_byteswap( BITMAPINFO *info, const unsigned char *src, unsigned char *dst,
++static void copy_image_byteswap( const BITMAPINFO *info, const unsigned char *src, unsigned char *dst,
+                                  int src_stride, int dst_stride, int height, BOOL byteswap,
+                                  const int *mapping, unsigned int zeropad_mask, unsigned int alpha_bits )
+ {
+@@ -1624,13 +1624,12 @@ static inline void add_row( HRGN rgn, RGNDATA *data, int x, int y, int len )
+ /***********************************************************************
+  *           update_surface_region
+  */
+-static void update_surface_region( struct x11drv_window_surface *surface, const void *color_bits,
++static void update_surface_region( struct x11drv_window_surface *surface, const BITMAPINFO *info, const void *color_bits,
+                                    COLORREF color_key, UINT alpha_mask )
+ {
+ #ifdef HAVE_LIBXSHAPE
+     char buffer[4096];
+     RGNDATA *data = (RGNDATA *)buffer;
+-    BITMAPINFO *info = &surface->info;
+     UINT *masks = (UINT *)info->bmiColors;
+     int x, y, start, width;
+     HRGN rgn;
+@@ -1957,17 +1956,17 @@ static void x11drv_surface_set_clip( struct window_surface *window_surface, cons
+ /***********************************************************************
+  *           x11drv_surface_flush
+  */
+-static BOOL x11drv_surface_flush( struct window_surface *window_surface, const RECT *rect, const RECT *dirty )
++static BOOL x11drv_surface_flush( struct window_surface *window_surface, const RECT *rect, const RECT *dirty,
++                                  const BITMAPINFO *color_info, const void *color_bits )
+ {
+     UINT alpha_mask = window_surface->alpha_mask, alpha_bits = window_surface->alpha_bits;
+     struct x11drv_window_surface *surface = get_x11_surface( window_surface );
+     COLORREF color_key = window_surface->color_key;
+-    const BITMAPINFO *color_info = &surface->info;
+     XImage *ximage = surface->image->ximage;
+-    unsigned char *src = window_surface->color_bits;
++    const unsigned char *src = color_bits;
+     unsigned char *dst = (unsigned char *)ximage->data;
+ 
+-    if (alpha_mask || color_key != CLR_INVALID) update_surface_region( surface, window_surface->color_bits, color_key, alpha_mask );
++    if (alpha_mask || color_key != CLR_INVALID) update_surface_region( surface, color_info, color_bits, color_key, alpha_mask );
+ 
+     if (alpha_bits == -1)
+     {
+@@ -1987,7 +1986,7 @@ static BOOL x11drv_surface_flush( struct window_surface *window_surface, const R
+ 
+         src += dirty->top * width_bytes;
+         dst += dirty->top * width_bytes;
+-        copy_image_byteswap( &surface->info, src, dst, width_bytes, width_bytes, dirty->bottom - dirty->top,
++        copy_image_byteswap( color_info, src, dst, width_bytes, width_bytes, dirty->bottom - dirty->top,
+                              surface->byteswap, mapping, ~0u, alpha_bits );
+     }
+     else if (alpha_bits)
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index d1e4b304323..4b1ea3c7e33 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -213,7 +213,8 @@ struct window_surface_funcs
+ {
+     void* (*get_info)( struct window_surface *surface, BITMAPINFO *info );
+     void  (*set_clip)( struct window_surface *surface, const RECT *rects, UINT count );
+-    BOOL  (*flush)( struct window_surface *surface, const RECT *rect, const RECT *dirty );
++    BOOL  (*flush)( struct window_surface *surface, const RECT *rect, const RECT *dirty,
++                    const BITMAPINFO *color_info, const void *color_bits );
+     void  (*destroy)( struct window_surface *surface );
+ };
+ 
+-- 
+2.45.2
+

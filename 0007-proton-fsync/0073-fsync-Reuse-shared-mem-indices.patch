@@ -233,9 +233,9 @@ index 3526cfee3f3..fb6fe2d9478 100644
 --- a/server/queue.c
 +++ b/server/queue.c
 @@ -1374,6 +1374,7 @@ static void msg_queue_destroy( struct object *obj )
-     release_object( queue->input );
      if (queue->hooks) release_object( queue->hooks );
      if (queue->fd) release_object( queue->fd );
+     if (queue->shared) free_shared_object( queue->shared );
 +    if (queue->fsync_idx) fsync_free_shm_idx( queue->fsync_idx );
      if (do_esync()) close( queue->esync_fd );
  }

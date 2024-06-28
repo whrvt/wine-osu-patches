@@ -57817,8 +57817,8 @@ index 11111111111..11111111111 100755
 +    "libs/jpeg/jdmrg565.c" => 1,
 +    "libs/jpeg/jdmrgext.c" => 1,
 +    "libs/jpeg/jstdhuff.c" => 1,
-     "tools/makedep.c" => 1,
  );
  
+ my @source_vars = (
 
 
