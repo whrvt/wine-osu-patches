@@ -1,4 +1,4 @@
-From 53e08c7938cec9e6899c8b820e3dbda8a274dea8 Mon Sep 17 00:00:00 2001
+From 1915484054e818e43c72dcf3bab67794ab4370f1 Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Wed, 26 Jun 2024 10:55:16 +0300
 Subject: [PATCH 4/4] winewayland: Support WGL_ARB_pixel_format_float.

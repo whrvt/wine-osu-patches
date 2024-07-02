@@ -1,4 +1,4 @@
-From 2a4775fb1dfc95103d33a17755da74d6e08d07cb Mon Sep 17 00:00:00 2001
+From f6504047c53e28783f1f5515d69cae5cc41314cf Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Tue, 25 Jun 2024 13:45:02 +0300
 Subject: [PATCH 1/4] opengl32: Add default implementation for
@@ -9,8 +9,8 @@ populates the wgl_pixel_format ARB fields.
 ---
  dlls/opengl32/make_opengl |   1 +
  dlls/opengl32/thunks.c    |  10 +-
- dlls/opengl32/wgl.c       | 243 ++++++++++++++++++++++++++++++++++++++
- 3 files changed, 245 insertions(+), 9 deletions(-)
+ dlls/opengl32/wgl.c       | 283 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 285 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
 index 771793b9049..54873150da3 100755
@@ -53,15 +53,24 @@ index 3ee1776daef..ccabbbc7519 100644
  extern const char * WINAPI wglGetExtensionsStringARB( HDC hdc );
  extern const char * WINAPI wglGetExtensionsStringEXT(void);
 diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
-index 2ae79a56f9e..c4cdf941fc5 100644
+index 2ae79a56f9e..19d989e44fc 100644
 --- a/dlls/opengl32/wgl.c
 +++ b/dlls/opengl32/wgl.c
-@@ -492,6 +492,249 @@ static BOOL wgl_pixel_format_get_attrib( const struct wgl_pixel_format *fmt, int
+@@ -18,6 +18,7 @@
+  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+  */
+ 
++#include <assert.h>
+ #include <stdarg.h>
+ #include <stdlib.h>
+ #include <math.h>
+@@ -492,6 +493,288 @@ static BOOL wgl_pixel_format_get_attrib( const struct wgl_pixel_format *fmt, int
      return valid;
  }
  
 +enum attrib_match
 +{
++    ATTRIB_MATCH_INVALID = -1,
 +    ATTRIB_MATCH_IGNORE,
 +    ATTRIB_MATCH_EXACT,
 +    ATTRIB_MATCH_MINIMUM,
@@ -111,8 +120,20 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +    case WGL_SAMPLE_BUFFERS_ARB:
 +    case WGL_SAMPLES_ARB:
 +        return ATTRIB_MATCH_MINIMUM;
-+    default:
++    case WGL_NUMBER_PIXEL_FORMATS_ARB:
++    case WGL_RED_SHIFT_ARB:
++    case WGL_GREEN_SHIFT_ARB:
++    case WGL_BLUE_SHIFT_ARB:
++    case WGL_ALPHA_SHIFT_ARB:
++    case WGL_TRANSPARENT_ARB:
++    case WGL_TRANSPARENT_RED_VALUE_ARB:
++    case WGL_TRANSPARENT_GREEN_VALUE_ARB:
++    case WGL_TRANSPARENT_BLUE_VALUE_ARB:
++    case WGL_TRANSPARENT_ALPHA_VALUE_ARB:
++    case WGL_TRANSPARENT_INDEX_VALUE_ARB:
 +        return ATTRIB_MATCH_IGNORE;
++    default:
++        return ATTRIB_MATCH_INVALID;
 +    }
 +}
 +
@@ -122,6 +143,8 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +    enum attrib_match match = wgl_attrib_match_criteria( attrib );
 +    int fmt_value;
 +    UINT i;
++
++    assert(match != ATTRIB_MATCH_INVALID);
 +
 +    if (match == ATTRIB_MATCH_IGNORE) return;
 +
@@ -145,12 +168,12 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +    case WGL_DRAW_TO_BITMAP_ARB: return 2;
 +    case WGL_ACCELERATION_ARB: return 3;
 +    case WGL_COLOR_BITS_ARB: return 4;
-+    case WGL_PIXEL_TYPE_ARB: return 5;
-+    case WGL_ALPHA_BITS_ARB: return 6;
-+    case WGL_AUX_BUFFERS_ARB: return 7;
-+    case WGL_DEPTH_BITS_ARB: return 8;
-+    case WGL_STENCIL_BITS_ARB: return 9;
-+    case WGL_ACCUM_BITS_ARB: return 10;
++    case WGL_ACCUM_BITS_ARB: return 5;
++    case WGL_PIXEL_TYPE_ARB: return 6;
++    case WGL_ALPHA_BITS_ARB: return 7;
++    case WGL_AUX_BUFFERS_ARB: return 8;
++    case WGL_DEPTH_BITS_ARB: return 9;
++    case WGL_STENCIL_BITS_ARB: return 10;
 +    case WGL_DOUBLE_BUFFER_ARB: return 11;
 +    case WGL_SWAP_METHOD_ARB: return 12;
 +    default: return 100;
@@ -159,12 +182,7 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +
 +static int compare_attribs( const void *a, const void *b )
 +{
-+    int prio_a = wgl_attrib_sort_priority( *(int *)a );
-+    int prio_b = wgl_attrib_sort_priority( *(int *)b );
-+
-+    if (prio_a == prio_b) return 0;
-+    else if (prio_a < prio_b) return -1;
-+    else return 1;
++    return wgl_attrib_sort_priority( *(int *)a ) - wgl_attrib_sort_priority( *(int *)b );
 +}
 +
 +static int wgl_attrib_value_priority( int value )
@@ -190,7 +208,7 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +
 +struct compare_formats_ctx
 +{
-+    int attribs[128];
++    int attribs[256];
 +    UINT num_attribs;
 +};
 +
@@ -198,7 +216,7 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +{
 +    const struct wgl_pixel_format *fmt_a = *(void **)a, *fmt_b = *(void **)b;
 +    struct compare_formats_ctx *ctx = arg;
-+    int val_a, val_b;
++    int attrib, val_a, val_b;
 +    UINT i;
 +
 +    if (!fmt_a) return 1;
@@ -206,17 +224,22 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +
 +    for (i = 0; i < ctx->num_attribs; ++i)
 +    {
-+        if (wgl_pixel_format_get_attrib( fmt_a, ctx->attribs[i], &val_a ) &&
-+            wgl_pixel_format_get_attrib( fmt_b, ctx->attribs[i], &val_b ) &&
++        attrib = ctx->attribs[2 * i];
++        if (wgl_pixel_format_get_attrib( fmt_a, attrib, &val_a ) &&
++            wgl_pixel_format_get_attrib( fmt_b, attrib, &val_b ) &&
 +            val_a != val_b)
 +        {
-+            switch (ctx->attribs[i])
++            switch (attrib)
 +            {
 +            case WGL_ACCELERATION_ARB:
 +            case WGL_SWAP_METHOD_ARB:
 +            case WGL_PIXEL_TYPE_ARB:
 +                return wgl_attrib_value_priority( val_a ) -
 +                       wgl_attrib_value_priority( val_b );
++            case WGL_COLOR_BITS_ARB:
++                /* Prefer 32bpp over other values */
++                if (val_a >= 32 && val_b >= 32) return val_a - val_b;
++                else return val_b - val_a;
 +            default:
 +                /* Smaller values first */
 +                return val_a - val_b;
@@ -226,6 +249,22 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +
 +    /* Maintain pixel format id order */
 +    return fmt_a - fmt_b;
++}
++
++static void compare_formats_ctx_set_attrib( struct compare_formats_ctx *ctx,
++                                            int attrib, int value )
++{
++    UINT i;
++
++    /* Overwrite attribute if it exists already */
++    for (i = 0; i < ctx->num_attribs; ++i)
++        if (ctx->attribs[2 * i] == attrib) break;
++
++    assert(i < ARRAY_SIZE(ctx->attribs) / 2);
++
++    ctx->attribs[2 * i] = attrib;
++    ctx->attribs[2 * i + 1] = value;
++    if (i == ctx->num_attribs) ++ctx->num_attribs;
 +}
 +
 +/***********************************************************************
@@ -266,27 +305,35 @@ index 2ae79a56f9e..c4cdf941fc5 100644
 +        return args.ret;
 +    }
 +
++    /* Gather, validate and deduplicate all attributes */
++    for (i = 0; attribs_int && attribs_int[i]; i += 2)
++    {
++        if (wgl_attrib_match_criteria( attribs_int[i] ) == ATTRIB_MATCH_INVALID) return FALSE;
++        compare_formats_ctx_set_attrib( &ctx, attribs_int[i], attribs_int[i + 1] );
++    }
++    for (i = 0; attribs_float && attribs_float[i]; i += 2)
++    {
++        if (wgl_attrib_match_criteria( attribs_float[i] ) == ATTRIB_MATCH_INVALID) return FALSE;
++        compare_formats_ctx_set_attrib( &ctx, attribs_float[i], attribs_float[i + 1] );
++    }
++
 +    /* Initialize the format_array with (pointers to) all wgl formats */
 +    format_array = malloc( num_wgl_formats * sizeof(*format_array) );
 +    if (!format_array) return FALSE;
 +    for (i = 0; i < num_wgl_formats; ++i) format_array[i] = &wgl_formats[i];
 +
 +    /* Remove formats that are not acceptable */
-+    for (i = 0; attribs_int && attribs_int[i]; i += 2)
-+    {
-+        if (ctx.num_attribs == ARRAY_SIZE(ctx.attribs)) { free( format_array ); return FALSE; }
-+        else ctx.attribs[ctx.num_attribs++] = attribs_int[i];
-+        filter_format_array( format_array, num_wgl_formats, attribs_int[i], attribs_int[i + 1] );
-+    }
-+    for (i = 0; attribs_float && attribs_float[i]; i += 2)
-+    {
-+        if (ctx.num_attribs == ARRAY_SIZE(ctx.attribs)) { free( format_array ); return FALSE; }
-+        else ctx.attribs[ctx.num_attribs++] = attribs_float[i];
-+        filter_format_array( format_array, num_wgl_formats, attribs_float[i], attribs_float[i + 1] );
-+    }
++    for (i = 0; i < ctx.num_attribs; ++i)
++        filter_format_array( format_array, num_wgl_formats, ctx.attribs[2 * i],
++                             ctx.attribs[2 * i + 1] );
++
++    /* Some attributes we always want to sort by (values don't matter for sorting) */
++    compare_formats_ctx_set_attrib( &ctx, WGL_ACCELERATION_ARB, 0 );
++    compare_formats_ctx_set_attrib( &ctx, WGL_COLOR_BITS_ARB, 0 );
++    compare_formats_ctx_set_attrib( &ctx, WGL_ACCUM_BITS_ARB, 0 );
 +
 +    /* Arrange attributes in the order which we want to check them */
-+    qsort( ctx.attribs, ctx.num_attribs, sizeof(*ctx.attribs), compare_attribs );
++    qsort( ctx.attribs, ctx.num_attribs, 2 * sizeof(*ctx.attribs), compare_attribs );
 +
 +    /* Sort pixel formats based on the specified attributes */
 +    qsort_s( format_array, num_wgl_formats, sizeof(*format_array), compare_formats, &ctx );

@@ -1,0 +1,60 @@
+From 3526c2fbd88f93a42c50adc8fb4328e62e0b7d72 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 20 Jun 2024 16:02:05 +0800
+Subject: [PATCH] winex11.drv: Fix a possible desktop window message queue
+ hang.
+
+After an X11 event handler queues messages to another thread, TRUE should be returned and eventually
+propagated to X11DRV_ProcessEvents().
+
+When FALSE is always returned in xrandr14_device_change_handler(), a possible hang can happen for
+the desktop message queue as follows:
+
+1. The explorer.exe calls GetMessageW() -> NtUserGetMessage() -> wait_objects() -> wait_message().
+2. In wait_message(), user_driver->pProcessEvents() gets called in the desktop window thread to
+handle RRNotify events and calls xrandr14_device_change_handler() -> display_mode_changed(FALSE)
+-> send_message(get_desktop_window(), WM_DISPLAYCHANGE, ...) -> desktop_window_proc() ->
+send_message_timeout() -> send_client_message() -> process_message() -> broadcast_message() ->
+send_message_timeout() -> send_client_message() -> process_message() -> send_inter_thread_message()
+-> wait_message_reply() -> a server set_queue_mask() with skip_wait being 1 -> wake_mask and
+changed_mask are set to 0.
+3. In wait_message(), user_driver->pProcessEvents() returns FALSE from xrandr14_device_change_handler().
+So wait_message() continues to call NtWaitForMultipleObjects().
+4. Now NtWaitForMultipleObjects() hangs for INFINITE timeout because wake_mask and changed_mask
+for the message queue are set to 0 so the thread is not woke up.
+
+The hang is sensitive to message ordering and only happens in this specific case so it's hard to
+reproduce with tests. I believe some of the past test timeouts on TestBots can be attributed to this
+bug.
+---
+ dlls/winex11.drv/xrandr.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/xrandr.c b/dlls/winex11.drv/xrandr.c
+index edad0712927..1cf8c7c5070 100644
+--- a/dlls/winex11.drv/xrandr.c
++++ b/dlls/winex11.drv/xrandr.c
+@@ -1212,15 +1212,19 @@ static void xrandr14_free_monitors( struct gdi_monitor *monitors, int count )
+ 
+ static BOOL xrandr14_device_change_handler( HWND hwnd, XEvent *event )
+ {
++    BOOL ret = FALSE;
+     RECT rect;
+ 
+     xrandr14_invalidate_current_mode_cache();
+     if (hwnd == NtUserGetDesktopWindow() && NtUserGetWindowThread( hwnd, NULL ) == GetCurrentThreadId())
++    {
+         NtUserCallNoParam( NtUserCallNoParam_DisplayModeChanged );
++        ret = TRUE;
++    }
+     /* Update xinerama monitors for xinerama_get_fullscreen_monitors() */
+     rect = get_host_primary_monitor_rect();
+     xinerama_init( rect.right - rect.left, rect.bottom - rect.top );
+-    return FALSE;
++    return ret;
+ }
+ 
+ static void xrandr14_register_event_handlers(void)
+-- 
+GitLab
+

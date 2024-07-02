@@ -1,0 +1,19 @@
+diff --git a/server/queue.c b/server/queue.c
+index c8f32554f0c..821b772c5c0 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -4165,11 +4165,13 @@ DECL_HANDLER(set_keyboard_repeat)
+ DECL_HANDLER(fsync_msgwait)
+ {
+     struct msg_queue *queue = get_current_queue();
++    const queue_shm_t *queue_shm;
+ 
+     if (!queue) return;
++    queue_shm = queue->shared;
+     queue->fsync_in_msgwait = req->in_msgwait;
+ 
+-    if (current->process->idle_event && !(queue->wake_mask & QS_SMRESULT))
++    if (current->process->idle_event && !(queue_shm->wake_mask & QS_SMRESULT))
+         set_event( current->process->idle_event );
+ 
+     /* and start/stop waiting on the driver */
