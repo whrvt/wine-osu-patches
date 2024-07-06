@@ -42,8 +42,8 @@ index d1f49ca3ed9..049773fe7e3 100644
          HWND orig = msg->hwnd;
 +        UINT dpi = get_thread_dpi();
  
--        msg->hwnd = window_from_point( 0, msg->pt, &hittest );
-+        msg->hwnd = window_from_point( 0, msg->pt, &hittest, dpi );
+-        msg->hwnd = window_from_point( msg->hwnd, msg->pt, &hittest );
++        msg->hwnd = window_from_point( msg->hwnd, msg->pt, &hittest, dpi );
          if (!msg->hwnd) /* As a heuristic, try the next window if it's the owner of orig */
          {
              HWND next = get_window_relative( orig, GW_HWNDNEXT );

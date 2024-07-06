@@ -1,0 +1,106 @@
+From 09c5434f1fe960571a9e711edaac0ebbc25605b8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 26 Jun 2024 12:18:17 +0200
+Subject: [PATCH 2/3] win32u: Use the thread message queue shared memory in
+ peek_message.
+
+---
+ dlls/win32u/message.c        | 25 +++++++++++++++++++++++--
+ dlls/win32u/ntuser_private.h |  1 +
+ server/queue.c               |  6 ++++--
+ 3 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 0a7102fece2..20674a11b1e 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2705,10 +2705,30 @@ int peek_message( MSG *msg, const struct peek_message_filter *filter )
+         NTSTATUS res;
+         size_t size = 0;
+         const message_data_t *msg_data = buffer;
++        UINT wake_mask, signal_bits, wake_bits, changed_bits, clear_bits = 0;
++
++        /* use the same logic as in server/queue.c get_message */
++        if (!(signal_bits = flags >> 16)) signal_bits = QS_ALLINPUT;
++
++        if (signal_bits & QS_POSTMESSAGE)
++        {
++            clear_bits |= QS_POSTMESSAGE | QS_HOTKEY | QS_TIMER;
++            if (first == 0 && last == ~0U) clear_bits |= QS_ALLPOSTMESSAGE;
++        }
++        if (signal_bits & QS_INPUT) clear_bits |= QS_INPUT;
++        if (signal_bits & QS_PAINT) clear_bits |= QS_PAINT;
++
++        /* if filter includes QS_RAWINPUT we have to translate hardware messages */
++        if (signal_bits & QS_RAWINPUT) signal_bits |= QS_KEY | QS_MOUSEMOVE | QS_MOUSEBUTTON;
+ 
+         thread_info->client_info.msg_source = prev_source;
++        wake_mask = filter->mask & (QS_SENDMESSAGE | QS_SMRESULT);
+ 
+-        SERVER_START_REQ( get_message )
++        if (NtGetTickCount() - thread_info->last_getmsg_time < 3000 && /* avoid hung queue */
++            check_queue_bits( wake_mask, filter->mask, wake_mask | signal_bits, filter->mask | clear_bits,
++                              &wake_bits, &changed_bits ))
++            res = STATUS_PENDING;
++        else SERVER_START_REQ( get_message )
+         {
+             req->internal  = filter->internal;
+             req->flags     = flags;
+@@ -2716,9 +2736,10 @@ int peek_message( MSG *msg, const struct peek_message_filter *filter )
+             req->get_first = first;
+             req->get_last  = last;
+             req->hw_id     = hw_id;
+-            req->wake_mask = filter->mask & (QS_SENDMESSAGE | QS_SMRESULT);
++            req->wake_mask = wake_mask;
+             req->changed_mask = filter->mask;
+             wine_server_set_reply( req, buffer, buffer_size );
++            thread_info->last_getmsg_time = NtGetTickCount();
+             if (!(res = wine_server_call( req )))
+             {
+                 size = wine_server_reply_size( reply );
+diff --git a/dlls/win32u/ntuser_private.h b/dlls/win32u/ntuser_private.h
+index e9d407efb14..a6e61e1751b 100644
+--- a/dlls/win32u/ntuser_private.h
++++ b/dlls/win32u/ntuser_private.h
+@@ -108,6 +108,7 @@ struct user_thread_info
+ {
+     struct ntuser_thread_info     client_info;            /* Data shared with client */
+     HANDLE                        server_queue;           /* Handle to server-side queue */
++    DWORD                         last_getmsg_time;       /* Get/PeekMessage last request time */
+     WORD                          message_count;          /* Get/PeekMessage loop counter */
+     WORD                          hook_call_depth;        /* Number of recursively called hook procs */
+     WORD                          hook_unicode;           /* Is current hook unicode? */
+diff --git a/server/queue.c b/server/queue.c
+index 4f58b795b7e..2a7e1d07082 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -3154,7 +3154,7 @@ DECL_HANDLER(get_message)
+     struct msg_queue *queue = get_current_queue();
+     user_handle_t get_win = get_user_full_handle( req->get_win );
+     const queue_shm_t *queue_shm;
+-    unsigned int filter = req->flags >> 16;
++    unsigned int filter;
+ 
+     if (get_win && get_win != 1 && get_win != -1 && !get_user_object( get_win, USER_WINDOW ))
+     {
+@@ -3177,7 +3177,6 @@ DECL_HANDLER(get_message)
+     }
+ 
+     queue->last_get_msg = current_time;
+-    if (!filter) filter = QS_ALLINPUT;
+ 
+     /* first check for sent messages */
+     if ((ptr = list_head( &queue->msg_list[SEND_MESSAGE] )))
+@@ -3187,6 +3186,9 @@ DECL_HANDLER(get_message)
+         return;
+     }
+ 
++    /* use the same logic as in win32u/message.c peek_message */
++    if (!(filter = req->flags >> 16)) filter = QS_ALLINPUT;
++
+     /* clear changed bits so we can wait on them if we don't find a message */
+     SHARED_WRITE_BEGIN( queue_shm, queue_shm_t )
+     {
+-- 
+2.45.2
+

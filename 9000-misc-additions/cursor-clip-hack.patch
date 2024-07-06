@@ -1,0 +1,24 @@
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index de7b19dfe79..1afa7b5c912 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -465,6 +465,7 @@ void x11drv_xinput2_init( struct x11drv_thread_data *data )
+  */
+ static BOOL grab_clipping_window( const RECT *clip )
+ {
++    return FALSE;
+ #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+     struct x11drv_thread_data *data = x11drv_thread_data();
+     Window clip_window;
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index 1d8acaeabd2..f2c36f29a94 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -898,6 +898,7 @@ void WAYLAND_SetCursor(HWND hwnd, HCURSOR hcursor)
+  */
+ BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
+ {
++    return TRUE;
+     struct wayland_pointer *pointer = &process_wayland.pointer;
+     struct wl_surface *wl_surface = NULL;
+     struct wayland_surface *surface = NULL;
