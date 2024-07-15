@@ -1,0 +1,75 @@
+From 2ca18fc137816ad1452d6229b16d8088e08817ec Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 16 Jun 2023 09:58:55 +0200
+Subject: [PATCH 5/7] server: Make the get_key_state request key code
+ mandatory.
+
+---
+ server/protocol.def |  3 +--
+ server/queue.c      | 21 ++++++---------------
+ 2 files changed, 7 insertions(+), 17 deletions(-)
+
+diff --git a/server/protocol.def b/server/protocol.def
+index 97a22599475..f69a3e8a846 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -2947,10 +2947,9 @@ enum coords_relative
+ /* Retrieve queue keyboard state for current thread or global async state */
+ @REQ(get_key_state)
+     int            async;         /* whether to query the async state */
+-    int            key;           /* optional key code or -1 */
++    int            key;           /* key code */
+ @REPLY
+     unsigned char  state;         /* state of specified key */
+-    VARARG(keystate,bytes);       /* state array for all the keys */
+ @END
+ 
+ /* Set queue keyboard state for current thread */
+diff --git a/server/queue.c b/server/queue.c
+index f42b9317080..c082d7acab8 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -3716,21 +3716,16 @@ DECL_HANDLER(get_thread_input)
+ DECL_HANDLER(get_key_state)
+ {
+     struct desktop *desktop;
+-    data_size_t size = min( 256, get_reply_max_size() );
+ 
+     if (req->async)  /* get global async key state */
+     {
+         if (!(desktop = get_thread_desktop( current, 0 ))) return;
+-        if (req->key >= 0)
++        SHARED_WRITE_BEGIN( desktop->shared, desktop_shm_t )
+         {
+-            SHARED_WRITE_BEGIN( desktop->shared, desktop_shm_t )
+-            {
+-                reply->state = shared->keystate[req->key & 0xff];
+-                shared->keystate[req->key & 0xff] &= ~0x40;
+-            }
+-            SHARED_WRITE_END;
++            reply->state = shared->keystate[req->key & 0xff];
++            shared->keystate[req->key & 0xff] &= ~0x40;
+         }
+-        set_reply_data( (const void *)desktop->shared->keystate, size );
++        SHARED_WRITE_END;
+         release_object( desktop );
+     }
+     else
+@@ -3738,12 +3733,8 @@ DECL_HANDLER(get_key_state)
+         struct msg_queue *queue = get_current_queue();
+         const input_shm_t *input_shm = queue->input->shared;
+         unsigned char *keystate = (void *)input_shm->keystate;
+-        if (req->key >= 0)
+-        {
+-            sync_input_keystate( queue->input );
+-            reply->state = keystate[req->key & 0xff];
+-        }
+-        set_reply_data( keystate, size );
++        sync_input_keystate( queue->input );
++        reply->state = keystate[req->key & 0xff];
+     }
+ }
+ 
+-- 
+2.45.2
+

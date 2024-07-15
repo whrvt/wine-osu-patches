@@ -1,0 +1,49 @@
+From 439c5cddbc18e9b99ce7f0f63ab99851d6c71817 Mon Sep 17 00:00:00 2001
+From: Brendan Shanks <bshanks@codeweavers.com>
+Date: Thu, 11 Jul 2024 22:01:24 -0700
+Subject: [PATCH] mmdevapi: Remove unused critical section from MMDevice.
+
+---
+ dlls/mmdevapi/devenum.c          | 5 -----
+ dlls/mmdevapi/mmdevapi_private.h | 2 --
+ 2 files changed, 7 deletions(-)
+
+diff --git a/dlls/mmdevapi/devenum.c b/dlls/mmdevapi/devenum.c
+index 52c88ad0a03..b1993573dd9 100644
+--- a/dlls/mmdevapi/devenum.c
++++ b/dlls/mmdevapi/devenum.c
+@@ -366,9 +366,6 @@ static MMDevice *MMDevice_Create(const WCHAR *name, GUID *id, EDataFlow flow, DW
+         cur->IMMDevice_iface.lpVtbl = &MMDeviceVtbl;
+         cur->IMMEndpoint_iface.lpVtbl = &MMEndpointVtbl;
+ 
+-        InitializeCriticalSectionEx(&cur->crst, 0, RTL_CRITICAL_SECTION_FLAG_FORCE_DEBUG_INFO);
+-        cur->crst.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": MMDevice.crst");
+-
+         list_add_tail(&device_list, &cur->entry);
+     }else if(cur->ref > 0)
+         WARN("Modifying an MMDevice with postitive reference count!\n");
+@@ -584,8 +581,6 @@ static void MMDevice_Destroy(MMDevice *This)
+ {
+     TRACE("Freeing %s\n", debugstr_w(This->drv_id));
+     list_remove(&This->entry);
+-    This->crst.DebugInfo->Spare[0] = 0;
+-    DeleteCriticalSection(&This->crst);
+     free(This->drv_id);
+     free(This);
+ }
+diff --git a/dlls/mmdevapi/mmdevapi_private.h b/dlls/mmdevapi/mmdevapi_private.h
+index 5ef19ffc0d1..38ab7d8f4a0 100644
+--- a/dlls/mmdevapi/mmdevapi_private.h
++++ b/dlls/mmdevapi/mmdevapi_private.h
+@@ -53,8 +53,6 @@ typedef struct MMDevice {
+     IMMEndpoint IMMEndpoint_iface;
+     LONG ref;
+ 
+-    CRITICAL_SECTION crst;
+-
+     EDataFlow flow;
+     DWORD state;
+     GUID devguid;
+-- 
+GitLab
+

@@ -1,15 +1,50 @@
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 216f1c0e2ce..3c2fbcb4f35 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -982,5 +982,5 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     return (p - dst) * sizeof(WCHAR);
+ }
+ extern BOOL gl_disable_child_window_rendering;
+-
++extern BOOL block_get_version;
+ #endif  /* __WINE_X11DRV_H */
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index be24a38ff82..df70075be1d 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -90,6 +90,7 @@ int xrender_error_base = 0;
+ char *process_name = NULL;
+ WNDPROC client_foreign_window_proc = NULL;
+ BOOL gl_disable_child_window_rendering = TRUE;
++BOOL block_get_version = FALSE;
+ 
+ static x11drv_error_callback err_callback;   /* current callback for error */
+ static Display *err_callback_display;        /* display callback is set for */
+@@ -778,6 +779,11 @@ static NTSTATUS x11drv_init( void *arg )
+         if (e && *e != '\0' && *e != '0') gl_disable_child_window_rendering = FALSE;
+     }
+ 
++    {
++        const char *e = getenv("WINE_BLOCK_GET_VERSION");
++        if (e && *e != '\0' && *e != '0') block_get_version = TRUE;
++    }
++
+     init_user_driver();
+     X11DRV_DisplayDevices_RegisterEventHandlers();
+     return STATUS_SUCCESS;
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index de7b19dfe79..1afa7b5c912 100644
+index de7b19dfe79..923c38b972b 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
-@@ -465,6 +465,7 @@ void x11drv_xinput2_init( struct x11drv_thread_data *data )
+@@ -1540,6 +1540,7 @@ BOOL X11DRV_GetCursorPos(LPPOINT pos)
   */
- static BOOL grab_clipping_window( const RECT *clip )
+ BOOL X11DRV_ClipCursor( const RECT *clip, BOOL reset )
  {
-+    return FALSE;
- #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
-     struct x11drv_thread_data *data = x11drv_thread_data();
-     Window clip_window;
++    if (block_get_version) return TRUE;
+     if (!reset && clip && grab_clipping_window( clip )) return TRUE;
+     ungrab_clipping_window();
+     return TRUE;
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
 index 1d8acaeabd2..f2c36f29a94 100644
 --- a/dlls/winewayland.drv/wayland_pointer.c

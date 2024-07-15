@@ -1,0 +1,139 @@
+From dc09fbd0b23af26fb736a976501d71ff7cbd601b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 23 Jun 2024 10:50:31 +0200
+Subject: [PATCH 1/7] server: Expose the thread input keystate through shared
+ memory.
+
+---
+ server/protocol.def |  1 +
+ server/queue.c      | 45 +++++++++++++++++++++++++++++++++++----------
+ 2 files changed, 36 insertions(+), 10 deletions(-)
+
+diff --git a/server/protocol.def b/server/protocol.def
+index 91257fce3a1..97a22599475 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -935,6 +935,7 @@ typedef volatile struct
+     rectangle_t          caret_rect;       /* caret rectangle */
+     user_handle_t        cursor;           /* handle to the cursor */
+     int                  cursor_count;     /* cursor show count */
++    unsigned char        keystate[256];    /* key state */
+ } input_shm_t;
+ 
+ typedef volatile union
+diff --git a/server/queue.c b/server/queue.c
+index 9ccd93c4280..f42b9317080 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -107,7 +107,6 @@ struct thread_input
+     int                    caret_hide;    /* caret hide count */
+     int                    caret_state;   /* caret on/off state */
+     struct list            msg_list;      /* list of hardware messages */
+-    unsigned char          keystate[256]; /* state of each key */
+     unsigned char          desktop_keystate[256]; /* desktop keystate when keystate was synced */
+     int                    keystate_lock; /* keystate is locked */
+     const input_shm_t     *shared;        /* thread input in session shared memory */
+@@ -251,7 +250,6 @@ static struct thread_input *create_thread_input( struct thread *thread )
+     if ((input = alloc_object( &thread_input_ops )))
+     {
+         list_init( &input->msg_list );
+-        memset( input->keystate, 0, sizeof(input->keystate) );
+         input->keystate_lock = 0;
+         input->shared = NULL;
+ 
+@@ -280,6 +278,7 @@ static struct thread_input *create_thread_input( struct thread *thread )
+             set_caret_window( input, shared, 0 );
+             shared->cursor = 0;
+             shared->cursor_count = 0;
++            memset( (void *)shared->keystate, 0, sizeof(shared->keystate) );
+         }
+         SHARED_WRITE_END;
+     }
+@@ -360,17 +359,23 @@ void free_msg_queue( struct thread *thread )
+ /* synchronize thread input keystate with the desktop */
+ static void sync_input_keystate( struct thread_input *input )
+ {
++    const input_shm_t *input_shm = input->shared;
+     const desktop_shm_t *desktop_shm;
++    struct desktop *desktop;
+     int i;
+ 
+-    if (!input->desktop || input->keystate_lock) return;
++    if (!(desktop = input->desktop) || input->keystate_lock) return;
+     desktop_shm = input->desktop->shared;
+ 
+-    for (i = 0; i < sizeof(input->keystate); ++i)
++    SHARED_WRITE_BEGIN( input_shm, input_shm_t )
+     {
+-        if (input->desktop_keystate[i] == desktop_shm->keystate[i]) continue;
+-        input->keystate[i] = input->desktop_keystate[i] = desktop_shm->keystate[i];
++        for (i = 0; i < sizeof(shared->keystate); ++i)
++        {
++            if (input->desktop_keystate[i] == desktop_shm->keystate[i]) continue;
++            shared->keystate[i] = input->desktop_keystate[i] = desktop_shm->keystate[i];
++        }
+     }
++    SHARED_WRITE_END;
+ }
+ 
+ /* locks thread input keystate to prevent synchronization */
+@@ -1435,7 +1440,15 @@ int attach_thread_input( struct thread *thread_from, struct thread *thread_to )
+     }
+ 
+     ret = assign_thread_input( thread_from, input );
+-    if (ret) memset( input->keystate, 0, sizeof(input->keystate) );
++    if (ret)
++    {
++        const input_shm_t *input_shm = input->shared;
++        SHARED_WRITE_BEGIN( input_shm, input_shm_t )
++        {
++            memset( (void *)shared->keystate, 0, sizeof(shared->keystate) );
++        }
++        SHARED_WRITE_END;
++    }
+     release_object( input );
+     return ret;
+ }
+@@ -1692,7 +1705,12 @@ static void update_key_state( volatile unsigned char *keystate, unsigned int msg
+ 
+ static void update_thread_input_key_state( struct thread_input *input, unsigned int msg, lparam_t wparam )
+ {
+-    update_key_state( input->keystate, msg, wparam, 0 );
++    const input_shm_t *input_shm = input->shared;
++    SHARED_WRITE_BEGIN( input_shm, input_shm_t )
++    {
++        update_key_state( shared->keystate, msg, wparam, 0 );
++    }
++    SHARED_WRITE_END;
+ }
+ 
+ static void update_desktop_key_state( struct desktop *desktop, unsigned int msg, lparam_t wparam )
+@@ -3718,7 +3736,8 @@ DECL_HANDLER(get_key_state)
+     else
+     {
+         struct msg_queue *queue = get_current_queue();
+-        unsigned char *keystate = queue->input->keystate;
++        const input_shm_t *input_shm = queue->input->shared;
++        unsigned char *keystate = (void *)input_shm->keystate;
+         if (req->key >= 0)
+         {
+             sync_input_keystate( queue->input );
+@@ -3735,8 +3754,14 @@ DECL_HANDLER(set_key_state)
+     struct msg_queue *queue = get_current_queue();
+     struct desktop *desktop = queue->input->desktop;
+     data_size_t size = min( 256, get_req_data_size() );
++    const input_shm_t *input_shm = queue->input->shared;
++
++    SHARED_WRITE_BEGIN( input_shm, input_shm_t )
++    {
++        memcpy( (void *)shared->keystate, get_req_data(), size );
++    }
++    SHARED_WRITE_END;
+ 
+-    memcpy( queue->input->keystate, get_req_data(), size );
+     memcpy( queue->input->desktop_keystate, (const void *)desktop->shared->keystate,
+             sizeof(queue->input->desktop_keystate) );
+ 
+-- 
+2.45.2
+

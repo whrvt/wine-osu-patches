@@ -1,0 +1,392 @@
+From 391ed0bc0b4566d1a22ce6c541a7f64b31f28c4e Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 2 Feb 2023 17:06:35 -0600
+Subject: [PATCH 1/4] kernel32/tests: Add tests for known dlls load specifics.
+
+---
+ dlls/kernel32/tests/module.c | 90 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 90 insertions(+)
+
+diff --git a/dlls/kernel32/tests/module.c b/dlls/kernel32/tests/module.c
+index 956595bf2a1..5bdf5d9f1ee 100644
+--- a/dlls/kernel32/tests/module.c
++++ b/dlls/kernel32/tests/module.c
+@@ -1627,6 +1627,95 @@ static void test_ddag_node(void)
+     ok( se == node->Dependencies.Tail, "Expected end of the list.\n" );
+ }
+ 
++#define check_dll_path(a, b) check_dll_path_( __LINE__, a, b )
++static void check_dll_path_( unsigned int line, HMODULE h, const char *expected )
++{
++    char path[MAX_PATH];
++    DWORD ret;
++
++    *path = 0;
++    ret = GetModuleFileNameA( h, path, MAX_PATH);
++    ok_(__FILE__, line)( ret && ret < MAX_PATH, "Got %lu.\n", ret );
++    ok_(__FILE__, line)( !stricmp( path, expected ), "Got %s.\n", debugstr_a(path) );
++}
++
++static void test_known_dlls_load(void)
++{
++    static const char apiset_dll[] = "ext-ms-win-base-psapi-l1-1-0.dll";
++    char system_path[MAX_PATH], local_path[MAX_PATH];
++    static const char dll[] = "psapi.dll";
++    HMODULE hlocal, hsystem, hapiset, h;
++    BOOL ret;
++
++    if (GetModuleHandleA( dll ) || GetModuleHandleA( apiset_dll ))
++    {
++        skip( "%s is already loaded, skipping test.\n", dll );
++        return;
++    }
++
++    hapiset = LoadLibraryA( apiset_dll );
++    if (!hapiset)
++    {
++        win_skip( "%s is not available.\n", apiset_dll );
++        return;
++    }
++    FreeLibrary( hapiset );
++
++    GetSystemDirectoryA( system_path, sizeof(system_path) );
++    strcat( system_path, "\\" );
++    strcat( system_path, dll );
++
++    GetCurrentDirectoryA( sizeof(local_path), local_path );
++    strcat( local_path, "\\" );
++    strcat( local_path, dll );
++
++    /* Known dll is always found in system dir, regardless of its presence in the application dir. */
++    ret = pSetDefaultDllDirectories( LOAD_LIBRARY_SEARCH_USER_DIRS );
++    ok( ret, "SetDefaultDllDirectories failed err %lu\n", GetLastError() );
++    h = LoadLibraryA( dll );
++    ret = pSetDefaultDllDirectories( LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
++    ok( ret, "SetDefaultDllDirectories failed err %lu\n", GetLastError() );
++    todo_wine ok( !!h, "Got NULL.\n" );
++    hapiset = GetModuleHandleA( apiset_dll );
++    ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
++    FreeLibrary( h );
++
++    h = LoadLibraryExA( dll, 0, LOAD_LIBRARY_SEARCH_APPLICATION_DIR );
++    todo_wine ok( !!h, "Got NULL.\n" );
++    hapiset = GetModuleHandleA( apiset_dll );
++    ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
++    FreeLibrary( h );
++
++    /* Put dll to the current directory. */
++    create_test_dll( dll );
++
++    h = LoadLibraryExA( dll, 0, LOAD_LIBRARY_SEARCH_APPLICATION_DIR );
++    ok( !!h, "Got NULL.\n" );
++    hapiset = GetModuleHandleA( apiset_dll );
++    todo_wine ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
++    FreeLibrary( h );
++
++    /* Local version can still be loaded if dll name contains path. */
++    hlocal = LoadLibraryA( local_path );
++    ok( !!hlocal, "Got NULL.\n" );
++    check_dll_path( hlocal, local_path );
++
++    /* dll without path will match the loaded one. */
++    hsystem = LoadLibraryA( dll );
++    ok( hsystem == hlocal, "Got %p, %p.\n", hsystem, hlocal );
++    h = GetModuleHandleA( dll );
++    ok( h == hlocal, "Got %p, %p.\n", h, hlocal );
++
++    /* apiset dll won't match the one loaded not from system dir. */
++    hapiset = GetModuleHandleA( apiset_dll );
++    ok( !hapiset, "Got %p.\n", hapiset );
++
++    FreeLibrary( hsystem );
++    FreeLibrary( hlocal );
++
++    DeleteFileA( dll );
++}
++
+ START_TEST(module)
+ {
+     WCHAR filenameW[MAX_PATH];
+@@ -1663,4 +1752,5 @@ START_TEST(module)
+     test_LdrGetDllFullName();
+     test_apisets();
+     test_ddag_node();
++    test_known_dlls_load();
+ }
+-- 
+GitLab
+
+From fa391327840ea433b063c017277deaebf43e6adf Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Tue, 7 Feb 2023 10:16:36 -0600
+Subject: [PATCH 3/4] loader/wine.inf: Add known dlls key.
+
+---
+ loader/wine.inf.in | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/loader/wine.inf.in b/loader/wine.inf.in
+index 1f5138051c9..0a1ac021a5e 100644
+--- a/loader/wine.inf.in
++++ b/loader/wine.inf.in
+@@ -461,6 +461,51 @@ HKLM,%Control%\Session Manager\Environment,"windir",0x00020000,"%SystemRoot%"
+ HKLM,%Control%\Session Manager\Environment,"winsysdir",,"%11%"
+ HKLM,%Control%\Session Manager\Memory Management,PagingFiles,,"%24%\pagefile.sys 27 77"
+ HKLM,%Control%\Session Manager\Memory Management,WriteWatch,0x00040002,1
++;;KnownDLLs
++HKLM,%Control%\Session Manager\KnownDLLs,"_wow64cpu",,"wow64cpu.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"_wowarmhw",,"wowarmhw.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"_xtajit",,"_xtajit.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"advapi32",,"advapi32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"clbcatq",,"clbcatq.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"combase",,"combase.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"COMDLG32",,"COMDLG32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"coml2",,"coml2.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"DifxApi",,"difxapi.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"gdi32",,"gdi32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"gdiplus",,"gdiplus.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"IMAGEHLP",,"IMAGEHLP.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"IMM32",,"IMM32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"kernel32",,"kernel32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"MSCTF",,"MSCTF.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"MSVCRT",,"MSVCRT.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"NORMALIZ",,"NORMALIZ.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"NSI",,"NSI.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"ole32",,"ole32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"OLEAUT32",,"OLEAUT32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"PSAPI",,"PSAPI.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"rpcrt4",,"rpcrt4.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"sechost",,"sechost.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"Setupapi",,"Setupapi.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"SHCORE",,"SHCORE.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"SHELL32",,"SHELL32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"SHLWAPI",,"SHLWAPI.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"user32",,"user32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"wow64",,"wow64.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"wow64win",,"wow64win.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"WS2_32",,"WS2_32.dll"
++;;KnownDLLs not present in registry on Windows but present in \\KnownDLLs directory
++HKLM,%Control%\Session Manager\KnownDLLs,"ucrtbase",,"ucrtbase.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"msvcp_win",,"msvcp_win.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"bcrypt",,"bcrypt.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"COMCTL32",,"COMCTL32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"cfgmgr32",,"cfgmgr32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"ntdll",,"ntdll.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"bcryptPrimitives",,"bcryptPrimitives.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"win32u",,"win32u.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"gdi32full",,"gdi32full.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"WINTRUST",,"WINTRUST.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"CRYPT32",,"CRYPT32.dll"
++HKLM,%Control%\Session Manager\KnownDLLs,"WLDAP32",,"WLDAP32.dll"
+ 
+ [Fonts]
+ HKLM,%FontSubStr%,"Arial Baltic,186",,"Arial,186"
+-- 
+GitLab
+
+
+From 480ce9db0a395f9ef80e8f196442c7aaa815b0a5 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 2 Feb 2023 17:14:54 -0600
+Subject: [PATCH 4/4] ntdll: Load known dlls from system directory.
+
+---
+ dlls/kernel32/tests/module.c |  9 ++++--
+ dlls/ntdll/loader.c          | 53 ++++++++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/kernel32/tests/module.c b/dlls/kernel32/tests/module.c
+index 5bdf5d9f1ee..2f465f4be6d 100644
+--- a/dlls/kernel32/tests/module.c
++++ b/dlls/kernel32/tests/module.c
+@@ -1675,13 +1675,15 @@ static void test_known_dlls_load(void)
+     h = LoadLibraryA( dll );
+     ret = pSetDefaultDllDirectories( LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
+     ok( ret, "SetDefaultDllDirectories failed err %lu\n", GetLastError() );
+-    todo_wine ok( !!h, "Got NULL.\n" );
++    ok( !!h, "Got NULL.\n" );
++    check_dll_path( h, system_path );
+     hapiset = GetModuleHandleA( apiset_dll );
+     ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
+     FreeLibrary( h );
+ 
+     h = LoadLibraryExA( dll, 0, LOAD_LIBRARY_SEARCH_APPLICATION_DIR );
+-    todo_wine ok( !!h, "Got NULL.\n" );
++    ok( !!h, "Got NULL.\n" );
++    check_dll_path( h, system_path );
+     hapiset = GetModuleHandleA( apiset_dll );
+     ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
+     FreeLibrary( h );
+@@ -1691,8 +1693,9 @@ static void test_known_dlls_load(void)
+ 
+     h = LoadLibraryExA( dll, 0, LOAD_LIBRARY_SEARCH_APPLICATION_DIR );
+     ok( !!h, "Got NULL.\n" );
++    check_dll_path( h, system_path );
+     hapiset = GetModuleHandleA( apiset_dll );
+-    todo_wine ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
++    ok( hapiset == h, "Got %p, %p.\n", hapiset, h );
+     FreeLibrary( h );
+ 
+     /* Local version can still be loaded if dll name contains path. */
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index 702b92279df..de5b6c5c473 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -34,6 +34,7 @@
+ #include "wine/exception.h"
+ #include "wine/debug.h"
+ #include "wine/list.h"
++#include "wine/rbtree.h"
+ #include "ntdll_misc.h"
+ #include "ddk/ntddk.h"
+ #include "ddk/wdm.h"
+@@ -194,6 +195,13 @@ static WINE_MODREF *last_failed_modref;
+ 
+ static LDR_DDAG_NODE *node_ntdll, *node_kernel32;
+ 
++struct known_dll
++{
++    struct rb_entry entry;
++    WCHAR name[1];
++};
++static struct rb_tree known_dlls;
++
+ static NTSTATUS load_dll( const WCHAR *load_path, const WCHAR *libname, DWORD flags, WINE_MODREF** pwm, BOOL system );
+ static NTSTATUS process_attach( LDR_DDAG_NODE *node, LPVOID lpReserved );
+ static FARPROC find_ordinal_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY *exports,
+@@ -3121,6 +3129,23 @@ done:
+ }
+ 
+ 
++/******************************************************************************
++ *	prepend_system_dir
++ */
++static NTSTATUS prepend_system_dir( const WCHAR *name, ULONG name_length, WCHAR **fullname )
++{
++    ULONG len;
++
++    len = wcslen( system_dir ) + name_length;
++    if (!(*fullname = RtlAllocateHeap( GetProcessHeap(), 0, (len + 1) * sizeof(WCHAR) )))
++        return STATUS_NO_MEMORY;
++    wcscpy( *fullname, system_dir );
++    memcpy( *fullname + wcslen( system_dir ), name, name_length * sizeof(WCHAR) );
++    (*fullname)[len] = 0;
++
++    return STATUS_SUCCESS;
++}
++
+ 
+ /******************************************************************************
+  *	find_apiset_dll
+@@ -3130,18 +3155,11 @@ static NTSTATUS find_apiset_dll( const WCHAR *name, WCHAR **fullname )
+     const API_SET_NAMESPACE *map = NtCurrentTeb()->Peb->ApiSetMap;
+     const API_SET_NAMESPACE_ENTRY *entry;
+     UNICODE_STRING str;
+-    ULONG len;
+ 
+     if (get_apiset_entry( map, name, wcslen(name), &entry )) return STATUS_APISET_NOT_PRESENT;
+     if (get_apiset_target( map, entry, NULL, &str )) return STATUS_DLL_NOT_FOUND;
+ 
+-    len = wcslen( system_dir ) + str.Length / sizeof(WCHAR);
+-    if (!(*fullname = RtlAllocateHeap( GetProcessHeap(), 0, (len + 1) * sizeof(WCHAR) )))
+-        return STATUS_NO_MEMORY;
+-    wcscpy( *fullname, system_dir );
+-    memcpy( *fullname + wcslen( system_dir ), str.Buffer, str.Length );
+-    (*fullname)[len] = 0;
+-    return STATUS_SUCCESS;
++    return prepend_system_dir( str.Buffer, str.Length / sizeof(WCHAR), fullname );
+ }
+ 
+ 
+@@ -3317,6 +3335,7 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, UNI
+                                WINE_MODREF **pwm, HANDLE *mapping, SECTION_IMAGE_INFORMATION *image_info,
+                                struct file_id *id )
+ {
++    const WCHAR *known_dll_name = NULL;
+     WCHAR *fullname = NULL;
+     NTSTATUS status;
+     ULONG wow64_old_value = 0;
+@@ -3349,6 +3368,12 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, UNI
+                 goto done;
+             }
+         }
++        if (!fullname && rb_get( &known_dlls, libname ))
++        {
++            prepend_system_dir( libname, wcslen(libname), &fullname );
++            known_dll_name = libname;
++            libname = fullname;
++        }
+     }
+ 
+     if (RtlDetermineDosPathNameType_U( libname ) == RELATIVE_PATH)
+@@ -3358,7 +3383,11 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, UNI
+             status = find_builtin_without_file( libname, nt_name, pwm, mapping, image_info, id );
+     }
+     else if (!(status = RtlDosPathNameToNtPathName_U_WithStatus( libname, nt_name, NULL, NULL )))
++    {
+         status = open_dll_file( nt_name, pwm, mapping, image_info, id );
++        if (status == STATUS_DLL_NOT_FOUND && known_dll_name)
++            status = find_builtin_without_file( known_dll_name, nt_name, pwm, mapping, image_info, id );
++    }
+ 
+     if (status == STATUS_NOT_SUPPORTED) status = STATUS_INVALID_IMAGE_FORMAT;
+ 
+@@ -4213,16 +4242,33 @@ PIMAGE_NT_HEADERS WINAPI RtlImageNtHeader(HMODULE hModule)
+     return ret;
+ }
+ 
++/*************************************************************************
++ *           compare_known_dlls
++ */
++static int compare_known_dlls( const void *name, const struct wine_rb_entry *entry )
++{
++    struct known_dll *known_dll = WINE_RB_ENTRY_VALUE( entry, struct known_dll, entry );
++
++    return wcsicmp( name, known_dll->name );
++}
++
+ /***********************************************************************
+  *           load_global_options
+  */
+ static void load_global_options(void)
+ {
++    char buffer[256];
++    KEY_VALUE_PARTIAL_INFORMATION *info = (KEY_VALUE_PARTIAL_INFORMATION *)buffer;
+     OBJECT_ATTRIBUTES attr;
+     UNICODE_STRING bootstrap_mode_str = RTL_CONSTANT_STRING( L"WINEBOOTSTRAPMODE" );
+     UNICODE_STRING session_manager_str =
+         RTL_CONSTANT_STRING( L"\\Registry\\Machine\\System\\CurrentControlSet\\Control\\Session Manager" );
++    UNICODE_STRING known_dlls_str =
++        RTL_CONSTANT_STRING( L"\\Registry\\Machine\\System\\CurrentControlSet\\Control\\Session Manager\\KnownDLLs" );
+     UNICODE_STRING val_str;
++    struct known_dll *known_dll;
++    ULONG idx = 0, size;
++    NTSTATUS status;
+     HANDLE hkey;
+ 
+     val_str.MaximumLength = 0;
+@@ -4242,6 +4288,24 @@ static void load_global_options(void)
+         query_dword_option( hkey, L"SafeDllSearchMode", &dll_safe_mode );
+         NtClose( hkey );
+     }
++
++    rb_init( &known_dlls, compare_known_dlls );
++
++    attr.ObjectName = &known_dlls_str;
++    if (NtOpenKey( &hkey, KEY_QUERY_VALUE, &attr )) return;
++    while (1)
++    {
++        status = NtEnumerateValueKey( hkey, idx++, KeyValuePartialInformation, buffer, sizeof(buffer), &size );
++        if (status == STATUS_BUFFER_OVERFLOW) continue;
++        if (status) break;
++        if (info->Type != REG_SZ) continue;
++
++        known_dll = RtlAllocateHeap( GetProcessHeap(), 0, offsetof(struct known_dll, name[0]) + info->DataLength );
++        if (!known_dll) break;
++        memcpy( known_dll->name, info->Data, info->DataLength );
++        rb_put( &known_dlls, known_dll->name, &known_dll->entry );
++    }
++    NtClose( hkey );
+ }
+ 
+ static BOOL needs_elevation(void)

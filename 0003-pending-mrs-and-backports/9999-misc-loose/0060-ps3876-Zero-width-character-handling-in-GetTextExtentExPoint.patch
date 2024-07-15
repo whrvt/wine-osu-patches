@@ -1,0 +1,678 @@
+From ac649ed5d873ee008fe4649cbf40bd00bedfd2e5 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Wed, 22 Nov 2023 13:56:00 +0100
+Subject: [PATCH 1/3] gdi32/tests: Add test for width of carriage return and
+ line feed.
+
+Signed-off-by: Torge Matthies <tmatthies@codeweavers.com>
+---
+ dlls/gdi32/tests/font.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/gdi32/tests/font.c b/dlls/gdi32/tests/font.c
+index 0513c2b2ca8..5935cafeb7d 100644
+--- a/dlls/gdi32/tests/font.c
++++ b/dlls/gdi32/tests/font.c
+@@ -1398,7 +1398,7 @@ static void test_GetCharABCWidths(void)
+ 
+ static void test_text_extents(void)
+ {
+-    static const WCHAR wt[] = L"One\ntwo 3";
++    static const WCHAR wt[] = L"One\r\ntwo 3\nfour";
+     LPINT extents;
+     INT i, len, fit1, fit2, extents2[3];
+     LOGFONTA lf;
+@@ -1461,11 +1461,20 @@ static void test_text_extents(void)
+     ok(extents[len-1] == sz1.cx, "GetTextExtentExPointW extents and size don't match\n");
+     ok(0 <= fit1 && fit1 <= len, "GetTextExtentExPointW generated illegal value %d for fit\n", fit1);
+     ok(0 < fit1, "GetTextExtentExPointW says we can't even fit one letter in 32767 logical units\n");
++    todo_wine
++    ok(extents[2] == extents[3], "Carriage return has width: %d != %d\n", extents[2], extents[3]);
++    todo_wine
++    ok(extents[3] == extents[4], "Line feed has width: %d != %d\n", extents[3], extents[4]);
++    todo_wine
++    ok(extents[9] == extents[10], "Unix-style newline has width: %d != %d\n", extents[3], extents[4]);
+     GetTextExtentExPointW(hdc, wt, len, extents[2], &fit2, NULL, &sz2);
+     ok(sz1.cx == sz2.cx && sz1.cy == sz2.cy, "GetTextExtentExPointW returned different sizes for the same string\n");
+     ok(fit2 == 3, "GetTextExtentExPointW extents isn't consistent with fit\n");
+     GetTextExtentExPointW(hdc, wt, len, extents[2]-1, &fit2, NULL, &sz2);
+     ok(fit2 == 2, "GetTextExtentExPointW extents isn't consistent with fit\n");
++    GetTextExtentExPointW(hdc, wt, len, extents[2]+1, &fit2, NULL, &sz2);
++    todo_wine
++    ok(fit2 == 5, "GetTextExtentExPointW newline doesn't fit in 1-pixel space\n");
+     GetTextExtentExPointW(hdc, wt, 2, 0, NULL, extents + 2, &sz2);
+     ok(extents[0] == extents[2] && extents[1] == extents[3],
+        "GetTextExtentExPointW with lpnFit == NULL returns incorrect results\n");
+-- 
+GitLab
+
+
+From 4c90825f69a45bfeff736c1374b6f4acddaad9c4 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Wed, 22 Nov 2023 13:56:00 +0100
+Subject: [PATCH 2/3] win32u: Use maximum of (A, A+C, A+C+B) width for
+ character fit test in GetTextExtentExPoint[AWI].
+
+---
+ dlls/win32u/driver.c      |  4 +--
+ dlls/win32u/font.c        | 61 ++++++++++++++++++++++++++++++---------
+ dlls/wineps.drv/unixlib.c |  5 ++--
+ include/wine/gdi_driver.h |  4 +--
+ 4 files changed, 54 insertions(+), 20 deletions(-)
+
+diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
+index 7fcdbc4c383..4f97ea8744a 100644
+--- a/dlls/win32u/driver.c
++++ b/dlls/win32u/driver.c
+@@ -362,12 +362,12 @@ static UINT nulldrv_GetTextCharsetInfo( PHYSDEV dev, LPFONTSIGNATURE fs, DWORD f
+     return DEFAULT_CHARSET;
+ }
+ 
+-static BOOL nulldrv_GetTextExtentExPoint( PHYSDEV dev, LPCWSTR str, INT count, INT *dx )
++static BOOL nulldrv_GetTextExtentExPoint( PHYSDEV dev, LPCWSTR str, INT count, INT *dx, INT *maxdx )
+ {
+     return FALSE;
+ }
+ 
+-static BOOL nulldrv_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT count, INT *dx )
++static BOOL nulldrv_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT count, INT *dx, INT *maxdx )
+ {
+     return FALSE;
+ }
+diff --git a/dlls/win32u/font.c b/dlls/win32u/font.c
+index 9ee89f1b5c4..d948c103eaa 100644
+--- a/dlls/win32u/font.c
++++ b/dlls/win32u/font.c
+@@ -4310,7 +4310,7 @@ static UINT font_GetTextCharsetInfo( PHYSDEV dev, FONTSIGNATURE *fs, DWORD flags
+ /*************************************************************
+  * font_GetTextExtentExPoint
+  */
+-static BOOL font_GetTextExtentExPoint( PHYSDEV dev, const WCHAR *str, INT count, INT *dxs )
++static BOOL font_GetTextExtentExPoint( PHYSDEV dev, const WCHAR *str, INT count, INT *dxs, INT *maxdxs )
+ {
+     struct font_physdev *physdev = get_font_dev( dev );
+     INT i, pos;
+@@ -4319,7 +4319,7 @@ static BOOL font_GetTextExtentExPoint( PHYSDEV dev, const WCHAR *str, INT count,
+     if (!physdev->font)
+     {
+         dev = GET_NEXT_PHYSDEV( dev, pGetTextExtentExPoint );
+-        return dev->funcs->pGetTextExtentExPoint( dev, str, count, dxs );
++        return dev->funcs->pGetTextExtentExPoint( dev, str, count, dxs, maxdxs );
+     }
+ 
+     TRACE( "%p, %s, %d\n", physdev->font, debugstr_wn(str, count), count );
+@@ -4328,7 +4328,17 @@ static BOOL font_GetTextExtentExPoint( PHYSDEV dev, const WCHAR *str, INT count,
+     for (i = pos = 0; i < count; i++)
+     {
+         get_glyph_outline( physdev->font, str[i], GGO_METRICS, NULL, &abc, 0, NULL, NULL );
+-        pos += abc.abcA + abc.abcB + abc.abcC;
++        if (maxdxs)
++            maxdxs[i] = pos;
++        pos += abc.abcA;
++        if (maxdxs && pos > maxdxs[i])
++            maxdxs[i] = pos;
++        pos += abc.abcC;
++        if (maxdxs && pos > maxdxs[i])
++            maxdxs[i] = pos;
++        pos += abc.abcB;
++        if (maxdxs && pos > maxdxs[i])
++            maxdxs[i] = pos;
+         dxs[i] = pos;
+     }
+     pthread_mutex_unlock( &font_lock );
+@@ -4339,7 +4349,7 @@ static BOOL font_GetTextExtentExPoint( PHYSDEV dev, const WCHAR *str, INT count,
+ /*************************************************************
+  * font_GetTextExtentExPointI
+  */
+-static BOOL font_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT count, INT *dxs )
++static BOOL font_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT count, INT *dxs, INT *maxdxs )
+ {
+     struct font_physdev *physdev = get_font_dev( dev );
+     INT i, pos;
+@@ -4348,7 +4358,7 @@ static BOOL font_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT co
+     if (!physdev->font)
+     {
+         dev = GET_NEXT_PHYSDEV( dev, pGetTextExtentExPointI );
+-        return dev->funcs->pGetTextExtentExPointI( dev, indices, count, dxs );
++        return dev->funcs->pGetTextExtentExPointI( dev, indices, count, dxs, maxdxs );
+     }
+ 
+     TRACE( "%p, %p, %d\n", physdev->font, indices, count );
+@@ -4358,7 +4368,17 @@ static BOOL font_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT co
+     {
+         get_glyph_outline( physdev->font, indices[i], GGO_METRICS | GGO_GLYPH_INDEX,
+                            NULL, &abc, 0, NULL, NULL );
+-        pos += abc.abcA + abc.abcB + abc.abcC;
++        if (maxdxs)
++            maxdxs[i] = pos;
++        pos += abc.abcA;
++        if (maxdxs && pos > maxdxs[i])
++            maxdxs[i] = pos;
++        pos += abc.abcC;
++        if (maxdxs && pos > maxdxs[i])
++            maxdxs[i] = pos;
++        pos += abc.abcB;
++        if (maxdxs && pos > maxdxs[i])
++            maxdxs[i] = pos;
+         dxs[i] = pos;
+     }
+     pthread_mutex_unlock( &font_lock );
+@@ -4867,7 +4887,7 @@ static UINT init_font_options(void)
+ 
+ 
+ /* compute positions for text rendering, in device coords */
+-static BOOL get_char_positions( DC *dc, const WCHAR *str, INT count, INT *dx, SIZE *size )
++static BOOL get_char_positions( DC *dc, const WCHAR *str, INT count, INT *dx, INT *maxdx, SIZE *size )
+ {
+     TEXTMETRICW tm;
+     PHYSDEV dev;
+@@ -4879,7 +4899,7 @@ static BOOL get_char_positions( DC *dc, const WCHAR *str, INT count, INT *dx, SI
+     dev->funcs->pGetTextMetrics( dev, &tm );
+ 
+     dev = GET_DC_PHYSDEV( dc, pGetTextExtentExPoint );
+-    if (!dev->funcs->pGetTextExtentExPoint( dev, str, count, dx )) return FALSE;
++    if (!dev->funcs->pGetTextExtentExPoint( dev, str, count, dx, maxdx )) return FALSE;
+ 
+     if (dc->breakExtra || dc->breakRem)
+     {
+@@ -4905,7 +4925,7 @@ static BOOL get_char_positions( DC *dc, const WCHAR *str, INT count, INT *dx, SI
+ }
+ 
+ /* compute positions for text rendering, in device coords */
+-static BOOL get_char_positions_indices( DC *dc, const WORD *indices, INT count, INT *dx, SIZE *size )
++static BOOL get_char_positions_indices( DC *dc, const WORD *indices, INT count, INT *dx, INT *maxdx, SIZE *size )
+ {
+     TEXTMETRICW tm;
+     PHYSDEV dev;
+@@ -4917,7 +4937,7 @@ static BOOL get_char_positions_indices( DC *dc, const WORD *indices, INT count,
+     dev->funcs->pGetTextMetrics( dev, &tm );
+ 
+     dev = GET_DC_PHYSDEV( dc, pGetTextExtentExPointI );
+-    if (!dev->funcs->pGetTextExtentExPointI( dev, indices, count, dx )) return FALSE;
++    if (!dev->funcs->pGetTextExtentExPointI( dev, indices, count, dx, maxdx )) return FALSE;
+ 
+     if (dc->breakExtra || dc->breakRem)
+     {
+@@ -5317,7 +5337,7 @@ BOOL WINAPI NtGdiGetTextExtentExW( HDC hdc, const WCHAR *str, INT count, INT max
+     DC *dc;
+     int i;
+     BOOL ret;
+-    INT buffer[256], *pos = dxs;
++    INT buffer[256], buffer2[256], *pos = dxs, *maxpos = buffer2;
+ 
+     if (count < 0) return FALSE;
+ 
+@@ -5334,11 +5354,18 @@ BOOL WINAPI NtGdiGetTextExtentExW( HDC hdc, const WCHAR *str, INT count, INT max
+         }
+     }
+ 
++    if (count > 256 && !(maxpos = malloc( count * sizeof(*maxpos) )))
++    {
++        if (pos != buffer && pos != dxs) free( pos );
++        release_dc_ptr( dc );
++        return FALSE;
++    }
++
+ 
+     if (flags)
+-        ret = get_char_positions_indices( dc, str, count, pos, size );
++        ret = get_char_positions_indices( dc, str, count, pos, maxpos, size );
+     else
+-        ret = get_char_positions( dc, str, count, pos, size );
++        ret = get_char_positions( dc, str, count, pos, maxpos, size );
+     if (ret)
+     {
+         if (dxs || nfit)
+@@ -5347,7 +5374,12 @@ BOOL WINAPI NtGdiGetTextExtentExW( HDC hdc, const WCHAR *str, INT count, INT max
+             {
+                 unsigned int dx = abs( INTERNAL_XDSTOWS( dc, pos[i] )) +
+                     (i + 1) * dc->attr->char_extra;
+-                if (nfit && dx > (unsigned int)max_ext) break;
++                if (nfit)
++                {
++                    unsigned int dx2 = abs( INTERNAL_XDSTOWS( dc, maxpos[i] )) +
++                        (i + 1) * dc->attr->char_extra;
++                    if (dx2 > (unsigned int)max_ext) break;
++                }
+ 		if (dxs) dxs[i] = dx;
+             }
+             if (nfit) *nfit = i;
+@@ -5357,6 +5389,7 @@ BOOL WINAPI NtGdiGetTextExtentExW( HDC hdc, const WCHAR *str, INT count, INT max
+         size->cy = abs( INTERNAL_YDSTOWS( dc, size->cy ));
+     }
+ 
++    if (maxpos != buffer2) free( maxpos );
+     if (pos != buffer && pos != dxs) free( pos );
+     release_dc_ptr( dc );
+ 
+diff --git a/dlls/wineps.drv/unixlib.c b/dlls/wineps.drv/unixlib.c
+index e9b009b0e87..005367cb813 100644
+--- a/dlls/wineps.drv/unixlib.c
++++ b/dlls/wineps.drv/unixlib.c
+@@ -1323,7 +1323,7 @@ static BOOL get_text_metrics(PHYSDEV dev, TEXTMETRICW *metrics)
+     return TRUE;
+ }
+ 
+-static BOOL get_text_extent_ex_point(PHYSDEV dev, const WCHAR *str, int count, int *dx)
++static BOOL get_text_extent_ex_point(PHYSDEV dev, const WCHAR *str, int count, int *dx, int *maxdx)
+ {
+     PSDRV_PDEVICE *pdev = get_psdrv_dev(dev);
+     int             i;
+@@ -1332,7 +1332,7 @@ static BOOL get_text_extent_ex_point(PHYSDEV dev, const WCHAR *str, int count, i
+     if (!pdev->builtin)
+     {
+         dev = GET_NEXT_PHYSDEV(dev, pGetTextExtentExPoint);
+-        return dev->funcs->pGetTextExtentExPoint(dev, str, count, dx);
++        return dev->funcs->pGetTextExtentExPoint(dev, str, count, dx, maxdx);
+     }
+ 
+     TRACE("%s %i\n", debugstr_wn(str, count), count);
+@@ -1341,6 +1341,7 @@ static BOOL get_text_extent_ex_point(PHYSDEV dev, const WCHAR *str, int count, i
+     {
+         width += uv_metrics(str[i], pdev->font)->width;
+         dx[i] = width * pdev->scale;
++        maxdx[i] = dx[i]; /* TODO */
+     }
+     return TRUE;
+ }
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index bd827c31cb1..be165758239 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -123,8 +123,8 @@ struct gdi_dc_funcs
+     COLORREF (*pGetPixel)(PHYSDEV,INT,INT);
+     UINT     (*pGetSystemPaletteEntries)(PHYSDEV,UINT,UINT,LPPALETTEENTRY);
+     UINT     (*pGetTextCharsetInfo)(PHYSDEV,LPFONTSIGNATURE,DWORD);
+-    BOOL     (*pGetTextExtentExPoint)(PHYSDEV,LPCWSTR,INT,LPINT);
+-    BOOL     (*pGetTextExtentExPointI)(PHYSDEV,const WORD*,INT,LPINT);
++    BOOL     (*pGetTextExtentExPoint)(PHYSDEV,LPCWSTR,INT,LPINT,LPINT);
++    BOOL     (*pGetTextExtentExPointI)(PHYSDEV,const WORD*,INT,LPINT,LPINT);
+     INT      (*pGetTextFace)(PHYSDEV,INT,LPWSTR);
+     BOOL     (*pGetTextMetrics)(PHYSDEV,TEXTMETRICW*);
+     BOOL     (*pGradientFill)(PHYSDEV,TRIVERTEX*,ULONG,void*,ULONG,ULONG);
+-- 
+GitLab
+
+
+From 800e9ac2e94e208e00525b81f7006152d4299dbb Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Wed, 22 Nov 2023 13:56:00 +0100
+Subject: [PATCH 3/3] win32u: Handle glyphs that are marked by the font as
+ zero-width in GetTextExtentExPoint[AWI].
+
+Signed-off-by: Torge Matthies <tmatthies@codeweavers.com>
+---
+ dlls/gdi32/tests/font.c       |   4 -
+ dlls/gdiplus/tests/graphics.c |   2 +-
+ dlls/win32u/font.c            | 214 +++++++++++++++++++++++++++++-----
+ dlls/win32u/ntgdi_private.h   |   2 +
+ 4 files changed, 188 insertions(+), 34 deletions(-)
+
+diff --git a/dlls/gdi32/tests/font.c b/dlls/gdi32/tests/font.c
+index 5935cafeb7d..c8c061a953b 100644
+--- a/dlls/gdi32/tests/font.c
++++ b/dlls/gdi32/tests/font.c
+@@ -1461,11 +1461,8 @@ static void test_text_extents(void)
+     ok(extents[len-1] == sz1.cx, "GetTextExtentExPointW extents and size don't match\n");
+     ok(0 <= fit1 && fit1 <= len, "GetTextExtentExPointW generated illegal value %d for fit\n", fit1);
+     ok(0 < fit1, "GetTextExtentExPointW says we can't even fit one letter in 32767 logical units\n");
+-    todo_wine
+     ok(extents[2] == extents[3], "Carriage return has width: %d != %d\n", extents[2], extents[3]);
+-    todo_wine
+     ok(extents[3] == extents[4], "Line feed has width: %d != %d\n", extents[3], extents[4]);
+-    todo_wine
+     ok(extents[9] == extents[10], "Unix-style newline has width: %d != %d\n", extents[3], extents[4]);
+     GetTextExtentExPointW(hdc, wt, len, extents[2], &fit2, NULL, &sz2);
+     ok(sz1.cx == sz2.cx && sz1.cy == sz2.cy, "GetTextExtentExPointW returned different sizes for the same string\n");
+@@ -1473,7 +1470,6 @@ static void test_text_extents(void)
+     GetTextExtentExPointW(hdc, wt, len, extents[2]-1, &fit2, NULL, &sz2);
+     ok(fit2 == 2, "GetTextExtentExPointW extents isn't consistent with fit\n");
+     GetTextExtentExPointW(hdc, wt, len, extents[2]+1, &fit2, NULL, &sz2);
+-    todo_wine
+     ok(fit2 == 5, "GetTextExtentExPointW newline doesn't fit in 1-pixel space\n");
+     GetTextExtentExPointW(hdc, wt, 2, 0, NULL, extents + 2, &sz2);
+     ok(extents[0] == extents[2] && extents[1] == extents[3],
+diff --git a/dlls/gdiplus/tests/graphics.c b/dlls/gdiplus/tests/graphics.c
+index 4af7f179ec2..2906d1e1aa4 100644
+--- a/dlls/gdiplus/tests/graphics.c
++++ b/dlls/gdiplus/tests/graphics.c
+@@ -3433,7 +3433,7 @@ static void test_string_functions(void)
+     expectf_(char_bounds.Width, bounds.Width, 0.01);
+     expectf_(char_bounds.Height + char_height * 3, bounds.Height, 0.05);
+     expect(6, codepointsfitted);
+-    todo_wine expect(4, linesfilled);
++    expect(4, linesfilled);
+ 
+     for (i = 0; i < 4; i++)
+         regions[i] = (GpRegion *)0xdeadbeef;
+diff --git a/dlls/win32u/font.c b/dlls/win32u/font.c
+index d948c103eaa..8f349abd215 100644
+--- a/dlls/win32u/font.c
++++ b/dlls/win32u/font.c
+@@ -2426,6 +2426,7 @@ static void free_gdi_font( struct gdi_font *font )
+     free( font->gm );
+     free( font->kern_pairs );
+     free( font->gsub_table );
++    free( font->gdef_table );
+     free( font );
+ }
+ 
+@@ -2833,6 +2834,126 @@ static UINT get_GSUB_vert_glyph( struct gdi_font *font, UINT glyph )
+     return GSUB_apply_feature( font->gsub_table, font->vert_feature, glyph );
+ }
+ 
++/* structures copied from dlls/gdi32/uniscribe/opentype.c */
++
++enum {BaseGlyph=1, LigatureGlyph, MarkGlyph, ComponentGlyph};
++
++typedef struct {
++    DWORD Version;
++    WORD GlyphClassDef;
++    WORD AttachList;
++    WORD LigCaretList;
++    WORD MarkAttachClassDef;
++} GDEF_Header;
++
++typedef struct {
++    WORD ClassFormat;
++    WORD StartGlyph;
++    WORD GlyphCount;
++    WORD ClassValueArray[1];
++} OT_ClassDefFormat1;
++
++typedef struct {
++    WORD Start;
++    WORD End;
++    WORD Class;
++} OT_ClassRangeRecord;
++
++typedef struct {
++    WORD ClassFormat;
++    WORD ClassRangeCount;
++    OT_ClassRangeRecord ClassRangeRecord[1];
++} OT_ClassDefFormat2;
++
++static void *load_GDEF( struct gdi_font *font )
++{
++    WORD format, offset, count;
++    GDEF_Header hdr;
++    UINT result;
++    size_t size;
++    void *data;
++
++    result = font_funcs->get_font_data( font, MS_GDEF_TAG, 0, &hdr, sizeof(hdr) );
++    if (result == GDI_ERROR) /* no GDEF table present */
++    {
++        TRACE("No GDEF table found\n");
++        return NULL;
++    }
++
++    offset = GET_BE_WORD(hdr.GlyphClassDef);
++    if (!offset)
++        return NULL;
++
++    result = font_funcs->get_font_data( font, MS_GDEF_TAG, offset, &format, sizeof(format) );
++    format = GET_BE_WORD(format);
++    if (result == GDI_ERROR || format < 1 || format > 2) /* GDEF table invalid or too short */
++    {
++        WARN("Invalid GDEF table\n");
++        return NULL;
++    }
++
++    if (format == 1)
++    {
++        result = font_funcs->get_font_data( font, MS_GDEF_TAG, offset + 4, &count, sizeof(count) );
++        size = FIELD_OFFSET(OT_ClassDefFormat1, ClassValueArray[GET_BE_WORD(count)]);
++    }
++    else
++    {
++        result = font_funcs->get_font_data( font, MS_GDEF_TAG, offset + 2, &count, sizeof(count) );
++        size = FIELD_OFFSET(OT_ClassDefFormat2, ClassRangeRecord[GET_BE_WORD(count)]);
++    }
++    if (result == GDI_ERROR)
++        return NULL;
++
++    data = malloc( size );
++    if (!data)
++        return NULL;
++
++    result = font_funcs->get_font_data( font, MS_GDEF_TAG, offset, data, size );
++    if (result != GDI_ERROR)
++    {
++        TRACE( "Loaded GDEF table of %zu bytes\n", size );
++        return data;
++    }
++    else
++        free( data );
++    return NULL;
++}
++
++static WORD get_GDEF_glyph_class( struct gdi_font *font, WORD glyph )
++{
++    OT_ClassDefFormat1 *cf1 = font->gdef_table;
++    WORD class = 0;
++
++    if (!cf1)
++        return 0;
++
++    if (cf1->ClassFormat == 1)
++    {
++        if (glyph >= GET_BE_WORD(cf1->StartGlyph))
++        {
++            int index = glyph - GET_BE_WORD(cf1->StartGlyph);
++            if (index < GET_BE_WORD(cf1->GlyphCount))
++                class = GET_BE_WORD(cf1->ClassValueArray[index]);
++        }
++    }
++    else
++    {
++        OT_ClassDefFormat2 *cf2 = (OT_ClassDefFormat2 *)cf1;
++        int i, top = GET_BE_WORD(cf2->ClassRangeCount);
++        for (i = 0; i < top; i++)
++        {
++            if (glyph >= GET_BE_WORD(cf2->ClassRangeRecord[i].Start) &&
++                glyph <= GET_BE_WORD(cf2->ClassRangeRecord[i].End))
++            {
++                class = GET_BE_WORD(cf2->ClassRangeRecord[i].Class);
++                break;
++            }
++        }
++    }
++    return class;
++}
++
+ static void add_child_font( struct gdi_font *font, const WCHAR *family_name )
+ {
+     FONTSIGNATURE fs = {{0}};
+@@ -3832,13 +3953,14 @@ static UINT get_glyph_index_linked( struct gdi_font **font, UINT glyph )
+ 
+ static DWORD get_glyph_outline( struct gdi_font *font, UINT glyph, UINT format,
+                                 GLYPHMETRICS *gm_ret, ABC *abc_ret, DWORD buflen, void *buf,
+-                                const MAT2 *mat )
++                                const MAT2 *mat, BOOL *zero_width )
+ {
+     GLYPHMETRICS gm;
+     ABC abc;
+     DWORD ret = 1;
+     UINT index = glyph;
+     BOOL tategaki = (*get_gdi_font_name( font ) == '@');
++    UINT orig_format = format;
+ 
+     if (format & GGO_GLYPH_INDEX)
+     {
+@@ -3863,12 +3985,26 @@ static DWORD get_glyph_outline( struct gdi_font *font, UINT glyph, UINT format,
+ 
+     if (mat && !memcmp( mat, &identity, sizeof(*mat) )) mat = NULL;
+ 
++    if (zero_width)
++    {
++        *zero_width = FALSE;
++        if (!(orig_format & GGO_GLYPH_INDEX))
++            *zero_width = glyph == 0x0009 || glyph == 0x000a || glyph == 0x000d || (glyph >= 0x001c && glyph <= 0x001f) || (glyph >= 0x0080 && glyph <= 0x009f);
++    }
++
+     if (format == GGO_METRICS && !mat && get_gdi_font_glyph_metrics( font, index, &gm, &abc ))
++    {
++        if (zero_width)
++            *zero_width = *zero_width || get_GDEF_glyph_class( font, index ) == MarkGlyph;
+         goto done;
++    }
+ 
+     ret = font_funcs->get_glyph_outline( font, index, format, &gm, &abc, buflen, buf, mat, tategaki );
+     if (ret == GDI_ERROR) return ret;
+ 
++    if (zero_width)
++        *zero_width = *zero_width || get_GDEF_glyph_class( font, index ) == MarkGlyph;
++
+     if (format == GGO_METRICS && !mat)
+         set_gdi_font_glyph_metrics( font, index, &gm, &abc );
+ 
+@@ -3915,7 +4051,7 @@ static BOOL font_GetCharABCWidths( PHYSDEV dev, UINT first, UINT count, WCHAR *c
+     for (i = 0; i < count; i++)
+     {
+         c = chars ? chars[i] : first + i;
+-        get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, &buffer[i], 0, NULL, NULL );
++        get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, &buffer[i], 0, NULL, NULL, NULL );
+     }
+     pthread_mutex_unlock( &font_lock );
+     return TRUE;
+@@ -3941,7 +4077,7 @@ static BOOL font_GetCharABCWidthsI( PHYSDEV dev, UINT first, UINT count, WORD *g
+     pthread_mutex_lock( &font_lock );
+     for (c = 0; c < count; c++, buffer++)
+         get_glyph_outline( physdev->font, gi ? gi[c] : first + c, GGO_METRICS | GGO_GLYPH_INDEX,
+-                           NULL, buffer, 0, NULL, NULL );
++                           NULL, buffer, 0, NULL, NULL, NULL );
+     pthread_mutex_unlock( &font_lock );
+     return TRUE;
+ }
+@@ -3968,7 +4104,7 @@ static BOOL font_GetCharWidth( PHYSDEV dev, UINT first, UINT count, const WCHAR
+     for (i = 0; i < count; i++)
+     {
+         c = chars ? chars[i] : i + first;
+-        if (get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, &abc, 0, NULL, NULL ) == GDI_ERROR)
++        if (get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, &abc, 0, NULL, NULL, NULL ) == GDI_ERROR)
+             buffer[i] = 0;
+         else
+             buffer[i] = abc.abcA + abc.abcB + abc.abcC;
+@@ -4147,7 +4283,7 @@ static DWORD font_GetGlyphOutline( PHYSDEV dev, UINT glyph, UINT format,
+         return dev->funcs->pGetGlyphOutline( dev, glyph, format, gm, buflen, buf, mat );
+     }
+     pthread_mutex_lock( &font_lock );
+-    ret = get_glyph_outline( physdev->font, glyph, format, gm, NULL, buflen, buf, mat );
++    ret = get_glyph_outline( physdev->font, glyph, format, gm, NULL, buflen, buf, mat, NULL );
+     pthread_mutex_unlock( &font_lock );
+     return ret;
+ }
+@@ -4327,18 +4463,27 @@ static BOOL font_GetTextExtentExPoint( PHYSDEV dev, const WCHAR *str, INT count,
+     pthread_mutex_lock( &font_lock );
+     for (i = pos = 0; i < count; i++)
+     {
+-        get_glyph_outline( physdev->font, str[i], GGO_METRICS, NULL, &abc, 0, NULL, NULL );
+-        if (maxdxs)
+-            maxdxs[i] = pos;
+-        pos += abc.abcA;
+-        if (maxdxs && pos > maxdxs[i])
+-            maxdxs[i] = pos;
+-        pos += abc.abcC;
+-        if (maxdxs && pos > maxdxs[i])
+-            maxdxs[i] = pos;
+-        pos += abc.abcB;
+-        if (maxdxs && pos > maxdxs[i])
+-            maxdxs[i] = pos;
++        BOOL zero_width = FALSE;
++        get_glyph_outline( physdev->font, str[i], GGO_METRICS, NULL, &abc, 0, NULL, NULL, &zero_width );
++        if (!zero_width)
++        {
++            if (maxdxs)
++                maxdxs[i] = pos;
++            pos += abc.abcA;
++            if (maxdxs && pos > maxdxs[i])
++                maxdxs[i] = pos;
++            pos += abc.abcC;
++            if (maxdxs && pos > maxdxs[i])
++                maxdxs[i] = pos;
++            pos += abc.abcB;
++            if (maxdxs && pos > maxdxs[i])
++                maxdxs[i] = pos;
++        }
++        else if (maxdxs)
++        {
++            /* +1 so that zero-width characters don't fit at the very right edge */
++            maxdxs[i] = pos + 1;
++        }
+         dxs[i] = pos;
+     }
+     pthread_mutex_unlock( &font_lock );
+@@ -4366,19 +4511,28 @@ static BOOL font_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, INT co
+     pthread_mutex_lock( &font_lock );
+     for (i = pos = 0; i < count; i++)
+     {
++        BOOL zero_width = FALSE;
+         get_glyph_outline( physdev->font, indices[i], GGO_METRICS | GGO_GLYPH_INDEX,
+-                           NULL, &abc, 0, NULL, NULL );
+-        if (maxdxs)
+-            maxdxs[i] = pos;
+-        pos += abc.abcA;
+-        if (maxdxs && pos > maxdxs[i])
+-            maxdxs[i] = pos;
+-        pos += abc.abcC;
+-        if (maxdxs && pos > maxdxs[i])
+-            maxdxs[i] = pos;
+-        pos += abc.abcB;
+-        if (maxdxs && pos > maxdxs[i])
+-            maxdxs[i] = pos;
++                           NULL, &abc, 0, NULL, NULL, &zero_width );
++        if (!zero_width)
++        {
++            if (maxdxs)
++                maxdxs[i] = pos;
++            pos += abc.abcA;
++            if (maxdxs && pos > maxdxs[i])
++                maxdxs[i] = pos;
++            pos += abc.abcC;
++            if (maxdxs && pos > maxdxs[i])
++                maxdxs[i] = pos;
++            pos += abc.abcB;
++            if (maxdxs && pos > maxdxs[i])
++                maxdxs[i] = pos;
++        }
++        else if (maxdxs)
++        {
++            /* +1 so that zero-width characters don't fit at the very right edge */
++            maxdxs[i] = pos + 1;
++        }
+         dxs[i] = pos;
+     }
+     pthread_mutex_unlock( &font_lock );
+@@ -4606,6 +4760,8 @@ static struct gdi_font *select_font( LOGFONTW *lf, FMAT2 dcmat, BOOL can_use_bit
+     if (face->flags & ADDFONT_VERTICAL_FONT) /* We need to try to load the GSUB table */
+         font->vert_feature = get_GSUB_vert_feature( font );
+ 
++    font->gdef_table = load_GDEF( font );
++
+     create_child_font_list( font );
+ 
+     TRACE( "caching: gdiFont=%p\n", font );
+diff --git a/dlls/win32u/ntgdi_private.h b/dlls/win32u/ntgdi_private.h
+index 5c4f8279c87..72bc6c10310 100644
+--- a/dlls/win32u/ntgdi_private.h
++++ b/dlls/win32u/ntgdi_private.h
+@@ -288,6 +288,7 @@ struct gdi_font
+     struct gdi_font       *base_font;
+     void                  *gsub_table;
+     void                  *vert_feature;
++    void                  *gdef_table;
+     void                  *data_ptr;
+     SIZE_T                 data_size;
+     FILETIME               writetime;
+@@ -299,6 +300,7 @@ struct gdi_font
+ 
+ #define MS_GASP_TAG MS_MAKE_TAG('g', 'a', 's', 'p')
+ #define MS_GSUB_TAG MS_MAKE_TAG('G', 'S', 'U', 'B')
++#define MS_GDEF_TAG MS_MAKE_TAG('G', 'D', 'E', 'F')
+ #define MS_KERN_TAG MS_MAKE_TAG('k', 'e', 'r', 'n')
+ #define MS_TTCF_TAG MS_MAKE_TAG('t', 't', 'c', 'f')
+ #define MS_VDMX_TAG MS_MAKE_TAG('V', 'D', 'M', 'X')
+-- 
+GitLab
+

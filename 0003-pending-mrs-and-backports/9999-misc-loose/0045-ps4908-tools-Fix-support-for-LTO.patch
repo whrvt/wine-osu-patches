@@ -1,0 +1,96 @@
+From 450a81748a94e0573e6c6c1f4d359440f12f9afe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Gabriel=20Iv=C4=83ncescu?= <gabrielopcode@gmail.com>
+Date: Mon, 22 Jan 2024 17:51:36 +0200
+Subject: [PATCH 1/2] tools/winebuild: Try gcc-* prefixed utils first.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+For Link-Time Optimization (LTO) it is required to use gcc-* prefixed utils
+(gcc-ar, gcc-ranlib, gcc-nm) to invoke the plugin properly, and since they're
+a superset of the standard utils, we can simply always use them if available.
+
+Signed-off-by: Gabriel Ivăncescu <gabrielopcode@gmail.com>
+---
+ tools/winebuild/import.c | 6 ++++--
+ tools/winebuild/utils.c  | 2 +-
+ 2 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/tools/winebuild/import.c b/tools/winebuild/import.c
+index 9325837b749..baac8786a98 100644
+--- a/tools/winebuild/import.c
++++ b/tools/winebuild/import.c
+@@ -1439,7 +1439,8 @@ void output_static_lib( const char *output_name, struct strarray files, int crea
+ 
+     if (!create || target.platform != PLATFORM_WINDOWS)
+     {
+-        args = find_tool( "ar", NULL );
++        static const char * const commands[] = { "gcc-ar", "ar", NULL };
++        args = find_tool( "ar", commands );
+         strarray_add( &args, create ? "rc" : "r" );
+         strarray_add( &args, output_name );
+     }
+@@ -1457,7 +1458,8 @@ void output_static_lib( const char *output_name, struct strarray files, int crea
+ 
+     if (target.platform != PLATFORM_WINDOWS)
+     {
+-        struct strarray ranlib = find_tool( "ranlib", NULL );
++        static const char * const commands[] = { "gcc-ranlib", "ranlib", NULL };
++        struct strarray ranlib = find_tool( "ranlib", commands );
+         strarray_add( &ranlib, output_name );
+         spawn( ranlib );
+     }
+diff --git a/tools/winebuild/utils.c b/tools/winebuild/utils.c
+index 9f51a60c01f..91d83fd6ba4 100644
+--- a/tools/winebuild/utils.c
++++ b/tools/winebuild/utils.c
+@@ -389,7 +389,7 @@ const char *get_nm_command(void)
+ {
+     if (!nm_command.count)
+     {
+-        static const char * const commands[] = { "nm", "gnm", NULL };
++        static const char * const commands[] = { "gcc-nm", "nm", "gnm", NULL };
+         nm_command = find_tool( "nm", commands );
+     }
+     if (nm_command.count > 1)
+-- 
+GitLab
+
+
+From daae8fb3b2b2cfa3d6f70eaeb92c7ae5137f5fa2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Gabriel=20Iv=C4=83ncescu?= <gabrielopcode@gmail.com>
+Date: Mon, 22 Jan 2024 17:51:36 +0200
+Subject: [PATCH 2/2] tools/winegcc: Pass relevant LTO options also to the
+ linker.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+-ffat-lto-objects wasn't included since it's not necessary for linking.
+
+Signed-off-by: Gabriel Ivăncescu <gabrielopcode@gmail.com>
+---
+ tools/winegcc/winegcc.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/tools/winegcc/winegcc.c b/tools/winegcc/winegcc.c
+index 56fe179c92b..d8e13c80bbb 100644
+--- a/tools/winegcc/winegcc.c
++++ b/tools/winegcc/winegcc.c
+@@ -1633,6 +1633,13 @@ int main(int argc, char **argv)
+                         opts.pic = 1;
+                     else if (!strcmp("-fno-PIC", opts.args.str[i]) || !strcmp("-fno-pic", opts.args.str[i]))
+                         opts.pic = 0;
++                    /* LTO options are available for both the compiler and the linker */
++                    else if ((!strncmp("-flto", opts.args.str[i], 5) && (!opts.args.str[i][5] || opts.args.str[i][5] == '=')) || !strcmp("-fno-lto", opts.args.str[i]))
++                        raw_linker_arg = 1;
++                    else if (!strncmp("-flto-partition=", opts.args.str[i], 16))
++                        raw_linker_arg = 1;
++                    else if (!strcmp("-fuse-linker-plugin", opts.args.str[i]) || !strcmp("-fno-use-linker-plugin", opts.args.str[i]))
++                        raw_linker_arg = 1;
+ 		    break;
+                 case 'i':
+                     if (!strcmp( "-isysroot", opts.args.str[i] )) opts.isysroot = opts.args.str[i + 1];
+-- 
+GitLab
+
