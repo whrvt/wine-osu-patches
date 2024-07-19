@@ -1,0 +1,102 @@
+From 8109804854745149e6a678d43d819f195853128f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 19 Jun 2024 11:07:57 +0200
+Subject: [PATCH 7/8] win32u: Avoid sending WM_PAINT to layered window
+ surfaces.
+
+And prevent drawing to layered surface.
+---
+ dlls/win32u/dibdrv/dc.c | 1 +
+ dlls/win32u/window.c    | 7 +++++--
+ server/protocol.def     | 5 +++--
+ server/window.c         | 9 ++++++---
+ 4 files changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/win32u/dibdrv/dc.c b/dlls/win32u/dibdrv/dc.c
+index ee257db6dd6..2fc9000025d 100644
+--- a/dlls/win32u/dibdrv/dc.c
++++ b/dlls/win32u/dibdrv/dc.c
+@@ -803,6 +803,7 @@ void dibdrv_set_window_surface( DC *dc, struct window_surface *surface )
+ 
+     if (surface)
+     {
++        if (surface->alpha_mask) surface = &dummy_surface;
+         if (windev) push_dc_driver( &dc->physDev, windev, windev->funcs );
+         else
+         {
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 532d8e7a789..6bf1219aa36 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1898,13 +1898,15 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+ {
+     WND *win;
+     HWND surface_win = 0;
+-    BOOL ret, needs_update = FALSE;
++    BOOL ret, is_layered, needs_update = FALSE;
+     RECT old_visible_rect, old_window_rect, old_client_rect, extra_rects[3];
+     struct window_surface *old_surface;
+     UINT monitor_dpi;
+ 
++    is_layered = new_surface && new_surface->alpha_mask;
++
+     get_window_rects( hwnd, COORDS_SCREEN, &old_window_rect, NULL, get_thread_dpi() );
+-    if (IsRectEmpty( &valid_rects[0] )) valid_rects = NULL;
++    if (IsRectEmpty( &valid_rects[0] ) || is_layered) valid_rects = NULL;
+ 
+     if (!(win = get_win_ptr( hwnd )) || win == WND_DESKTOP || win == WND_OTHER_PROCESS) return FALSE;
+ 
+@@ -1938,6 +1940,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+             wine_server_add_data( req, extra_rects, sizeof(extra_rects) );
+         }
+         if (new_surface) req->paint_flags |= SET_WINPOS_PAINT_SURFACE;
++        if (is_layered) req->paint_flags |= SET_WINPOS_LAYERED_WINDOW;
+         if (win->pixel_format || win->internal_pixel_format)
+             req->paint_flags |= SET_WINPOS_PIXEL_FORMAT;
+ 
+diff --git a/server/protocol.def b/server/protocol.def
+index 91257fce3a1..ddfe3fa0a05 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -2603,8 +2603,9 @@ enum message_type
+     user_handle_t  surface_win;   /* parent window that holds the surface */
+     int            needs_update;  /* whether the surface region needs an update */
+ @END
+-#define SET_WINPOS_PAINT_SURFACE 0x01  /* window has a paintable surface */
+-#define SET_WINPOS_PIXEL_FORMAT  0x02  /* window has a custom pixel format */
++#define SET_WINPOS_PAINT_SURFACE    0x01  /* window has a paintable surface */
++#define SET_WINPOS_PIXEL_FORMAT     0x02  /* window has a custom pixel format */
++#define SET_WINPOS_LAYERED_WINDOW   0x04  /* window is drawn with UpdateLayeredWindow */
+ 
+ /* Get the window and client rectangles of a window */
+ @REQ(get_window_rectangles)
+diff --git a/server/window.c b/server/window.c
+index 4ebfec3da12..564c69bf18d 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -123,9 +123,10 @@ static const struct object_ops window_ops =
+ };
+ 
+ /* flags that can be set by the client */
+-#define PAINT_HAS_SURFACE        SET_WINPOS_PAINT_SURFACE
+-#define PAINT_HAS_PIXEL_FORMAT   SET_WINPOS_PIXEL_FORMAT
+-#define PAINT_CLIENT_FLAGS       (PAINT_HAS_SURFACE | PAINT_HAS_PIXEL_FORMAT)
++#define PAINT_HAS_SURFACE          SET_WINPOS_PAINT_SURFACE
++#define PAINT_HAS_PIXEL_FORMAT     SET_WINPOS_PIXEL_FORMAT
++#define PAINT_HAS_LAYERED_SURFACE  SET_WINPOS_LAYERED_WINDOW
++#define PAINT_CLIENT_FLAGS         (PAINT_HAS_SURFACE | PAINT_HAS_PIXEL_FORMAT | PAINT_HAS_LAYERED_SURFACE)
+ /* flags only manipulated by the server */
+ #define PAINT_INTERNAL           0x0010  /* internal WM_PAINT pending */
+ #define PAINT_ERASE              0x0020  /* needs WM_ERASEBKGND */
+@@ -2478,6 +2479,8 @@ DECL_HANDLER(set_window_pos)
+     set_window_pos( win, previous, flags, &window_rect, &client_rect,
+                     &visible_rect, &surface_rect, &valid_rect );
+ 
++    if (win->paint_flags & SET_WINPOS_LAYERED_WINDOW) validate_whole_window( win );
++
+     reply->new_style = win->style;
+     reply->new_ex_style = win->ex_style;
+ 
+-- 
+2.45.2
+

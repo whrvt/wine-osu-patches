@@ -301,9 +301,9 @@ index 11111111111..11111111111 100644
 +    }
 +#endif
 +
-     if (do_fsync())
+     if (do_esync())
      {
-         thread->fsync_idx = fsync_alloc_shm( 0, 0 );
+         thread->esync_fd = esync_create_fd( 0, 0 );
 @@ -652,6 +665,10 @@ static void cleanup_thread( struct thread *thread )
      if (thread->request_fd) release_object( thread->request_fd );
      if (thread->reply_fd) release_object( thread->reply_fd );

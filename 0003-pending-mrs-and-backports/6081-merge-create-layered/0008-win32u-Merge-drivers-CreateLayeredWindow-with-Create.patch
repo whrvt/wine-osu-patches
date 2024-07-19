@@ -1,0 +1,470 @@
+From fe688917a17a6d7ad4f2b519b7c081e1bb417271 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 17 Jul 2024 09:10:25 +0200
+Subject: [PATCH 8/8] win32u: Merge drivers CreateLayeredWindow with
+ CreateWindowSurface.
+
+---
+ dlls/win32u/driver.c                  | 17 +--------
+ dlls/win32u/window.c                  | 10 ++---
+ dlls/wineandroid.drv/android.h        |  4 +-
+ dlls/wineandroid.drv/init.c           |  1 -
+ dlls/wineandroid.drv/window.c         | 36 +-----------------
+ dlls/winemac.drv/gdi.c                |  1 -
+ dlls/winemac.drv/macdrv.h             |  4 +-
+ dlls/winemac.drv/surface.c            | 37 ++++--------------
+ dlls/winewayland.drv/waylanddrv.h     |  2 +-
+ dlls/winewayland.drv/window_surface.c |  4 +-
+ dlls/winex11.drv/bitblt.c             | 55 +++++++++------------------
+ dlls/winex11.drv/init.c               |  1 -
+ dlls/winex11.drv/x11drv.h             |  4 +-
+ include/wine/gdi_driver.h             |  5 +--
+ 14 files changed, 39 insertions(+), 142 deletions(-)
+
+diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
+index 76e717648d6..362f32b93d7 100644
+--- a/dlls/win32u/driver.c
++++ b/dlls/win32u/driver.c
+@@ -867,13 +867,6 @@ static LRESULT nulldrv_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam )
+     return -1;
+ }
+ 
+-static BOOL nulldrv_CreateLayeredWindow( HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                         struct window_surface **surface )
+-{
+-    *surface = NULL;
+-    return TRUE;
+-}
+-
+ static void nulldrv_UpdateLayeredWindow( HWND hwnd, const RECT *window_rect, COLORREF color_key,
+                                          BYTE alpha, UINT flags )
+ {
+@@ -889,7 +882,7 @@ static BOOL nulldrv_WindowPosChanging( HWND hwnd, UINT swp_flags, BOOL shaped, c
+     return TRUE;
+ }
+ 
+-static BOOL nulldrv_CreateWindowSurface( HWND hwnd, const RECT *surface_rect, struct window_surface **surface )
++static BOOL nulldrv_CreateWindowSurface( HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface )
+ {
+     return FALSE;
+ }
+@@ -1217,12 +1210,6 @@ static void loaderdrv_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
+     load_driver()->pSetWindowRgn( hwnd, hrgn, redraw );
+ }
+ 
+-static BOOL loaderdrv_CreateLayeredWindow( HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                           struct window_surface **surface )
+-{
+-    return load_driver()->pCreateLayeredWindow( hwnd, surface_rect, color_key, surface );
+-}
+-
+ static void loaderdrv_UpdateLayeredWindow( HWND hwnd, const RECT *window_rect, COLORREF color_key,
+                                            BYTE alpha, UINT flags )
+ {
+@@ -1293,7 +1280,6 @@ static const struct user_driver_funcs lazy_load_driver =
+     nulldrv_SetWindowText,
+     nulldrv_ShowWindow,
+     nulldrv_SysCommand,
+-    loaderdrv_CreateLayeredWindow,
+     loaderdrv_UpdateLayeredWindow,
+     nulldrv_WindowMessage,
+     nulldrv_WindowPosChanging,
+@@ -1381,7 +1367,6 @@ void __wine_set_user_driver( const struct user_driver_funcs *funcs, UINT version
+     SET_USER_FUNC(SetWindowText);
+     SET_USER_FUNC(ShowWindow);
+     SET_USER_FUNC(SysCommand);
+-    SET_USER_FUNC(CreateLayeredWindow);
+     SET_USER_FUNC(UpdateLayeredWindow);
+     SET_USER_FUNC(WindowMessage);
+     SET_USER_FUNC(WindowPosChanging);
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 6bf1219aa36..2844c1ea64b 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1863,8 +1863,9 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+         window_surface_add_ref( new_surface );
+     }
+ 
++    if (create_layered || is_layered) needs_surface = TRUE;
+     if (!needs_surface || IsRectEmpty( visible_rect )) needs_surface = FALSE; /* use default surface */
+-    else needs_surface = !user_driver->pCreateWindowSurface( hwnd, surface_rect, &new_surface );
++    else needs_surface = !user_driver->pCreateWindowSurface( hwnd, create_layered, surface_rect, &new_surface );
+ 
+     /* create or update window surface for top-level windows if the driver doesn't implement CreateWindowSurface */
+     if (needs_surface && new_surface == &dummy_surface && (create_opaque && !create_layered))
+@@ -2228,11 +2229,7 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+ 
+     surface = create_window_surface( hwnd, swp_flags, TRUE, &window_rect, &client_rect, &visible_rect, &surface_rect );
+     apply_window_pos( hwnd, 0, swp_flags, surface, &window_rect, &client_rect, &visible_rect, NULL );
+-    if (surface) window_surface_release( surface );
+-
+-    if (!(flags & ULW_COLORKEY)) key = CLR_INVALID;
+-    if (IsRectEmpty( &surface_rect )) window_surface_add_ref( (surface = &dummy_surface) );
+-    else if (!(user_driver->pCreateLayeredWindow( hwnd, &surface_rect, key, &surface )) || !surface) return FALSE;
++    if (!surface) return FALSE;
+ 
+     if (!hdc_src || surface == &dummy_surface) ret = TRUE;
+     else
+@@ -2265,6 +2262,7 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+         NtGdiDeleteObjectApp( hdc );
+         window_surface_unlock( surface );
+ 
++        if (!(flags & ULW_COLORKEY)) key = CLR_INVALID;
+         window_surface_set_layered( surface, key, -1, 0xff000000 );
+         window_surface_flush( surface );
+ 
+diff --git a/dlls/wineandroid.drv/android.h b/dlls/wineandroid.drv/android.h
+index 9f6bb2b999c..f31a295354b 100644
+--- a/dlls/wineandroid.drv/android.h
++++ b/dlls/wineandroid.drv/android.h
+@@ -96,12 +96,10 @@ extern void ANDROID_SetParent( HWND hwnd, HWND parent, HWND old_parent );
+ extern void ANDROID_SetCapture( HWND hwnd, UINT flags );
+ extern void ANDROID_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style );
+ extern UINT ANDROID_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp );
+-extern BOOL ANDROID_CreateLayeredWindow( HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                         struct window_surface **surface );
+ extern LRESULT ANDROID_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp );
+ extern BOOL ANDROID_WindowPosChanging( HWND hwnd, UINT swp_flags, BOOL shaped, const RECT *window_rect,
+                                        const RECT *client_rect, RECT *visible_rect );
+-extern BOOL ANDROID_CreateWindowSurface( HWND hwnd, const RECT *surface_rect, struct window_surface **surface );
++extern BOOL ANDROID_CreateWindowSurface( HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface );
+ extern void ANDROID_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
+                                       const RECT *window_rect, const RECT *client_rect,
+                                       const RECT *visible_rect, const RECT *valid_rects,
+diff --git a/dlls/wineandroid.drv/init.c b/dlls/wineandroid.drv/init.c
+index 25055ece395..d84a56716d8 100644
+--- a/dlls/wineandroid.drv/init.c
++++ b/dlls/wineandroid.drv/init.c
+@@ -347,7 +347,6 @@ static const struct user_driver_funcs android_drv_funcs =
+     .pSetParent = ANDROID_SetParent,
+     .pSetWindowStyle = ANDROID_SetWindowStyle,
+     .pShowWindow = ANDROID_ShowWindow,
+-    .pCreateLayeredWindow = ANDROID_CreateLayeredWindow,
+     .pWindowMessage = ANDROID_WindowMessage,
+     .pWindowPosChanging = ANDROID_WindowPosChanging,
+     .pCreateWindowSurface = ANDROID_CreateWindowSurface,
+diff --git a/dlls/wineandroid.drv/window.c b/dlls/wineandroid.drv/window.c
+index 0d6df89d06f..65ce4180730 100644
+--- a/dlls/wineandroid.drv/window.c
++++ b/dlls/wineandroid.drv/window.c
+@@ -1065,12 +1065,12 @@ done:
+ /***********************************************************************
+  *           ANDROID_CreateWindowSurface
+  */
+-BOOL ANDROID_CreateWindowSurface( HWND hwnd, const RECT *surface_rect, struct window_surface **surface )
++BOOL ANDROID_CreateWindowSurface( HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface )
+ {
+     struct window_surface *previous;
+     struct android_win_data *data;
+ 
+-    TRACE( "hwnd %p, surface_rect %s, surface %p\n", hwnd, wine_dbgstr_rect( surface_rect ), surface );
++    TRACE( "hwnd %p, layered %u, surface_rect %s, surface %p\n", hwnd, layered, wine_dbgstr_rect( surface_rect ), surface );
+ 
+     if ((previous = *surface) && previous->funcs == &android_surface_funcs) return TRUE;
+     if (!(data = get_win_data( hwnd ))) return TRUE; /* use default surface */
+@@ -1245,38 +1245,6 @@ void ANDROID_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+ }
+ 
+ 
+-/*****************************************************************************
+- *           ANDROID_CreateLayeredWindow
+- */
+-BOOL ANDROID_CreateLayeredWindow( HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                  struct window_surface **window_surface )
+-{
+-    struct window_surface *surface;
+-    struct android_win_data *data;
+-
+-    if (!(data = get_win_data( hwnd ))) return FALSE;
+-
+-    surface = data->surface;
+-    if (!is_argb_surface( surface ))
+-    {
+-        if (surface) window_surface_release( surface );
+-        surface = NULL;
+-    }
+-
+-    if (!surface || !EqualRect( &surface->rect, surface_rect ))
+-    {
+-        data->surface = create_surface( data->hwnd, surface_rect );
+-        if (surface) window_surface_release( surface );
+-        surface = data->surface;
+-    }
+-
+-    if ((*window_surface = surface)) window_surface_add_ref( surface );
+-    release_win_data( data );
+-
+-    return TRUE;
+-}
+-
+-
+ /**********************************************************************
+  *           ANDROID_WindowMessage
+  */
+diff --git a/dlls/winemac.drv/gdi.c b/dlls/winemac.drv/gdi.c
+index 0b12c65303d..dba4acc49a3 100644
+--- a/dlls/winemac.drv/gdi.c
++++ b/dlls/winemac.drv/gdi.c
+@@ -301,7 +301,6 @@ static const struct user_driver_funcs macdrv_funcs =
+     .pToUnicodeEx = macdrv_ToUnicodeEx,
+     .pUnregisterHotKey = macdrv_UnregisterHotKey,
+     .pUpdateClipboard = macdrv_UpdateClipboard,
+-    .pCreateLayeredWindow = macdrv_CreateLayeredWindow,
+     .pUpdateLayeredWindow = macdrv_UpdateLayeredWindow,
+     .pVkKeyScanEx = macdrv_VkKeyScanEx,
+     .pImeProcessKey = macdrv_ImeProcessKey,
+diff --git a/dlls/winemac.drv/macdrv.h b/dlls/winemac.drv/macdrv.h
+index cbb453b2dfa..18b6700a2c1 100644
+--- a/dlls/winemac.drv/macdrv.h
++++ b/dlls/winemac.drv/macdrv.h
+@@ -145,14 +145,12 @@ extern void macdrv_SetLayeredWindowAttributes(HWND hwnd, COLORREF key, BYTE alph
+ extern void macdrv_SetWindowText(HWND hwnd, LPCWSTR text);
+ extern UINT macdrv_ShowWindow(HWND hwnd, INT cmd, RECT *rect, UINT swp);
+ extern LRESULT macdrv_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam);
+-extern BOOL macdrv_CreateLayeredWindow(HWND hwnd, const RECT *window_rect, COLORREF color_key,
+-                                       struct window_surface **surface);
+ extern void macdrv_UpdateLayeredWindow(HWND hwnd, const RECT *window_rect, COLORREF color_key,
+                                        BYTE alpha, UINT flags);
+ extern LRESULT macdrv_WindowMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+ extern BOOL macdrv_WindowPosChanging(HWND hwnd, UINT swp_flags, BOOL shaped, const RECT *window_rect,
+                                      const RECT *client_rect, RECT *visible_rect);
+-extern BOOL macdrv_CreateWindowSurface(HWND hwnd, const RECT *surface_rect, struct window_surface **surface);
++extern BOOL macdrv_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface);
+ extern void macdrv_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags,
+                                     const RECT *window_rect, const RECT *client_rect,
+                                     const RECT *visible_rect, const RECT *valid_rects,
+diff --git a/dlls/winemac.drv/surface.c b/dlls/winemac.drv/surface.c
+index c16acfe9905..06156fc3331 100644
+--- a/dlls/winemac.drv/surface.c
++++ b/dlls/winemac.drv/surface.c
+@@ -189,44 +189,22 @@ failed:
+ /***********************************************************************
+  *              CreateWindowSurface   (MACDRV.@)
+  */
+-BOOL macdrv_CreateWindowSurface(HWND hwnd, const RECT *surface_rect, struct window_surface **surface)
++BOOL macdrv_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface)
+ {
+     struct window_surface *previous;
+     struct macdrv_win_data *data;
+ 
+-    TRACE("hwnd %p, surface_rect %s, surface %p\n", hwnd, wine_dbgstr_rect(surface_rect), surface);
++    TRACE("hwnd %p, layered %u, surface_rect %s, surface %p\n", hwnd, layered, wine_dbgstr_rect(surface_rect), surface);
+ 
+     if ((previous = *surface) && previous->funcs == &macdrv_surface_funcs) return TRUE;
+     if (!(data = get_win_data(hwnd))) return TRUE; /* use default surface */
+     if (previous) window_surface_release(previous);
+ 
+-    *surface = create_surface(data->hwnd, data->cocoa_window, surface_rect);
+-
+-    release_win_data(data);
+-    return TRUE;
+-}
+-
+-
+-/***********************************************************************
+- *              CreateLayeredWindow   (MACDRV.@)
+- */
+-BOOL macdrv_CreateLayeredWindow(HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                struct window_surface **window_surface)
+-{
+-    struct window_surface *surface;
+-    struct macdrv_win_data *data;
+-
+-    if (!(data = get_win_data(hwnd))) return FALSE;
+-
+-    data->layered = TRUE;
+-    data->ulw_layered = TRUE;
+-
+-    surface = data->surface;
+-    if (!surface || !EqualRect(&surface->rect, surface_rect))
++    if (layered)
+     {
+-        data->surface = create_surface(data->hwnd, data->cocoa_window, surface_rect);
+-        if (surface) window_surface_release(surface);
+-        surface = data->surface;
++        data->layered = TRUE;
++        data->ulw_layered = TRUE;
++
+         if (data->unminimized_surface)
+         {
+             window_surface_release(data->unminimized_surface);
+@@ -234,9 +212,8 @@ BOOL macdrv_CreateLayeredWindow(HWND hwnd, const RECT *surface_rect, COLORREF co
+         }
+     }
+ 
+-    if ((*window_surface = surface)) window_surface_add_ref(surface);
++    *surface = create_surface(hwnd, data->cocoa_window, surface_rect);
+ 
+     release_win_data(data);
+-
+     return TRUE;
+ }
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index efb13821696..7b476528aa5 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -362,7 +362,7 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags,
+                               struct window_surface *surface);
+ BOOL WAYLAND_WindowPosChanging(HWND hwnd, UINT swp_flags, BOOL shaped, const RECT *window_rect,
+                                const RECT *client_rect, RECT *visible_rect);
+-BOOL WAYLAND_CreateWindowSurface(HWND hwnd, const RECT *surface_rect, struct window_surface **surface);
++BOOL WAYLAND_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface);
+ UINT WAYLAND_VulkanInit(UINT version, void *vulkan_handle, const struct vulkan_driver_funcs **driver_funcs);
+ struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version);
+ 
+diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
+index ecbc023833e..e0c00dfb28f 100644
+--- a/dlls/winewayland.drv/window_surface.c
++++ b/dlls/winewayland.drv/window_surface.c
+@@ -510,12 +510,12 @@ void wayland_window_surface_update_wayland_surface(struct window_surface *window
+ /***********************************************************************
+  *           WAYLAND_CreateWindowSurface
+  */
+-BOOL WAYLAND_CreateWindowSurface(HWND hwnd, const RECT *surface_rect, struct window_surface **surface)
++BOOL WAYLAND_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface)
+ {
+     struct window_surface *previous;
+     struct wayland_win_data *data;
+ 
+-    TRACE("hwnd %p, surface_rect %s, surface %p\n", hwnd, wine_dbgstr_rect(surface_rect), surface);
++    TRACE("hwnd %p, layered %u, surface_rect %s, surface %p\n", hwnd, layered, wine_dbgstr_rect(surface_rect), surface);
+ 
+     if ((previous = *surface) && previous->funcs == &wayland_window_surface_funcs) return TRUE;
+     if (!(data = wayland_win_data_get(hwnd))) return TRUE; /* use default surface */
+diff --git a/dlls/winex11.drv/bitblt.c b/dlls/winex11.drv/bitblt.c
+index 4e4de2d3990..41b47e5f308 100644
+--- a/dlls/winex11.drv/bitblt.c
++++ b/dlls/winex11.drv/bitblt.c
+@@ -1989,55 +1989,34 @@ HRGN expose_surface( struct window_surface *window_surface, const RECT *rect )
+ /***********************************************************************
+  *      CreateWindowSurface   (X11DRV.@)
+  */
+-BOOL X11DRV_CreateWindowSurface( HWND hwnd, const RECT *surface_rect, struct window_surface **surface )
++BOOL X11DRV_CreateWindowSurface( HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface )
+ {
+     struct window_surface *previous;
+     struct x11drv_win_data *data;
+-    BOOL layered = NtUserGetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED;
+ 
+-    TRACE( "hwnd %p, surface_rect %s, surface %p\n", hwnd, wine_dbgstr_rect( surface_rect ), surface );
++    TRACE( "hwnd %p, layered %u, surface_rect %s, surface %p\n", hwnd, layered, wine_dbgstr_rect( surface_rect ), surface );
+ 
+     if ((previous = *surface) && previous->funcs == &x11drv_surface_funcs) return TRUE;
+     if (!(data = get_win_data( hwnd ))) return TRUE; /* use default surface */
+     if (previous) window_surface_release( previous );
+ 
+-    *surface = NULL;  /* indicate that we want to draw directly to the window */
+-    if (data->embedded) goto done; /* draw directly to the window */
+-    if (data->whole_window == root_window) goto done; /* draw directly to the window */
+-    if (!client_side_graphics && !layered) goto done; /* draw directly to the window */
+-
+-    *surface = create_surface( data->hwnd, data->whole_window, &data->vis, surface_rect, FALSE );
+-
+-done:
+-    release_win_data( data );
+-    return TRUE;
+-}
+-
+-
+-/*****************************************************************************
+- *              CreateLayeredWindow  (X11DRV.@)
+- */
+-BOOL X11DRV_CreateLayeredWindow( HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                 struct window_surface **window_surface )
+-{
+-    struct window_surface *surface;
+-    struct x11drv_win_data *data;
+-
+-    if (!(data = get_win_data( hwnd ))) return FALSE;
+-
+-    data->layered = TRUE;
+-    if (!data->embedded && argb_visual.visualid) set_window_visual( data, &argb_visual, TRUE );
+-
+-    surface = data->surface;
+-    if (!surface || !EqualRect( &surface->rect, surface_rect ))
++    if (layered)
++    {
++        data->layered = TRUE;
++        if (!data->embedded && argb_visual.visualid) set_window_visual( data, &argb_visual, TRUE );
++    }
++    else
+     {
+-        data->surface = create_surface( data->hwnd, data->whole_window, &data->vis, surface_rect, data->use_alpha );
+-        if (surface) window_surface_release( surface );
+-        surface = data->surface;
++        *surface = NULL;  /* indicate that we want to draw directly to the window */
++        if (data->embedded) goto done; /* draw directly to the window */
++        if (data->whole_window == root_window) goto done; /* draw directly to the window */
++        if (!client_side_graphics) goto done; /* draw directly to the window */
+     }
+ 
+-    if ((*window_surface = surface)) window_surface_add_ref( surface );
+-    release_win_data( data );
++    *surface = create_surface( data->hwnd, data->whole_window, &data->vis, surface_rect,
++                               layered ? data->use_alpha : FALSE );
+ 
++done:
++    release_win_data( data );
+     return TRUE;
+ }
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 28729d1c14b..4a78073cb9b 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -420,7 +420,6 @@ static const struct user_driver_funcs x11drv_funcs =
+     .pSysCommand = X11DRV_SysCommand,
+     .pClipboardWindowProc = X11DRV_ClipboardWindowProc,
+     .pUpdateClipboard = X11DRV_UpdateClipboard,
+-    .pCreateLayeredWindow = X11DRV_CreateLayeredWindow,
+     .pUpdateLayeredWindow = X11DRV_UpdateLayeredWindow,
+     .pWindowMessage = X11DRV_WindowMessage,
+     .pWindowPosChanging = X11DRV_WindowPosChanging,
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index fc57c72cb79..eddbc74a726 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -240,14 +240,12 @@ extern UINT X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp );
+ extern LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam );
+ extern LRESULT X11DRV_ClipboardWindowProc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp );
+ extern void X11DRV_UpdateClipboard(void);
+-extern BOOL X11DRV_CreateLayeredWindow( HWND hwnd, const RECT *surface_rect, COLORREF color_key,
+-                                        struct window_surface **surface );
+ extern void X11DRV_UpdateLayeredWindow( HWND hwnd, const RECT *window_rect, COLORREF color_key,
+                                         BYTE alpha, UINT flags );
+ extern LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp );
+ extern BOOL X11DRV_WindowPosChanging( HWND hwnd, UINT swp_flags, BOOL shaped, const RECT *window_rect,
+                                       const RECT *client_rect, RECT *visible_rect );
+-extern BOOL X11DRV_CreateWindowSurface( HWND hwnd, const RECT *surface_rect, struct window_surface **surface );
++extern BOOL X11DRV_CreateWindowSurface( HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface );
+ extern void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
+                                      const RECT *rectWindow, const RECT *rectClient,
+                                      const RECT *visible_rect, const RECT *valid_rects,
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index 774211fea15..8eec0ada4ca 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -179,7 +179,7 @@ struct gdi_dc_funcs
+ };
+ 
+ /* increment this when you change the DC function table */
+-#define WINE_GDI_DRIVER_VERSION 87
++#define WINE_GDI_DRIVER_VERSION 88
+ 
+ #define GDI_PRIORITY_NULL_DRV        0  /* null driver */
+ #define GDI_PRIORITY_FONT_DRV      100  /* any font driver */
+@@ -342,11 +342,10 @@ struct user_driver_funcs
+     void    (*pSetWindowText)(HWND,LPCWSTR);
+     UINT    (*pShowWindow)(HWND,INT,RECT*,UINT);
+     LRESULT (*pSysCommand)(HWND,WPARAM,LPARAM);
+-    BOOL    (*pCreateLayeredWindow)(HWND,const RECT *,COLORREF,struct window_surface **);
+     void    (*pUpdateLayeredWindow)(HWND,const RECT *,COLORREF,BYTE,UINT);
+     LRESULT (*pWindowMessage)(HWND,UINT,WPARAM,LPARAM);
+     BOOL    (*pWindowPosChanging)(HWND,UINT,BOOL,const RECT *,const RECT *,RECT *);
+-    BOOL    (*pCreateWindowSurface)(HWND,const RECT *,struct window_surface**);
++    BOOL    (*pCreateWindowSurface)(HWND,BOOL,const RECT *,struct window_surface**);
+     void    (*pWindowPosChanged)(HWND,HWND,UINT,const RECT *,const RECT *,const RECT *,
+                                  const RECT *,struct window_surface*);
+     /* system parameters */
+-- 
+2.45.2
+

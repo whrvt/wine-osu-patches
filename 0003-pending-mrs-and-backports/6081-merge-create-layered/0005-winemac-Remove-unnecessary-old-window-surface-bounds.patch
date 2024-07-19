@@ -1,0 +1,54 @@
+From dc47b74862943140253be724880f62807cf09e50 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 17 Jul 2024 09:08:13 +0200
+Subject: [PATCH 5/8] winemac: Remove unnecessary old window surface bounds
+ copy.
+
+Surface bounds aren't used anymore.
+---
+ dlls/winemac.drv/surface.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winemac.drv/surface.c b/dlls/winemac.drv/surface.c
+index b6f0ea2d812..83f6df62c80 100644
+--- a/dlls/winemac.drv/surface.c
++++ b/dlls/winemac.drv/surface.c
+@@ -126,8 +126,7 @@ static struct macdrv_window_surface *get_mac_surface(struct window_surface *surf
+ /***********************************************************************
+  *              create_surface
+  */
+-static struct window_surface *create_surface(HWND hwnd, macdrv_window window, const RECT *rect,
+-                                             struct window_surface *old_surface)
++static struct window_surface *create_surface(HWND hwnd, macdrv_window window, const RECT *rect)
+ {
+     struct macdrv_window_surface *surface = NULL;
+     int width = rect->right - rect->left, height = rect->bottom - rect->top;
+@@ -170,7 +169,6 @@ static struct window_surface *create_surface(HWND hwnd, macdrv_window window, co
+     if (!window_surface_init(&surface->header, &macdrv_surface_funcs, hwnd, rect, info, bitmap)) goto failed;
+ 
+     surface->window = window;
+-    if (old_surface) surface->header.bounds = old_surface->bounds;
+     surface->provider = provider;
+ 
+     window_background = macdrv_window_background_color();
+@@ -213,7 +211,7 @@ BOOL macdrv_CreateWindowSurface(HWND hwnd, const RECT *surface_rect, struct wind
+         }
+     }
+ 
+-    *surface = create_surface(data->hwnd, data->cocoa_window, surface_rect, data->surface);
++    *surface = create_surface(data->hwnd, data->cocoa_window, surface_rect);
+ 
+ done:
+     release_win_data(data);
+@@ -238,7 +236,7 @@ BOOL macdrv_CreateLayeredWindow(HWND hwnd, const RECT *surface_rect, COLORREF co
+     surface = data->surface;
+     if (!surface || !EqualRect(&surface->rect, surface_rect))
+     {
+-        data->surface = create_surface(data->hwnd, data->cocoa_window, surface_rect, NULL);
++        data->surface = create_surface(data->hwnd, data->cocoa_window, surface_rect);
+         if (surface) window_surface_release(surface);
+         surface = data->surface;
+         if (data->unminimized_surface)
+-- 
+2.45.2
+
