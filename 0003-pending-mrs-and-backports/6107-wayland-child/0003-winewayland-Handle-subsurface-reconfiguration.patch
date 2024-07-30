@@ -1,18 +1,26 @@
-From bb1e949dcab9b10a9437d71bea311de4b5cf50f8 Mon Sep 17 00:00:00 2001
+From 9d197ac7f732f9975aba25d1f88d41eb9052a09f Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Thu, 11 Jul 2024 17:37:18 +0300
-Subject: [PATCH 3/6] winewayland: Handle subsurface reconfiguration.
+Subject: [PATCH 3/8] winewayland: Handle subsurface reconfiguration.
 
 ---
- dlls/winewayland.drv/wayland_surface.c | 90 ++++++++++++++++++++------
- dlls/winewayland.drv/window.c          | 11 +++-
- 2 files changed, 82 insertions(+), 19 deletions(-)
+ dlls/winewayland.drv/wayland_surface.c | 99 +++++++++++++++++++++-----
+ dlls/winewayland.drv/window.c          | 11 ++-
+ 2 files changed, 91 insertions(+), 19 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index de3307ec51e..a097b09f0ef 100644
+index de3307ec51e..425c270099e 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -589,29 +589,15 @@ static void wayland_surface_reconfigure_client(struct wayland_surface *surface)
+@@ -568,6 +568,7 @@ static void wayland_surface_reconfigure_client(struct wayland_surface *surface)
+     TRACE("hwnd=%p subsurface=%d,%d+%dx%d\n", surface->hwnd, x, y, width, height);
+ 
+     wl_subsurface_set_position(surface->client->wl_subsurface, x, y);
++    wl_subsurface_place_above(surface->client->wl_subsurface, surface->wl_surface);
+ 
+     if (surface->client->wp_viewport)
+     {
+@@ -589,29 +590,15 @@ static void wayland_surface_reconfigure_client(struct wayland_surface *surface)
  }
  
  /**********************************************************************
@@ -46,7 +54,7 @@ index de3307ec51e..a097b09f0ef 100644
  
      /* Acknowledge any compatible processed config. */
      if (surface->processing.serial && surface->processing.processed &&
-@@ -644,6 +630,74 @@ BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
+@@ -644,6 +631,82 @@ BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
      }
  
      wayland_surface_reconfigure_geometry(surface, width, height);
@@ -65,6 +73,10 @@ index de3307ec51e..a097b09f0ef 100644
 +    struct wayland_surface *parent;
 +    int local_x, local_y, x, y;
 +
++    /* TODO: Locking the parent surface using the HWND may lead to a deadlock,
++     * since we will try to acquire the win_data_mutex while holding a surface
++     * mutex (from the argument of this function), whereas all other paths
++     * acquire the win_data_mutex before any surface mutex. */
 +    if (surface->processing.serial && surface->processing.processed &&
 +        (parent = wayland_surface_lock_hwnd(surface->parent_hwnd)))
 +    {
@@ -79,6 +91,10 @@ index de3307ec51e..a097b09f0ef 100644
 +        TRACE("hwnd=%p pos=%d,%d\n", surface->hwnd, x, y);
 +
 +        wl_subsurface_set_position(surface->wl_subsurface, x, y);
++        if (parent->client)
++            wl_subsurface_place_above(surface->wl_subsurface, parent->client->wl_surface);
++        else
++            wl_subsurface_place_above(surface->wl_subsurface, parent->wl_surface);
 +        wl_surface_commit(parent->wl_surface);
 +
 +        pthread_mutex_unlock(&parent->mutex);
@@ -122,10 +138,10 @@ index de3307ec51e..a097b09f0ef 100644
      wayland_surface_reconfigure_client(surface);
  
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 4804bc9896c..85496f6a310 100644
+index 9be98363ac8..6ee3707357a 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -296,7 +296,16 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
+@@ -295,7 +295,16 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
  
      pthread_mutex_lock(&surface->mutex);
  

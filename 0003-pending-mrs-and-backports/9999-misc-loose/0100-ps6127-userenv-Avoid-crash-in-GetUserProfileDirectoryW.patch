@@ -1,0 +1,61 @@
+From baba454851f2126903cb70fc636256cbfabf5a59 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Fri, 19 Jul 2024 17:54:08 +0200
+Subject: [PATCH] userenv: Avoid crash in GetUserProfileDirectoryW.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=56884
+---
+ dlls/userenv/tests/userenv.c | 16 ++++++++++++++++
+ dlls/userenv/userenv_main.c  |  2 +-
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/userenv/tests/userenv.c b/dlls/userenv/tests/userenv.c
+index a440f538723..b679490f483 100644
+--- a/dlls/userenv/tests/userenv.c
++++ b/dlls/userenv/tests/userenv.c
+@@ -363,6 +363,14 @@ static void test_get_user_profile_dir(void)
+     ok(error == ERROR_INVALID_PARAMETER, "expected ERROR_INVALID_PARAMETER, got %lu\n", error);
+     ok(!len, "expected 0, got %lu\n", len);
+ 
++    len = SHRT_MAX;
++    SetLastError( 0xdeadbeef );
++    ret = GetUserProfileDirectoryA( token, NULL, &len );
++    error = GetLastError();
++    ok(!ret, "expected failure\n");
++    ok(error == ERROR_INVALID_PARAMETER, "expected ERROR_INVALID_PARAMETER, got %lu\n", error);
++    ok(len == SHRT_MAX, "expected SHRT_MAX, got %lu\n", len);
++
+     len = 0;
+     dirA = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, 32 );
+     SetLastError( 0xdeadbeef );
+@@ -415,6 +423,14 @@ static void test_get_user_profile_dir(void)
+     ok(error == ERROR_INSUFFICIENT_BUFFER, "expected ERROR_INSUFFICIENT_BUFFER, got %lu\n", error);
+     ok(len, "expected len > 0\n");
+ 
++    len = SHRT_MAX;
++    SetLastError( 0xdeadbeef );
++    ret = GetUserProfileDirectoryW( token, NULL, &len );
++    error = GetLastError();
++    ok(!ret, "expected failure\n");
++    ok(error == ERROR_INSUFFICIENT_BUFFER, "expected ERROR_INSUFFICIENT_BUFFER, got %lu\n", error);
++    ok(len != SHRT_MAX, "expected not SHRT_MAX, got %lu\n", len);
++
+     dirW = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, len * sizeof(WCHAR) );
+     SetLastError( 0xdeadbeef );
+     ret = GetUserProfileDirectoryW( token, dirW, &len );
+diff --git a/dlls/userenv/userenv_main.c b/dlls/userenv/userenv_main.c
+index dd04c40446e..f067d409624 100644
+--- a/dlls/userenv/userenv_main.c
++++ b/dlls/userenv/userenv_main.c
+@@ -439,7 +439,7 @@ BOOL WINAPI GetUserProfileDirectoryW( HANDLE hToken, LPWSTR lpProfileDir,
+     if (!GetProfilesDirectoryW( dirW, &dir_len )) goto done;
+ 
+     len += dir_len + 2;
+-    if (*lpcchSize < len)
++    if (*lpcchSize < len || !lpProfileDir)
+     {
+         SetLastError( ERROR_INSUFFICIENT_BUFFER );
+         *lpcchSize = len;
+-- 
+GitLab
+

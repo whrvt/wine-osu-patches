@@ -99,11 +99,11 @@ index 11111111111..11111111111 100644
  {
      unsigned int status;
  
--    if (virtual_check_buffer_for_write( buffer, size ))
-+    if (check_buffer_write_access( buffer, size ))
+-    if (!virtual_check_buffer_for_write( buffer, size ))
++    if (!check_buffer_write_access( buffer, size ))
      {
-         SERVER_START_REQ( read_process_memory )
-         {
+         status = STATUS_ACCESS_VIOLATION;
+         size = 0;
 @@ -6464,7 +6485,7 @@ NTSTATUS WINAPI NtWow64ReadVirtualMemory64( HANDLE process, ULONG64 addr, void *
  
      if (size > MAXLONG) size = MAXLONG;
@@ -111,5 +111,5 @@ index 11111111111..11111111111 100644
 -    if (virtual_check_buffer_for_write( buffer, size ))
 +    if (check_buffer_write_access( buffer, size ))
      {
-         SERVER_START_REQ( read_process_memory )
+         if (process == GetCurrentProcess())
          {

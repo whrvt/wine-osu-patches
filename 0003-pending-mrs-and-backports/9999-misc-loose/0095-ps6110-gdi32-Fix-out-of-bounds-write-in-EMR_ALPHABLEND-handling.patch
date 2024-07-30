@@ -1,0 +1,37 @@
+From 6ccfcaf8f436c0d826be06bb7ae3efcee96eb270 Mon Sep 17 00:00:00 2001
+From: Esme Povirk <esme@codeweavers.com>
+Date: Wed, 17 Jul 2024 21:01:12 +0000
+Subject: [PATCH] gdi32: Fix out-of-bounds write in EMR_ALPHABLEND handling.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=45105
+---
+ dlls/gdi32/enhmetafile.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/gdi32/enhmetafile.c b/dlls/gdi32/enhmetafile.c
+index 0351d8c462d..0ef26522eb6 100644
+--- a/dlls/gdi32/enhmetafile.c
++++ b/dlls/gdi32/enhmetafile.c
+@@ -1968,12 +1968,18 @@ BOOL WINAPI PlayEnhMetaFileRecord(
+             HBITMAP hBmp = 0, hBmpOld = 0;
+             const BITMAPINFO *pbi = (const BITMAPINFO *)((const BYTE *)mr + pAlphaBlend->offBmiSrc);
+             void *bits;
++            DIBSECTION dib;
++            DWORD copy_size;
+ 
+             SetGraphicsMode(hdcSrc, GM_ADVANCED);
+             SetWorldTransform(hdcSrc, &pAlphaBlend->xformSrc);
+ 
+             hBmp = CreateDIBSection(hdc, pbi, pAlphaBlend->iUsageSrc, &bits, NULL, 0);
+-            memcpy(bits, (const BYTE *)mr + pAlphaBlend->offBitsSrc, pAlphaBlend->cbBitsSrc);
++
++            GetObjectW(hBmp, sizeof(dib), &dib);
++            copy_size = min(dib.dsBmih.biSizeImage, pAlphaBlend->cbBitsSrc);
++
++            memcpy(bits, (const BYTE *)mr + pAlphaBlend->offBitsSrc, copy_size);
+             hBmpOld = SelectObject(hdcSrc, hBmp);
+ 
+             GdiAlphaBlend(hdc, pAlphaBlend->xDest, pAlphaBlend->yDest, pAlphaBlend->cxDest, pAlphaBlend->cyDest,
+-- 
+GitLab
+

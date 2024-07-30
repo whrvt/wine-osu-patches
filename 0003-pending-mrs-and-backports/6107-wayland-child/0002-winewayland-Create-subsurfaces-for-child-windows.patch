@@ -1,15 +1,15 @@
-From b9b6c53af06e02a4a39d79763dd5c33eca716c26 Mon Sep 17 00:00:00 2001
+From 8fb239e8dda6305bc059e650443593d83e703f6e Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Thu, 11 Jul 2024 17:36:39 +0300
-Subject: [PATCH 2/6] winewayland: Create subsurfaces for child windows.
+Subject: [PATCH 2/8] winewayland: Create subsurfaces for child windows.
 
 Create (possibly nested) Wayland subsurfaces for all child windows,
 to allow GL/VK contents to be presented onto them.
 ---
- dlls/winewayland.drv/wayland_surface.c | 61 ++++++++++++++++++++++++
+ dlls/winewayland.drv/wayland_surface.c | 61 +++++++++++++++++++++++
  dlls/winewayland.drv/waylanddrv.h      | 12 +++++
- dlls/winewayland.drv/window.c          | 64 ++++++++++++++++++--------
- 3 files changed, 117 insertions(+), 20 deletions(-)
+ dlls/winewayland.drv/window.c          | 69 +++++++++++++++++---------
+ 3 files changed, 119 insertions(+), 23 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
 index 39c3976cdfd..de3307ec51e 100644
@@ -153,7 +153,7 @@ index c25f5775762..87d071707a8 100644
  void wayland_surface_attach_shm(struct wayland_surface *surface,
                                  struct wayland_shm_buffer *shm_buffer,
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index fda7139283f..4804bc9896c 100644
+index fda7139283f..9be98363ac8 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -134,19 +134,32 @@ static void wayland_win_data_destroy(struct wayland_win_data *data)
@@ -194,7 +194,7 @@ index fda7139283f..4804bc9896c 100644
      pthread_mutex_unlock(&win_data_mutex);
  
      return NULL;
-@@ -205,38 +218,43 @@ static void reapply_cursor_clipping(void)
+@@ -205,38 +218,42 @@ static void reapply_cursor_clipping(void)
  static void wayland_win_data_update_wayland_surface(struct wayland_win_data *data)
  {
      struct wayland_surface *surface = data->wayland_surface;
@@ -208,7 +208,6 @@ index fda7139283f..4804bc9896c 100644
  
 -    /* We don't want wayland surfaces for child windows. */
 -    if (parent != NtUserGetDesktopWindow() && parent != 0)
-+    parent_data = wayland_win_data_get_nolock(NtUserGetAncestor(data->hwnd, GA_PARENT));
 +    if (NtUserGetWindowLongW(data->hwnd, GWL_STYLE) & WS_VISIBLE)
      {
 -        if (data->window_surface)
@@ -216,6 +215,7 @@ index fda7139283f..4804bc9896c 100644
 -        if (surface) wayland_surface_destroy(surface);
 -        surface = NULL;
 -        goto out;
++        parent_data = wayland_win_data_get_nolock(NtUserGetAncestor(data->hwnd, GA_PARENT));
 +        if (parent_data && parent_data->wayland_surface)
 +            role = WAYLAND_SURFACE_ROLE_SUBSURFACE;
 +        else
@@ -245,15 +245,17 @@ index fda7139283f..4804bc9896c 100644
      {
          /* If we have a pre-existing surface ensure it has no role. */
          if (data->wayland_surface) wayland_surface_clear_role(surface);
-         /* If the window is a visible toplevel make it a wayland
-          * xdg_toplevel. Otherwise keep it role-less to avoid polluting the
-          * compositor with empty xdg_toplevels. */
+-        /* If the window is a visible toplevel make it a wayland
+-         * xdg_toplevel. Otherwise keep it role-less to avoid polluting the
+-         * compositor with empty xdg_toplevels. */
 -        if (visible)
++        /* If the window is visible give it a role, otherwise keep it role-less
++         * to avoid polluting the compositor with unused role objects. */
 +        if (role == WAYLAND_SURFACE_ROLE_TOPLEVEL)
          {
              wayland_surface_make_toplevel(surface);
              if (surface->xdg_toplevel)
-@@ -246,6 +264,12 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -246,6 +263,12 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
                  wayland_surface_set_title(surface, text);
              }
          }

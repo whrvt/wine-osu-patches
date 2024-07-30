@@ -1,0 +1,99 @@
+From 5d4d33c3623271d7d47a9d91d4466749a18411a1 Mon Sep 17 00:00:00 2001
+From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
+Date: Wed, 10 Jul 2024 11:05:31 +0300
+Subject: [PATCH] winewayland: Provide wl_surface opaque region hints.
+
+---
+ dlls/winewayland.drv/wayland_surface.c | 23 +++++++++++++++++++----
+ dlls/winewayland.drv/waylanddrv.h      |  3 ++-
+ dlls/winewayland.drv/window_surface.c  |  2 +-
+ 3 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 5e7b04842f6..27bccfcd558 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -316,12 +316,13 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
+  */
+ void wayland_surface_attach_shm(struct wayland_surface *surface,
+                                 struct wayland_shm_buffer *shm_buffer,
+-                                HRGN surface_damage_region)
++                                HRGN surface_damage_region,
++                                BOOL opaque)
+ {
+     RGNDATA *surface_damage;
+ 
+-    TRACE("surface=%p shm_buffer=%p (%dx%d)\n",
+-          surface, shm_buffer, shm_buffer->width, shm_buffer->height);
++    TRACE("surface=%p shm_buffer=%p (%dx%d) opaque=%d\n",
++          surface, shm_buffer, shm_buffer->width, shm_buffer->height, opaque);
+ 
+     shm_buffer->busy = TRUE;
+     wayland_shm_buffer_ref(shm_buffer);
+@@ -347,6 +348,20 @@ void wayland_surface_attach_shm(struct wayland_surface *surface,
+         free(surface_damage);
+     }
+ 
++    if (opaque && !surface->opaque)
++    {
++        struct wl_region *region =
++            wl_compositor_create_region(process_wayland.wl_compositor);
++        wl_region_add(region, 0, 0, INT32_MAX, INT32_MAX);
++        wl_surface_set_opaque_region(surface->wl_surface, region);
++        wl_region_destroy(region);
++    }
++    else if (!opaque && surface->opaque)
++    {
++        wl_surface_set_opaque_region(surface->wl_surface, NULL);
++    }
++
++    surface->opaque = opaque;
+     surface->buffer_width = shm_buffer->width;
+     surface->buffer_height = shm_buffer->height;
+ }
+@@ -894,7 +909,7 @@ void wayland_surface_ensure_contents(struct wayland_surface *surface)
+ 
+     if (wayland_surface_reconfigure(surface))
+     {
+-        wayland_surface_attach_shm(surface, dummy_shm_buffer, damage);
++        wayland_surface_attach_shm(surface, dummy_shm_buffer, damage, FALSE);
+         wl_surface_commit(surface->wl_surface);
+     }
+     else
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index efb13821696..0d99feda847 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -204,6 +204,7 @@ struct wayland_surface
+     LONG weak_ref;
+     BOOL destroyed;
+     struct wayland_surface *parent_weak_ref;
++    BOOL opaque;
+ };
+ 
+ struct wayland_shm_buffer
+@@ -242,7 +243,7 @@ void wayland_surface_make_toplevel(struct wayland_surface *surface);
+ void wayland_surface_clear_role(struct wayland_surface *surface);
+ void wayland_surface_attach_shm(struct wayland_surface *surface,
+                                 struct wayland_shm_buffer *shm_buffer,
+-                                HRGN surface_damage_region);
++                                HRGN surface_damage_region, BOOL opaque);
+ struct wayland_surface *wayland_surface_lock_hwnd(HWND hwnd);
+ BOOL wayland_surface_reconfigure(struct wayland_surface *surface);
+ BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
+diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
+index 961ba511c7a..97218fafa54 100644
+--- a/dlls/winewayland.drv/window_surface.c
++++ b/dlls/winewayland.drv/window_surface.c
+@@ -421,7 +421,7 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+     if (wayland_surface_reconfigure(wws->wayland_surface))
+     {
+         wayland_surface_attach_shm(wws->wayland_surface, shm_buffer,
+-                                   surface_damage_region);
++                                   surface_damage_region, !shape_bits);
+         wl_surface_commit(wws->wayland_surface->wl_surface);
+         flushed = TRUE;
+     }
+-- 
+GitLab
+
