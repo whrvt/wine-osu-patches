@@ -1,0 +1,30 @@
+From 7612d9e1fee4fd70483862c0e4236cd25b5105d4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 8 Aug 2024 15:12:16 +0200
+Subject: [PATCH 2/5] win32u: Fix CreateWindowSurface call when updating
+ layered surfaces.
+
+It was previously passing layered = FALSE unless called directly from
+NtUserUpdateLayeredWindow.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=56622
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57003
+---
+ dlls/win32u/window.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 11336b01309..c7b1190230b 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1869,6 +1869,7 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+         new_surface = &dummy_surface;
+         window_surface_add_ref( new_surface );
+     }
++    else if (!create_opaque && is_layered) create_layered = TRUE;
+ 
+     if (create_layered || is_layered) needs_surface = TRUE;
+     if (!needs_surface || IsRectEmpty( visible_rect )) needs_surface = FALSE; /* use default surface */
+-- 
+2.46.0
+

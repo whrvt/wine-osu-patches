@@ -13,10 +13,10 @@ index 0db8087441a..d1219862f74 100644
 --- a/dlls/winex11.drv/bitblt.c
 +++ b/dlls/winex11.drv/bitblt.c
 @@ -2263,7 +2263,6 @@ BOOL X11DRV_CreateWindowSurface( HWND hwnd, UINT swp_flags, const RECT *visible_
+         *surface = NULL;  /* indicate that we want to draw directly to the window */
+         if (data->embedded) goto done; /* draw directly to the window */
+         if (data->whole_window == root_window) goto done; /* draw directly to the window */
+-        if (data->client_window) goto done; /* draw directly to the window */
+         if (!client_side_graphics) goto done; /* draw directly to the window */
+     }
  
-     if (data->embedded) goto done; /* draw directly to the window */
-     if (data->whole_window == root_window) goto done; /* draw directly to the window */
--    if (data->client_window) goto done; /* draw directly to the window */
-     if (!client_side_graphics && !layered) goto done; /* draw directly to the window */
- 
-     if (!get_surface_rect( visible_rect, &surface_rect )) goto done;

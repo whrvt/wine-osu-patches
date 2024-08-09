@@ -1,0 +1,30 @@
+From 057027a0d3c45a241b4ab3133bed00fd440a330f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 8 Aug 2024 19:55:07 +0200
+Subject: [PATCH 3/5] winex11: Avoid moving embedded windows in the systray
+ dock.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=56622
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57003
+---
+ dlls/winex11.drv/window.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 98cb7952164..aa4f43f1cc3 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1410,8 +1410,8 @@ static void sync_window_position( struct x11drv_win_data *data,
+         mask |= CWWidth | CWHeight;
+     }
+ 
+-    /* only the size is allowed to change for the desktop window */
+-    if (data->whole_window != root_window)
++    /* only the size is allowed to change for the desktop window or systray docked windows */
++    if (data->whole_window != root_window && !data->embedded)
+     {
+         POINT pt = virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
+         changes.x = pt.x;
+-- 
+2.46.0
+

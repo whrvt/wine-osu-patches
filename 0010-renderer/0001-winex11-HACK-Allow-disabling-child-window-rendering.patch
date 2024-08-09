@@ -20,7 +20,7 @@ index 11111111111..11111111111 100644
 +    static unsigned int cache;
 +    if (gl_disable_child_window_rendering) {
 +        if (!cache++)
-+            MESSAGE("OpenGL speedhack enabled; export WINE_DISABLE_GLCHILD_HACK=1 to disable.\n");
++            MESSAGE("OpenGL speedhack enabled, which will cause the editor top menu bar to render incorrectly\n\texport WINE_DISABLE_GLCHILD_HACK=1 to disable.\n");
 +        known_child = FALSE;
 +    }
 +
