@@ -20,17 +20,22 @@ index 11111111111..11111111111 100644
  WNDPROC client_foreign_window_proc = NULL;
  BOOL gl_disable_child_window_rendering = TRUE;
 +BOOL block_get_version = FALSE;
-+BOOL absolute_tablet_hack = TRUE;
++BOOL absolute_tablet_hack = FALSE;
  
  static x11drv_error_callback err_callback;   /* current callback for error */
  static Display *err_callback_display;        /* display callback is set for */
-@@ -772,6 +774,15 @@ static NTSTATUS x11drv_init( void *arg )
+@@ -772,6 +774,20 @@ static NTSTATUS x11drv_init( void *arg )
      X11DRV_InitKeyboard( gdi_display );
      X11DRV_InitMouse( gdi_display );
      if (use_xim) use_xim = xim_init( input_style );
 +    {
 +        const char *e = getenv("WINE_BLOCK_GET_VERSION");
 +        if (e && *e != '\0' && *e != '0') block_get_version = TRUE;
++    }
++
++    {
++        const char *e = getenv("WAYLAND_DISPLAY");
++        if (e) absolute_tablet_hack = TRUE;
 +    }
 +
 +    {
@@ -45,7 +50,7 @@ diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
-@@ -1540,6 +1540,13 @@ BOOL X11DRV_GetCursorPos(LPPOINT pos)
+@@ -1540,6 +1540,14 @@ BOOL X11DRV_GetCursorPos(LPPOINT pos)
   */
  BOOL X11DRV_ClipCursor( const RECT *clip, BOOL reset )
  {
@@ -54,6 +59,7 @@ index 11111111111..11111111111 100644
 +    {
 +        if (!once++)
 +            MESSAGE("(X)Wayland absolute tablet hack enabled, which may cause cursor teleportation\n\texport WINE_DISABLE_ABS_TABLET_HACK=1 to disable.\n");
++        ungrab_clipping_window();
 +        return TRUE;
 +    }
      if (!reset && clip && grab_clipping_window( clip )) return TRUE;
@@ -71,3 +77,46 @@ index 11111111111..11111111111 100644
      struct wayland_pointer *pointer = &process_wayland.pointer;
      struct wl_surface *wl_surface = NULL;
      struct wayland_surface *surface = NULL;
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -406,6 +406,9 @@ static const KBDTABLES kbdus_tables =
+ BOOL grab_pointer = TRUE;
+ BOOL grab_fullscreen = FALSE;
+ 
++static BOOL block_get_version = FALSE;
++static BOOL absolute_tablet_hack = FALSE;
++
+ static void kbd_tables_init_vsc2vk( const KBDTABLES *tables, USHORT vsc2vk[0x300] )
+ {
+     const VSC_VK *entry;
+@@ -2615,6 +2618,28 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
+  */
+ BOOL WINAPI NtUserClipCursor( const RECT *rect )
+ {
++    static unsigned int once;
++    if (!once++) {
++        {
++            const char *e = getenv("WAYLAND_DISPLAY");
++            if (e) absolute_tablet_hack = TRUE;
++        }
++
++        {
++            const char *e = getenv("WINE_BLOCK_GET_VERSION");
++            if (e && *e != '\0' && *e != '0') block_get_version = TRUE;
++        }
++
++        {
++            const char *e = getenv("WINE_DISABLE_ABS_TABLET_HACK");
++            if (e && *e != '\0' && *e != '0') absolute_tablet_hack = FALSE;
++        }
++        if (absolute_tablet_hack && block_get_version) grab_pointer = FALSE;
++    }
++
++    if (absolute_tablet_hack && block_get_version)
++        return FALSE;
++
+     UINT dpi;
+     BOOL ret;
+     RECT new_rect;
