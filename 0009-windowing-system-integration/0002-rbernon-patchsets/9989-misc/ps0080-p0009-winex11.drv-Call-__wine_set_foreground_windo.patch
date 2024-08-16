@@ -1,0 +1,168 @@
+From 58a1d9ccabf67f394b8ef05e71e287789f99cf26 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 16 Aug 2024 17:51:48 -0700
+Subject: [REBASED PATCH 09/12] winex11.drv: Call __wine_set_foreground_window on focus
+ events.
+
+This also instroduces a new internal __wine_set_foreground_window user32
+export that takes a timestamp parameter.
+
+This fixes the broken tests, because the WM_TAKE_FOCUS messages have
+a timestamp, but it will not work when the take_focus mode is not used.
+
+Standard focus events do not have a timestamp so we will have to use
+XInput2 focus events to support this case.
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -1819,6 +1819,22 @@ static HWND set_focus_window( HWND hwnd, HWND last_focus )
+     return previous;
+ }
+ 
++/*******************************************************************
++ *      __wine_set_foreground_window  (USER32.@)
++ *
++ * Internal NtUserSetForegroundWindow function to let the graphics driver
++ * update the foreground window.
++ */
++BOOL WINAPI __wine_set_foreground_window( HWND hwnd, DWORD time )
++{
++    TRACE( "%p\n", hwnd );
++
++    hwnd = get_full_window_handle( hwnd );
++
++    return set_foreground_window( hwnd, FALSE, time );
++}
++
++
+ /*******************************************************************
+  *		set_active_window
+  */
+diff --git a/dlls/win32u/win32u.spec b/dlls/win32u/win32u.spec
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/win32u.spec
++++ b/dlls/win32u/win32u.spec
+@@ -1322,3 +1322,4 @@ # Wine internal extensions
+ 
+ @ stdcall -syscall __wine_get_icm_profile(long long ptr ptr)
+ @ stdcall -syscall __wine_get_file_outline_text_metric(wstr ptr ptr ptr)
++@ stdcall -syscall __wine_set_foreground_window(long long)
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -649,11 +649,11 @@ static HWND find_activatable_window( HWND hwnd, Time time, BOOL check )
+     return hwnd;
+ }
+ 
+-static void set_foreground_window( HWND hwnd )
++static void set_foreground_window( HWND hwnd, DWORD time )
+ {
+     struct x11drv_thread_data *thread_data = x11drv_thread_data();
+     thread_data->activating_hwnd = hwnd;
+-    NtUserSetForegroundWindow( hwnd );
++    __wine_set_foreground_window( hwnd, time );
+     thread_data->activating_hwnd = 0;
+ }
+ 
+@@ -676,7 +676,7 @@ static void set_focus( XEvent *xev, HWND hwnd, Time time, BOOL check )
+ 
+     if (!(focus = find_activatable_window( focus, time, check ))) return;
+     TRACE( "setting foreground window to %p\n", focus );
+-    set_foreground_window( focus );
++    set_foreground_window( focus, x11drv_time_to_ticks( time ) );
+ 
+     /* Some applications expect that a being deactivated topmost window
+      * receives the WM_WINDOWPOSCHANGING/WM_WINDOWPOSCHANGED messages,
+@@ -915,7 +915,7 @@ static void focus_out( Display *display , HWND hwnd, Time time )
+         if (hwnd == NtUserGetForegroundWindow())
+         {
+             TRACE( "lost focus, setting fg to desktop\n" );
+-            set_foreground_window( NtUserGetDesktopWindow() );
++            set_foreground_window( NtUserGetDesktopWindow(), NtGetTickCount() );
+         }
+     }
+  }
+@@ -1396,7 +1396,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+                 TRACE( "restoring win %p/%lx\n", data->hwnd, data->whole_window );
+                 release_win_data( data );
+                 if ((style & (WS_MINIMIZE | WS_VISIBLE)) == (WS_MINIMIZE | WS_VISIBLE))
+-                    set_foreground_window( hwnd );
++                    set_foreground_window( hwnd, x11drv_time_to_ticks( event->time ) );
+                 NtUserShowWindow( hwnd, SW_RESTORE );
+                 return;
+             }
+@@ -1448,9 +1448,8 @@ static BOOL X11DRV_PropertyNotify( HWND hwnd, XEvent *xev )
+     XPropertyEvent *event = &xev->xproperty;
+     char *name;
+     HWND active_window;
+-
+     /* sync with the X server time */
+-    x11drv_time_to_ticks( event->time );
++    DWORD time = x11drv_time_to_ticks( event->time );
+ 
+     if (event->atom == x11drv_atom(_NET_ACTIVE_WINDOW))
+     {
+@@ -1459,9 +1458,9 @@ static BOOL X11DRV_PropertyNotify( HWND hwnd, XEvent *xev )
+             return FALSE;
+ 
+         if (!(active_window = get_foreground_window( event->display, NULL )))
+-            set_foreground_window( NtUserGetDesktopWindow() );
++            set_foreground_window( NtUserGetDesktopWindow(), time );
+         else
+-            set_foreground_window( active_window );
++            set_foreground_window( active_window, time );
+ 
+         return FALSE;
+     }
+diff --git a/dlls/wow64win/user.c b/dlls/wow64win/user.c
+index 11111111111..11111111111 100644
+--- a/dlls/wow64win/user.c
++++ b/dlls/wow64win/user.c
+@@ -4798,3 +4798,11 @@ NTSTATUS WINAPI wow64___wine_send_input( UINT *args )
+     ERR( "not supported\n" );
+     return 0;
+ }
++
++NTSTATUS WINAPI wow64___wine_set_foreground_window( UINT *args )
++{
++    HWND hwnd = get_handle( &args );
++    DWORD time = get_ulong( &args );
++
++    return __wine_set_foreground_window( hwnd, time );
++}
+diff --git a/include/ntuser.h b/include/ntuser.h
+index 11111111111..11111111111 100644
+--- a/include/ntuser.h
++++ b/include/ntuser.h
+@@ -1382,6 +1382,9 @@ static inline BOOL NtUserShowOwnedPopups( HWND hwnd, BOOL show )
+      return NtUserCallHwndParam( hwnd, show, NtUserCallHwndParam_ShowOwnedPopups );
+ }
+ 
++/* Wine extensions */
++W32KAPI BOOL WINAPI __wine_set_foreground_window( HWND hwnd, DWORD time );
++
+ struct hid_input
+ {
+     UINT device;
+diff --git a/dlls/win32u/main.c b/dlls/win32u/main.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/main.c
++++ b/dlls/win32u/main.c
+@@ -2161,6 +2161,11 @@ BOOL SYSCALL_API __wine_get_icm_profile( HDC hdc, BOOL allow_default, DWORD *siz
+     SYSCALL_FUNC( __wine_get_icm_profile );
+ }
+ 
++BOOL SYSCALL_API __wine_set_foreground_window( HWND hwnd, DWORD time )
++{
++    SYSCALL_FUNC( __wine_set_foreground_window );
++}
++
+ #else /*  __arm64ec__ */
+ 
+ #ifdef _WIN64
+-- 
+0.0.0
+

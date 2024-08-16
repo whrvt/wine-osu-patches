@@ -1,0 +1,51 @@
+From 47848c6b10661f36afdd3384b514257e53828b4b Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 16 Aug 2024 01:29:41 -0700
+Subject: [PATCH] add WINE_WAYLAND_DISPLAY_INDEX
+
+---
+ dlls/winewayland.drv/wayland_output.c | 35 +++++++++++++++++----------
+ 1 file changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_output.c b/dlls/winewayland.drv/wayland_output.c
+index 11111111111..11111111111 100644
+--- a/dlls/winewayland.drv/wayland_output.c
++++ b/dlls/winewayland.drv/wayland_output.c
+@@ -67,10 +67,33 @@ static int wayland_output_mode_cmp_rb(const void *key,
+     return 0;
+ }
+ 
++static BOOL check_display_wanted(struct wayland_output_state *state)
++{
++    int dpy_index = -1;
++    char dpy_name[32];
++
++    if (!state->name || state->name == '\0') return TRUE;
++
++    TRACE("display name: %s\n", state->name);
++
++    const char *e = getenv("WINE_WAYLAND_DISPLAY_INDEX");
++    if (!e || *e == '\0' || (dpy_index = atoi(e)) < 0) return TRUE;
++
++    snprintf(dpy_name, 32, "%s%d", "WaylandOutput", dpy_index);
++
++    TRACE("selected: %s\n", dpy_name);
++
++    if (strncmp(state->name, dpy_name, 32) == 0) return TRUE;
++
++    return FALSE;
++}
++
+ static void wayland_output_state_add_mode(struct wayland_output_state *state,
+                                           int32_t width, int32_t height,
+                                           int32_t refresh, BOOL current)
+ {
++    if (!check_display_wanted(state)) return;    
++
+     struct rb_entry *mode_entry;
+     struct wayland_output_mode *mode;
+     struct wayland_output_mode key =
+
+-- 
+2.46.0
+

@@ -127,9 +127,9 @@ index f975986a9d9..75d01df1009 100644
 +        data->whole_rect = original_rect;
 +        update_net_wm_states( data );
 +    }
- #ifdef HAVE_LIBXSHAPE
-     if (IsRectEmpty( old_window_rect ) != IsRectEmpty( &data->window_rect ))
-         sync_window_region( data, (HRGN)1 );
+ 
+     TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x serial=%lu\n",
+            data->hwnd, data->whole_window, (int)data->whole_rect.left, (int)data->whole_rect.top,
 @@ -1981,6 +2085,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
  {
      unsigned int width, height;

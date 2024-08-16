@@ -202,37 +202,18 @@ index 2a326b07a4c..94194f49437 100644
  
  #define MAX_DASHLEN 16
  
-@@ -610,25 +611,33 @@ struct x11drv_win_data
-     RECT        whole_rect;     /* X window rectangle for the whole window relative to win32 parent window client area */
-     RECT        client_rect;    /* client area relative to win32 parent window client area */
-     XIC         xic;            /* X input context */
+@@ -607,6 +608,14 @@ enum x11drv_net_wm_state
+ /* x11drv private window data */
+ struct x11drv_win_data
+ {
 +    UINT        pending_fullscreen : 1; /* HACK: pending change to fullscreen state */
-     UINT        managed : 1;    /* is window managed? */
-     UINT        mapped : 1;     /* is window mapped? (in either normal or iconic state) */
 +    UINT        fs_hack : 1;    /* is window forced / faking fullscreen? */
-     UINT        iconic : 1;     /* is window in iconic state? */
-     UINT        embedded : 1;   /* is window an XEMBED client? */
-     UINT        shaped : 1;     /* is window using a custom region shape? */
-     UINT        layered : 1;    /* is window layered and with valid attributes? */
 +    UINT        layered_attributes : 1;
 +                                /* is layered window has leyered attributes set (or otherwise managed with UpdateLayeredWindow()? */
-     UINT        use_alpha : 1;  /* does window use an alpha channel? */
-     UINT        skip_taskbar : 1; /* does window should be deleted from taskbar */
-     UINT        add_taskbar : 1; /* does window should be added to taskbar regardless of style */
-     UINT        net_wm_fullscreen_monitors_set : 1; /* is _NET_WM_FULLSCREEN_MONITORS set */
 +    ULONGLONG   take_focus_back;
-     int         wm_state;       /* current value of the WM_STATE property */
-     DWORD       net_wm_state;   /* bit mask of active x11drv_net_wm_state values */
-     Window      embedder;       /* window id of embedder */
 +    unsigned long unmapnotify_serial; /* serial number of last UnmapNotify event */
 +    unsigned long fake_unmap_serial; /* serial number of unmap before map for restoring window from minimized state in X11DRV_WindowPosChanged() */
-     unsigned long configure_serial; /* serial number of last configure request */
-     struct window_surface *surface;
-     Pixmap         icon_pixmap;
-     Pixmap         icon_mask;
-     unsigned long *icon_bits;
-     unsigned int   icon_size;
 +    MwmHints prev_hints;
- };
- 
- extern struct x11drv_win_data *get_win_data( HWND hwnd );
+     Display    *display;        /* display connection for the thread owning the window */
+     XVisualInfo vis;            /* X visual used by this window */
+     Colormap    whole_colormap; /* colormap if non-default visual */

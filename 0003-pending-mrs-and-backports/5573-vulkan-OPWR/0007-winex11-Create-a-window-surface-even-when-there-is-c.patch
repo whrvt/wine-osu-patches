@@ -9,14 +9,14 @@ Subject: [PATCH (REBASE) 07/10] winex11: Create a window surface even when there
  1 file changed, 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/bitblt.c b/dlls/winex11.drv/bitblt.c
-index 0db8087441a..d1219862f74 100644
+index c0ffa1531a0..894004b1a38 100644
 --- a/dlls/winex11.drv/bitblt.c
 +++ b/dlls/winex11.drv/bitblt.c
-@@ -2263,7 +2263,6 @@ BOOL X11DRV_CreateWindowSurface( HWND hwnd, UINT swp_flags, const RECT *visible_
-         *surface = NULL;  /* indicate that we want to draw directly to the window */
-         if (data->embedded) goto done; /* draw directly to the window */
-         if (data->whole_window == root_window) goto done; /* draw directly to the window */
--        if (data->client_window) goto done; /* draw directly to the window */
-         if (!client_side_graphics) goto done; /* draw directly to the window */
-     }
- 
+@@ -1962,7 +1962,6 @@ static BOOL enable_direct_drawing( struct x11drv_win_data *data, BOOL layered )
+     if (layered) return FALSE;
+     if (data->embedded) return TRUE; /* draw directly to the window */
+     if (data->whole_window == root_window) return TRUE; /* draw directly to the window */
+-    if (data->client_window) return TRUE; /* draw directly to the window */
+     if (!client_side_graphics) return TRUE; /* draw directly to the window */
+     return FALSE;
+ }

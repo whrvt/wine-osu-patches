@@ -1,0 +1,135 @@
+From 8401789570589061b411b4b1048747126e31937d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 10 Apr 2020 18:32:04 +0200
+Subject: [PATCH 2/6] server: Remove non-responsive hooks, as Win7 does.
+
+GTA V installs a keyboard hook on startup but then never checks its
+messages. The user side already removes the hook on first timeout, but
+if there's no other user-side hook, the server is always going to wait.
+
+Usually the dinput mouse/keyboard hook are removing other non-responsive
+hooks, but in order to be able to stop using hooks in rawinput mode we
+have to support removal on timeout on the server side as well.
+---
+ server/hook.c  | 12 +++++++++---
+ server/queue.c | 13 ++++++++++++-
+ server/user.h  |  5 ++++-
+ 3 files changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/server/hook.c b/server/hook.c
+index 11111111111..11111111111 100644
+--- a/server/hook.c
++++ b/server/hook.c
+@@ -324,7 +324,7 @@ static void hook_table_destroy( struct object *obj )
+ }
+ 
+ /* remove a hook, freeing it if the chain is not in use */
+-static void remove_hook( struct hook *hook )
++void remove_hook( struct hook *hook )
+ {
+     struct desktop *desktop = hook->desktop;
+     int global = hook->table == desktop->global_hooks;
+@@ -363,6 +363,12 @@ void add_desktop_hook_count( struct desktop *desktop, struct thread *thread, int
+     }
+ }
+ 
++/* get the owner thread from a hook */
++extern struct thread *get_hook_thread( struct hook *hook )
++{
++    return hook->owner;
++}
++
+ /* release a hook chain, removing deleted hooks if the use count drops to 0 */
+ static void release_hook_chain( struct hook_table *table, int index )
+ {
+@@ -405,14 +411,14 @@ void remove_thread_hooks( struct thread *thread )
+ }
+ 
+ /* return the thread that owns the first global hook */
+-struct thread *get_first_global_hook( struct desktop *desktop, int id )
++struct hook *get_first_global_hook( struct desktop *desktop, int id )
+ {
+     struct hook *hook;
+     struct hook_table *global_hooks = desktop->global_hooks;
+ 
+     if (!global_hooks) return NULL;
+     if (!(hook = get_first_valid_hook( global_hooks, id - WH_MINHOOK, EVENT_MIN, 0, 0, 0 ))) return NULL;
+-    return hook->owner;
++    return hook;
+ }
+ 
+ /* set a window hook */
+
+diff --git a/server/queue.c b/server/queue.c
+index 11111111111..11111111111 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -72,6 +72,7 @@ struct message_result
+     void                  *data;          /* message reply data */
+     unsigned int           data_size;     /* size of message reply data */
+     struct timeout_user   *timeout;       /* result timeout */
++    struct hook           *hook;          /* target hook of the message */
+ };
+ 
+ struct message
+@@ -1008,6 +1009,13 @@ static void result_timeout( void *private )
+     {
+         struct message *msg = result->msg;
+ 
++        /* hook timed out, remove it */
++        if (msg->type == MSG_HOOK_LL && result->hook)
++        {
++            fprintf(stderr, "wineserver: hook %p timeout, removing it\n", result->hook);
++            remove_hook( result->hook );
++        }
++
+         result->msg = NULL;
+         msg->result = NULL;
+         remove_queue_message( result->receiver, msg, SEND_MESSAGE );
+@@ -1995,12 +2003,14 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
+ static int send_hook_ll_message( struct desktop *desktop, struct message *hardware_msg,
+                                  int id, lparam_t lparam, struct msg_queue *sender )
+ {
++    struct hook *hook;
+     struct thread *hook_thread;
+     struct msg_queue *queue;
+     struct message *msg;
+     timeout_t timeout = 2000 * -10000;  /* FIXME: load from registry */
+ 
+-    if (!(hook_thread = get_first_global_hook( desktop, id ))) return 0;
++    if (!(hook = get_first_global_hook( desktop, id ))) return 0;
++    if (!(hook_thread = get_hook_thread( hook ))) return 0;
+     if (!(queue = hook_thread->queue)) return 0;
+     if (is_queue_hung( queue )) return 0;
+ 
+@@ -2025,6 +2035,7 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
+     }
+     msg->result->hardware_msg = hardware_msg;
+     msg->result->desktop = (struct desktop *)grab_object( desktop );
++    msg->result->hook = hook;
+     list_add_tail( &queue->msg_list[SEND_MESSAGE], &msg->entry );
+     set_queue_bits( queue, QS_SENDMESSAGE );
+     return 1;
+diff --git a/server/user.h b/server/user.h
+index 11111111111..11111111111 100644
+--- a/server/user.h
++++ b/server/user.h
+@@ -104,10 +104,13 @@ extern void cleanup_clipboard_thread( struct thread *thread );
+ 
+ /* hook functions */
+ 
++struct hook;
++extern void remove_hook( struct hook *hook );
+ extern void remove_thread_hooks( struct thread *thread );
+ extern unsigned int get_active_hooks(void);
+-extern struct thread *get_first_global_hook( struct desktop *desktop, int id );
+ extern void add_desktop_hook_count( struct desktop *desktop, struct thread *thread, int count );
++extern struct hook *get_first_global_hook( struct desktop *desktop, int id );
++extern struct thread *get_hook_thread( struct hook *hook );
+ 
+ /* queue functions */
+ 
+
+-- 
+0.0.0
+

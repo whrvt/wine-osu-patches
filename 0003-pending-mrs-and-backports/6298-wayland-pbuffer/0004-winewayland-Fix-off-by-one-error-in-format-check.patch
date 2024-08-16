@@ -1,0 +1,25 @@
+From 78ce474b4f375efef895cab2b66ab21a28429296 Mon Sep 17 00:00:00 2001
+From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
+Date: Fri, 16 Aug 2024 14:31:54 +0300
+Subject: [PATCH 4/4] winewayland: Fix off-by-one error in format check.
+
+---
+ dlls/winewayland.drv/opengl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index 5e1f040ac0a..fd13bdbb406 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -482,7 +482,7 @@ static BOOL set_pixel_format(HDC hdc, int format, BOOL internal)
+         WARN("not a proper window DC %p/%p\n", hdc, hwnd);
+         return FALSE;
+     }
+-    if (format < 0 || format >= num_egl_configs)
++    if (!is_onscreen_format(format))
+     {
+         WARN("Invalid format %d\n", format);
+         return FALSE;
+-- 
+2.46.0
+
