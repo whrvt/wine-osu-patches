@@ -1,7 +1,7 @@
-From fc5134eb61797365164fc3f854d50ae00395d776 Mon Sep 17 00:00:00 2001
+From 68a36e08f3dca9747db890f8a27feb15c9e49616 Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Mon, 22 Jul 2024 11:57:53 +0300
-Subject: [PATCH 4/8] winewayland: Use weak references for parent
+Subject: [PATCH 4/7] winewayland: Use weak references for parent
  wayland_surfaces.
 
 Don't access the parent wayland_surface through their HWND while holding
@@ -126,7 +126,7 @@ index 425c270099e..57fd217e0d3 100644
          /* For now we use a subsurface only for child windows, whose window
           * coordinates are relative to the client area of their parent. */
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 87d071707a8..98cf4d41c10 100644
+index 22e8b27df82..d553f06a420 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -213,7 +213,9 @@ struct wayland_surface
@@ -151,10 +151,10 @@ index 87d071707a8..98cf4d41c10 100644
  void wayland_surface_make_toplevel(struct wayland_surface *surface);
  void wayland_surface_make_subsurface(struct wayland_surface *surface,
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 6ee3707357a..4f3daca14d4 100644
+index de395389264..8453d73488c 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -247,7 +247,8 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -240,7 +240,8 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
  
      if ((role == WAYLAND_SURFACE_ROLE_TOPLEVEL) != !!(surface->xdg_toplevel) ||
          (role == WAYLAND_SURFACE_ROLE_SUBSURFACE) != !!(surface->wl_subsurface) ||
@@ -164,7 +164,7 @@ index 6ee3707357a..4f3daca14d4 100644
      {
          /* If we have a pre-existing surface ensure it has no role. */
          if (data->wayland_surface) wayland_surface_clear_role(surface);
-@@ -297,7 +298,8 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
+@@ -290,7 +291,8 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
  
      if (surface->wl_subsurface)
      {

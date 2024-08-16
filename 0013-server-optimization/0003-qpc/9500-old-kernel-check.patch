@@ -1,0 +1,45 @@
+diff --git a/configure.ac b/configure.ac
+index 11111111111..11111111111 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2197,6 +2197,14 @@ AC_CACHE_CHECK([whether we can use re-entrant gethostbyname_r Linux style],
+                 [Define if Linux-style gethostbyname_r and gethostbyaddr_r are available])
+    fi
+ 
++dnl Check for perf_event_mmap_page.cap_user_time_short
++AC_CHECK_MEMBERS([struct perf_event_mmap_page.cap_user_time_short],,,
++[#include <linux/perf_event.h>])
++
++dnl Check for perf_event_attr.remove_on_exec
++AC_CHECK_MEMBERS([struct perf_event_attr.remove_on_exec],,,
++[#include <linux/perf_event.h>])
++
+ dnl Check for socket structure members
+ AC_CHECK_MEMBERS([struct sockaddr_un.sun_len],,,
+ [#include <sys/types.h>
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2067,7 +2067,9 @@ static NTSTATUS map_perf_event_mmap_page( struct perf_event_mmap_page **addr )
+     attr.exclude_kernel = 1;
+     attr.exclude_hv = 1;
+     attr.exclude_host = 1;
++#ifdef HAVE_STRUCT_PERF_EVENT_ATTR_REMOVE_ON_EXEC
+     attr.remove_on_exec = 1;
++#endif
+     fd = perf_event_open( &attr, 0, -1, -1, PERF_FLAG_FD_CLOEXEC );
+     if (fd == -1)
+     {
+@@ -2094,7 +2096,11 @@ static NTSTATUS get_time_shift_mult( struct perf_event_mmap_page *page, __u32 *t
+     {
+         while (((seq = page->lock) % 2)) YieldProcessor();
+         __asm__ __volatile__( "" : : : "memory" );
++#ifdef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
+         user_time_supported = page->cap_user_time && !page->cap_user_time_short;
++#else
++        user_time_supported = page->cap_user_time;
++#endif
+         if (user_time_supported)
+         {
+             *time_mult = page->time_mult;

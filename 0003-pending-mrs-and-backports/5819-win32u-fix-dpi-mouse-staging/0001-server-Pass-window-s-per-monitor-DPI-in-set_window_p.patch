@@ -10,22 +10,22 @@ Subject: [PATCH 1/7] server: Pass window's per-monitor DPI in set_window_pos.
  3 files changed, 15 insertions(+), 10 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index caa3b3aa323..193e7212e02 100644
+index 44d96ea27b9..95d333dffd5 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -1793,6 +1793,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
-     BOOL ret, needs_update = FALSE;
-     RECT old_visible_rect, old_window_rect, old_client_rect, extra_rects[3];
+@@ -1948,6 +1948,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+     struct window_rects old_rects;
+     RECT extra_rects[3];
      struct window_surface *old_surface;
 +    UINT monitor_dpi;
  
-     get_window_rects( hwnd, COORDS_SCREEN, &old_window_rect, NULL, get_thread_dpi() );
-     if (IsRectEmpty( &valid_rects[0] )) valid_rects = NULL;
-@@ -1834,11 +1835,14 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
+     is_layered = new_surface && new_surface->alpha_mask;
+ 
+@@ -1965,11 +1966,14 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
          valid_rects = NULL;
      }
  
-+    monitor_dpi = get_monitor_dpi( monitor_from_rect( window_rect, MONITOR_DEFAULTTONEAREST, get_thread_dpi() ) );
++    monitor_dpi = get_monitor_dpi( monitor_from_rect( &new_rects->window, MONITOR_DEFAULTTONEAREST, get_thread_dpi() ) );
 +
      SERVER_START_REQ( set_window_pos )
      {
@@ -33,9 +33,9 @@ index caa3b3aa323..193e7212e02 100644
          req->previous      = wine_server_user_handle( insert_after );
          req->swp_flags     = swp_flags;
 +        req->monitor_dpi   = monitor_dpi;
-         req->window        = wine_server_rectangle( *window_rect );
-         req->client        = wine_server_rectangle( *client_rect );
-         if (!EqualRect( window_rect, &visible_rect ) || new_surface || valid_rects)
+         req->window        = wine_server_rectangle( new_rects->window );
+         req->client        = wine_server_rectangle( new_rects->client );
+         if (!EqualRect( &new_rects->window, &new_rects->visible ) || new_surface || valid_rects)
 diff --git a/server/protocol.def b/server/protocol.def
 index 25184641082..173368df6eb 100644
 --- a/server/protocol.def

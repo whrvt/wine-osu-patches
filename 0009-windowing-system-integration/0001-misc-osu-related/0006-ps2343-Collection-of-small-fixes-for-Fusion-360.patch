@@ -1,0 +1,149 @@
+From a81e2cf5013f548e00364c5f2bda26c402f3cfc8 Mon Sep 17 00:00:00 2001
+From: novenary <streetwalkermc@gmail.com>
+Date: Tue, 7 Mar 2023 09:05:43 +0200
+Subject: [PATCH 1/3] winex11: restack a window's owned popups above it
+
+This fixes Z ordering issues in the virtual desktop.
+For example, Fusion 360's floating menus tend to disappear behind the
+main window.
+---
+ dlls/winex11.drv/event.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 1ae39eb9edf..19126cecaf8 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -539,6 +539,34 @@ static inline BOOL can_activate_window( HWND hwnd )
+ }
+ 
+ 
++/***********************************************************************
++ *              restack_owned_popups
++ *
++ * Restack a window's owned popups above it.
++ */
++static void restack_owned_popups( struct x11drv_win_data *data )
++{
++    HWND *list;
++    UINT i;
++    struct x11drv_win_data *owned_data;
++    XWindowChanges changes = {.stack_mode = Above, .sibling = data->whole_window};
++
++    if (!(list = build_hwnd_list())) return;
++
++    for (i = 0; list[i] != HWND_BOTTOM; i++)
++    {
++        if (NtUserGetWindowRelative( list[i], GW_OWNER ) != data->hwnd) continue;
++        owned_data = get_win_data( list[i] );
++        if (owned_data && !owned_data->managed)
++            XConfigureWindow( data->display, owned_data->whole_window, CWSibling | CWStackMode, &changes );
++        release_win_data( owned_data );
++    }
++
++    free( list );
++    return;
++}
++
++
+ /**********************************************************************
+  *              set_input_focus
+  *
+@@ -561,6 +589,7 @@ static void set_input_focus( struct x11drv_win_data *data )
+     /* Set X focus and install colormap */
+     changes.stack_mode = Above;
+     XConfigureWindow( data->display, data->whole_window, CWStackMode, &changes );
++    restack_owned_popups( data );
+ 
+     if (data->embedder)
+         xembed_request_focus( data->display, data->embedder, timestamp );
+-- 
+GitLab
+
+
+From 461b7b18d677451d178edaf4c9353609ad00b418 Mon Sep 17 00:00:00 2001
+From: novenary <streetwalkermc@gmail.com>
+Date: Tue, 7 Mar 2023 13:40:28 +0200
+Subject: [PATCH 2/3] winex11: pass ICCCM withdrawn state as minimized
+
+A window is withdrawn when neither it nor its "taskbar" icon is visible,
+e.g. when switching workspaces.
+
+This fixes issues with unmanaged popups showing on all workspaces.
+---
+ dlls/winex11.drv/event.c  | 5 +----
+ dlls/winex11.drv/window.c | 5 ++++-
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 19126cecaf8..e05e45a4c12 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1301,9 +1301,6 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+                 TRACE( "%p/%lx: new WM_STATE %d from %d\n",
+                        data->hwnd, data->whole_window, new_state, old_state );
+                 data->wm_state = new_state;
+-                /* ignore the initial state transition out of withdrawn state */
+-                /* metacity does Withdrawn->NormalState->IconicState when mapping an iconic window */
+-                if (!old_state) goto done;
+             }
+         }
+         break;
+@@ -1342,7 +1339,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+             TRACE( "not restoring win %p/%lx style %08x\n", data->hwnd, data->whole_window, style );
+         }
+     }
+-    else if (!data->iconic && data->wm_state == IconicState)
++    else if (!data->iconic && (data->wm_state == IconicState || data->wm_state == WithdrawnState))
+     {
+         data->iconic = TRUE;
+         if ((style & WS_MINIMIZEBOX) && !(style & WS_DISABLED))
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index cb9e07599c4..fcbdad97d16 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2721,7 +2721,10 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
+             data->iconic = (new_style & WS_MINIMIZE) != 0;
+             TRACE( "changing win %p iconic state to %u\n", data->hwnd, data->iconic );
+             if (data->iconic)
+-                XIconifyWindow( data->display, data->whole_window, data->vis.screen );
++            {
++                if (data->wm_state != WithdrawnState)
++                    XIconifyWindow( data->display, data->whole_window, data->vis.screen );
++            }
+             else if (is_window_rect_mapped( &new_rects->window ))
+                 XMapWindow( data->display, data->whole_window );
+             update_net_wm_states( data );
+-- 
+GitLab
+
+
+From 7a60ae53fba2e470f2ed64438001a22a5b47f7ba Mon Sep 17 00:00:00 2001
+From: novenary <streetwalkermc@gmail.com>
+Date: Tue, 7 Mar 2023 16:16:01 +0200
+Subject: [PATCH 3/3] winex11: don't let captionless popups be managed
+
+Popups without a title bar are expected to be self-managed.
+
+This fixes Fusion 360's popups becoming activated and therefore managed
+when clicked, which breaks them in several ways.
+---
+ dlls/winex11.drv/window.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index fcbdad97d16..c1fe1ed85e1 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -248,6 +248,8 @@ static BOOL is_window_managed( HWND hwnd, UINT swp_flags, const RECT *window_rec
+     /* child windows are not managed */
+     style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
+     if ((style & (WS_CHILD|WS_POPUP)) == WS_CHILD) return FALSE;
++    /* captionless popups are not managed */
++    if ((style & (WS_CAPTION|WS_POPUP)) == WS_POPUP) return FALSE;
+     /* activated windows are managed */
+     if (!(swp_flags & (SWP_NOACTIVATE|SWP_HIDEWINDOW))) return TRUE;
+     if (hwnd == get_active_window()) return TRUE;
+-- 
+GitLab
+

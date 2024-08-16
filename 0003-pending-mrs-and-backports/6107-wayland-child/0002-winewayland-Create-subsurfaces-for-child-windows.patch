@@ -1,15 +1,15 @@
-From 8fb239e8dda6305bc059e650443593d83e703f6e Mon Sep 17 00:00:00 2001
+From 7bcbaa02ba4035cab9cc42c793487bd2cf8dec59 Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Thu, 11 Jul 2024 17:36:39 +0300
-Subject: [PATCH 2/8] winewayland: Create subsurfaces for child windows.
+Subject: [PATCH 2/7] winewayland: Create subsurfaces for child windows.
 
 Create (possibly nested) Wayland subsurfaces for all child windows,
 to allow GL/VK contents to be presented onto them.
 ---
  dlls/winewayland.drv/wayland_surface.c | 61 +++++++++++++++++++++++
  dlls/winewayland.drv/waylanddrv.h      | 12 +++++
- dlls/winewayland.drv/window.c          | 69 +++++++++++++++++---------
- 3 files changed, 119 insertions(+), 23 deletions(-)
+ dlls/winewayland.drv/window.c          | 67 +++++++++++++++++---------
+ 3 files changed, 117 insertions(+), 23 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
 index 39c3976cdfd..de3307ec51e 100644
@@ -109,7 +109,7 @@ index 39c3976cdfd..de3307ec51e 100644
      /* Ensure no buffer is attached, otherwise future role assignments may fail. */
      wl_surface_attach(surface->wl_surface, NULL, 0, 0);
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index c25f5775762..87d071707a8 100644
+index 3ac3865efd2..22e8b27df82 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -73,6 +73,13 @@ enum wayland_surface_config_state
@@ -153,10 +153,10 @@ index c25f5775762..87d071707a8 100644
  void wayland_surface_attach_shm(struct wayland_surface *surface,
                                  struct wayland_shm_buffer *shm_buffer,
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index fda7139283f..9be98363ac8 100644
+index 9e228b779f9..9d0e649f9d6 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -134,19 +134,32 @@ static void wayland_win_data_destroy(struct wayland_win_data *data)
+@@ -129,19 +129,32 @@ static void wayland_win_data_destroy(struct wayland_win_data *data)
  }
  
  /***********************************************************************
@@ -194,14 +194,14 @@ index fda7139283f..9be98363ac8 100644
      pthread_mutex_unlock(&win_data_mutex);
  
      return NULL;
-@@ -205,38 +218,42 @@ static void reapply_cursor_clipping(void)
+@@ -200,38 +213,40 @@ static void reapply_cursor_clipping(void)
  static void wayland_win_data_update_wayland_surface(struct wayland_win_data *data)
  {
      struct wayland_surface *surface = data->wayland_surface;
 -    HWND parent = NtUserGetAncestor(data->hwnd, GA_PARENT);
 -    BOOL visible, xdg_visible;
 +    struct wayland_win_data *parent_data;
-+    enum wayland_surface_role role;
++    enum wayland_surface_role role = WAYLAND_SURFACE_ROLE_NONE;
      WCHAR text[1024];
  
      TRACE("hwnd=%p\n", data->hwnd);
@@ -216,13 +216,11 @@ index fda7139283f..9be98363ac8 100644
 -        surface = NULL;
 -        goto out;
 +        parent_data = wayland_win_data_get_nolock(NtUserGetAncestor(data->hwnd, GA_PARENT));
-+        if (parent_data && parent_data->wayland_surface)
-+            role = WAYLAND_SURFACE_ROLE_SUBSURFACE;
-+        else
++        if (!parent_data)
 +            role = WAYLAND_SURFACE_ROLE_TOPLEVEL;
++        else if (parent_data->wayland_surface)
++            role = WAYLAND_SURFACE_ROLE_SUBSURFACE;
      }
-+    else
-+        role = WAYLAND_SURFACE_ROLE_NONE;
  
 -    /* Otherwise ensure that we have a wayland surface. */
 -    if (!surface && !(surface = wayland_surface_create(data->hwnd))) return;
@@ -255,7 +253,7 @@ index fda7139283f..9be98363ac8 100644
          {
              wayland_surface_make_toplevel(surface);
              if (surface->xdg_toplevel)
-@@ -246,6 +263,12 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -241,6 +256,12 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
                  wayland_surface_set_title(surface, text);
              }
          }

@@ -1,7 +1,7 @@
-From 9d197ac7f732f9975aba25d1f88d41eb9052a09f Mon Sep 17 00:00:00 2001
+From e75ee74dddeac8f3880e047c7c6ac814ec3fc8de Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Thu, 11 Jul 2024 17:37:18 +0300
-Subject: [PATCH 3/8] winewayland: Handle subsurface reconfiguration.
+Subject: [PATCH 3/7] winewayland: Handle subsurface reconfiguration.
 
 ---
  dlls/winewayland.drv/wayland_surface.c | 99 +++++++++++++++++++++-----
@@ -138,10 +138,10 @@ index de3307ec51e..425c270099e 100644
      wayland_surface_reconfigure_client(surface);
  
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 9be98363ac8..6ee3707357a 100644
+index 9d0e649f9d6..de395389264 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -295,7 +295,16 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
+@@ -288,7 +288,16 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
  
      pthread_mutex_lock(&surface->mutex);
  

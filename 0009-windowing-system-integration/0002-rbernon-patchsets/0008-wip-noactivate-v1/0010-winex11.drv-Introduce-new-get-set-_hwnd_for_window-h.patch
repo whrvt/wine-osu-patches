@@ -1,0 +1,141 @@
+From 2b79b3e87f1e8af914d88d7018dec2285f957dbe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 16 Jan 2020 12:30:15 +0100
+Subject: [PATCH 10/19] winex11.drv: Introduce new (get|set)_hwnd_for_window
+ helpers.
+
+Wrapping the Xlib winContext context uses.
+
+CW-Bug-Id: #19553
+CW-Bug-Id: #19644
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=2155
+
+ 100.0% dlls/winex11.drv/
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 26a10a61651..f3f63b17cf7 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -425,9 +425,7 @@ static inline BOOL call_event_handler( Display *display, XEvent *event )
+ #ifdef GenericEvent
+     if (event->type == GenericEvent) hwnd = 0; else
+ #endif
+-    if (XFindContext( display, event->xany.window, winContext, (char **)&hwnd ) != 0)
+-        hwnd = 0;  /* not for a registered window */
+-    if (!hwnd && event->xany.window == root_window) hwnd = NtUserGetDesktopWindow();
++    hwnd = get_hwnd_for_window( display, event->xany.window );
+ 
+     TRACE( "%lu %s for hwnd/window %p/%lx\n",
+            event->xany.serial, dbgstr_event( event->type ), hwnd, event->xany.window );
+@@ -1677,7 +1675,7 @@ static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
+     /* query window (drag&drop event contains only drag window) */
+     XQueryPointer( event->display, root_window, &root, &child,
+                    &root_x, &root_y, &child_x, &child_y, &u);
+-    if (XFindContext( event->display, child, winContext, (char **)&hwnd ) != 0) hwnd = 0;
++    hwnd = get_hwnd_for_window( event->display, child );
+     if (!hwnd) return;
+     if (event->data.l[0] == DndFile || event->data.l[0] == DndFiles)
+         EVENT_DropFromOffiX(hwnd, event);
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 93f423d1a3e..3e16a68ac65 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1832,7 +1832,7 @@ Window get_dummy_parent(void)
+ 
+ static void client_window_events_enable( struct x11drv_win_data *data, Window client_window )
+ {
+-    XSaveContext( data->display, client_window, winContext, (char *)data->hwnd );
++    set_hwnd_for_window( data->display, data->client_window, data->hwnd );
+     XSync( data->display, False ); /* make sure client_window is known from data->display */
+     XSelectInput( data->display, client_window, ExposureMask );
+ }
+@@ -1841,7 +1841,7 @@ static void client_window_events_disable( struct x11drv_win_data *data, Window c
+ {
+     XSelectInput( data->display, client_window, 0 );
+     XFlush( data->display ); /* make sure XSelectInput doesn't use client_window after this point */
+-    XDeleteContext( data->display, client_window, winContext );
++    set_hwnd_for_window( data->display, data->client_window, 0 );
+ }
+ 
+ /**********************************************************************
+@@ -2025,7 +2025,7 @@ static void create_whole_window( struct x11drv_win_data *data )
+     set_initial_wm_hints( data->display, data->whole_window );
+     set_wm_hints( data );
+ 
+-    XSaveContext( data->display, data->whole_window, winContext, (char *)data->hwnd );
++    set_hwnd_for_window( data->display, data->whole_window, data->hwnd );
+     NtUserSetProp( data->hwnd, whole_window_prop, (HANDLE)data->whole_window );
+ 
+     /* set the window text */
+@@ -2067,7 +2067,7 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
+             if (xwin)
+             {
+                 if (!already_destroyed) XSelectInput( data->display, xwin, 0 );
+-                XDeleteContext( data->display, xwin, winContext );
++                set_hwnd_for_window( data->display, xwin, 0 );
+                 NtUserRemoveProp( data->hwnd, foreign_window_prop );
+             }
+             return;
+@@ -2458,7 +2458,7 @@ HWND create_foreign_window( Display *display, Window xwin )
+         class_registered = TRUE;
+     }
+ 
+-    if (XFindContext( display, xwin, winContext, (char **)&hwnd )) hwnd = 0;
++    hwnd = get_hwnd_for_window( display, xwin );
+     if (hwnd) return hwnd;  /* already created */
+ 
+     XSelectInput( display, xwin, StructureNotifyMask );
+@@ -2497,7 +2497,7 @@ HWND create_foreign_window( Display *display, Window xwin )
+     data->mapped = TRUE;
+ 
+     NtUserSetProp( hwnd, foreign_window_prop, (HANDLE)xwin );
+-    XSaveContext( display, xwin, winContext, (char *)data->hwnd );
++    set_hwnd_for_window( display, xwin, data->hwnd );
+ 
+     TRACE( "win %lx parent %p style %08x %s -> hwnd %p\n",
+            xwin, parent, style, wine_dbgstr_rect(&data->window_rect), hwnd );
+@@ -3411,3 +3411,28 @@ void init_win_context(void)
+     win_data_context = XUniqueContext();
+     cursor_context = XUniqueContext();
+ }
++
++HWND get_hwnd_for_window( Display *display, Window window )
++{
++    HWND hwnd;
++
++    if (!window) return 0;
++    if (window == root_window) return NtUserGetDesktopWindow();
++
++    TRACE( "display %p, window %lx\n", display, window );
++
++    if (!XFindContext( display, window, winContext, (char **)&hwnd )) return hwnd;
++
++    WARN( "Failed to find HWND for window %lx\n", window );
++    return 0;
++}
++
++void set_hwnd_for_window( Display *display, Window window, HWND hwnd )
++{
++    if (!window || window == root_window) return;
++
++    TRACE( "display %p, window %lx, hwnd %p\n", display, window, hwnd );
++
++    if (!hwnd) XDeleteContext( display, window, winContext );
++    else XSaveContext( display, window, winContext, (char *)hwnd );
++}
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index d7ed09f5295..1a5dde86556 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -658,6 +658,9 @@ extern void release_win_data( struct x11drv_win_data *data );
+ extern Window X11DRV_get_whole_window( HWND hwnd );
+ extern Window get_dummy_parent(void);
+ 
++extern HWND get_hwnd_for_window( Display *display, Window window );
++extern void set_hwnd_for_window( Display *display, Window window, HWND hwnd );
++
+ extern void sync_gl_drawable( HWND hwnd, BOOL known_child );
+ extern void set_gl_drawable_parent( HWND hwnd, HWND parent );
+ extern void destroy_gl_drawable( HWND hwnd );
+-- 
+2.43.0
+

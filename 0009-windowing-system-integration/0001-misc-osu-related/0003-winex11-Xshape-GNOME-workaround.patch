@@ -1,0 +1,18 @@
+Patch to workaround commit https://github.com/wine-mirror/wine/commit/35193586.
+Without this, Mutter (GNOME X11) force-enables VSync on osu! due to
+the compositor not being disabled, even in fullscreen
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1809,7 +1809,9 @@ Window get_dummy_parent(void)
+         attrib.colormap = default_colormap;
+ 
+ #ifdef HAVE_LIBXSHAPE
++        if (!wm_is_mutter( gdi_display ))
+         {
++            WARN("Not using Xshape hack, WM isn't mutter\n");
+             static XRectangle empty_rect;
+             dummy_parent = XCreateWindow( gdi_display, root_window, 0, 0, 1, 1, 0,
+                                           default_visual.depth, InputOutput, default_visual.visual,

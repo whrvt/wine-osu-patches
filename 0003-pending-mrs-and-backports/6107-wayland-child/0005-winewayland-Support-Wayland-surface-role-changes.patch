@@ -1,7 +1,7 @@
-From f351394e6da328844c0b1453b58e0d805a0f1f44 Mon Sep 17 00:00:00 2001
+From 71355074488f3f42f71384bb32b45713d04926f1 Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Thu, 11 Jul 2024 17:39:01 +0300
-Subject: [PATCH 5/8] winewayland: Support Wayland surface role changes.
+Subject: [PATCH 5/7] winewayland: Support Wayland surface role changes.
 
 Windows supports changing between the WS_CHILD and WS_POPUP window
 styles which requires a Wayland surface role change between
@@ -59,7 +59,7 @@ index 57fd217e0d3..4ace7a16246 100644
  {
      struct wayland_shm_buffer *shm_buffer = data;
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 98cf4d41c10..87e0d29ef0c 100644
+index d553f06a420..36e8c550b23 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -273,6 +273,8 @@ void wayland_surface_coords_to_window(struct wayland_surface *surface,
@@ -72,7 +72,7 @@ index 98cf4d41c10..87e0d29ef0c 100644
  void wayland_surface_set_title(struct wayland_surface *surface, LPCWSTR title);
  
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 4f3daca14d4..617ad6e392c 100644
+index 8453d73488c..2005bc71004 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -36,6 +36,7 @@
@@ -83,7 +83,7 @@ index 4f3daca14d4..617ad6e392c 100644
  
  /**********************************************************************
   *       get_win_monitor_dpi
-@@ -215,14 +216,18 @@ static void reapply_cursor_clipping(void)
+@@ -210,14 +211,18 @@ static void reapply_cursor_clipping(void)
      NtUserSetThreadDpiAwarenessContext(context);
  }
  
@@ -95,7 +95,7 @@ index 4f3daca14d4..617ad6e392c 100644
      struct wayland_surface *surface = data->wayland_surface;
 -    struct wayland_win_data *parent_data;
 +    struct wayland_win_data *parent_data, *wwd;
-     enum wayland_surface_role role;
+     enum wayland_surface_role role = WAYLAND_SURFACE_ROLE_NONE;
 +    BOOL surface_changed = FALSE;
 +    struct wayland_client_surface *client = NULL;
      WCHAR text[1024];
@@ -105,8 +105,8 @@ index 4f3daca14d4..617ad6e392c 100644
  
      if (NtUserGetWindowLongW(data->hwnd, GWL_STYLE) & WS_VISIBLE)
      {
-@@ -236,19 +241,33 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
-         role = WAYLAND_SURFACE_ROLE_NONE;
+@@ -229,19 +234,33 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+     }
  
      /* We can temporarily remove a role from a wayland surface and add it back,
 -     * but we can't change a surface's role.
@@ -144,7 +144,7 @@ index 4f3daca14d4..617ad6e392c 100644
      {
          /* If we have a pre-existing surface ensure it has no role. */
          if (data->wayland_surface) wayland_surface_clear_role(surface);
-@@ -273,6 +292,7 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -266,6 +285,7 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
      }
  
      wayland_win_data_get_config(data, &surface->window);
@@ -152,7 +152,7 @@ index 4f3daca14d4..617ad6e392c 100644
  
      pthread_mutex_unlock(&surface->mutex);
  
-@@ -287,6 +307,22 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -280,6 +300,22 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
  out:
      TRACE("hwnd=%p surface=%p=>%p\n", data->hwnd, data->wayland_surface, surface);
      data->wayland_surface = surface;
@@ -175,7 +175,7 @@ index 4f3daca14d4..617ad6e392c 100644
  }
  
  static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
-@@ -520,7 +556,7 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags,
+@@ -496,7 +532,7 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
      if (data->window_surface) window_surface_release(data->window_surface);
      data->window_surface = surface;
  

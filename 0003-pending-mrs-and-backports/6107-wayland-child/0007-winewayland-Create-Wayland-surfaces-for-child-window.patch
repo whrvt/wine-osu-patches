@@ -1,7 +1,7 @@
-From 385582d824dce17806270d1e1f8b178db97c8ff6 Mon Sep 17 00:00:00 2001
+From 1f6c5d5744fcd689749b080535a000bf0e27aeab Mon Sep 17 00:00:00 2001
 From: Alexandros Frantzis <alexandros.frantzis@collabora.com>
 Date: Fri, 12 Jul 2024 10:18:05 +0300
-Subject: [PATCH 7/8] winewayland: Create Wayland surfaces for child windows on
+Subject: [PATCH 7/7] winewayland: Create Wayland surfaces for child windows on
  demand.
 
 Wayland surfaces for child windows are currently only needed to render
@@ -45,7 +45,7 @@ index 337bfb823d0..9d73d80b1c3 100644
      {
          ERR("Failed to find wayland surface for hwnd=%p\n", hwnd);
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 87e0d29ef0c..378d408a719 100644
+index 36e8c550b23..9dc05a06e16 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -261,6 +261,7 @@ void wayland_surface_attach_shm(struct wayland_surface *surface,
@@ -57,7 +57,7 @@ index 87e0d29ef0c..378d408a719 100644
  BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
                                            int width, int height,
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 617ad6e392c..e160ef9ce12 100644
+index 2005bc71004..c0b384d6bcd 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -36,7 +36,9 @@
@@ -71,7 +71,7 @@ index 617ad6e392c..e160ef9ce12 100644
  
  /**********************************************************************
   *       get_win_monitor_dpi
-@@ -216,6 +218,37 @@ static void reapply_cursor_clipping(void)
+@@ -211,6 +213,37 @@ static void reapply_cursor_clipping(void)
      NtUserSetThreadDpiAwarenessContext(context);
  }
  
@@ -109,7 +109,7 @@ index 617ad6e392c..e160ef9ce12 100644
  static void wayland_win_data_update_wayland_state(struct wayland_win_data *data);
  
  static void wayland_win_data_update_wayland_surface(struct wayland_win_data *data, UINT flags)
-@@ -229,9 +262,24 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -224,9 +257,24 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
  
      TRACE("hwnd=%p flags=0x%x\n", data->hwnd, flags);
  
@@ -133,10 +133,10 @@ index 617ad6e392c..e160ef9ce12 100644
 -        parent_data = wayland_win_data_get_nolock(NtUserGetAncestor(data->hwnd, GA_PARENT));
 +        /* We anchor child windows to their toplevel parent window. */
 +        parent_data = wayland_win_data_get_top_parent(data);
-         if (parent_data && parent_data->wayland_surface)
-             role = WAYLAND_SURFACE_ROLE_SUBSURFACE;
-         else
-@@ -309,16 +357,18 @@ out:
+         if (!parent_data)
+             role = WAYLAND_SURFACE_ROLE_TOPLEVEL;
+         else if (parent_data->wayland_surface)
+@@ -302,16 +350,18 @@ out:
      data->wayland_surface = surface;
      if (client) wayland_client_surface_release(client);
  
@@ -161,7 +161,7 @@ index 617ad6e392c..e160ef9ce12 100644
                  if (wwd->wayland_surface) wayland_win_data_update_wayland_state(wwd);
              }
          }
-@@ -805,6 +855,8 @@ void wayland_window_flush(HWND hwnd)
+@@ -781,6 +831,8 @@ void wayland_window_flush(HWND hwnd)
  
  /**********************************************************************
   *           wayland_surface_lock_hwnd
@@ -170,7 +170,7 @@ index 617ad6e392c..e160ef9ce12 100644
   */
  struct wayland_surface *wayland_surface_lock_hwnd(HWND hwnd)
  {
-@@ -819,3 +871,32 @@ struct wayland_surface *wayland_surface_lock_hwnd(HWND hwnd)
+@@ -795,3 +847,32 @@ struct wayland_surface *wayland_surface_lock_hwnd(HWND hwnd)
  
      return surface;
  }
