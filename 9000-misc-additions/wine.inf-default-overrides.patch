@@ -1,7 +1,7 @@
 ## winemenubuilder is bloat
-## wine(bus/sys/hid) are prone to crashing after some time with strange error messages; they are unnecessary for osu anyways 
+## wine(bus/sys/hid) are prone to crashing after some time (maybe fixed?) with strange error messages; they are unnecessary for osu anyways
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index 194c1a7f5c0..c76bcb3d8f3 100644
+index 11111111111..11111111111 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
 @@ -98,7 +98,8 @@ AddReg=\
@@ -34,13 +34,31 @@ index 194c1a7f5c0..c76bcb3d8f3 100644
  
  [Wow64Install.ntarm]
  RegisterDlls=RegisterDllsSection
-@@ -3025,3 +3028,9 @@ EtcFiles  = 12,etc
+@@ -2500,7 +2503,6 @@ StartType=3
+ ErrorControl=1
+ 
+ [Services]
+-HKLM,%CurrentVersion%\RunServices,"winemenubuilder",2,"%11%\winemenubuilder.exe -a -r"
+ HKLM,"System\CurrentControlSet\Services\Eventlog\Application",,16
+ HKLM,"System\CurrentControlSet\Services\Eventlog\System","Sources",0x10000,""
+ HKLM,"System\CurrentControlSet\Services\Tcpip\Parameters","DataBasePath",,"%12%\etc"
+@@ -3025,3 +3027,9 @@ EtcFiles  = 12,etc
  InfFiles  = 17
  NlsFiles  = 11
  SortFiles = 10,globalization\sorting
 +
 +[Overrides]
-+HKCU,Software\Wine\DllOverrides,"winemenubuilder.exe",0x2,""
-+HKCU,Software\Wine\DllOverrides,"winebus.sys",0x2,""
-+HKCU,Software\Wine\DllOverrides,"winehid.sys",0x2,""
-+HKCU,Software\Wine\DllOverrides,"wineusb.sys",0x2,""
++;; HKCU,Software\Wine\DllOverrides,"winemenubuilder.exe",0x2,""
++
++
++
+#@@ -3025,3 +3028,9 @@ EtcFiles  = 12,etc
+# InfFiles  = 17
+# NlsFiles  = 11
+# SortFiles = 10,globalization\sorting
+#+
+#+[Overrides]
+#+HKCU,Software\Wine\DllOverrides,"winemenubuilder.exe",0x2,""
+#+HKCU,Software\Wine\DllOverrides,"winebus.sys",0x2,""
+#+HKCU,Software\Wine\DllOverrides,"winehid.sys",0x2,""
+#+HKCU,Software\Wine\DllOverrides,"wineusb.sys",0x2,""

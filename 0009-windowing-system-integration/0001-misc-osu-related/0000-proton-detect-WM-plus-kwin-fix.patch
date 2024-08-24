@@ -1,0 +1,248 @@
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index f975986a9d9..75d01df1009 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -113,6 +113,97 @@ static const WCHAR clip_window_prop[] =
+ static pthread_mutex_t win_data_mutex = PTHREAD_MUTEX_INITIALIZER;
+ 
+ 
++static int handle_wm_name_badwindow_error( Display *dpy, XErrorEvent *event, void *arg )
++{
++    if (event->error_code == BadWindow)
++    {
++        WARN( "BadWindow error when reading WM name from window %lx, ignoring.\n", event->resourceid );
++        return 1;
++    }
++
++    return 0;
++}
++
++static int detect_wm(Display *dpy)
++{
++    Display *display = dpy ? dpy : thread_init_display(); /* DefaultRootWindow is a macro... */
++    Window root = DefaultRootWindow(display), *wm_check;
++    Atom type;
++    int format, err;
++    unsigned long count, remaining;
++    char *wm_name;
++
++    static int cached = -1;
++
++    if(cached < 0){
++
++        if (XGetWindowProperty( display, root, x11drv_atom(_NET_SUPPORTING_WM_CHECK), 0,
++                                 sizeof(*wm_check)/sizeof(CARD32), False, x11drv_atom(WINDOW),
++                                 &type, &format, &count, &remaining, (unsigned char **)&wm_check ) == Success){
++            if (type == x11drv_atom(WINDOW)){
++                /* The window returned by _NET_SUPPORTING_WM_CHECK might be stale,
++                   so we may get errors when asking for its properties */
++                X11DRV_expect_error( display, handle_wm_name_badwindow_error, NULL );
++                err = XGetWindowProperty( display, *wm_check, x11drv_atom(_NET_WM_NAME), 0,
++                                           256/sizeof(CARD32), False, x11drv_atom(UTF8_STRING),
++                                           &type, &format, &count, &remaining, (unsigned char **)&wm_name);
++
++                if (X11DRV_check_error() || err != Success || type != x11drv_atom(UTF8_STRING)){
++                    X11DRV_expect_error( display, handle_wm_name_badwindow_error, NULL );
++                    err = XGetWindowProperty( display, *wm_check, x11drv_atom(WM_NAME), 0,
++                                               256/sizeof(CARD32), False, x11drv_atom(STRING),
++                                               &type, &format, &count, &remaining, (unsigned char **)&wm_name);
++
++                    if (X11DRV_check_error() || err != Success || type != x11drv_atom(STRING))
++                        wm_name = NULL;
++                }
++
++                if(wm_name){
++                    TRACE("Got WM name %s\n", wm_name);
++
++                    if((strcmp(wm_name, "GNOME Shell") == 0) ||
++                            (strcmp(wm_name, "Mutter") == 0))
++                        cached = WINE_WM_X11_MUTTER;
++                    else if(strcmp(wm_name, "steamcompmgr") == 0)
++                        cached = WINE_WM_X11_STEAMCOMPMGR;
++                    else if(strcmp(wm_name, "KWin") == 0)
++                        cached = WINE_WM_X11_KDE;
++                    else
++                        cached = WINE_WM_UNKNOWN;
++
++                    XFree(wm_name);
++                }else{
++                    TRACE("WM did not set _NET_WM_NAME or WM_NAME\n");
++                    cached = WINE_WM_UNKNOWN;
++                }
++            }else
++                cached = WINE_WM_UNKNOWN;
++
++            XFree(wm_check);
++        }else
++            cached = WINE_WM_UNKNOWN;
++
++        __wine_set_window_manager(cached);
++    }
++
++    return cached;
++}
++
++BOOL wm_is_mutter(Display *display)
++{
++    return detect_wm(display) == WINE_WM_X11_MUTTER;
++}
++
++BOOL wm_is_kde(Display *display)
++{
++    return detect_wm(display) == WINE_WM_X11_KDE;
++}
++
++BOOL wm_is_steamcompmgr(Display *display)
++{
++    return detect_wm(display) == WINE_WM_X11_STEAMCOMPMGR;
++}
++
+ /***********************************************************************
+  * http://standards.freedesktop.org/startup-notification-spec
+  */
+@@ -1374,6 +1465,7 @@ static void sync_window_position( struct x11drv_win_data *data,
+ {
+     DWORD style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+     DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
++    RECT original_rect = {0};
+     XWindowChanges changes;
+     unsigned int mask = 0;
+ 
+@@ -1417,9 +1509,21 @@ static void sync_window_position( struct x11drv_win_data *data,
+ 
+     set_size_hints( data, style );
+     set_mwm_hints( data, style, ex_style );
++    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
++     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
++    if (wm_is_kde( data->display ) && NtUserIsWindowRectFullScreen( &data->whole_rect, get_win_monitor_dpi( data->hwnd ) ))
++    {
++        original_rect = data->whole_rect;
++        SetRectEmpty( &data->whole_rect );
++    }
+     update_net_wm_states( data );
+     data->configure_serial = NextRequest( data->display );
+     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
++    if (!IsRectEmpty( &original_rect ))
++    {
++        data->whole_rect = original_rect;
++        update_net_wm_states( data );
++    }
+ 
+     TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x serial=%lu\n",
+            data->hwnd, data->whole_window, (int)data->whole_rect.left, (int)data->whole_rect.top,
+@@ -1981,6 +2085,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
+ {
+     unsigned int width, height;
+ 
++    detect_wm( gdi_display );
++
+     /* retrieve the real size of the desktop */
+     SERVER_START_REQ( get_window_rectangles )
+     {
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 2a326b07a4c..76ed5b9a162 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -462,11 +462,13 @@ enum x11drv_atoms
+     XATOM_TEXT,
+     XATOM_TIMESTAMP,
+     XATOM_UTF8_STRING,
++    XATOM_STRING,
+     XATOM_RAW_ASCENT,
+     XATOM_RAW_DESCENT,
+     XATOM_RAW_CAP_HEIGHT,
+     XATOM_WM_PROTOCOLS,
+     XATOM_WM_DELETE_WINDOW,
++    XATOM_WM_NAME,
+     XATOM_WM_STATE,
+     XATOM_WM_TAKE_FOCUS,
+     XATOM_DndProtocol,
+@@ -477,6 +479,7 @@ enum x11drv_atoms
+     XATOM__NET_STARTUP_INFO_BEGIN,
+     XATOM__NET_STARTUP_INFO,
+     XATOM__NET_SUPPORTED,
++    XATOM__NET_SUPPORTING_WM_CHECK,
+     XATOM__NET_SYSTEM_TRAY_OPCODE,
+     XATOM__NET_SYSTEM_TRAY_S0,
+     XATOM__NET_SYSTEM_TRAY_VISUAL,
+@@ -528,6 +531,7 @@ enum x11drv_atoms
+     XATOM_WCF_SYLK,
+     XATOM_WCF_TIFF,
+     XATOM_WCF_WAVE,
++    XATOM_WINDOW,
+     XATOM_image_bmp,
+     XATOM_image_gif,
+     XATOM_image_jpeg,
+@@ -631,6 +635,9 @@ struct x11drv_win_data
+     unsigned int   icon_size;
+ };
+ 
++extern BOOL wm_is_mutter(Display *);
++extern BOOL wm_is_steamcompmgr(Display *);
++
+ extern struct x11drv_win_data *get_win_data( HWND hwnd );
+ extern void release_win_data( struct x11drv_win_data *data );
+ extern Window X11DRV_get_whole_window( HWND hwnd );
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 9c00b16386e..16b17abdb65 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -119,11 +119,13 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+     "TEXT",
+     "TIMESTAMP",
+     "UTF8_STRING",
++    "STRING",
+     "RAW_ASCENT",
+     "RAW_DESCENT",
+     "RAW_CAP_HEIGHT",
+     "WM_PROTOCOLS",
+     "WM_DELETE_WINDOW",
++    "WM_NAME",
+     "WM_STATE",
+     "WM_TAKE_FOCUS",
+     "DndProtocol",
+@@ -134,6 +136,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+     "_NET_STARTUP_INFO_BEGIN",
+     "_NET_STARTUP_INFO",
+     "_NET_SUPPORTED",
++    "_NET_SUPPORTING_WM_CHECK",
+     "_NET_SYSTEM_TRAY_OPCODE",
+     "_NET_SYSTEM_TRAY_S0",
+     "_NET_SYSTEM_TRAY_VISUAL",
+@@ -185,6 +188,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+     "WCF_SYLK",
+     "WCF_TIFF",
+     "WCF_WAVE",
++    "WINDOW",
+     "image/bmp",
+     "image/gif",
+     "image/jpeg",
+diff --git a/include/ntuser.h b/include/ntuser.h
+index ff45ffa2bc8..0f123151210 100644
+--- a/include/ntuser.h
++++ b/include/ntuser.h
+@@ -1453,4 +1453,24 @@ static inline BOOL NtUserSendHardwareInput( HWND hwnd, UINT flags, const INPUT *
+     return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SendHardwareInput );
+ }
+ 
++/* HACK: We use some WM specific hacks in user32 and we need the user
++ * driver to export that information. */
++
++#define WINE_WM_UNKNOWN          0
++#define WINE_WM_X11_MUTTER       1
++#define WINE_WM_X11_STEAMCOMPMGR 2
++#define WINE_WM_X11_KDE          3
++
++static inline LONG_PTR __wine_get_window_manager(void)
++{
++    static const WCHAR __wine_window_managerW[] = {'_','_','w','i','n','e','_','w','i','n','d','o','w','_','m','a','n','a','g','e','r',0};
++    return (LONG_PTR)NtUserGetProp(NtUserGetDesktopWindow(), __wine_window_managerW);
++}
++
++static inline void __wine_set_window_manager(LONG_PTR window_manager)
++{
++    static const WCHAR __wine_window_managerW[] = {'_','_','w','i','n','e','_','w','i','n','d','o','w','_','m','a','n','a','g','e','r',0};
++    NtUserSetProp(NtUserGetDesktopWindow(), __wine_window_managerW, (HANDLE)window_manager);
++}
++
+ #endif /* _NTUSER_ */

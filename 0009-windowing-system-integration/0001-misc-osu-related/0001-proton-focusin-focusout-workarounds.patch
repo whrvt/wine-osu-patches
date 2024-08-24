@@ -1,0 +1,219 @@
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 3e9e0254c91..b273afa758a 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -775,6 +775,17 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
+     if (is_virtual_desktop() && hwnd == NtUserGetDesktopWindow()) retry_grab_clipping_window();
+     if (hwnd == NtUserGetDesktopWindow()) return FALSE;
+ 
++    /* Focus was just restored but it can be right after super was
++     * pressed and gnome-shell needs a bit of time to respond and
++     * toggle the activity view. If we grab the cursor right away
++     * it will cancel it and super key will do nothing.
++     */
++    if (event->mode == NotifyUngrab && wm_is_mutter(event->display))
++    {
++        LARGE_INTEGER timeout = {.QuadPart = 100 * -10000};
++        NtDelayExecution( FALSE, &timeout );
++    }
++
+     x11drv_thread_data()->keymapnotify_hwnd = hwnd;
+ 
+     /* when keyboard grab is released, re-apply the cursor clipping rect */
+@@ -805,8 +816,30 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
+  */
+ static void focus_out( Display *display , HWND hwnd )
+  {
++    struct x11drv_win_data *data;
++
+     if (xim_in_compose_mode()) return;
+ 
++    data = get_win_data(hwnd);
++    if(data){
++        LARGE_INTEGER frequency, counter;
++        ULONGLONG now;
++        NtQueryPerformanceCounter( &counter, &frequency );
++        now = 1000 * counter.QuadPart / frequency.QuadPart;
++        if(data->take_focus_back > 0 &&
++                now >= data->take_focus_back &&
++                now - data->take_focus_back < 1000){
++            data->take_focus_back = 0;
++            TRACE("workaround mutter bug, taking focus back\n");
++            XSetInputFocus( data->display, data->whole_window, RevertToParent, CurrentTime);
++            release_win_data(data);
++            /* don't inform win32 client */
++            return;
++        }
++        data->take_focus_back = 0;
++        release_win_data(data);
++    }
++
+     x11drv_thread_data()->last_focus = hwnd;
+     xim_set_focus( hwnd, FALSE );
+ 
+@@ -840,9 +873,21 @@ static void focus_out( Display *display , HWND hwnd )
+ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
+ {
+     XFocusChangeEvent *event = &xev->xfocus;
++    struct x11drv_win_data *data;
+ 
+     TRACE( "win %p xwin %lx detail=%s mode=%s\n", hwnd, event->window, focus_details[event->detail], focus_modes[event->mode] );
+ 
++    if ((data = get_win_data( hwnd )))
++    {
++        if (data->fake_unmap_serial == event->serial)
++        {
++            release_win_data( data );
++            TRACE( "Ignoring event from intermediate unmap.\n" );
++            return FALSE;
++        }
++        release_win_data( data );
++    }
++
+     if (event->detail == NotifyPointer)
+     {
+         if (!hwnd && event->window == x11drv_thread_data()->clip_window)
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index f975986a9d9..63f2861c101 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -26,6 +26,7 @@
+ 
+ #include "config.h"
+ 
++#include <poll.h>
+ #include <stdarg.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+@@ -739,13 +740,31 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
+     XFree( size_hints );
+ }
+ 
++struct is_unmap_notify_param
++{
++    struct x11drv_win_data *data;
++    BOOL found;
++};
++
++static Bool is_unmap_notify( Display *display, XEvent *event, XPointer arg )
++{
++    struct is_unmap_notify_param *p = (struct is_unmap_notify_param *)arg;
++
++    if (!p->found)
++        p->found = event->type == UnmapNotify &&
++                   event->xany.serial >= p->data->unmapnotify_serial &&
++                   event->xany.window == p->data->whole_window;
++    return False;
++}
+ 
+ /***********************************************************************
+  *              set_mwm_hints
+  */
+ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_style )
+ {
++    GUITHREADINFO info = {.cbSize = sizeof(GUITHREADINFO)};
+     MwmHints mwm_hints;
++    int enable_mutter_workaround, mapped;
+ 
+     if (data->hwnd == NtUserGetDesktopWindow())
+     {
+@@ -783,6 +802,72 @@ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_sty
+     XChangeProperty( data->display, data->whole_window, x11drv_atom(_MOTIF_WM_HINTS),
+                      x11drv_atom(_MOTIF_WM_HINTS), 32, PropModeReplace,
+                      (unsigned char*)&mwm_hints, sizeof(mwm_hints)/sizeof(long) );
++
++    enable_mutter_workaround = wm_is_mutter(data->display) && NtUserGetGUIThreadInfo( GetCurrentThreadId(), &info ) &&
++                               info.hwndFocus == data->hwnd && !!data->prev_hints.decorations != !!mwm_hints.decorations &&
++                               root_window == DefaultRootWindow(data->display);
++
++    /* workaround for mutter gitlab bug #649, we cannot trust the
++     * data->mapped flag as mapping is asynchronous.
++     */
++    if (enable_mutter_workaround)
++    {
++        XWindowAttributes attr;
++
++        mapped = data->mapped;
++        if (XGetWindowAttributes( data->display, data->whole_window, &attr ))
++            mapped = (attr.map_state != IsUnmapped);
++    }
++
++    mwm_hints.flags = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS;
++    mwm_hints.input_mode = 0;
++    mwm_hints.status = 0;
++    data->unmapnotify_serial = NextRequest( data->display );
++    XChangeProperty( data->display, data->whole_window, x11drv_atom(_MOTIF_WM_HINTS),
++                     x11drv_atom(_MOTIF_WM_HINTS), 32, PropModeReplace,
++                     (unsigned char*)&mwm_hints, sizeof(mwm_hints)/sizeof(long) );
++
++    if (enable_mutter_workaround && mapped)
++    {
++        DWORD end = NtGetTickCount() + 100;
++        struct is_unmap_notify_param p;
++        struct pollfd pfd;
++        XEvent event;
++        int timeout;
++
++        /* workaround for mutter gitlab bug #649, wait for the map notify
++         * event each time the decorations are modified before modifying
++         * them again.
++         */
++        p.data = data;
++        p.found = FALSE;
++        TRACE("workaround mutter bug #649, waiting for UnmapNotify\n");
++        pfd.fd = ConnectionNumber(data->display);
++        pfd.events = POLLIN;
++        for (;;)
++        {
++            XCheckIfEvent( data->display, &event, is_unmap_notify, (XPointer)&p );
++            if (p.found) break;
++            timeout = end - NtGetTickCount();
++            if (timeout <= 0 || poll( &pfd, 1, timeout ) != 1)
++            {
++                WARN( "window %p/%lx unmap_notify wait timed out.\n", data->hwnd, data->whole_window );
++                break;
++            }
++        }
++    }
++
++    if (wm_is_mutter(data->display) && NtUserGetGUIThreadInfo( GetCurrentThreadId(), &info ) &&
++        info.hwndFocus == data->hwnd && !!data->prev_hints.decorations != !!mwm_hints.decorations)
++    {
++        LARGE_INTEGER frequency, counter;
++        /* workaround for mutter gitlab bug #273 */
++        TRACE("workaround mutter bug, setting take_focus_back\n");
++        NtQueryPerformanceCounter( &counter, &frequency );
++        data->take_focus_back = 1000 * counter.QuadPart / frequency.QuadPart;
++    }
++
++    data->prev_hints = mwm_hints;
+ }
+ 
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 2a326b07a4c..94194f49437 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -67,6 +67,7 @@ typedef int Status;
+ #include "unixlib.h"
+ #include "wine/list.h"
+ #include "wine/debug.h"
++#include "mwm.h"
+ 
+ #define MAX_DASHLEN 16
+ 
+@@ -607,6 +608,14 @@ enum x11drv_net_wm_state
+ /* x11drv private window data */
+ struct x11drv_win_data
+ {
++    UINT        pending_fullscreen : 1; /* HACK: pending change to fullscreen state */
++    UINT        fs_hack : 1;    /* is window forced / faking fullscreen? */
++    UINT        layered_attributes : 1;
++                                /* is layered window has leyered attributes set (or otherwise managed with UpdateLayeredWindow()? */
++    ULONGLONG   take_focus_back;
++    unsigned long unmapnotify_serial; /* serial number of last UnmapNotify event */
++    unsigned long fake_unmap_serial; /* serial number of unmap before map for restoring window from minimized state in X11DRV_WindowPosChanged() */
++    MwmHints prev_hints;
+     Display    *display;        /* display connection for the thread owning the window */
+     XVisualInfo vis;            /* X visual used by this window */
+     Colormap    whole_colormap; /* colormap if non-default visual */

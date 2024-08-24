@@ -1,0 +1,52 @@
+diff --git a/dlls/winebus.sys/bus_udev.c b/dlls/winebus.sys/bus_udev.c
+index 11111111111..11111111111 100644
+--- a/dlls/winebus.sys/bus_udev.c
++++ b/dlls/winebus.sys/bus_udev.c
+@@ -1300,6 +1300,12 @@ static void udev_add_device(struct udev_device *dev, int fd)
+ 
+     TRACE("dev %p, node %s, desc %s.\n", dev, debugstr_a(devnode), debugstr_device_desc(&desc));
+ 
++    if (desc.vid == 0x31e3) // Fixes usb_main_loop crashing when a keyboard key is pressed (wooting/linux firmware bug?)
++    {
++        close(fd);
++        TRACE("Not adding Wooting device\n");
++    }
++   
+     if (strcmp(subsystem, "hidraw") == 0)
+     {
+         if (!(impl = raw_device_create(&hidraw_device_vtbl, sizeof(struct hidraw_device)))) return;
+@@ -1706,7 +1712,7 @@ NTSTATUS udev_bus_init(void *args)
+ 
+     if (monitor_fd < 0 && !(udev_monitor = create_monitor(&monitor_fd)))
+     {
+-        ERR("UDEV monitor creation failed\n");
++        WARN("UDEV monitor creation failed\n");
+         goto error;
+     }
+ 
+diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
+index 11111111111..11111111111 100644
+--- a/dlls/winebus.sys/main.c
++++ b/dlls/winebus.sys/main.c
+@@ -919,7 +919,7 @@ static NTSTATUS udev_driver_init(BOOL enable_sdl)
+         .wait_code = udev_wait,
+     };
+ 
+-    bus_options.disable_hidraw = check_bus_option(L"DisableHidraw", 0);
++    bus_options.disable_hidraw = check_bus_option(L"DisableHidraw", 1);
+     if (bus_options.disable_hidraw) TRACE("UDEV hidraw devices disabled in registry\n");
+     bus_options.disable_input = check_bus_option(L"DisableInput", 0) || enable_sdl;
+     if (bus_options.disable_input) TRACE("UDEV input devices disabled in registry\n");
+diff --git a/dlls/wineusb.sys/wineusb.c b/dlls/wineusb.sys/wineusb.c
+index 29d28ee002d..5139aef4549 100644
+--- a/dlls/wineusb.sys/wineusb.c
++++ b/dlls/wineusb.sys/wineusb.c
+@@ -428,7 +428,7 @@ static NTSTATUS query_id(struct usb_device *device, IRP *irp, BUS_QUERY_ID_TYPE
+             break;
+ 
+         default:
+-            FIXME("Unhandled ID query type %#x.\n", type);
++            WARN("Unhandled ID query type %#x.\n", type);
+             return irp->IoStatus.Status;
+     }
+ 

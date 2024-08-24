@@ -1,0 +1,34 @@
+From a342f56ab0e9b01a3dc2f2351a3bf478d6885869 Mon Sep 17 00:00:00 2001
+From: Piotr Caban <piotr@codeweavers.com>
+Date: Tue, 19 Oct 2021 10:39:18 +0200
+Subject: [PATCH 0864/1562] HACK: user32: Process WM_PAINT in peek_message for
+ WS_EX_COMPOSITED windows.
+
+CW-Bug-Id: #19488
+---
+ dlls/win32u/message.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 7f2fe415c7e..7bb3c393483 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -3052,6 +3052,15 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
+                 info.msg.wParam = result.wparam;
+                 info.msg.lParam = result.lparam;
+             }
++            /* CXHACK 19488 */
++            if (info.msg.message == WM_PAINT &&
++                    flags == (PM_REMOVE | PM_QS_INPUT | PM_QS_POSTMESSAGE | PM_QS_PAINT | PM_QS_SENDMESSAGE) &&
++                    (get_window_long( info.msg.hwnd, GWL_EXSTYLE ) & WS_EX_COMPOSITED ))
++            {
++                send_message( info.msg.hwnd, info.msg.message, info.msg.wParam, info.msg.lParam );
++                flags &= ~PM_QS_PAINT;
++                continue;
++            }
+             *msg = info.msg;
+             msg->pt = point_phys_to_win_dpi( info.msg.hwnd, info.msg.pt );
+             thread_info->client_info.message_pos   = MAKELONG( msg->pt.x, msg->pt.y );
+-- 
+2.45.2
+

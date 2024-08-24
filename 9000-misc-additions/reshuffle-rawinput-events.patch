@@ -1,0 +1,95 @@
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -336,38 +336,42 @@ static enum event_merge_action merge_events( XEvent *prev, XEvent *next )
+             return MERGE_KEEP;
+         }
+         break;
+-    case MotionNotify:
++#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
++    case GenericEvent:
++        if (prev->xcookie.extension != xinput2_opcode) break;
++        if (prev->xcookie.evtype != XI_RawMotion) break;
++        if (thread_data->xinput2_rawinput) break;
+         switch (next->type)
+         {
+-        case MotionNotify:
+-            if (prev->xany.window == next->xany.window)
+-            {
+-                TRACE( "discarding duplicate MotionNotify for window %lx\n", prev->xany.window );
+-                return MERGE_DISCARD;
+-            }
+-            break;
+-#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+         case GenericEvent:
+             if (next->xcookie.extension != xinput2_opcode) break;
+             if (next->xcookie.evtype != XI_RawMotion) break;
+-            if (thread_data->xinput2_rawinput) break;
+             if (thread_data->warp_serial) break;
+-            return MERGE_KEEP;
++            return merge_raw_motion_events( prev->xcookie.data, next->xcookie.data );
+         }
+         break;
+-    case GenericEvent:
+-        if (prev->xcookie.extension != xinput2_opcode) break;
+-        if (prev->xcookie.evtype != XI_RawMotion) break;
+-        if (thread_data->xinput2_rawinput) break;
++#endif
++    case MotionNotify:
++#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+         switch (next->type)
+         {
+         case GenericEvent:
+             if (next->xcookie.extension != xinput2_opcode) break;
+             if (next->xcookie.evtype != XI_RawMotion) break;
++            if (thread_data->xinput2_rawinput) break;
+             if (thread_data->warp_serial) break;
+-            return merge_raw_motion_events( prev->xcookie.data, next->xcookie.data );
++            return MERGE_KEEP;
++        case MotionNotify:
+ #endif
++            if (prev->xany.window == next->xany.window)
++            {
++                TRACE( "discarding duplicate MotionNotify for window %lx\n", prev->xany.window );
++                return MERGE_DISCARD;
++            }
++#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
++            break;
+         }
++#endif
+         break;
+     }
+     return MERGE_HANDLE;
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 010495b174c..95b1be20bcc 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -225,6 +225,13 @@ static Bool filter_event( Display *display, XEvent *event, char *arg )
+ 
+     switch(event->type)
+     {
++#ifdef GenericEvent
++    case GenericEvent:
++#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
++        if (event->xcookie.extension == xinput2_opcode) return (mask & QS_INPUT) != 0;
++#endif
++        /* fallthrough */
++#endif
+     case KeyPress:
+     case KeyRelease:
+     case KeymapNotify:
+@@ -247,13 +254,6 @@ static Bool filter_event( Display *display, XEvent *event, char *arg )
+     case PropertyNotify:
+     case ClientMessage:
+         return (mask & QS_POSTMESSAGE) != 0;
+-#ifdef GenericEvent
+-    case GenericEvent:
+-#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+-        if (event->xcookie.extension == xinput2_opcode) return (mask & QS_INPUT) != 0;
+-#endif
+-        /* fallthrough */
+-#endif
+     default:
+         return (mask & QS_SENDMESSAGE) != 0;
+     }

@@ -55,7 +55,7 @@ index 2eb49dd5d5c..7f2fe415c7e 100644
      check_for_driver_events();
  
 -    if ((ret = peek_message( &msg, &filter )) <= 0)
-+    if ((ret = peek_message( &msg, &filter, TRUE )) <= 0)
++    if ((ret = peek_message( &msg, &filter, FALSE )) <= 0)
      {
          if (!ret)
          {

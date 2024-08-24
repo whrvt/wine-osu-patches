@@ -1,0 +1,34 @@
+From 0a34ac3279cf964602bd0746eb1795ec2a1163b4 Mon Sep 17 00:00:00 2001
+From: winebuild <wine@build.dev>
+Date: Fri, 16 Aug 2024 02:00:47 -0700
+Subject: [PATCH] winewayland: round display refresh rate better
+
+---
+ dlls/winewayland.drv/display.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/display.c b/dlls/winewayland.drv/display.c
+index 9b4ebe7cdc1..a1076fd8bd6 100644
+--- a/dlls/winewayland.drv/display.c
++++ b/dlls/winewayland.drv/display.c
+@@ -34,6 +34,8 @@
+ 
+ #include <stdlib.h>
+ 
++#define ROUND_DIV(n,d) (((n < 0) == (d < 0)) ? ((n + d/2)/d) : ((n - d/2)/d))
++
+ WINE_DEFAULT_DEBUG_CHANNEL(waylanddrv);
+ 
+ struct output_info
+@@ -231,7 +233,7 @@ static void populate_devmode(struct wayland_output_mode *output_mode, DEVMODEW *
+     mode->dmBitsPerPel = 32;
+     mode->dmPelsWidth = output_mode->width;
+     mode->dmPelsHeight = output_mode->height;
+-    mode->dmDisplayFrequency = output_mode->refresh / 1000;
++    mode->dmDisplayFrequency = ROUND_DIV(output_mode->refresh, 1000);
+ }
+ 
+ static void wayland_add_device_modes(const struct gdi_device_manager *device_manager,
+-- 
+2.46.0
+

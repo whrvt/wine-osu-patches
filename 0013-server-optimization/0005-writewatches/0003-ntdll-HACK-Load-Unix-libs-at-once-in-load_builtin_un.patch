@@ -1,0 +1,26 @@
+From 498f70e9ca11d5bba6cbd855c559fc6e15d4c63f Mon Sep 17 00:00:00 2001
+From: Paul Gofman <gofmanp@gmail.com>
+Date: Thu, 29 Dec 2022 11:30:18 -0600
+Subject: [PATCH 0426/1562] ntdll: HACK: Load Unix libs at once in
+ load_builtin_unixlib().
+
+CW-Bug-Id: #21736
+---
+ dlls/ntdll/unix/virtual.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 707eb513a54..787f12f1615 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -689,6 +689,7 @@ NTSTATUS load_builtin_unixlib( void *module, const char *name )
+         if (builtin->module != module) continue;
+         if (!builtin->unix_path) builtin->unix_path = strdup( name );
+         else status = STATUS_IMAGE_ALREADY_LOADED;
++        if (!builtin->unix_handle) builtin->unix_handle = dlopen( builtin->unix_path, RTLD_NOW );
+         break;
+     }
+     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
+-- 
+2.45.2
+

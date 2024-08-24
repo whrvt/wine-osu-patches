@@ -1,70 +1,130 @@
+Don't clip the cursor on Wayland to avoid enabling relative motion on absolute input devices.
+
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -981,5 +981,7 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+@@ -980,5 +980,18 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
      return (p - dst) * sizeof(WCHAR);
  }
  extern BOOL gl_disable_child_window_rendering;
-+extern BOOL block_get_version;
-+extern BOOL absolute_tablet_hack;
++extern BOOL cursor_clip_hack;
++
++static inline BOOL use_cursor_clip_hack(void)
++{
++    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
++
++    {
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (e && *e != '\0' && *e != '0') return TRUE;
++    }
++
++    return FALSE;
++}
  
  #endif  /* __WINE_X11DRV_H */
-
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-@@ -90,6 +90,8 @@ int xrender_error_base = 0;
- char *process_name = NULL;
- WNDPROC client_foreign_window_proc = NULL;
- BOOL gl_disable_child_window_rendering = TRUE;
-+BOOL block_get_version = FALSE;
-+BOOL absolute_tablet_hack = FALSE;
+@@ -84,6 +84,7 @@ int primary_monitor = 0;
+ BOOL client_side_graphics = TRUE;
+ BOOL client_side_with_render = TRUE;
+ BOOL shape_layered_windows = TRUE;
++BOOL cursor_clip_hack = FALSE;
+ int copy_default_colors = 128;
+ int alloc_system_colors = 256;
+ int xrender_error_base = 0;
+@@ -778,6 +779,7 @@ static NTSTATUS x11drv_init( void *arg )
+         if (e && *e != '\0' && *e != '0') gl_disable_child_window_rendering = FALSE;
+     }
  
- static x11drv_error_callback err_callback;   /* current callback for error */
- static Display *err_callback_display;        /* display callback is set for */
-@@ -772,6 +774,20 @@ static NTSTATUS x11drv_init( void *arg )
-     X11DRV_InitKeyboard( gdi_display );
-     X11DRV_InitMouse( gdi_display );
-     if (use_xim) use_xim = xim_init( input_style );
-+    {
-+        const char *e = getenv("WINE_BLOCK_GET_VERSION");
-+        if (e && *e != '\0' && *e != '0') block_get_version = TRUE;
-+    }
-+
-+    {
-+        const char *e = getenv("WAYLAND_DISPLAY");
-+        if (e) absolute_tablet_hack = TRUE;
-+    }
-+
-+    {
-+        const char *e = getenv("WINE_DISABLE_ABS_TABLET_HACK");
-+        if (e && *e != '\0' && *e != '0') absolute_tablet_hack = FALSE;
-+    }
- 
-     {
-         const char *e = getenv("WINE_DISABLE_GLCHILD_HACK");
-
-diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
++    cursor_clip_hack = use_cursor_clip_hack();
+     init_user_driver();
+     X11DRV_DisplayDevices_RegisterEventHandlers();
+     return STATUS_SUCCESS;
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
 index 11111111111..11111111111 100644
---- a/dlls/winex11.drv/mouse.c
-+++ b/dlls/winex11.drv/mouse.c
-@@ -1540,6 +1540,14 @@ BOOL X11DRV_GetCursorPos(LPPOINT pos)
-  */
- BOOL X11DRV_ClipCursor( const RECT *clip, BOOL reset )
- {
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -1105,6 +1105,11 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+ 
+     if (!(gl = calloc( 1, sizeof(*gl) ))) return NULL;
+ 
++    /* lazy to find somewhere else to put this so that it doesn't show up more than once */
 +    static unsigned int once;
-+    if (absolute_tablet_hack && block_get_version)
++    if (!once++ && cursor_clip_hack)
++         MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_ENABLE_ABS_TABLET_HACK=0 to disable.\n");
++
+     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI
+      * there is no way to query it, so we have to store it here.
+      */
+
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -108,6 +108,7 @@ extern BOOL get_clip_cursor( RECT *rect, UINT dpi );
+ extern BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset );
+ extern BOOL clip_fullscreen_window( HWND hwnd, BOOL reset );
+ extern USHORT map_scan_to_kbd_vkey( USHORT scan, HKL layout );
++extern BOOL cursor_clip_hack;
+ 
+ /* menu.c */
+ extern HMENU create_menu( BOOL is_popup );
+@@ -395,4 +396,16 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+     return !IsRectEmpty( dst );
+ }
+ 
++static inline BOOL use_cursor_clip_hack(void)
++{
++    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
++
 +    {
-+        if (!once++)
-+            MESSAGE("(X)Wayland absolute tablet hack enabled, which may cause cursor teleportation\n\texport WINE_DISABLE_ABS_TABLET_HACK=1 to disable.\n");
-+        ungrab_clipping_window();
-+        return TRUE;
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (e && *e != '\0' && *e != '0') return TRUE;
 +    }
-     if (!reset && clip && grab_clipping_window( clip )) return TRUE;
-     ungrab_clipping_window();
-     return TRUE;
++
++    return FALSE;
++}
++
+ #endif /* __WINE_WIN32U_PRIVATE */
+
+diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/class.c
++++ b/dlls/win32u/class.c
+@@ -85,6 +85,8 @@ static struct list class_list = LIST_INIT( class_list );
+ 
+ HINSTANCE user32_module = 0;
+ 
++BOOL cursor_clip_hack = FALSE;
++
+ /* find an existing winproc for a given function and type */
+ /* FIXME: probably should do something more clever than a linear search */
+ static WINDOWPROC *find_winproc( WNDPROC func, BOOL ansi )
+@@ -248,6 +250,7 @@ DLGPROC get_dialog_proc( DLGPROC ret, BOOL ansi )
+ 
+ static void init_user(void)
+ {
++    cursor_clip_hack = use_cursor_clip_hack();
+     gdi_init();
+     sysparams_init();
+     winstation_init();
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2615,6 +2615,7 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
+  */
+ BOOL WINAPI NtUserClipCursor( const RECT *rect )
+ {
++    if (cursor_clip_hack) return E_NOTIMPL;
+     UINT dpi;
+     BOOL ret;
+     RECT new_rect;
+
+### WIP: do better than this for wayland ###
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
 index 11111111111..11111111111 100644
 --- a/dlls/winewayland.drv/wayland_pointer.c
@@ -77,46 +137,45 @@ index 11111111111..11111111111 100644
      struct wayland_pointer *pointer = &process_wayland.pointer;
      struct wl_surface *wl_surface = NULL;
      struct wayland_surface *surface = NULL;
-diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
-index 11111111111..11111111111 100644
---- a/dlls/win32u/input.c
-+++ b/dlls/win32u/input.c
-@@ -406,6 +406,9 @@ static const KBDTABLES kbdus_tables =
- BOOL grab_pointer = TRUE;
- BOOL grab_fullscreen = FALSE;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 815f60808c7..96527c69769 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -194,6 +194,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
  
-+static BOOL block_get_version = FALSE;
-+static BOOL absolute_tablet_hack = FALSE;
-+
- static void kbd_tables_init_vsc2vk( const KBDTABLES *tables, USHORT vsc2vk[0x300] )
+ static void reapply_cursor_clipping(void)
  {
-     const VSC_VK *entry;
-@@ -2615,6 +2618,28 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
-  */
- BOOL WINAPI NtUserClipCursor( const RECT *rect )
++    return;
+     RECT rect;
+     UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
+     if (NtUserGetClipCursor(&rect )) NtUserClipCursor(&rect);
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index f2c36f29a94..ed1c8714ab6 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -661,6 +661,7 @@ clear_cursor:
+ 
+ static void reapply_cursor_clipping(void)
  {
-+    static unsigned int once;
-+    if (!once++) {
-+        {
-+            const char *e = getenv("WAYLAND_DISPLAY");
-+            if (e) absolute_tablet_hack = TRUE;
-+        }
-+
-+        {
-+            const char *e = getenv("WINE_BLOCK_GET_VERSION");
-+            if (e && *e != '\0' && *e != '0') block_get_version = TRUE;
-+        }
-+
-+        {
-+            const char *e = getenv("WINE_DISABLE_ABS_TABLET_HACK");
-+            if (e && *e != '\0' && *e != '0') absolute_tablet_hack = FALSE;
-+        }
-+        if (absolute_tablet_hack && block_get_version) grab_pointer = FALSE;
-+    }
-+
-+    if (absolute_tablet_hack && block_get_version)
-+        return FALSE;
-+
-     UINT dpi;
-     BOOL ret;
-     RECT new_rect;
++    return;
+     RECT rect;
+     UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
+     if (NtUserGetClipCursor(&rect)) NtUserClipCursor(&rect);
+#diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+#index 11111111111..11111111111 100644
+#--- a/dlls/winewayland.drv/wayland_pointer.c
+#+++ b/dlls/winewayland.drv/wayland_pointer.c
+#@@ -308,6 +308,13 @@ static void relative_pointer_v1_relative_motion(void *data,
+#     screen.x -= origin.x;
+#     screen.y -= origin.y;
+# 
+#+    if (!(screen.x || screen.y))
+#+    {
+#+        wayland_pointer_clear_constraint();
+#+        pointer_handle_motion_internal(dx, dy);
+#+        return;
+#+    }
+#+
+#     input.type = INPUT_MOUSE;
+#     input.mi.dx = screen.x;
+#     input.mi.dy = screen.y;
