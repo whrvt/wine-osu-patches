@@ -1,7 +1,7 @@
-From 1ee9763731bb7eea3ee901548094b090e96519fd Mon Sep 17 00:00:00 2001
+From 879293ce8e4ea808a8ec42487a9eb442592fe88c Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 10 Jun 2024 12:11:20 +0200
-Subject: [PATCH 3/7] win32u: Use per-monitor DPI window_from_point in
+Subject: [PATCH 3/8] win32u: Use per-monitor DPI window_from_point in
  process_mouse_message.
 
 ---
@@ -9,10 +9,10 @@ Subject: [PATCH 3/7] win32u: Use per-monitor DPI window_from_point in
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
-index 049773fe7e3..9117979422f 100644
+index 36f0f9a0cec..1c0f7bdeecf 100644
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -2424,16 +2424,15 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2434,16 +2434,15 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
      else
      {
          HWND orig = msg->hwnd;
@@ -32,5 +32,5 @@ index 049773fe7e3..9117979422f 100644
      }
  
 -- 
-2.45.2
+2.46.0
 

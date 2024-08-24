@@ -1,0 +1,68 @@
+From f176386d7e95579de5ad0b4073edffa2cc45f9c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 21 Aug 2024 14:05:06 +0200
+Subject: [PATCH 19/24] winewayland: Move surface title change to
+ wayland_surface_make_toplevel.
+
+---
+ dlls/winewayland.drv/wayland_surface.c |  6 ++++++
+ dlls/winewayland.drv/window.c          | 12 +-----------
+ 2 files changed, 7 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index e1edc9297f4..bdc74524b28 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -238,6 +238,8 @@ void wayland_surface_destroy(struct wayland_surface *surface)
+  */
+ void wayland_surface_make_toplevel(struct wayland_surface *surface)
+ {
++    WCHAR text[1024];
++
+     TRACE("surface=%p\n", surface);
+ 
+     surface->xdg_surface =
+@@ -255,6 +257,10 @@ void wayland_surface_make_toplevel(struct wayland_surface *surface)
+     wl_surface_commit(surface->wl_surface);
+     wl_display_flush(process_wayland.wl_display);
+ 
++    if (!NtUserInternalGetWindowText(surface->hwnd, text, ARRAY_SIZE(text)))
++        text[0] = 0;
++    wayland_surface_set_title(surface, text);
++
+     return;
+ 
+ err:
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 31528e7b76b..c214f0b14a3 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -211,7 +211,6 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *dat
+     struct wayland_client_surface *client;
+     struct wayland_surface *surface;
+     BOOL xdg_visible;
+-    WCHAR text[1024];
+ 
+     TRACE("hwnd=%p\n", data->hwnd);
+ 
+@@ -227,16 +226,7 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *dat
+         /* If the window is a visible toplevel make it a wayland
+          * xdg_toplevel. Otherwise keep it role-less to avoid polluting the
+          * compositor with empty xdg_toplevels. */
+-        if (visible)
+-        {
+-            wayland_surface_make_toplevel(surface);
+-            if (surface->xdg_toplevel)
+-            {
+-                if (!NtUserInternalGetWindowText(data->hwnd, text, ARRAY_SIZE(text)))
+-                    text[0] = 0;
+-                wayland_surface_set_title(surface, text);
+-            }
+-        }
++        if (visible) wayland_surface_make_toplevel(surface);
+     }
+ 
+     wayland_win_data_get_config(data, &surface->window);
+-- 
+2.46.0
+

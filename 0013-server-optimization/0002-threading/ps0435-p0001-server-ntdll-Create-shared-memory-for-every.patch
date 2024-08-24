@@ -169,9 +169,9 @@ index 11111111111..11111111111 100644
 +    int                request_shm_fd; /* request shared memory fd */
 +    volatile struct request_shm *request_shm; /* shared memory for sending and receiving server requests/replies */
 +#endif
+     BOOL               allow_writes;  /* ThreadAllowWrites flags */
      pthread_t          pthread_id;    /* pthread thread id */
      struct list        entry;         /* entry in TEB list */
-     PRTL_THREAD_START_ROUTINE start;  /* thread entry point */
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/virtual.c

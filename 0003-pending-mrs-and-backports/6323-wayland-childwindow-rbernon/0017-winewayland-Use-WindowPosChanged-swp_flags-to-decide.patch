@@ -1,0 +1,60 @@
+From 38cf97f764a5f2c234113704594f11189133f4f6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 21 Aug 2024 15:03:26 +0200
+Subject: [PATCH 17/24] winewayland: Use WindowPosChanged swp_flags to decide
+ if a window is visible.
+
+---
+ dlls/winewayland.drv/window.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 8cbb8974e36..2656dbc6fb7 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -193,17 +193,16 @@ static void reapply_cursor_clipping(void)
+     NtUserSetThreadDpiAwarenessContext(context);
+ }
+ 
+-static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *data)
++static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *data, BOOL visible)
+ {
+     struct wayland_surface *surface;
+-    BOOL visible, xdg_visible;
++    BOOL xdg_visible;
+     WCHAR text[1024];
+ 
+     TRACE("hwnd=%p\n", data->hwnd);
+ 
+     if (!(surface = data->wayland_surface) && !(surface = wayland_surface_create(data->hwnd))) return FALSE;
+ 
+-    visible = (NtUserGetWindowLongW(data->hwnd, GWL_STYLE) & WS_VISIBLE) == WS_VISIBLE;
+     xdg_visible = surface->xdg_toplevel != NULL;
+ 
+     if (visible != xdg_visible)
+@@ -419,10 +418,12 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
+                               struct window_surface *surface)
+ {
+     struct wayland_win_data *data;
+-    BOOL managed;
++    BOOL managed, visible;
+ 
+     TRACE("hwnd %p new_rects %s after %p flags %08x\n", hwnd, debugstr_window_rects(new_rects), insert_after, swp_flags);
+ 
++    visible = !(swp_flags & SWP_HIDEWINDOW) && ((NtUserGetWindowLongW(hwnd, GWL_STYLE) & WS_VISIBLE) || (swp_flags & SWP_SHOWWINDOW));
++
+     /* Get the managed state with win_data unlocked, as is_window_managed
+      * may need to query win_data information about other HWNDs and thus
+      * acquire the lock itself internally. */
+@@ -441,7 +442,7 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
+             data->wayland_surface = NULL;
+         }
+     }
+-    else if (wayland_win_data_create_wayland_surface(data))
++    else if (wayland_win_data_create_wayland_surface(data, visible))
+     {
+         wayland_window_surface_set_visible_rect(surface, &data->rects.visible);
+         wayland_win_data_update_wayland_state(data);
+-- 
+2.46.0
+

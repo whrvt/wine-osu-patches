@@ -16,25 +16,25 @@ index 47851f442a3..c173375694d 100644
  
      if (!data->client_window) return;
  
--    changes.x      = data->client_rect.left - data->whole_rect.left;
--    changes.y      = data->client_rect.top - data->whole_rect.top;
+-    changes.x      = data->rects.client.left - data->rects.visible.left;
+-    changes.y      = data->rects.client.top - data->rects.visible.top;
 +    if (data->whole_window)
 +    {
-+        changes.x = data->client_rect.left - data->whole_rect.left;
-+        changes.y = data->client_rect.top - data->whole_rect.top;
++        changes.x = data->rects.client.left - data->rects.visible.left;
++        changes.y = data->rects.client.top - data->rects.visible.top;
 +    }
 +    else
 +    {
 +        HWND toplevel = NtUserGetAncestor( data->hwnd, GA_ROOT );
-+        POINT pos = {data->client_rect.left, data->client_rect.top};
++        POINT pos = {data->rects.client.left, data->rects.client.top};
 +
 +        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1 );
 +        changes.x = pos.x;
 +        changes.y = pos.y;
 +    }
 +
-     changes.width  = min( max( 1, data->client_rect.right - data->client_rect.left ), 65535 );
-     changes.height = min( max( 1, data->client_rect.bottom - data->client_rect.top ), 65535 );
+     changes.width  = min( max( 1, data->rects.client.right - data->rects.client.left ), 65535 );
+     changes.height = min( max( 1, data->rects.client.bottom - data->rects.client.top ), 65535 );
  
 @@ -1610,11 +1623,8 @@ void detach_client_window( struct x11drv_win_data *data, Window client_window )
  
@@ -67,18 +67,18 @@ index 47851f442a3..c173375694d 100644
 +    if ((whole_window = data->whole_window))
      {
 -        client_window_events_enable( data, client_window );
--        XReparentWindow( gdi_display, client_window, data->whole_window, data->client_rect.left - data->whole_rect.left,
--                         data->client_rect.top - data->whole_rect.top );
-+        pos.x = data->client_rect.left - data->whole_rect.left;
-+        pos.y = data->client_rect.top - data->whole_rect.top;
+-        XReparentWindow( gdi_display, client_window, data->whole_window, data->rects.client.left - data->rects.visible.left,
+-                         data->rects.client.top - data->rects.visible.top );
++        pos.x = data->rects.client.left - data->rects.visible.left;
++        pos.y = data->rects.client.top - data->rects.visible.top;
      }
 +    else
 +    {
 +        HWND toplevel = NtUserGetAncestor( data->hwnd, GA_ROOT );
 +        whole_window = X11DRV_get_whole_window( toplevel );
 +
-+        pos.x = data->client_rect.left;
-+        pos.y = data->client_rect.top;
++        pos.x = data->rects.client.left;
++        pos.y = data->rects.client.top;
 +        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1 );
 +    }
 +    if (!whole_window) whole_window = get_dummy_parent();

@@ -1,0 +1,31 @@
+From 387d2393ee9aa39c4b04aa4f96e68c9f7e434beb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 21 Aug 2024 14:56:26 +0200
+Subject: [PATCH 16/24] winewayland: Use the wayland_win_data client rect for
+ child GL windows.
+
+---
+ dlls/winewayland.drv/opengl.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index 760f9f50bef..cb9df1223d3 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -252,6 +252,13 @@ static void wayland_gl_drawable_sync_size(struct wayland_gl_drawable *gl)
+             client_height = wayland_surface->window.client_rect.bottom -
+                             wayland_surface->window.client_rect.top;
+         }
++        else
++        {
++            client_width = data->rects.client.right -
++                           data->rects.client.left;
++            client_height = data->rects.client.bottom -
++                            data->rects.client.top;
++        }
+ 
+         if (client_width == 0 || client_height == 0)
+             client_width = client_height = 1;
+-- 
+2.46.0
+

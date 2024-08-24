@@ -114,22 +114,22 @@ index f975986a9d9..75d01df1009 100644
      set_mwm_hints( data, style, ex_style );
 +    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
 +     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
-+    if (wm_is_kde( data->display ) && NtUserIsWindowRectFullScreen( &data->whole_rect, get_win_monitor_dpi( data->hwnd ) ))
++    if (wm_is_kde( data->display ) && NtUserIsWindowRectFullScreen( &data->rects.visible, get_win_monitor_dpi( data->hwnd ) ))
 +    {
-+        original_rect = data->whole_rect;
-+        SetRectEmpty( &data->whole_rect );
++        original_rect = data->rects.visible;
++        SetRectEmpty( &data->rects.visible );
 +    }
      update_net_wm_states( data );
      data->configure_serial = NextRequest( data->display );
      XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
 +    if (!IsRectEmpty( &original_rect ))
 +    {
-+        data->whole_rect = original_rect;
++        data->rects.visible = original_rect;
 +        update_net_wm_states( data );
 +    }
  
      TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x serial=%lu\n",
-            data->hwnd, data->whole_window, (int)data->whole_rect.left, (int)data->whole_rect.top,
+            data->hwnd, data->whole_window, (int)data->rects.visible.left, (int)data->rects.visible.top,
 @@ -1981,6 +2085,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
  {
      unsigned int width, height;

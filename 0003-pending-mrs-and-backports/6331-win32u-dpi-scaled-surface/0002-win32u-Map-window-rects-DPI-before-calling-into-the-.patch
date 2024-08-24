@@ -1,0 +1,125 @@
+From 9f0f174b537111d04ec45bc5721af114fe8c30de Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 19 Aug 2024 09:16:05 +0200
+Subject: [PATCH 2/4] win32u: Map window rects DPI before calling into the
+ drivers.
+
+---
+ dlls/win32u/sysparams.c      | 11 +++++++++++
+ dlls/win32u/win32u_private.h |  1 +
+ dlls/win32u/window.c         | 26 ++++++++++++++++++++++----
+ 3 files changed, 34 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index 02d7bd8ac0c..fd87a607908 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -2272,6 +2272,17 @@ HRGN map_dpi_region( HRGN hrgn, UINT dpi_from, UINT dpi_to )
+     return hrgn;
+ }
+ 
++/**********************************************************************
++ *              map_dpi_window_rects
++ */
++struct window_rects map_dpi_window_rects( struct window_rects rects, UINT dpi_from, UINT dpi_to )
++{
++    rects.window = map_dpi_rect( rects.window, dpi_from, dpi_to );
++    rects.client = map_dpi_rect( rects.client, dpi_from, dpi_to );
++    rects.visible = map_dpi_rect( rects.visible, dpi_from, dpi_to );
++    return rects;
++}
++
+ /**********************************************************************
+  *              map_dpi_point
+  */
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index af054186f1a..bd0f4410afe 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -184,6 +184,7 @@ extern BOOL is_exiting_thread( DWORD tid );
+ extern POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to );
+ extern RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to );
+ extern HRGN map_dpi_region( HRGN region, UINT dpi_from, UINT dpi_to );
++extern struct window_rects map_dpi_window_rects( struct window_rects rects, UINT dpi_from, UINT dpi_to );
+ extern BOOL message_beep( UINT i );
+ extern POINT point_phys_to_win_dpi( HWND hwnd, POINT pt );
+ extern POINT point_thread_to_win_dpi( HWND hwnd, POINT pt );
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 397d0802f1b..e07100707f3 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1897,10 +1897,15 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+     BOOL shaped, needs_surface, create_opaque, is_layered;
+     HWND parent = NtUserGetAncestor( hwnd, GA_PARENT );
+     struct window_surface *new_surface;
+-    UINT style, ex_style;
++    struct window_rects monitor_rects;
++    UINT monitor_dpi, style, ex_style;
++    HMONITOR monitor;
+     RECT dummy;
+     HRGN shape;
+ 
++    monitor = monitor_from_rect( &rects->window, MONITOR_DEFAULTTONEAREST, get_thread_dpi() );
++    monitor_dpi = get_monitor_dpi( monitor );
++
+     style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
+     ex_style = NtUserGetWindowLongW( hwnd, GWL_EXSTYLE );
+ 
+@@ -1908,7 +1913,8 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+     else if ((shaped = !!shape)) NtGdiDeleteObjectApp( shape );
+ 
+     rects->visible = rects->window;
+-    if (!user_driver->pWindowPosChanging( hwnd, swp_flags, shaped, rects )) needs_surface = FALSE;
++    monitor_rects = map_dpi_window_rects( *rects, get_thread_dpi(), monitor_dpi );
++    if (!user_driver->pWindowPosChanging( hwnd, swp_flags, shaped, &monitor_rects )) needs_surface = FALSE;
+     else if (parent && parent != NtUserGetDesktopWindow()) needs_surface = FALSE;
+     else if (swp_flags & SWP_HIDEWINDOW) needs_surface = FALSE;
+     else if (swp_flags & SWP_SHOWWINDOW) needs_surface = TRUE;
+@@ -1967,12 +1973,15 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, struct window_surface *new_surface,
+                               const struct window_rects *new_rects, const RECT *valid_rects )
+ {
++    struct window_rects monitor_rects;
+     WND *win;
+     HWND surface_win = 0;
+     BOOL ret, is_layered, needs_update = FALSE;
+     struct window_rects old_rects;
+     RECT extra_rects[3];
+     struct window_surface *old_surface;
++    HMONITOR monitor;
++    UINT monitor_dpi;
+ 
+     is_layered = new_surface && new_surface->alpha_mask;
+ 
+@@ -1992,6 +2001,11 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+         valid_rects = NULL;
+     }
+ 
++    monitor = monitor_from_rect( &new_rects->window, MONITOR_DEFAULTTONEAREST, get_thread_dpi() );
++    monitor_dpi = get_monitor_dpi( monitor );
++
++    monitor_rects = map_dpi_window_rects( *new_rects, get_thread_dpi(), monitor_dpi );
++
+     SERVER_START_REQ( set_window_pos )
+     {
+         req->handle        = wine_server_user_handle( hwnd );
+@@ -2089,10 +2103,14 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+             if (surface_win && surface_win != hwnd)
+                 move_window_bits( hwnd, &new_rects->visible, &new_rects->visible, &new_rects->window, valid_rects );
+             else
+-                user_driver->pMoveWindowBits( hwnd, new_rects, valid_rects );
++            {
++                rects[0] = map_dpi_rect( valid_rects[0], get_thread_dpi(), monitor_dpi );
++                rects[1] = map_dpi_rect( valid_rects[1], get_thread_dpi(), monitor_dpi );
++                user_driver->pMoveWindowBits( hwnd, &monitor_rects, rects );
++            }
+         }
+ 
+-        user_driver->pWindowPosChanged( hwnd, insert_after, swp_flags, new_rects, new_surface );
++        user_driver->pWindowPosChanged( hwnd, insert_after, swp_flags, &monitor_rects, new_surface );
+     }
+ 
+     return ret;
+-- 
+2.46.0
+

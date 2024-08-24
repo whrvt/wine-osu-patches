@@ -1,0 +1,214 @@
+From a65ed1eaa8bdf544766cf1a0b2c2c162ae71e743 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 22 Aug 2024 11:55:22 +0800
+Subject: [PATCH 1/2] winex11.drv: Delete unused parameters for
+ X11DRV_init_desktop().
+
+---
+ dlls/winex11.drv/desktop.c | 4 ++--
+ dlls/winex11.drv/window.c  | 2 +-
+ dlls/winex11.drv/x11drv.h  | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winex11.drv/desktop.c b/dlls/winex11.drv/desktop.c
+index dae0d652737..da9edfecaa8 100644
+--- a/dlls/winex11.drv/desktop.c
++++ b/dlls/winex11.drv/desktop.c
+@@ -51,7 +51,7 @@ BOOL is_virtual_desktop(void)
+  *
+  * Setup the desktop when not using the root window.
+  */
+-void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height )
++void X11DRV_init_desktop( Window win )
+ {
+     host_primary_rect = get_host_primary_monitor_rect();
+     root_window = win;
+@@ -90,7 +90,7 @@ BOOL X11DRV_CreateDesktop( const WCHAR *name, UINT width, UINT height )
+     x11drv_xinput2_enable( display, win );
+     XFlush( display );
+ 
+-    X11DRV_init_desktop( win, width, height );
++    X11DRV_init_desktop( win );
+     return TRUE;
+ }
+ 
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 0e06939f67d..f1a609d4cd5 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1948,7 +1948,7 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
+     else
+     {
+         Window win = (Window)NtUserGetProp( hwnd, whole_window_prop );
+-        if (win && win != root_window) X11DRV_init_desktop( win, width, height );
++        if (win && win != root_window) X11DRV_init_desktop( win );
+     }
+ }
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 9c47a7462ba..6a157befeae 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -740,7 +740,7 @@ struct x11drv_settings_handler
+ 
+ extern void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *handler);
+ 
+-extern void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height );
++extern void X11DRV_init_desktop( Window win );
+ extern BOOL is_virtual_desktop(void);
+ extern BOOL is_desktop_fullscreen(void);
+ extern BOOL is_detached_mode(const DEVMODEW *);
+-- 
+GitLab
+
+
+From f25a4e2c48f69559bd2512d627b562194361ddd7 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 22 Aug 2024 12:14:31 +0800
+Subject: [PATCH 2/2] winex11.drv: Properly check if the desktop window is
+ fullscreen on multi-monitor systems.
+
+If there are two monitors and the primary monitor is on the right side and the virtual desktop
+resolution happens to be the same as the primary monitor, then the X11 desktop window will
+not have window frames and show as a fullscreen window before this patch. is_desktop_fullscreen()
+should check which monitor that it is on to decide whether to use fullscreen mode instead of always
+checking against the primary monitor.
+---
+ dlls/winex11.drv/desktop.c | 23 ++++++++++----
+ dlls/winex11.drv/display.c | 61 ++++++++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h  |  1 +
+ 3 files changed, 80 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/desktop.c b/dlls/winex11.drv/desktop.c
+index da9edfecaa8..29d454e0e97 100644
+--- a/dlls/winex11.drv/desktop.c
++++ b/dlls/winex11.drv/desktop.c
+@@ -35,7 +35,8 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(x11drv);
+ 
+-static RECT host_primary_rect;
++static RECT *host_monitor_rects;
++static int host_monitor_rect_count;
+ 
+ #define _NET_WM_STATE_REMOVE 0
+ #define _NET_WM_STATE_ADD 1
+@@ -53,7 +54,9 @@ BOOL is_virtual_desktop(void)
+  */
+ void X11DRV_init_desktop( Window win )
+ {
+-    host_primary_rect = get_host_primary_monitor_rect();
++    if (host_monitor_rects) free( host_monitor_rects );
++    if (!get_host_monitor_rects( &host_monitor_rects, &host_monitor_rect_count ))
++        ERR("Failed to get host monitor rectangle.\n");
+     root_window = win;
+     managed_mode = FALSE;  /* no managed windows in desktop mode */
+ }
+@@ -96,7 +99,17 @@ BOOL X11DRV_CreateDesktop( const WCHAR *name, UINT width, UINT height )
+ 
+ BOOL is_desktop_fullscreen(void)
+ {
+-    RECT primary_rect = NtUserGetPrimaryMonitorRect();
+-    return (primary_rect.right - primary_rect.left == host_primary_rect.right - host_primary_rect.left &&
+-            primary_rect.bottom - primary_rect.top == host_primary_rect.bottom - host_primary_rect.top);
++    Display *display = thread_display();
++    unsigned int width, height, border, depth;
++    int x, y, i;
++    Window root;
++    RECT rect;
++
++    XGetGeometry( display, root_window, &root, &x, &y, &width, &height, &border, &depth );
++    SetRect( &rect, x, y, x + width, y + height );
++
++    for (i = 0; i < host_monitor_rect_count; i++)
++        if (EqualRect( &host_monitor_rects[i], &rect) ) return TRUE;
++
++    return FALSE;
+ }
+diff --git a/dlls/winex11.drv/display.c b/dlls/winex11.drv/display.c
+index 6b92e046fb8..3187f23ea9a 100644
+--- a/dlls/winex11.drv/display.c
++++ b/dlls/winex11.drv/display.c
+@@ -415,6 +415,67 @@ RECT get_host_primary_monitor_rect(void)
+     return rect;
+ }
+ 
++/* Get an array of host monitor rectangles in X11 root coordinates. Free the array when it's done */
++BOOL get_host_monitor_rects( RECT **ret_rects, int *ret_count )
++{
++    int gpu_count, adapter_count, monitor_count, rect_count = 0;
++    int gpu_idx, adapter_idx, monitor_idx, rect_idx;
++    struct x11drv_gpu *gpus = NULL;
++    struct x11drv_adapter *adapters = NULL;
++    struct gdi_monitor *monitors = NULL;
++    RECT *rects = NULL, *new_rects;
++    POINT left_top = {INT_MAX, INT_MAX};
++
++    if (!host_handler.get_gpus( &gpus, &gpu_count, FALSE )) goto failed;
++
++    for (gpu_idx = 0; gpu_idx < gpu_count; gpu_idx++)
++    {
++        if (!host_handler.get_adapters( gpus[gpu_idx].id, &adapters, &adapter_count )) goto failed;
++
++        for (adapter_idx = 0; adapter_idx < adapter_count; adapter_idx++)
++        {
++            if (!host_handler.get_monitors( adapters[adapter_idx].id, &monitors, &monitor_count )) goto failed;
++
++            new_rects = realloc( rects, (rect_count + monitor_count) * sizeof(*rects) );
++            if (!new_rects) goto failed;
++            rects = new_rects;
++
++            for (monitor_idx = 0; monitor_idx < monitor_count; monitor_idx++)
++            {
++                rects[rect_count++] = monitors[monitor_idx].rc_monitor;
++                left_top.x = min( left_top.x, monitors[monitor_idx].rc_monitor.left );
++                left_top.y = min( left_top.y, monitors[monitor_idx].rc_monitor.top );
++            }
++
++            host_handler.free_monitors( monitors, monitor_count );
++            monitors = NULL;
++        }
++
++        host_handler.free_adapters( adapters );
++        adapters = NULL;
++    }
++
++    host_handler.free_gpus( gpus, gpu_count );
++    gpus = NULL;
++
++    /* Convert from win32 virtual screen coordinates to X11 root coordinates */
++    for (rect_idx = 0; rect_idx < rect_count; rect_idx++)
++        OffsetRect( &rects[rect_idx], -left_top.x, -left_top.y );
++
++    *ret_rects = rects;
++    *ret_count = rect_count;
++    return TRUE;
++
++failed:
++    if (monitors) host_handler.free_monitors( monitors, monitor_count );
++    if (adapters) host_handler.free_adapters( adapters );
++    if (gpus) host_handler.free_gpus( gpus, gpu_count );
++    free( rects );
++    *ret_rects = NULL;
++    *ret_count = 0;
++    return FALSE;
++}
++
+ RECT get_work_area(const RECT *monitor_rect)
+ {
+     Atom type;
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 6a157befeae..1eae4996266 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -680,6 +680,7 @@ extern int X11DRV_check_error(void);
+ extern POINT virtual_screen_to_root( INT x, INT y );
+ extern POINT root_to_virtual_screen( INT x, INT y );
+ extern RECT get_host_primary_monitor_rect(void);
++extern BOOL get_host_monitor_rects( RECT **ret_rects, int *ret_count );
+ extern RECT get_work_area( const RECT *monitor_rect );
+ extern BOOL xinerama_get_fullscreen_monitors( const RECT *rect, long *indices );
+ extern void xinerama_init( unsigned int width, unsigned int height );
+-- 
+GitLab
+

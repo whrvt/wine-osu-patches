@@ -1,0 +1,127 @@
+From 303e318fee19320fd8d3b9bfaa615a9734128ed1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 20 Aug 2024 14:47:28 +0200
+Subject: [PATCH 03/24] winewayland: Introduce a new
+ ensure_window_surface_contents helper.
+
+---
+ dlls/winewayland.drv/opengl.c     | 22 +---------------------
+ dlls/winewayland.drv/vulkan.c     | 18 +-----------------
+ dlls/winewayland.drv/waylanddrv.h |  2 ++
+ dlls/winewayland.drv/window.c     | 21 +++++++++++++++++++++
+ 4 files changed, 25 insertions(+), 38 deletions(-)
+
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index 994154968b3..ecc7b9e03c1 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -264,26 +264,6 @@ static void wayland_gl_drawable_sync_size(struct wayland_gl_drawable *gl)
+     }
+ }
+ 
+-static void wayland_gl_drawable_sync_surface_state(struct wayland_gl_drawable *gl)
+-{
+-    struct wayland_surface *wayland_surface;
+-
+-    if (!(wayland_surface = wayland_surface_lock_hwnd(gl->hwnd))) return;
+-
+-    wayland_surface_ensure_contents(wayland_surface);
+-
+-    /* Handle any processed configure request, to ensure the related
+-     * surface state is applied by the compositor. */
+-    if (wayland_surface->processing.serial &&
+-        wayland_surface->processing.processed &&
+-        wayland_surface_reconfigure(wayland_surface))
+-    {
+-        wl_surface_commit(wayland_surface->wl_surface);
+-    }
+-
+-    pthread_mutex_unlock(&wayland_surface->mutex);
+-}
+-
+ static BOOL wgl_context_make_current(struct wgl_context *ctx, HDC draw_hdc, HDC read_hdc)
+ {
+     BOOL ret;
+@@ -666,7 +646,7 @@ static BOOL wayland_wglSwapBuffers(HDC hdc)
+     if (!(gl = wayland_gl_drawable_get(NtUserWindowFromDC(hdc), hdc))) return FALSE;
+ 
+     if (ctx) wgl_context_refresh(ctx);
+-    wayland_gl_drawable_sync_surface_state(gl);
++    ensure_window_surface_contents(gl->hwnd);
+     /* Although all the EGL surfaces we create are double-buffered, we want to
+      * use some as single-buffered, so avoid swapping those. */
+     if (gl->double_buffered) p_eglSwapBuffers(egl_display, gl->surface);
+diff --git a/dlls/winewayland.drv/vulkan.c b/dlls/winewayland.drv/vulkan.c
+index 16084175013..a828d736da1 100644
+--- a/dlls/winewayland.drv/vulkan.c
++++ b/dlls/winewayland.drv/vulkan.c
+@@ -138,23 +138,7 @@ static void wayland_vulkan_surface_detach(HWND hwnd, void *private)
+ 
+ static void wayland_vulkan_surface_presented(HWND hwnd, VkResult result)
+ {
+-    struct wayland_surface *wayland_surface;
+-
+-    if ((wayland_surface = wayland_surface_lock_hwnd(hwnd)))
+-    {
+-        wayland_surface_ensure_contents(wayland_surface);
+-
+-        /* Handle any processed configure request, to ensure the related
+-         * surface state is applied by the compositor. */
+-        if (wayland_surface->processing.serial &&
+-            wayland_surface->processing.processed &&
+-            wayland_surface_reconfigure(wayland_surface))
+-        {
+-            wl_surface_commit(wayland_surface->wl_surface);
+-        }
+-
+-        pthread_mutex_unlock(&wayland_surface->mutex);
+-    }
++    ensure_window_surface_contents(hwnd);
+ }
+ 
+ static VkBool32 wayland_vkGetPhysicalDeviceWin32PresentationSupportKHR(VkPhysicalDevice phys_dev,
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 4e3841d8cf9..9e46b6e59c8 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -297,6 +297,8 @@ struct wayland_win_data
+ struct wayland_win_data *wayland_win_data_get(HWND hwnd);
+ void wayland_win_data_release(struct wayland_win_data *data);
+ 
++void ensure_window_surface_contents(HWND hwnd);
++
+ /**********************************************************************
+  *          Wayland Keyboard
+  */
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 355894f6137..bde3aede433 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -710,3 +710,24 @@ struct wayland_surface *wayland_surface_lock_hwnd(HWND hwnd)
+ 
+     return surface;
+ }
++
++void ensure_window_surface_contents(HWND hwnd)
++{
++    struct wayland_surface *wayland_surface;
++
++    if ((wayland_surface = wayland_surface_lock_hwnd(hwnd)))
++    {
++        wayland_surface_ensure_contents(wayland_surface);
++
++        /* Handle any processed configure request, to ensure the related
++         * surface state is applied by the compositor. */
++        if (wayland_surface->processing.serial &&
++            wayland_surface->processing.processed &&
++            wayland_surface_reconfigure(wayland_surface))
++        {
++            wl_surface_commit(wayland_surface->wl_surface);
++        }
++
++        pthread_mutex_unlock(&wayland_surface->mutex);
++    }
++}
+-- 
+2.46.0
+

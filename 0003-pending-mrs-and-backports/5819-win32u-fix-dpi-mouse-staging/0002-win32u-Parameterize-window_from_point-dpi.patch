@@ -1,7 +1,7 @@
-From 234a5006027da75bf6be463e0b33c532face60c3 Mon Sep 17 00:00:00 2001
+From c3dc5488ab797d452a5499f66ae1028986c3e9c9 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sat, 1 Jun 2024 23:03:40 +0200
-Subject: [PATCH 2/7] win32u: Parameterize window_from_point dpi.
+Subject: [PATCH 2/8] win32u: Parameterize window_from_point dpi.
 
 ---
  dlls/win32u/input.c          |  4 ++--
@@ -11,10 +11,10 @@ Subject: [PATCH 2/7] win32u: Parameterize window_from_point dpi.
  4 files changed, 12 insertions(+), 12 deletions(-)
 
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
-index 5b25086cb6f..0d9fe0f1d38 100644
+index 0324909c954..7bab5ef41b2 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
-@@ -1607,7 +1607,7 @@ void update_mouse_tracking_info( HWND hwnd )
+@@ -1631,7 +1631,7 @@ void update_mouse_tracking_info( HWND hwnd )
      TRACE( "hwnd %p\n", hwnd );
  
      get_cursor_pos( &pos );
@@ -23,7 +23,7 @@ index 5b25086cb6f..0d9fe0f1d38 100644
  
      TRACE( "point %s hwnd %p hittest %d\n", wine_dbgstr_point(&pos), hwnd, hittest );
  
-@@ -1703,7 +1703,7 @@ BOOL WINAPI NtUserTrackMouseEvent( TRACKMOUSEEVENT *info )
+@@ -1727,7 +1727,7 @@ BOOL WINAPI NtUserTrackMouseEvent( TRACKMOUSEEVENT *info )
          NtUserSystemParametersInfo( SPI_GETMOUSEHOVERTIME, 0, &hover_time, 0 );
  
      get_cursor_pos( &pos );
@@ -33,10 +33,10 @@ index 5b25086cb6f..0d9fe0f1d38 100644
  
      if (info->dwFlags & ~(TME_CANCEL | TME_HOVER | TME_LEAVE | TME_NONCLIENT))
 diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
-index d1f49ca3ed9..049773fe7e3 100644
+index 73c15defb04..36f0f9a0cec 100644
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -2424,15 +2424,16 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2434,15 +2434,16 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
      else
      {
          HWND orig = msg->hwnd;
@@ -56,10 +56,10 @@ index d1f49ca3ed9..049773fe7e3 100644
      }
  
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index 96517ef081a..8e33370ee48 100644
+index 28801dfd30f..ace3233a0c3 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
-@@ -252,7 +252,7 @@ extern BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y );
+@@ -276,7 +276,7 @@ extern BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y );
  extern ULONG set_window_style( HWND hwnd, ULONG set_bits, ULONG clear_bits );
  extern BOOL show_owned_popups( HWND owner, BOOL show );
  extern void update_window_state( HWND hwnd );
@@ -69,10 +69,10 @@ index 96517ef081a..8e33370ee48 100644
  extern HWND get_progman_window(void);
  extern HWND set_progman_window( HWND hwnd );
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 193e7212e02..532bbb6bfec 100644
+index 3317c2fcc38..7303e849296 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -2195,7 +2195,7 @@ done:
+@@ -2412,7 +2412,7 @@ done:
   * Point is in screen coordinates.
   * Returned list must be freed by caller.
   */
@@ -81,7 +81,7 @@ index 193e7212e02..532bbb6bfec 100644
  {
      int i, size = 128;
      HWND *list;
-@@ -2211,7 +2211,7 @@ static HWND *list_children_from_point( HWND hwnd, POINT pt )
+@@ -2428,7 +2428,7 @@ static HWND *list_children_from_point( HWND hwnd, POINT pt )
              req->parent = wine_server_user_handle( hwnd );
              req->x = pt.x;
              req->y = pt.y;
@@ -90,7 +90,7 @@ index 193e7212e02..532bbb6bfec 100644
              wine_server_set_reply( req, list, (size-1) * sizeof(user_handle_t) );
              if (!wine_server_call( req )) count = reply->count;
          }
-@@ -2236,19 +2236,18 @@ static HWND *list_children_from_point( HWND hwnd, POINT pt )
+@@ -2453,19 +2453,18 @@ static HWND *list_children_from_point( HWND hwnd, POINT pt )
   *
   * Find the window and hittest for a given point.
   */
@@ -113,7 +113,7 @@ index 193e7212e02..532bbb6bfec 100644
  
      /* now determine the hittest */
  
-@@ -2290,7 +2289,7 @@ HWND WINAPI NtUserWindowFromPoint( LONG x, LONG y )
+@@ -2507,7 +2506,7 @@ HWND WINAPI NtUserWindowFromPoint( LONG x, LONG y )
  {
      POINT pt = { .x = x, .y = y };
      INT hittest;
@@ -123,5 +123,5 @@ index 193e7212e02..532bbb6bfec 100644
  
  /*******************************************************************
 -- 
-2.45.2
+2.46.0
 

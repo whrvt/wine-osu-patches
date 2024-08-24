@@ -13,8 +13,8 @@ index e68c4abdf93..696edd6675c 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1750,7 +1750,6 @@ Window create_client_window( HWND hwnd, const XVisualInfo *visual )
-     cx = min( max( 1, data->client_rect.right - data->client_rect.left ), 65535 );
-     cy = min( max( 1, data->client_rect.bottom - data->client_rect.top ), 65535 );
+     cx = min( max( 1, data->rects.client.right - data->rects.client.left ), 65535 );
+     cy = min( max( 1, data->rects.client.bottom - data->rects.client.top ), 65535 );
  
 -    XSync( gdi_display, False ); /* make sure whole_window is known from gdi_display */
      ret = data->client_window = XCreateWindow( gdi_display,

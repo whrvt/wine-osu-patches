@@ -1,0 +1,80 @@
+From 5c796488bf0ce4f702465c5dd79cf582a488bd22 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 20 Aug 2024 15:32:52 +0200
+Subject: [PATCH 15/24] winewayland: Split
+ wayland_win_data_update_wayland_surface helper.
+
+---
+ dlls/winewayland.drv/window.c | 34 +++++++++++++++++-----------------
+ 1 file changed, 17 insertions(+), 17 deletions(-)
+
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 759d6f48dbc..8cbb8974e36 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -193,25 +193,15 @@ static void reapply_cursor_clipping(void)
+     NtUserSetThreadDpiAwarenessContext(context);
+ }
+ 
+-static void wayland_win_data_update_wayland_surface(struct wayland_win_data *data)
++static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *data)
+ {
+-    struct wayland_surface *surface = data->wayland_surface;
+-    HWND parent = NtUserGetAncestor(data->hwnd, GA_PARENT);
++    struct wayland_surface *surface;
+     BOOL visible, xdg_visible;
+     WCHAR text[1024];
+ 
+     TRACE("hwnd=%p\n", data->hwnd);
+ 
+-    /* We don't want wayland surfaces for child windows. */
+-    if (parent != NtUserGetDesktopWindow() && parent != 0)
+-    {
+-        if (surface) wayland_surface_destroy(surface);
+-        surface = NULL;
+-        goto out;
+-    }
+-
+-    /* Otherwise ensure that we have a wayland surface. */
+-    if (!surface && !(surface = wayland_surface_create(data->hwnd))) return;
++    if (!(surface = data->wayland_surface) && !(surface = wayland_surface_create(data->hwnd))) return FALSE;
+ 
+     visible = (NtUserGetWindowLongW(data->hwnd, GWL_STYLE) & WS_VISIBLE) == WS_VISIBLE;
+     xdg_visible = surface->xdg_toplevel != NULL;
+@@ -241,9 +231,9 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+      * it as needed. */
+     if (data->hwnd == NtUserGetForegroundWindow()) reapply_cursor_clipping();
+ 
+-out:
+     TRACE("hwnd=%p surface=%p=>%p\n", data->hwnd, data->wayland_surface, surface);
+     data->wayland_surface = surface;
++    return TRUE;
+ }
+ 
+ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
+@@ -443,9 +433,19 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
+     data->rects = *new_rects;
+     data->managed = managed;
+ 
+-    wayland_win_data_update_wayland_surface(data);
+-    if (surface) wayland_window_surface_set_visible_rect(surface, &data->rects.visible);
+-    if (data->wayland_surface) wayland_win_data_update_wayland_state(data);
++    if (!surface)
++    {
++        if (data->wayland_surface)
++        {
++            wayland_surface_destroy(data->wayland_surface);
++            data->wayland_surface = NULL;
++        }
++    }
++    else if (wayland_win_data_create_wayland_surface(data))
++    {
++        wayland_window_surface_set_visible_rect(surface, &data->rects.visible);
++        wayland_win_data_update_wayland_state(data);
++    }
+ 
+     wayland_win_data_release(data);
+ }
+-- 
+2.46.0
+

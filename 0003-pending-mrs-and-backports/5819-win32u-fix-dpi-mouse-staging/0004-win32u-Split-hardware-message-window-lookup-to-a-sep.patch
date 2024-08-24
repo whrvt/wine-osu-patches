@@ -1,7 +1,7 @@
-From a768e5e79226b1120d2448dd43a1450b82b73a56 Mon Sep 17 00:00:00 2001
+From 81813a1854884cffee5036f9d82954be990118fe Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Thu, 13 Jun 2024 09:25:53 +0200
-Subject: [PATCH 4/7] win32u: Split hardware message window lookup to a
+Subject: [PATCH 4/8] win32u: Split hardware message window lookup to a
  separate helper.
 
 ---
@@ -9,10 +9,10 @@ Subject: [PATCH 4/7] win32u: Split hardware message window lookup to a
  1 file changed, 31 insertions(+), 32 deletions(-)
 
 diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
-index 9117979422f..7ff38a923fa 100644
+index 1c0f7bdeecf..d537a75aea5 100644
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -2393,49 +2393,43 @@ static BOOL process_keyboard_message( MSG *msg, UINT hw_id, HWND hwnd_filter,
+@@ -2403,49 +2403,43 @@ static BOOL process_keyboard_message( MSG *msg, UINT hw_id, HWND hwnd_filter,
      return TRUE;
  }
  
@@ -83,7 +83,7 @@ index 9117979422f..7ff38a923fa 100644
      if (!msg->hwnd || !is_current_thread_window( msg->hwnd ))
      {
          accept_hardware_message( hw_id );
-@@ -2470,7 +2464,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2480,7 +2474,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
          {
              /* coordinates don't get translated while tracking a menu */
              /* FIXME: should differentiate popups and top-level menus */
@@ -92,7 +92,7 @@ index 9117979422f..7ff38a923fa 100644
                  screen_to_client( msg->hwnd, &pt );
          }
      }
-@@ -2489,7 +2483,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2499,7 +2493,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
  	 * note that ...MOUSEMOVEs can slip in between
  	 * ...BUTTONDOWN and ...BUTTONDBLCLK messages */
  
@@ -101,7 +101,7 @@ index 9117979422f..7ff38a923fa 100644
              hittest != HTCLIENT ||
              (get_class_long( msg->hwnd, GCL_STYLE, FALSE ) & CS_DBLCLKS))
          {
-@@ -2546,7 +2540,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2556,7 +2550,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
  
      if (remove) accept_hardware_message( hw_id );
  
@@ -110,7 +110,7 @@ index 9117979422f..7ff38a923fa 100644
      {
          msg->message = message;
          return TRUE;
-@@ -2567,7 +2561,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2577,7 +2571,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
  
          /* Activate the window if needed */
  
@@ -119,7 +119,7 @@ index 9117979422f..7ff38a923fa 100644
          {
              HWND hwndTop = NtUserGetAncestor( msg->hwnd, GA_ROOT );
  
-@@ -2616,12 +2610,17 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+@@ -2626,12 +2620,17 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
                                        HWND hwnd_filter, UINT first, UINT last, BOOL remove )
  {
      struct ntuser_thread_info *thread_info = NtUserGetThreadInfo();
@@ -137,7 +137,7 @@ index 9117979422f..7ff38a923fa 100644
      /* hardware messages are always in physical coords */
      context = set_thread_dpi_awareness_context( NTUSER_DPI_PER_MONITOR_AWARE );
  
-@@ -2630,7 +2629,7 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+@@ -2640,7 +2639,7 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
      else if (is_keyboard_message( msg->message ))
          ret = process_keyboard_message( msg, hw_id, hwnd_filter, first, last, remove );
      else if (is_mouse_message( msg->message ))
@@ -147,5 +147,5 @@ index 9117979422f..7ff38a923fa 100644
          ret = process_pointer_message( msg, hw_id, msg_data );
      else if (msg->message == WM_WINE_CLIPCURSOR)
 -- 
-2.45.2
+2.46.0
 

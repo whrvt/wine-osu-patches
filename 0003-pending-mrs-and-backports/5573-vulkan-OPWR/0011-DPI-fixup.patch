@@ -30,7 +30,7 @@ index e0ac88d..2d425b5 100644
 +++ b/dlls/winex11.drv/window.c
 @@ -1684,7 +1684,7 @@ static void sync_client_position( struct x11drv_win_data *data,
          HWND toplevel = NtUserGetAncestor( data->hwnd, GA_ROOT );
-         POINT pos = {data->client_rect.left, data->client_rect.top};
+         POINT pos = {data->rects.client.left, data->rects.client.top};
  
 -        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1 );
 +        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1, 0 /* per-monitor DPI */ );
@@ -39,8 +39,8 @@ index e0ac88d..2d425b5 100644
      }
 @@ -1861,7 +1861,7 @@ void attach_client_window( struct x11drv_win_data *data, Window client_window )
  
-         pos.x = data->client_rect.left;
-         pos.y = data->client_rect.top;
+         pos.x = data->rects.client.left;
+         pos.y = data->rects.client.top;
 -        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1 );
 +        NtUserMapWindowPoints( toplevel, toplevel, &pos, 1, 0 /* per-monitor DPI */ );
      }

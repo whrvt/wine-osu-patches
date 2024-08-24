@@ -130,7 +130,7 @@ index 11111111111..11111111111 100644
                                              SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page );
  extern void virtual_map_user_shared_data(void);
 +extern void virtual_map_hypervisor_shared_data(void);
- extern NTSTATUS virtual_handle_fault( void *addr, DWORD err, void *stack );
+ extern NTSTATUS virtual_handle_fault( EXCEPTION_RECORD *rec, void *stack );
  extern unsigned int virtual_locked_server_call( void *req_ptr );
  extern ssize_t virtual_locked_read( int fd, void *addr, size_t size );
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c

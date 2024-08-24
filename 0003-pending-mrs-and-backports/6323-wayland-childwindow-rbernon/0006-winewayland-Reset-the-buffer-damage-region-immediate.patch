@@ -1,0 +1,31 @@
+From 26c55b1642cc0efb62f88b49ca9574df743fa34d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 20 Aug 2024 10:06:39 +0200
+Subject: [PATCH 06/24] winewayland: Reset the buffer damage region immediately
+ after copy.
+
+---
+ dlls/winewayland.drv/window_surface.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
+index 0e4747fce2f..4e5ea3d366d 100644
+--- a/dlls/winewayland.drv/window_surface.c
++++ b/dlls/winewayland.drv/window_surface.c
+@@ -386,12 +386,11 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+     }
+ 
+     wayland_shm_buffer_copy_data(shm_buffer, color_bits, &surface_rect, copy_from_window_region);
++    NtGdiSetRectRgn(shm_buffer->damage_region, 0, 0, 0, 0);
+ 
+     flushed = set_window_surface_contents(window_surface->hwnd, shm_buffer, surface_damage_region);
+     wl_display_flush(process_wayland.wl_display);
+ 
+-    NtGdiSetRectRgn(shm_buffer->damage_region, 0, 0, 0, 0);
+-
+ done:
+     if (surface_damage_region) NtGdiDeleteObjectApp(surface_damage_region);
+     return flushed;
+-- 
+2.46.0
+

@@ -1,7 +1,7 @@
-From c74aa8d4887641221e9cca7c147fa4b4d9a9f5c7 Mon Sep 17 00:00:00 2001
+From 6f85523490b3588970b5f3c411717d7ec0cedb44 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Thu, 13 Jun 2024 10:04:56 +0200
-Subject: [PATCH 6/7] win32u: Factor hardware message point DPI mapping
+Subject: [PATCH 6/8] win32u: Factor hardware message point DPI mapping
  together.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 6/7] win32u: Factor hardware message point DPI mapping
  2 files changed, 1 insertion(+), 4 deletions(-)
 
 diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
-index 210885d59d1..c0f6cb2e7ec 100644
+index d0e884daa9a..2a92f919641 100644
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -2305,7 +2305,6 @@ static void send_parent_notify( HWND hwnd, WORD event, WORD idChild, POINT pt )
+@@ -2315,7 +2315,6 @@ static void send_parent_notify( HWND hwnd, WORD event, WORD idChild, POINT pt )
   */
  static BOOL process_pointer_message( MSG *msg, UINT hw_id, const struct hardware_msg_data *msg_data )
  {
@@ -21,7 +21,7 @@ index 210885d59d1..c0f6cb2e7ec 100644
      return TRUE;
  }
  
-@@ -2384,7 +2383,6 @@ static BOOL process_keyboard_message( MSG *msg, UINT hw_id, HWND hwnd_filter,
+@@ -2394,7 +2393,6 @@ static BOOL process_keyboard_message( MSG *msg, UINT hw_id, HWND hwnd_filter,
          call_hooks( WH_CBT, HCBT_KEYSKIPPED, LOWORD(msg->wParam), msg->lParam, 0 );
          return FALSE;
      }
@@ -29,7 +29,7 @@ index 210885d59d1..c0f6cb2e7ec 100644
  
      if (remove && (msg->message == WM_KEYDOWN || msg->message == WM_KEYUP))
          if (ImmProcessKey( msg->hwnd, NtUserGetKeyboardLayout(0), msg->wParam, msg->lParam, 0 ))
-@@ -2436,7 +2434,6 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+@@ -2446,7 +2444,6 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
          return FALSE;
      }
  
@@ -37,7 +37,7 @@ index 210885d59d1..c0f6cb2e7ec 100644
      set_thread_dpi_awareness_context( get_window_dpi_awareness_context( msg->hwnd ));
  
      /* FIXME: is this really the right place for this hook? */
-@@ -2619,6 +2616,7 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+@@ -2629,6 +2626,7 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
  
      NtUserGetGUIThreadInfo( GetCurrentThreadId(), &info );
      msg->hwnd = find_hardware_message_window( msg, &info, &hittest );
@@ -58,5 +58,5 @@ index 62b1707dbfe..7af2de1cb73 100644
  }
  
 -- 
-2.45.2
+2.46.0
 

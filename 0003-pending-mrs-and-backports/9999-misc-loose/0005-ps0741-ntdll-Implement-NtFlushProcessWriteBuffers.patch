@@ -336,9 +336,9 @@ index 3628cec89e8..748ce9c4bb8 100644
      NtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi), NULL);
      trace("system page size %#lx\n", sbi.PageSize);
 @@ -2755,4 +2765,5 @@ START_TEST(virtual)
-     test_syscalls();
      test_query_region_information();
      test_query_image_information();
+     test_exec_memory_writes();
 +    test_flush_write_buffers();
  }
 -- 

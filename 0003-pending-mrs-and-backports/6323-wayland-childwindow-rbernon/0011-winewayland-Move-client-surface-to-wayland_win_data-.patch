@@ -1,0 +1,380 @@
+From 6c457621da4e6c25bd9b3f0cffe08b8f301e0376 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 20 Aug 2024 15:57:23 +0200
+Subject: [PATCH 11/24] winewayland: Move client surface to wayland_win_data
+ struct.
+
+---
+ dlls/winewayland.drv/opengl.c          | 27 ++++--------
+ dlls/winewayland.drv/vulkan.c          | 21 ++--------
+ dlls/winewayland.drv/wayland_surface.c | 57 ++++++++++----------------
+ dlls/winewayland.drv/waylanddrv.h      | 13 ++++--
+ dlls/winewayland.drv/window.c          | 41 ++++++++++++++++--
+ 5 files changed, 79 insertions(+), 80 deletions(-)
+
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index f61aad6e960..dbeab07a5f1 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -138,8 +138,8 @@ static void wayland_gl_drawable_release(struct wayland_gl_drawable *gl)
+         HWND hwnd = wl_surface_get_user_data(gl->client->wl_surface);
+         struct wayland_win_data *data = wayland_win_data_get(hwnd);
+ 
+-        if (wayland_client_surface_release(gl->client) && data && data->wayland_surface)
+-            data->wayland_surface->client = NULL;
++        if (wayland_client_surface_release(gl->client) && data)
++            data->client_surface = NULL;
+ 
+         if (data) wayland_win_data_release(data);
+     }
+@@ -150,9 +150,8 @@ static void wayland_gl_drawable_release(struct wayland_gl_drawable *gl)
+ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int format)
+ {
+     struct wayland_gl_drawable *gl;
+-    struct wayland_surface *wayland_surface;
+     int client_width = 0, client_height = 0;
+-    struct wayland_win_data *data;
++    RECT client_rect;
+ 
+     TRACE("hwnd=%p format=%d\n", hwnd, format);
+ 
+@@ -166,24 +165,12 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
+     /* Get the client surface for the HWND. If don't have a wayland surface
+      * (e.g., HWND_MESSAGE windows) just create a dummy surface to act as the
+      * target render surface. */
+-    if ((data = wayland_win_data_get(hwnd)))
++    if ((gl->client = get_client_surface(hwnd, &client_rect)))
+     {
+-        if (!(wayland_surface = data->wayland_surface))
+-        {
+-            gl->client = wayland_client_surface_create(hwnd);
++        client_width = client_rect.right - client_rect.left;
++        client_height = client_rect.bottom - client_rect.top;
++        if (client_width == 0 || client_height == 0)
+             client_width = client_height = 1;
+-        }
+-        else
+-        {
+-            gl->client = wayland_surface_get_client(wayland_surface);
+-            client_width = wayland_surface->window.client_rect.right -
+-                           wayland_surface->window.client_rect.left;
+-            client_height = wayland_surface->window.client_rect.bottom -
+-                            wayland_surface->window.client_rect.top;
+-            if (client_width == 0 || client_height == 0)
+-                client_width = client_height = 1;
+-        }
+-        wayland_win_data_release(data);
+     }
+     else
+     {
+diff --git a/dlls/winewayland.drv/vulkan.c b/dlls/winewayland.drv/vulkan.c
+index 7a075a925b7..7c8537bfc40 100644
+--- a/dlls/winewayland.drv/vulkan.c
++++ b/dlls/winewayland.drv/vulkan.c
+@@ -63,8 +63,8 @@ static void wine_vk_surface_destroy(struct wayland_client_surface *client)
+     HWND hwnd = wl_surface_get_user_data(client->wl_surface);
+     struct wayland_win_data *data = wayland_win_data_get(hwnd);
+ 
+-    if (wayland_client_surface_release(client) && data && data->wayland_surface)
+-        data->wayland_surface->client = NULL;
++    if (wayland_client_surface_release(client) && data)
++        data->client_surface = NULL;
+ 
+     if (data) wayland_win_data_release(data);
+ }
+@@ -73,25 +73,12 @@ static VkResult wayland_vulkan_surface_create(HWND hwnd, VkInstance instance, Vk
+ {
+     VkResult res;
+     VkWaylandSurfaceCreateInfoKHR create_info_host;
+-    struct wayland_surface *wayland_surface;
+     struct wayland_client_surface *client;
+-    struct wayland_win_data *data;
++    RECT client_rect;
+ 
+     TRACE("%p %p %p %p\n", hwnd, instance, surface, private);
+ 
+-    if (!(data = wayland_win_data_get(hwnd)))
+-    {
+-        ERR("Failed to find wayland surface for hwnd=%p\n", hwnd);
+-        return VK_ERROR_OUT_OF_HOST_MEMORY;
+-    }
+-
+-    if ((wayland_surface = data->wayland_surface))
+-        client = wayland_surface_get_client(wayland_surface);
+-    else
+-        client = wayland_client_surface_create(hwnd);
+-    wayland_win_data_release(data);
+-
+-    if (!client)
++    if (!(client = get_client_surface(hwnd, &client_rect)))
+     {
+         ERR("Failed to create client surface for hwnd=%p\n", hwnd);
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 6e767b5d680..2acd9f09be5 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -480,14 +480,12 @@ static void wayland_surface_reconfigure_size(struct wayland_surface *surface,
+  *
+  * Reconfigures the subsurface covering the client area.
+  */
+-static void wayland_surface_reconfigure_client(struct wayland_surface *surface)
++void wayland_surface_reconfigure_client(struct wayland_surface *surface, struct wayland_client_surface *client)
+ {
+     struct wayland_window_config *window = &surface->window;
+     int client_x, client_y, x, y;
+     int client_width, client_height, width, height;
+ 
+-    if (!surface->client) return;
+-
+     /* The offset of the client area origin relatively to the window origin. */
+     client_x = window->client_rect.left - window->rect.left;
+     client_y = window->client_rect.top - window->rect.top;
+@@ -501,23 +499,22 @@ static void wayland_surface_reconfigure_client(struct wayland_surface *surface)
+ 
+     TRACE("hwnd=%p subsurface=%d,%d+%dx%d\n", surface->hwnd, x, y, width, height);
+ 
+-    wl_subsurface_set_position(surface->client->wl_subsurface, x, y);
++    wl_subsurface_set_position(client->wl_subsurface, x, y);
+ 
+-    if (surface->client->wp_viewport)
++    if (client->wp_viewport)
+     {
+         if (width != 0 && height != 0)
+         {
+-            wp_viewport_set_destination(surface->client->wp_viewport,
+-                                        width, height);
++            wp_viewport_set_destination(client->wp_viewport, width, height);
+         }
+         else
+         {
+             /* We can't have a 0x0 destination, use 1x1 instead. */
+-            wp_viewport_set_destination(surface->client->wp_viewport, 1, 1);
++            wp_viewport_set_destination(client->wp_viewport, 1, 1);
+         }
+     }
+ 
+-    wl_surface_commit(surface->client->wl_surface);
++    wl_surface_commit(client->wl_surface);
+ 
+     wayland_resize_gl_drawable(surface->hwnd);
+ }
+@@ -528,7 +525,7 @@ static void wayland_surface_reconfigure_client(struct wayland_surface *surface)
+  * Reconfigures the wayland surface as needed to match the latest requested
+  * state.
+  */
+-BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
++BOOL wayland_surface_reconfigure(struct wayland_surface *surface, struct wayland_client_surface *client)
+ {
+     struct wayland_window_config *window = &surface->window;
+     int win_width, win_height, width, height;
+@@ -579,7 +576,7 @@ BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
+ 
+     wayland_surface_reconfigure_geometry(surface, width, height);
+     wayland_surface_reconfigure_size(surface, width, height);
+-    wayland_surface_reconfigure_client(surface);
++    if (client) wayland_surface_reconfigure_client(surface, client);
+ 
+     return TRUE;
+ }
+@@ -807,22 +804,8 @@ err:
+     return NULL;
+ }
+ 
+-/**********************************************************************
+- *          wayland_surface_get_client
+- */
+-struct wayland_client_surface *wayland_surface_get_client(struct wayland_surface *surface)
++void wayland_client_surface_attach(struct wayland_client_surface *client, struct wayland_surface *surface)
+ {
+-    struct wayland_client_surface *client;
+-
+-    if ((client = surface->client))
+-    {
+-        InterlockedIncrement(&client->ref);
+-        return client;
+-    }
+-
+-    if (!(client = wayland_client_surface_create(surface->hwnd)))
+-        return NULL;
+-
+     client->wl_subsurface =
+         wl_subcompositor_get_subsurface(process_wayland.wl_subcompositor,
+                                         client->wl_surface,
+@@ -830,21 +813,23 @@ struct wayland_client_surface *wayland_surface_get_client(struct wayland_surface
+     if (!client->wl_subsurface)
+     {
+         ERR("Failed to create client wl_subsurface\n");
+-        goto err;
++        return;
+     }
+     /* Present contents independently of the parent surface. */
+     wl_subsurface_set_desync(client->wl_subsurface);
+ 
+-    wayland_surface_reconfigure_client(surface);
++    wayland_surface_reconfigure_client(surface, client);
+     /* Commit to apply subsurface positioning. */
+     wl_surface_commit(surface->wl_surface);
++}
+ 
+-    surface->client = client;
+-    return client;
+-
+-err:
+-    wayland_client_surface_release(client);
+-    return NULL;
++void wayland_client_surface_detach(struct wayland_client_surface *client)
++{
++    if (client->wl_subsurface)
++    {
++        wl_subsurface_destroy(client->wl_subsurface);
++        client->wl_subsurface = NULL;
++    }
+ }
+ 
+ static void dummy_buffer_release(void *data, struct wl_buffer *buffer)
+@@ -865,7 +850,7 @@ static const struct wl_buffer_listener dummy_buffer_listener =
+  * Ensure that the wayland surface has up-to-date contents, by committing
+  * a dummy buffer if necessary.
+  */
+-void wayland_surface_ensure_contents(struct wayland_surface *surface)
++void wayland_surface_ensure_contents(struct wayland_surface *surface, struct wayland_client_surface *client)
+ {
+     struct wayland_shm_buffer *dummy_shm_buffer;
+     HRGN damage;
+@@ -896,7 +881,7 @@ void wayland_surface_ensure_contents(struct wayland_surface *surface)
+     if (!(damage = NtGdiCreateRectRgn(0, 0, width, height)))
+         WARN("Failed to create damage region for dummy buffer\n");
+ 
+-    if (wayland_surface_reconfigure(surface))
++    if (wayland_surface_reconfigure(surface, client))
+     {
+         wayland_surface_attach_shm(surface, dummy_shm_buffer, damage);
+         wl_surface_commit(surface->wl_surface);
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index c68f21e6311..d58e6696910 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -199,7 +199,6 @@ struct wayland_surface
+     struct wayland_surface_config pending, requested, processing, current;
+     BOOL resizing;
+     struct wayland_window_config window;
+-    struct wayland_client_surface *client;
+     int buffer_width, buffer_height;
+     HCURSOR hcursor;
+ };
+@@ -241,7 +240,8 @@ void wayland_surface_clear_role(struct wayland_surface *surface);
+ void wayland_surface_attach_shm(struct wayland_surface *surface,
+                                 struct wayland_shm_buffer *shm_buffer,
+                                 HRGN surface_damage_region);
+-BOOL wayland_surface_reconfigure(struct wayland_surface *surface);
++BOOL wayland_surface_reconfigure(struct wayland_surface *surface, struct wayland_client_surface *client_surface);
++void wayland_surface_reconfigure_client(struct wayland_surface *surface, struct wayland_client_surface *client_surface);
+ BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
+                                           int width, int height,
+                                           enum wayland_surface_config_state state);
+@@ -252,9 +252,10 @@ void wayland_surface_coords_to_window(struct wayland_surface *surface,
+                                       double surface_x, double surface_y,
+                                       int *window_x, int *window_y);
+ struct wayland_client_surface *wayland_client_surface_create(HWND hwnd);
+-struct wayland_client_surface *wayland_surface_get_client(struct wayland_surface *surface);
+ BOOL wayland_client_surface_release(struct wayland_client_surface *client);
+-void wayland_surface_ensure_contents(struct wayland_surface *surface);
++void wayland_client_surface_attach(struct wayland_client_surface *client, struct wayland_surface *surface);
++void wayland_client_surface_detach(struct wayland_client_surface *client);
++void wayland_surface_ensure_contents(struct wayland_surface *surface, struct wayland_client_surface *client);
+ void wayland_surface_set_title(struct wayland_surface *surface, LPCWSTR title);
+ 
+ /**********************************************************************
+@@ -286,6 +287,8 @@ struct wayland_win_data
+     struct wayland_shm_buffer *window_contents;
+     /* wayland surface (if any) for this window */
+     struct wayland_surface *wayland_surface;
++    /* wayland client surface (if any) for this window */
++    struct wayland_client_surface *client_surface;
+     /* wine window_surface backing this window */
+     struct window_surface *window_surface;
+     /* window rects, relative to parent client area */
+@@ -296,6 +299,8 @@ struct wayland_win_data
+ struct wayland_win_data *wayland_win_data_get(HWND hwnd);
+ void wayland_win_data_release(struct wayland_win_data *data);
+ 
++struct wayland_client_surface *get_client_surface(HWND hwnd, RECT *client_rect);
++
+ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffer, HRGN damage_region);
+ struct wayland_shm_buffer *get_window_surface_contents(HWND hwnd);
+ void ensure_window_surface_contents(HWND hwnd);
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index b6dfb48eaec..c8a75250a89 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -688,6 +688,41 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+     return ret;
+ }
+ 
++/**********************************************************************
++ *          wayland_surface_get_client
++ */
++struct wayland_client_surface *get_client_surface(HWND hwnd, RECT *client_rect)
++{
++    BOOL visible = NtUserGetWindowLongW(hwnd, GWL_STYLE) & WS_VISIBLE;
++    struct wayland_client_surface *client;
++    struct wayland_surface *wayland_surface;
++    struct wayland_win_data *data;
++
++    if (!(data = wayland_win_data_get(hwnd))) return NULL;
++
++    if (!(client = data->client_surface) && !(client = wayland_client_surface_create(data->hwnd)))
++    {
++        wayland_win_data_release(data);
++        return NULL;
++    }
++
++    if (data->client_surface) wayland_client_surface_detach(data->client_surface);
++
++    if ((wayland_surface = data->wayland_surface))
++        *client_rect = wayland_surface->window.client_rect;
++    else
++        *client_rect = data->rects.client;
++
++    if (wayland_surface && visible) wayland_client_surface_attach(client, wayland_surface);
++
++    if (!data->client_surface) data->client_surface = client;
++    else InterlockedIncrement(&client->ref);
++
++    wayland_win_data_release(data);
++
++    return client;
++}
++
+ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffer, HRGN damage_region)
+ {
+     struct wayland_surface *wayland_surface;
+@@ -698,7 +733,7 @@ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffe
+ 
+     if ((wayland_surface = data->wayland_surface))
+     {
+-        if (wayland_surface_reconfigure(wayland_surface))
++        if (wayland_surface_reconfigure(wayland_surface, data->client_surface))
+         {
+             wayland_surface_attach_shm(wayland_surface, shm_buffer, damage_region);
+             wl_surface_commit(wayland_surface->wl_surface);
+@@ -743,13 +778,13 @@ void ensure_window_surface_contents(HWND hwnd)
+ 
+     if ((wayland_surface = data->wayland_surface))
+     {
+-        wayland_surface_ensure_contents(wayland_surface);
++        wayland_surface_ensure_contents(wayland_surface, data->client_surface);
+ 
+         /* Handle any processed configure request, to ensure the related
+          * surface state is applied by the compositor. */
+         if (wayland_surface->processing.serial &&
+             wayland_surface->processing.processed &&
+-            wayland_surface_reconfigure(wayland_surface))
++            wayland_surface_reconfigure(wayland_surface, data->client_surface))
+         {
+             wl_surface_commit(wayland_surface->wl_surface);
+         }
+-- 
+2.46.0
+
