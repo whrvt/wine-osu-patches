@@ -1,0 +1,68 @@
+From ed80fcf100133abba6bf908d2a41a2cbbbd353ee Mon Sep 17 00:00:00 2001
+From: Giovanni Mascellani <gmascellani@codeweavers.com>
+Date: Tue, 27 Apr 2021 10:51:12 +0200
+Subject: [PATCH] HACK: winex11.drv: Fix drawing of layered windows with a
+ client window.
+
+CW-Bug-Id: #18807
+---
+ dlls/winex11.drv/event.c       |  5 ++++-
+ dlls/winex11.drv/x11drv.h      |  2 ++
+ dlls/winex11.drv/x11drv_main.c | 12 ++++++++++++
+ 3 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index d076703c79b..7ce3f6fea4a 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -946,7 +946,10 @@ static BOOL X11DRV_Expose( HWND hwnd, XEvent *xev )
+     rect.right  = pos.x + event->width;
+     rect.bottom = pos.y + event->height;
+ 
+-    if (event->window != data->client_window)
++    if (layered_window_client_hack && event->window == data->client_window)
++        OffsetRect( &rect, data->client_rect.left - data->whole_rect.left,
++                    data->client_rect.top - data->whole_rect.top );
++    if (layered_window_client_hack || event->window != data->client_window)
+         OffsetRect( &rect, data->whole_rect.left - data->client_rect.left,
+                     data->whole_rect.top - data->client_rect.top );
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index d5f40de97cc..3cbab6255b2 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -968,6 +968,8 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
+     while (len--) *dst++ = (unsigned char)*src++;
+ }
+ 
++extern BOOL layered_window_client_hack;
++
+ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+ {
+     WCHAR *p = dst;
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 6488114a7d6..ac2a7857b91 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -95,6 +95,7 @@ int xrender_error_base = 0;
+ int xfixes_event_base = 0;
+ char *process_name = NULL;
+ WNDPROC client_foreign_window_proc = NULL;
++BOOL layered_window_client_hack = FALSE;
+ 
+ static x11drv_error_callback err_callback;   /* current callback for error */
+ static Display *err_callback_display;        /* display callback is set for */
+@@ -834,6 +835,13 @@ static NTSTATUS x11drv_init( void *arg )
+             (e && *e != '\0' && *e != '0');
+     }
+ 
++    {
++        const char *e = getenv("WINE_LAYERED_WINDOW_CLIENT_HACK");
++        layered_window_client_hack =
++            (e && *e != '\0' && *e != '0');
++        if (layered_window_client_hack) FIXME("HACK: layered window client active. Set WINE_LAYERED_WINDOW_CLIENT_HACK=0 to disable.\n");
++    }
++
+     init_user_driver();
+     X11DRV_DisplayDevices_Init(FALSE);
+     return STATUS_SUCCESS;

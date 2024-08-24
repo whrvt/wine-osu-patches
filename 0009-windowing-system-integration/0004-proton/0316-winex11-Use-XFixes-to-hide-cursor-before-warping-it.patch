@@ -1,0 +1,93 @@
+From 97688ca3cfdd6e5ea6f51e9eda0716d1946aae31 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 25 Jul 2023 10:38:35 +0200
+Subject: [PATCH 0316/1562] winex11: Use XFixes to hide cursor before warping
+ it.
+
+XWayland only allows warping the cursor if it is not visible. Fixes
+a regression from the periodic cursor sync removal.
+
+CW-Bug-Id: #21879
+---
+ dlls/winex11.drv/mouse.c       | 4 +++-
+ dlls/winex11.drv/x11drv_main.c | 4 ++++
+ dlls/winex11.drv/xfixes.h      | 2 ++
+ 3 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 1f2a26e5ea7..c052bdd692c 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -55,6 +55,7 @@ MAKE_FUNCPTR(XcursorLibraryLoadCursor);
+ #define OEMRESOURCE
+ 
+ #include "x11drv.h"
++#include "xfixes.h"
+ #include "winreg.h"
+ #include "wine/server.h"
+ #include "wine/debug.h"
+@@ -1497,10 +1498,11 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
+         return FALSE;
+     }
+ 
++    pXFixesHideCursor( data->display, root_window );
+     XWarpPointer( data->display, root_window, root_window, 0, 0, 0, 0, pos.x, pos.y );
+     data->warp_serial = NextRequest( data->display );
+ 
+-    XNoOp( data->display );
++    pXFixesShowCursor( data->display, root_window );
+     XFlush( data->display ); /* avoids bad mouse lag in games that do their own mouse warping */
+     TRACE( "warped to %d,%d serial %lu\n", x, y, data->warp_serial );
+     return TRUE;
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index c989d557c91..6488114a7d6 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -614,11 +614,13 @@ sym_not_found:
+ #ifdef SONAME_LIBXFIXES
+ 
+ #define MAKE_FUNCPTR(f) typeof(f) * p##f;
++MAKE_FUNCPTR(XFixesHideCursor)
+ MAKE_FUNCPTR(XFixesQueryExtension)
+ MAKE_FUNCPTR(XFixesQueryVersion)
+ MAKE_FUNCPTR(XFixesCreateRegion)
+ MAKE_FUNCPTR(XFixesCreateRegionFromGC)
+ MAKE_FUNCPTR(XFixesSelectSelectionInput)
++MAKE_FUNCPTR(XFixesShowCursor)
+ #undef MAKE_FUNCPTR
+ 
+ static void x11drv_load_xfixes(void)
+@@ -639,11 +641,13 @@ static void x11drv_load_xfixes(void)
+         dlclose(xfixes);                                      \
+         return;                                               \
+     }
++    LOAD_FUNCPTR(XFixesHideCursor)
+     LOAD_FUNCPTR(XFixesQueryExtension)
+     LOAD_FUNCPTR(XFixesQueryVersion)
+     LOAD_FUNCPTR(XFixesCreateRegion)
+     LOAD_FUNCPTR(XFixesCreateRegionFromGC)
+     LOAD_FUNCPTR(XFixesSelectSelectionInput)
++    LOAD_FUNCPTR(XFixesShowCursor)
+ #undef LOAD_FUNCPTR
+ 
+     if (!pXFixesQueryExtension(gdi_display, &event, &error))
+diff --git a/dlls/winex11.drv/xfixes.h b/dlls/winex11.drv/xfixes.h
+index f3beea5efed..6cd4e48425b 100644
+--- a/dlls/winex11.drv/xfixes.h
++++ b/dlls/winex11.drv/xfixes.h
+@@ -27,9 +27,11 @@
+ #ifdef SONAME_LIBXFIXES
+ #include <X11/extensions/Xfixes.h>
+ #define MAKE_FUNCPTR(f) extern typeof(f) * p##f;
++MAKE_FUNCPTR(XFixesHideCursor)
+ MAKE_FUNCPTR(XFixesQueryExtension)
+ MAKE_FUNCPTR(XFixesQueryVersion)
+ MAKE_FUNCPTR(XFixesSelectSelectionInput)
++MAKE_FUNCPTR(XFixesShowCursor)
+ #undef MAKE_FUNCPTR
+ #endif /* defined(SONAME_LIBXFIXES) */
+ 
+-- 
+2.45.2
+

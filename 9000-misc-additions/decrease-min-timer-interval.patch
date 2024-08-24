@@ -7,7 +7,7 @@ index 7d7a2dc557d..7ad4559052b 100644
  
  /* SetTimer() limits */
 -#define USER_TIMER_MINIMUM 0x0000000A
-+#define USER_TIMER_MINIMUM 0x00000002
++#define USER_TIMER_MINIMUM 0x00000005
  #define USER_TIMER_MAXIMUM 0x7FFFFFFF
  
  /* SetCoalescableTimer() tolerances */

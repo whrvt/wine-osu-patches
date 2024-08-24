@@ -48,7 +48,7 @@ index 11111111111..11111111111 100644
 -static void initialize_qpc_features( struct _KUSER_SHARED_DATA *data, UINT64 *tsc_frequency )
 +static void initialize_qpc_features( struct _KUSER_SHARED_DATA *data, UINT64 *tsc_frequency, LONGLONG *tsc_offset )
  {
-     data->QpcBypassEnabled = (SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED | SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP);
+     data->QpcBypassEnabled = 0;
      data->QpcFrequency = TICKSPERSEC;
      data->QpcShift = 0;
      data->QpcBias = 0;

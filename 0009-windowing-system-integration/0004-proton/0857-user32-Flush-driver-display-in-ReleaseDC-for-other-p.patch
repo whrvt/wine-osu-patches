@@ -1,0 +1,28 @@
+From c6fc9aac47ffdc5644f9aace4ad365e66bb1fbce Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Tue, 24 May 2022 16:27:08 -0500
+Subject: [PATCH 0857/1562] user32: Flush driver display in ReleaseDC() for
+ other process window.
+
+CW-Bug-Id: #19779
+---
+ dlls/win32u/dce.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index 649b82cdb6b..d7aa75b3039 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -1020,6 +1020,9 @@ HDC WINAPI NtUserGetDCEx( HWND hwnd, HRGN clip_rgn, DWORD flags )
+  */
+ INT WINAPI NtUserReleaseDC( HWND hwnd, HDC hdc )
+ {
++    if (hwnd && !is_current_process_window( hwnd ))
++        user_driver->pProcessEvents( 0 );
++
+     return release_dc( hwnd, hdc, FALSE );
+ }
+ 
+-- 
+2.45.2
+

@@ -43,3 +43,55 @@ index 11111111111..11111111111 100644
          if (user_time_supported)
          {
              *time_mult = page->time_mult;
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2139,6 +2139,18 @@ NTSTATUS unixcall_wine_get_tsc_calibration( void *args )
+     __u32 time_mult;
+     NTSTATUS s;
+ 
++#ifndef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++    /* allow disabling rdtscp if Wine is built with old Linux kernels (e.g. WineBuilder Ubuntu 20.04) */
++    {
++        const char *e = getenv("WINE_DISABLE_TSC");
++        if (e && *e != '\0' && *e != '0') 
++        {
++            user_shared_data->QpcBypassEnabled &= ~(SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED | SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP);
++            return STATUS_NOT_SUPPORTED;
++        }
++    }
++#endif
++
+     if (monotonic_time_raw( &ts ))
+         return STATUS_NOT_SUPPORTED;
+
+
+Only hardcode QPC/TSC support if Wine is compiled on a fully compliant kernel (i.e. not Linux 5.4 through WineBuilder)
+diff --git a/dlls/ntdll/time.c b/dlls/ntdll/time.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/time.c
++++ b/dlls/ntdll/time.c
+@@ -391,12 +391,20 @@ static UINT64 multiply_tsc(UINT64 a, UINT64 b)
+  */
+ BOOL WINAPI DECLSPEC_HOTPATCH RtlQueryPerformanceCounter( LARGE_INTEGER *counter )
+ {
+-    if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
++    if (
++#ifdef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++        1 ||
++#endif
++        user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
+     {
+         unsigned __int64 tsc;
+         unsigned int aux;
+ 
+-        if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
++        if (
++#ifdef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++            1 ||
++#endif
++            user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
+             tsc = __rdtscp(&aux);
+         else
+         {

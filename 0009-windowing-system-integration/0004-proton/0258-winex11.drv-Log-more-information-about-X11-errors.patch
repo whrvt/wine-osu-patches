@@ -1,0 +1,26 @@
+From 058a5556151a5954c19f649d05189b5c43c543af Mon Sep 17 00:00:00 2001
+From: Andrew Eikum <aeikum@codeweavers.com>
+Date: Mon, 12 Feb 2018 09:15:07 -0600
+Subject: [PATCH 0258/1562] winex11.drv: Log more information about X11 errors.
+
+---
+ dlls/winex11.drv/x11drv_main.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 46b35b03782..7e17501e320 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -321,6 +321,9 @@ static int error_handler( Display *display, XErrorEvent *error_evt )
+              error_evt->serial, error_evt->request_code );
+         assert( 0 );
+     }
++    TRACE("passing on error %d req %d:%d res 0x%lx\n",
++            error_evt->error_code, error_evt->request_code,
++            error_evt->minor_code, error_evt->resourceid);
+     old_error_handler( display, error_evt );
+     return 0;
+ }
+-- 
+2.45.2
+

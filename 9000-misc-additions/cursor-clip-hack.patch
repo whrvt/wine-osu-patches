@@ -15,11 +15,11 @@ index 11111111111..11111111111 100644
 +    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
 +
 +    {
-+        const char *e = getenv("WINE_DISABLE_ABS_TABLET_HACK");
-+        if (e && *e != '\0' && *e != '0') return FALSE;
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (e && *e != '\0' && *e != '0') return TRUE;
 +    }
 +
-+    return TRUE;
++    return FALSE;
 +}
  
  #endif  /* __WINE_X11DRV_H */
@@ -54,7 +54,7 @@ index 11111111111..11111111111 100644
 +    /* lazy to find somewhere else to put this so that it doesn't show up more than once */
 +    static unsigned int once;
 +    if (!once++ && cursor_clip_hack)
-+         MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_DISABLE_ABS_TABLET_HACK=1 to disable.\n");
++         MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_ENABLE_ABS_TABLET_HACK=0 to disable.\n");
 +
      /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI
       * there is no way to query it, so we have to store it here.
@@ -81,11 +81,11 @@ index 11111111111..11111111111 100644
 +    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
 +
 +    {
-+        const char *e = getenv("WINE_DISABLE_ABS_TABLET_HACK");
-+        if (e && *e != '\0' && *e != '0') return FALSE;
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (e && *e != '\0' && *e != '0') return TRUE;
 +    }
 +
-+    return TRUE;
++    return FALSE;
 +}
 +
  #endif /* __WINE_WIN32U_PRIVATE */
@@ -123,6 +123,8 @@ index 11111111111..11111111111 100644
      UINT dpi;
      BOOL ret;
      RECT new_rect;
+
+### WIP: do better than this for wayland ###
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
 index 11111111111..11111111111 100644
 --- a/dlls/winewayland.drv/wayland_pointer.c
@@ -159,3 +161,21 @@ index f2c36f29a94..ed1c8714ab6 100644
      RECT rect;
      UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
      if (NtUserGetClipCursor(&rect)) NtUserClipCursor(&rect);
+#diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+#index 11111111111..11111111111 100644
+#--- a/dlls/winewayland.drv/wayland_pointer.c
+#+++ b/dlls/winewayland.drv/wayland_pointer.c
+#@@ -308,6 +308,13 @@ static void relative_pointer_v1_relative_motion(void *data,
+#     screen.x -= origin.x;
+#     screen.y -= origin.y;
+# 
+#+    if (!(screen.x || screen.y))
+#+    {
+#+        wayland_pointer_clear_constraint();
+#+        pointer_handle_motion_internal(dx, dy);
+#+        return;
+#+    }
+#+
+#     input.type = INPUT_MOUSE;
+#     input.mi.dx = screen.x;
+#     input.mi.dy = screen.y;
