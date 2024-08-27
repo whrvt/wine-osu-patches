@@ -1,6 +1,6 @@
 From: William Horvath <william@horvath.blog>
-Date: Fri, 05 Jul 2024 08:10:03 +0000
-Subject: [PATCH] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
+Date: Tue, 27 Aug 2024 05:03:23 -0700
+Subject: [PATCH 3/3] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
 
 Relevant environment variables are: 
 ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)
@@ -84,17 +84,10 @@ diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
 index 16c9daaf59c..fdd9395e70b 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -943,8 +943,18 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
-     if (stream)
-         pa_stream_unref(stream);
+@@ -943,6 +943,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
  
--    if (length)
--        *def_period = *min_period = pa_bytes_to_usec(10 * length, &ss);
-+    if (length) {
-+        *min_period = pa_bytes_to_usec(10 * length, &ss);
-+        // magic numbers...? +10 to make sure we round up instead of down
-+        *def_period = (*min_period + (*min_period / 2)) + 10;
-+    }
+     if (length)
+         *def_period = *min_period = pa_bytes_to_usec(10 * length, &ss);
 +
 +    const char* penv = getenv("STAGING_AUDIO_PERIOD");
 +    int val;
@@ -105,15 +98,6 @@ index 16c9daaf59c..fdd9395e70b 100644
  
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
      wfx->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-@@ -1246,7 +1256,7 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
- 
-     /* PulseAudio will fill in correct values */
-     attr.minreq = attr.fragsize = period_bytes;
--    attr.tlength = period_bytes * 3;
-+    attr.tlength = period_bytes;
-     attr.maxlength = stream->bufsize_frames * pa_frame_size(&stream->ss);
-     attr.prebuf = pa_frame_size(&stream->ss);
-     dump_attr(&attr);
 @@ -1343,6 +1353,20 @@ static NTSTATUS pulse_create_stream(void *args)
      if (FAILED(hr))
          goto exit;
@@ -135,24 +119,6 @@ index 16c9daaf59c..fdd9395e70b 100644
      stream->def_period = params->period;
  
      stream->period_bytes = pa_frame_size(&stream->ss) * muldiv(params->period,
-diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 77b1dcf6c4c..6837b0441b9 100644
---- a/dlls/winepulse.drv/pulse.c
-+++ b/dlls/winepulse.drv/pulse.c
-@@ -944,9 +944,10 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
-         pa_stream_unref(stream);
- 
-     if (length) {
--        *min_period = pa_bytes_to_usec(10 * length, &ss);
--        // magic numbers...? +10 to make sure we round up instead of down
--        *def_period = (*min_period + (*min_period / 2)) + 10;
-+        *min_period = pa_bytes_to_usec(10 * length, &ss);
-+
-+        // don't even ask
-+        *def_period = pa_bytes_to_usec(10 * (length + (96 - (length % 96))), &ss);
-     }
- 
-     const char* penv = getenv("STAGING_AUDIO_PERIOD");
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
 index 860c31f4b49..bb5228eb561 100644
 --- a/dlls/mmdevapi/client.c
@@ -193,7 +159,8 @@ index 860c31f4b49..bb5228eb561 100644
 -        else if (*period < min_period)
 -            return AUDCLNT_E_INVALID_DEVICE_PERIOD;
 -        if (*duration < 3 * *period)
-             *duration = 3 * *period;
+-            *duration = 3 * *period;
++            *duration = 3.5 * *period;
 +        }
      } else {
          const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
@@ -204,7 +171,7 @@ index 860c31f4b49..bb5228eb561 100644
  
 -    TRACE("Adjusted duration %lu and period %lu\n", (ULONG)*duration, (ULONG)*period);
 +    if (custom) {
-+        MESSAGE("Set period %lu and duration %lu\n", (ULONG)*period, (ULONG)*duration);
++        MESSAGE("Set custom audio period %lu and duration %lu\n", (ULONG)*period, (ULONG)*duration);
 +    } else {
 +        TRACE("Adjusted duration %lu and period %lu\n", (ULONG)*duration, (ULONG)*period);
 +    }

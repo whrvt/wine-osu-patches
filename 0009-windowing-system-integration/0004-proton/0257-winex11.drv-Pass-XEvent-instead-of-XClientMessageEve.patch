@@ -68,9 +68,9 @@ index 77b7fa50db6..dccbaa15c1c 100644
 +static void handle_xdnd_enter_event( HWND hWnd, XEvent *xev )
  {
 +    XClientMessageEvent *event = &xev->xclient;
+     struct dnd_enter_event_params *params;
      struct format_entry *data;
      unsigned long count = 0;
-     Atom *xdndtypes;
 @@ -1764,8 +1771,9 @@ static long drop_effect_to_xdnd_action( UINT effect )
  }
  
@@ -90,9 +90,9 @@ index 77b7fa50db6..dccbaa15c1c 100644
 +static void handle_xdnd_drop_event( HWND hwnd, XEvent *xev )
  {
 +    XClientMessageEvent *event = &xev->xclient;
+     struct dnd_drop_event_params params = {.dispatch.callback = dnd_leave_event_callback, .hwnd = HandleToULong(hwnd)};
      XClientMessageEvent e;
-     DWORD effect;
- 
+     void *ret_ptr;
 @@ -1818,7 +1827,7 @@ static void handle_xdnd_drop_event( HWND hwnd, XClientMessageEvent *event )
  }
  

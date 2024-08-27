@@ -1,7 +1,7 @@
-From 3d1b00b0a758607d834ccd32837c7847571d8f18 Mon Sep 17 00:00:00 2001
+From 4ad5bc4f487356b6b52c86dc75f21b9858c24b27 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Wed, 21 Aug 2024 08:21:30 +0200
-Subject: [PATCH 4/4] win32u: Implement DPI scaled window surface.
+Subject: [PATCH 5/5] win32u: Implement DPI scaled window surface.
 
 ---
  dlls/win32u/dce.c            | 169 ++++++++++++++++++++++++++++++++++-
@@ -200,10 +200,10 @@ index 8bad1949ebd..3b8bc699017 100644
  
  /* window surface common helpers */
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index 4341ab3feed..9e71bcbd513 100644
+index 6b7734d2af5..f7d869d1feb 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
-@@ -45,8 +45,9 @@ extern ULONG_PTR set_icon_param( HICON handle, ULONG_PTR param );
+@@ -45,8 +45,9 @@ extern ULONG_PTR set_icon_param( HICON handle, const struct free_icon_params *pa
  
  /* dce.c */
  extern struct window_surface dummy_surface;
@@ -215,10 +215,10 @@ index 4341ab3feed..9e71bcbd513 100644
  extern void flush_window_surfaces( BOOL idle );
  extern void move_window_bits( HWND hwnd, const RECT *visible_rect, const RECT *old_visible_rect,
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index fdcb80b7506..0a3eb9c7763 100644
+index 2aed22350e7..05a353ae53a 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -1939,7 +1939,7 @@ static struct window_surface *get_window_surface( HWND hwnd, UINT swp_flags, BOO
+@@ -1940,7 +1940,7 @@ static struct window_surface *get_window_surface( HWND hwnd, UINT swp_flags, BOO
      else if (create_layered || is_layered) needs_surface = TRUE;
  
      if (needs_surface)
@@ -227,7 +227,7 @@ index fdcb80b7506..0a3eb9c7763 100644
      else if (new_surface && new_surface != &dummy_surface)
      {
          window_surface_release( new_surface );
-@@ -2106,7 +2106,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+@@ -2107,7 +2107,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
              }
          }
  

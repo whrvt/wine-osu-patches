@@ -1,7 +1,7 @@
-From 01ee6c052b241a601a9975b5accb80b4455827b4 Mon Sep 17 00:00:00 2001
+From 27716601ff862cad61bc435b7605819d35e8d105 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 9 Aug 2024 09:40:37 +0200
-Subject: [PATCH 1/4] win32u: Map window region DPI before calling into the
+Subject: [PATCH 2/5] win32u: Map window region DPI before calling into the
  drivers.
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH 1/4] win32u: Map window region DPI before calling into the
  3 files changed, 31 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index 5a1b2e12e40..02d7bd8ac0c 100644
+index 1106c265402..d26e7f76bfe 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
 @@ -2249,6 +2249,29 @@ RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to )
@@ -45,7 +45,7 @@ index 5a1b2e12e40..02d7bd8ac0c 100644
   *              map_dpi_point
   */
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index 28801dfd30f..af054186f1a 100644
+index 2058d0332f7..b15c8ebd9dd 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
 @@ -183,6 +183,7 @@ extern RECT get_virtual_screen_rect( UINT dpi );
@@ -57,10 +57,10 @@ index 28801dfd30f..af054186f1a 100644
  extern POINT point_phys_to_win_dpi( HWND hwnd, POINT pt );
  extern POINT point_thread_to_win_dpi( HWND hwnd, POINT pt );
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index c53e4f8e0e8..397d0802f1b 100644
+index 35710f862d5..f1c898446b6 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -2231,8 +2231,14 @@ int WINAPI NtUserSetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
+@@ -2232,8 +2232,14 @@ int WINAPI NtUserSetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
      {
          UINT swp_flags = SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED |
              SWP_NOCLIENTSIZE | SWP_NOCLIENTMOVE;

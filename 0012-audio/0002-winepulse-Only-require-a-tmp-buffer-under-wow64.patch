@@ -1,0 +1,35 @@
+From b0a82a2e0c4c5a1aa80b82466016e19c3707d81c Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 27 Aug 2024 04:31:40 -0700
+Subject: [PATCH 2/3] winepulse: Only require a tmp buffer under wow64.
+
+---
+ dlls/winepulse.drv/pulse.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 11111111111..11111111111 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -1216,10 +1216,14 @@ static NTSTATUS pulse_create_stream(void *args)
+         /* Update frames according to new size */
+         dump_attr(attr);
+         if (stream->dataflow == eRender) {
+-            if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+-                zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
+-                hr = E_OUTOFMEMORY;
+-        } 
++            /* Don't unconditionally create a tmp buffer outside of experimental wow64 mode */
++            if (attr->tlength < size || zero_bits) {
++                WARN("Allocating tmp buffer.\n");
++                if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
++                    zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
++                    hr = E_OUTOFMEMORY;
++            }
++        }
+         else {
+            WARN("Capture device support is unavailable with this version of wine.\n");
+            hr = E_NOTIMPL;
+-- 
+2.46.0
+

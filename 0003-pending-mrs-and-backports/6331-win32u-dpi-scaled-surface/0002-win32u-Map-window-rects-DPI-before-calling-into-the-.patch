@@ -1,7 +1,7 @@
-From 9f0f174b537111d04ec45bc5721af114fe8c30de Mon Sep 17 00:00:00 2001
+From 18e9b5c58d10ed358078f221f508413fa72b3d8b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 19 Aug 2024 09:16:05 +0200
-Subject: [PATCH 2/4] win32u: Map window rects DPI before calling into the
+Subject: [PATCH 3/5] win32u: Map window rects DPI before calling into the
  drivers.
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH 2/4] win32u: Map window rects DPI before calling into the
  3 files changed, 34 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index 02d7bd8ac0c..fd87a607908 100644
+index d26e7f76bfe..cd9e2a37e6c 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
 @@ -2272,6 +2272,17 @@ HRGN map_dpi_region( HRGN hrgn, UINT dpi_from, UINT dpi_to )
@@ -33,7 +33,7 @@ index 02d7bd8ac0c..fd87a607908 100644
   *              map_dpi_point
   */
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index af054186f1a..bd0f4410afe 100644
+index b15c8ebd9dd..2b77cd20a9e 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
 @@ -184,6 +184,7 @@ extern BOOL is_exiting_thread( DWORD tid );
@@ -45,11 +45,11 @@ index af054186f1a..bd0f4410afe 100644
  extern POINT point_phys_to_win_dpi( HWND hwnd, POINT pt );
  extern POINT point_thread_to_win_dpi( HWND hwnd, POINT pt );
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 397d0802f1b..e07100707f3 100644
+index f1c898446b6..909b7ca4bec 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -1897,10 +1897,15 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
-     BOOL shaped, needs_surface, create_opaque, is_layered;
+     BOOL shaped, needs_surface, create_opaque, is_layered, is_child;
      HWND parent = NtUserGetAncestor( hwnd, GA_PARENT );
      struct window_surface *new_surface;
 -    UINT style, ex_style;
@@ -64,18 +64,18 @@ index 397d0802f1b..e07100707f3 100644
 +
      style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
      ex_style = NtUserGetWindowLongW( hwnd, GWL_EXSTYLE );
- 
-@@ -1908,7 +1913,8 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+     is_child = parent && parent != NtUserGetDesktopWindow();
+@@ -1909,7 +1914,8 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
      else if ((shaped = !!shape)) NtGdiDeleteObjectApp( shape );
  
      rects->visible = rects->window;
 -    if (!user_driver->pWindowPosChanging( hwnd, swp_flags, shaped, rects )) needs_surface = FALSE;
 +    monitor_rects = map_dpi_window_rects( *rects, get_thread_dpi(), monitor_dpi );
 +    if (!user_driver->pWindowPosChanging( hwnd, swp_flags, shaped, &monitor_rects )) needs_surface = FALSE;
-     else if (parent && parent != NtUserGetDesktopWindow()) needs_surface = FALSE;
+     else if (is_child) needs_surface = FALSE;
      else if (swp_flags & SWP_HIDEWINDOW) needs_surface = FALSE;
      else if (swp_flags & SWP_SHOWWINDOW) needs_surface = TRUE;
-@@ -1967,12 +1973,15 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
+@@ -1968,12 +1974,15 @@ static struct window_surface *create_window_surface( HWND hwnd, UINT swp_flags,
  static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, struct window_surface *new_surface,
                                const struct window_rects *new_rects, const RECT *valid_rects )
  {
@@ -91,7 +91,7 @@ index 397d0802f1b..e07100707f3 100644
  
      is_layered = new_surface && new_surface->alpha_mask;
  
-@@ -1992,6 +2001,11 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+@@ -1993,6 +2002,11 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
          valid_rects = NULL;
      }
  
@@ -103,7 +103,7 @@ index 397d0802f1b..e07100707f3 100644
      SERVER_START_REQ( set_window_pos )
      {
          req->handle        = wine_server_user_handle( hwnd );
-@@ -2089,10 +2103,14 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+@@ -2090,10 +2104,14 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
              if (surface_win && surface_win != hwnd)
                  move_window_bits( hwnd, &new_rects->visible, &new_rects->visible, &new_rects->window, valid_rects );
              else
