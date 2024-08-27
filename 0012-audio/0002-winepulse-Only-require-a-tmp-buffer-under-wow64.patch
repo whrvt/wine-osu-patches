@@ -20,7 +20,7 @@ index 11111111111..11111111111 100644
 -                hr = E_OUTOFMEMORY;
 -        } 
 +            /* Don't unconditionally create a tmp buffer outside of experimental wow64 mode */
-+            if (attr->tlength < size || zero_bits) {
++            if ((attr->tlength < stream->bufsize_bytes) || zero_bits) {
 +                WARN("Allocating tmp buffer.\n");
 +                if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
 +                    zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
