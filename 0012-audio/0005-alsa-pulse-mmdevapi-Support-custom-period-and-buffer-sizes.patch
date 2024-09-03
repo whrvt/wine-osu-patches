@@ -1,6 +1,6 @@
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
-Subject: [PATCH 3/3] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
+Subject: [PATCH 5/5] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
 
 Relevant environment variables are: 
 ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)
@@ -81,7 +81,7 @@ index 11111111111..11111111111 100644
              WARN("Recover failed: %d (%s)\n", ret, snd_strerror(ret));
              return;
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 16c9daaf59c..fdd9395e70b 100644
+index 11111111111..11111111111 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -943,6 +943,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
@@ -112,7 +112,7 @@ index 16c9daaf59c..fdd9395e70b 100644
 +    const char* denv = getenv("STAGING_AUDIO_DURATION");
 +    int durationval;
 +    if ((stream->dataflow == eRender) && denv && (durationval = atoi(denv)) >= 0) {
-+        params->duration = durationval;
++        params->duration = max(durationval, params->period);
 +        TRACE("Pulse audio duration set to %d.\n", durationval);
 +    }
 +
@@ -120,19 +120,20 @@ index 16c9daaf59c..fdd9395e70b 100644
  
      stream->period_bytes = pa_frame_size(&stream->ss) * muldiv(params->period,
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index 860c31f4b49..bb5228eb561 100644
+index 11111111111..11111111111 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
-@@ -52,6 +52,8 @@ extern struct audio_session_wrapper *session_wrapper_create(struct audio_client
+@@ -52,6 +52,9 @@ extern struct audio_session_wrapper *session_wrapper_create(struct audio_client
  
  static HANDLE main_loop_thread;
  
 +static BOOL custom;
++static REFERENCE_TIME num_periods = 3;
 +
  void main_loop_stop(void)
  {
      if (main_loop_thread) {
-@@ -105,7 +107,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
+@@ -105,7 +108,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
  static HRESULT get_periods(struct audio_client *client,
                             REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
  {
@@ -140,7 +141,7 @@ index 860c31f4b49..bb5228eb561 100644
      struct get_device_period_params params;
  
      params.device     = client->device_name;
-@@ -115,8 +116,6 @@ static HRESULT get_periods(struct audio_client *client,
+@@ -115,8 +117,6 @@ static HRESULT get_periods(struct audio_client *client,
  
      wine_unix_call(get_device_period, &params);
  
@@ -149,7 +150,7 @@ index 860c31f4b49..bb5228eb561 100644
      return params.result;
  }
  
-@@ -136,12 +135,10 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -136,12 +136,10 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
      TRACE("Device periods: %lu default and %lu minimum\n", (ULONG)def_period, (ULONG)min_period);
  
      if (mode == AUDCLNT_SHAREMODE_SHARED) {
@@ -160,12 +161,12 @@ index 860c31f4b49..bb5228eb561 100644
 -            return AUDCLNT_E_INVALID_DEVICE_PERIOD;
 -        if (*duration < 3 * *period)
 -            *duration = 3 * *period;
-+            *duration = 3.5 * *period;
++            *duration = num_periods * *period;
 +        }
      } else {
          const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
          if (fmtex->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-@@ -166,7 +163,11 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -166,7 +164,11 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
          }
      }
  
@@ -178,29 +179,33 @@ index 860c31f4b49..bb5228eb561 100644
  
      return hr;
  }
-@@ -378,6 +379,21 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
- 
+@@ -379,6 +381,25 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
      if (mode != AUDCLNT_SHAREMODE_SHARED && mode != AUDCLNT_SHAREMODE_EXCLUSIVE)
          return E_INVALIDARG;
-+    
+ 
 +    if (mode == AUDCLNT_SHAREMODE_SHARED) {
 +        const char* penv = getenv("STAGING_AUDIO_PERIOD");
 +        const char* denv = getenv("STAGING_AUDIO_DURATION");
 +        int periodval, durationval;
-+        if (  (penv && denv) &&
-+            (((periodval   = atoi(penv)) >= 0) &&
-+             ((durationval = atoi(denv)) >= 0))
-+           )
-+        {
++
++        if (penv && ((periodval = atoi(penv)) >= 0)) {
 +            custom = TRUE;
 +            period = periodval;
-+            duration = durationval;
++
++            /* only set duration if period is given (backwards compatibility?) */
++            if (denv && ((durationval = atoi(denv)) >= 0)) {
++                duration = max(durationval, periodval);
++            }
++            else {
++                duration = num_periods * periodval;
++            }
 +        }
 +    }
- 
++
      if (flags & ~(AUDCLNT_STREAMFLAGS_CROSSPROCESS |
                    AUDCLNT_STREAMFLAGS_LOOPBACK |
-@@ -1091,7 +1107,14 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
+                   AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+@@ -1091,7 +1112,14 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
      if (!format)
          return E_POINTER;
  

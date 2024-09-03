@@ -108,9 +108,9 @@ index 956595bf2a1..5bdf5d9f1ee 100644
  {
      WCHAR filenameW[MAX_PATH];
 @@ -1663,4 +1752,5 @@ START_TEST(module)
-     test_LdrGetDllFullName();
      test_apisets();
      test_ddag_node();
+     test_tls_links();
 +    test_known_dlls_load();
  }
 -- 

@@ -1,7 +1,7 @@
-From 1c1ec6ceef05fc0bcb2e98a4e86be7a2d1114864 Mon Sep 17 00:00:00 2001
+From a155bcfd2579a5c19e93de5dde64a5e38648892d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 20 Aug 2024 15:45:26 +0200
-Subject: [PATCH 07/24] winewayland: Move window contents buffer to
+Subject: [PATCH 06/10] winewayland: Move window contents buffer to
  wayland_win_data struct.
 
 ---
@@ -11,10 +11,10 @@ Subject: [PATCH 07/24] winewayland: Move window contents buffer to
  3 files changed, 22 insertions(+), 16 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index c96ed7bde18..8acd43e1729 100644
+index 040a07463a0..146c688ef4c 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -230,9 +230,6 @@ void wayland_surface_destroy(struct wayland_surface *surface)
+@@ -232,9 +232,6 @@ void wayland_surface_destroy(struct wayland_surface *surface)
  
      pthread_mutex_unlock(&surface->mutex);
  
@@ -25,7 +25,7 @@ index c96ed7bde18..8acd43e1729 100644
  
      pthread_mutex_destroy(&surface->mutex);
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 580e367e1bf..54138f63ceb 100644
+index 35c18ffe468..5644045109c 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -198,7 +198,6 @@ struct wayland_surface
@@ -46,7 +46,7 @@ index 580e367e1bf..54138f63ceb 100644
      struct wayland_surface *wayland_surface;
      /* wine window_surface backing this window */
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index a8fa6e73b4d..edfbed23a4a 100644
+index ce755de6b9e..a4446b34c56 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -125,6 +125,7 @@ static void wayland_win_data_destroy(struct wayland_win_data *data)

@@ -1,0 +1,31 @@
+From d6810f314acdbeb20f79f8522ba2b90aa3c5c7f6 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 2 Sep 2024 16:16:34 -0700
+Subject: [PATCH 3/5] winepulse: Return the correct latency in
+ pulse_get_latency
+
+---
+ dlls/winepulse.drv/pulse.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 32995e8ac85..e697eb2459f 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -2370,11 +2370,9 @@ static NTSTATUS pulse_get_latency(void *args)
+     }
+     else
+         lat = attr->fragsize / pa_frame_size(&stream->ss);
+-    *params->latency = 10000000;
+-    *params->latency *= lat;
+-    *params->latency /= stream->ss.rate;
++    *params->latency = lat;
+     pulse_unlock();
+-    TRACE("Latency: %u ms\n", (unsigned)(*params->latency / 10000));
++    TRACE("Latency: %u ms\n", (unsigned)max(*params->latency / 10000, 1));
+     params->result = S_OK;
+     return STATUS_SUCCESS;
+ }
+-- 
+2.46.0
+

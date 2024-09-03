@@ -1,7 +1,7 @@
-From 7fa28a9fc7df7c2449e17636320b0ebfe0146540 Mon Sep 17 00:00:00 2001
+From 88f0a4a7225a73bddd7091a0e41721d60207ebb6 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sun, 18 Aug 2024 12:36:20 +0200
-Subject: [PATCH 12/24] winewayland: Get rid of window_surface reference from
+Subject: [PATCH 08/10] winewayland: Get rid of window_surface reference from
  wayland_win_data.
 
 ---
@@ -10,20 +10,20 @@ Subject: [PATCH 12/24] winewayland: Get rid of window_surface reference from
  2 files changed, 7 deletions(-)
 
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index d58e6696910..c717838cefa 100644
+index 85df9865a3d..f6d4f2e519c 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
-@@ -289,8 +289,6 @@ struct wayland_win_data
+@@ -281,8 +281,6 @@ struct wayland_win_data
+     struct wayland_shm_buffer *window_contents;
+     /* wayland surface (if any) for this window */
      struct wayland_surface *wayland_surface;
-     /* wayland client surface (if any) for this window */
-     struct wayland_client_surface *client_surface;
 -    /* wine window_surface backing this window */
 -    struct window_surface *window_surface;
      /* window rects, relative to parent client area */
      struct window_rects rects;
      BOOL managed;
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index c8a75250a89..759d6f48dbc 100644
+index 7b273fdd202..4a621115c03 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -119,7 +119,6 @@ static void wayland_win_data_destroy(struct wayland_win_data *data)
@@ -34,7 +34,7 @@ index c8a75250a89..759d6f48dbc 100644
      if (data->wayland_surface) wayland_surface_destroy(data->wayland_surface);
      if (data->window_contents) wayland_shm_buffer_unref(data->window_contents);
      free(data);
-@@ -444,10 +443,6 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
+@@ -451,10 +450,6 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
      data->rects = *new_rects;
      data->managed = managed;
  
@@ -43,8 +43,8 @@ index c8a75250a89..759d6f48dbc 100644
 -    data->window_surface = surface;
 -
      wayland_win_data_update_wayland_surface(data);
-     if (surface) wayland_window_surface_set_visible_rect(surface, &data->rects.visible);
      if (data->wayland_surface) wayland_win_data_update_wayland_state(data);
+ 
 -- 
 2.46.0
 

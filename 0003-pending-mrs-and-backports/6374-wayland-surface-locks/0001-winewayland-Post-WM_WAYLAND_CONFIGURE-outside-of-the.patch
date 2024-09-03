@@ -1,7 +1,7 @@
-From 185cdff2c9d486772da04fecd1371cd0d94f6f82 Mon Sep 17 00:00:00 2001
+From 31ecb3f6dbdb4ab07a348e030ed3bc645c412a0e Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 28 Jun 2024 21:22:18 +0200
-Subject: [PATCH 02/24] winewayland: Post WM_WAYLAND_CONFIGURE outside of the
+Subject: [PATCH 01/10] winewayland: Post WM_WAYLAND_CONFIGURE outside of the
  surface lock.
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 02/24] winewayland: Post WM_WAYLAND_CONFIGURE outside of the
  1 file changed, 4 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index a2699d66e51..c96ed7bde18 100644
+index 5ca8b010746..040a07463a0 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -38,7 +38,7 @@ static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_sur

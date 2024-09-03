@@ -1,24 +1,24 @@
-From 6c55fd04263fc1b2596447a211625ec81378bf30 Mon Sep 17 00:00:00 2001
+From 8c3fe2546655e234494b984fba723668d0453023 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 20 Aug 2024 14:49:49 +0200
-Subject: [PATCH 10/24] winewayland: Get rid of the window surface individual
+Subject: [PATCH 10/10] winewayland: Get rid of the window surface individual
  locks.
 
 ---
  dlls/winewayland.drv/opengl.c           | 53 +++++++++++--------
  dlls/winewayland.drv/vulkan.c           | 28 +++++-----
  dlls/winewayland.drv/wayland_keyboard.c | 10 ++--
- dlls/winewayland.drv/wayland_pointer.c  | 40 +++++++++++----
+ dlls/winewayland.drv/wayland_pointer.c  | 39 +++++++++-----
  dlls/winewayland.drv/wayland_surface.c  | 30 +++++------
  dlls/winewayland.drv/waylanddrv.h       |  2 -
  dlls/winewayland.drv/window.c           | 68 ++++++++++---------------
- 7 files changed, 120 insertions(+), 111 deletions(-)
+ 7 files changed, 117 insertions(+), 113 deletions(-)
 
 diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
-index 94bf4334d11..f61aad6e960 100644
+index fe7499f5256..94ff32c81f1 100644
 --- a/dlls/winewayland.drv/opengl.c
 +++ b/dlls/winewayland.drv/opengl.c
-@@ -136,12 +136,12 @@ static void wayland_gl_drawable_release(struct wayland_gl_drawable *gl)
+@@ -166,12 +166,12 @@ static void wayland_gl_drawable_release(struct wayland_gl_drawable *gl)
      if (gl->client)
      {
          HWND hwnd = wl_surface_get_user_data(gl->client->wl_surface);
@@ -35,7 +35,7 @@ index 94bf4334d11..f61aad6e960 100644
      }
  
      free(gl);
-@@ -152,6 +152,7 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
+@@ -194,6 +194,7 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
      struct wayland_gl_drawable *gl;
      struct wayland_surface *wayland_surface;
      int client_width = 0, client_height = 0;
@@ -43,7 +43,7 @@ index 94bf4334d11..f61aad6e960 100644
  
      TRACE("hwnd=%p format=%d\n", hwnd, format);
  
-@@ -165,16 +166,24 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
+@@ -207,16 +208,24 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
      /* Get the client surface for the HWND. If don't have a wayland surface
       * (e.g., HWND_MESSAGE windows) just create a dummy surface to act as the
       * target render surface. */
@@ -76,7 +76,7 @@ index 94bf4334d11..f61aad6e960 100644
      }
      else
      {
-@@ -241,23 +250,27 @@ static void wayland_update_gl_drawable(HWND hwnd, struct wayland_gl_drawable *ne
+@@ -285,23 +294,27 @@ static void wayland_update_gl_drawable(HWND hwnd, struct wayland_gl_drawable *ne
  
  static void wayland_gl_drawable_sync_size(struct wayland_gl_drawable *gl)
  {
@@ -212,7 +212,7 @@ index 5c2fe15273e..8f7b6dce30f 100644
  
  static void keyboard_handle_leave(void *data, struct wl_keyboard *wl_keyboard,
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
-index 1d8acaeabd2..c1a364925f0 100644
+index b549aa28257..66b39b12690 100644
 --- a/dlls/winewayland.drv/wayland_pointer.c
 +++ b/dlls/winewayland.drv/wayland_pointer.c
 @@ -53,9 +53,15 @@ static void pointer_handle_motion_internal(wl_fixed_t sx, wl_fixed_t sy)
@@ -239,45 +239,41 @@ index 1d8acaeabd2..c1a364925f0 100644
 -    pthread_mutex_unlock(&surface->mutex);
 +    wayland_win_data_release(data);
  
-     /* Hardware input events are in physical coordinates. */
-     if (!NtUserLogicalToPerMonitorDPIPhysicalPoint(hwnd, &screen)) return;
-@@ -248,7 +254,7 @@ static const struct wl_pointer_listener pointer_listener =
+     input.type = INPUT_MOUSE;
+     input.mi.dx = screen.x;
+@@ -245,7 +251,7 @@ static const struct wl_pointer_listener pointer_listener =
      pointer_handle_axis_discrete
  };
  
 -static void relative_pointer_v1_relative_motion(void *data,
 +static void relative_pointer_v1_relative_motion(void *private,
- 			                        struct zwp_relative_pointer_v1 *zwp_relative_pointer_v1,
+                                                 struct zwp_relative_pointer_v1 *zwp_relative_pointer_v1,
                                                  uint32_t utime_hi, uint32_t utime_lo,
                                                  wl_fixed_t dx, wl_fixed_t dy,
-@@ -258,10 +264,16 @@ static void relative_pointer_v1_relative_motion(void *data,
+@@ -254,17 +260,18 @@ static void relative_pointer_v1_relative_motion(void *data,
+     INPUT input = {0};
      HWND hwnd;
-     POINT screen, origin;
-     struct wayland_surface *surface;
+     POINT screen;
+-    struct wayland_surface *surface;
 +    struct wayland_win_data *data;
-     RECT window_rect;
  
      if (!(hwnd = wayland_pointer_get_focused_hwnd())) return;
 -    if (!(surface = wayland_surface_lock_hwnd(hwnd))) return;
 +    if (!(data = wayland_win_data_get(hwnd))) return;
-+    if (!(surface = data->wayland_surface))
-+    {
-+        wayland_win_data_release(data);
-+        return;
-+    }
  
-     window_rect = surface->window.rect;
- 
-@@ -270,7 +282,7 @@ static void relative_pointer_v1_relative_motion(void *data,
+-    wayland_surface_coords_to_window(surface,
++    wayland_surface_coords_to_window(data->wayland_surface,
+                                      wl_fixed_to_double(dx),
                                       wl_fixed_to_double(dy),
                                       (int *)&screen.x, (int *)&screen.y);
  
 -    pthread_mutex_unlock(&surface->mutex);
 +    wayland_win_data_release(data);
++
  
-     /* We clip the relative motion within the window rectangle so that
-      * the NtUserLogicalToPerMonitorDPIPhysicalPoint calls later succeed.
-@@ -671,16 +683,22 @@ static void wayland_set_cursor(HWND hwnd, HCURSOR hcursor, BOOL use_hcursor)
+     input.type = INPUT_MOUSE;
+     input.mi.dx = screen.x;
+@@ -629,16 +636,22 @@ static void wayland_set_cursor(HWND hwnd, HCURSOR hcursor, BOOL use_hcursor)
  {
      struct wayland_pointer *pointer = &process_wayland.pointer;
      struct wayland_surface *surface;
@@ -302,7 +298,7 @@ index 1d8acaeabd2..c1a364925f0 100644
      }
      else
      {
-@@ -901,22 +919,24 @@ BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
+@@ -859,22 +872,24 @@ BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
      struct wayland_pointer *pointer = &process_wayland.pointer;
      struct wl_surface *wl_surface = NULL;
      struct wayland_surface *surface = NULL;
@@ -331,7 +327,7 @@ index 1d8acaeabd2..c1a364925f0 100644
      wayland_pointer_update_constraint(wl_surface,
                                        (clip && wl_surface) ? &confine_rect : NULL,
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 545378368c5..6e767b5d680 100644
+index 79b73f24f6c..cfd8b3c9368 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -34,20 +34,21 @@
@@ -417,7 +413,7 @@ index 545378368c5..6e767b5d680 100644
      surface->hwnd = hwnd;
      surface->wl_surface = wl_compositor_create_surface(process_wayland.wl_compositor);
      if (!surface->wl_surface)
-@@ -202,8 +202,6 @@ void wayland_surface_destroy(struct wayland_surface *surface)
+@@ -204,8 +204,6 @@ void wayland_surface_destroy(struct wayland_surface *surface)
          process_wayland.keyboard.focused_hwnd = NULL;
      pthread_mutex_unlock(&process_wayland.keyboard.mutex);
  
@@ -426,7 +422,7 @@ index 545378368c5..6e767b5d680 100644
      if (surface->wp_viewport)
      {
          wp_viewport_destroy(surface->wp_viewport);
-@@ -228,12 +226,8 @@ void wayland_surface_destroy(struct wayland_surface *surface)
+@@ -230,12 +228,8 @@ void wayland_surface_destroy(struct wayland_surface *surface)
          surface->wl_surface = NULL;
      }
  
@@ -440,7 +436,7 @@ index 545378368c5..6e767b5d680 100644
  }
  
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 6d1666738f8..c68f21e6311 100644
+index c1b647435ab..4551540e0d4 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -196,7 +196,6 @@ struct wayland_surface
@@ -460,10 +456,10 @@ index 6d1666738f8..c68f21e6311 100644
  BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
                                            int width, int height,
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index bd5a1f79038..b6dfb48eaec 100644
+index 4a621115c03..942d56870a3 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -217,8 +217,6 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -216,8 +216,6 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
      visible = (NtUserGetWindowLongW(data->hwnd, GWL_STYLE) & WS_VISIBLE) == WS_VISIBLE;
      xdg_visible = surface->xdg_toplevel != NULL;
  
@@ -472,7 +468,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      if (visible != xdg_visible)
      {
          /* If we have a pre-existing surface ensure it has no role. */
-@@ -240,8 +238,6 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+@@ -239,8 +237,6 @@ static void wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
  
      wayland_win_data_get_config(data, &surface->window);
  
@@ -481,7 +477,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      /* Size/position changes affect the effective pointer constraint, so update
       * it as needed. */
      if (data->hwnd == NtUserGetForegroundWindow()) reapply_cursor_clipping();
-@@ -256,8 +252,6 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
+@@ -255,8 +251,6 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
      struct wayland_surface *surface = data->wayland_surface;
      BOOL processing_config;
  
@@ -490,7 +486,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      if (!surface->xdg_toplevel) goto out;
  
      processing_config = surface->processing.serial &&
-@@ -302,7 +296,6 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
+@@ -301,7 +295,6 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
      }
  
  out:
@@ -498,7 +494,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      wl_display_flush(process_wayland.wl_display);
  }
  
-@@ -472,20 +465,26 @@ static void wayland_configure_window(HWND hwnd)
+@@ -466,20 +459,26 @@ static void wayland_configure_window(HWND hwnd)
      DWORD style;
      BOOL needs_enter_size_move = FALSE;
      BOOL needs_exit_size_move = FALSE;
@@ -528,7 +524,7 @@ index bd5a1f79038..b6dfb48eaec 100644
          return;
      }
  
-@@ -547,7 +546,7 @@ static void wayland_configure_window(HWND hwnd)
+@@ -541,7 +540,7 @@ static void wayland_configure_window(HWND hwnd)
      wayland_surface_coords_to_window(surface, width, height,
                                       &window_width, &window_height);
  
@@ -537,7 +533,7 @@ index bd5a1f79038..b6dfb48eaec 100644
  
      TRACE("processing=%dx%d,%#x\n", width, height, state);
  
-@@ -626,14 +625,16 @@ static enum xdg_toplevel_resize_edge hittest_to_resize_edge(WPARAM hittest)
+@@ -620,14 +619,16 @@ static enum xdg_toplevel_resize_edge hittest_to_resize_edge(WPARAM hittest)
   */
  void WAYLAND_SetWindowText(HWND hwnd, LPCWSTR text)
  {
@@ -558,7 +554,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      }
  }
  
-@@ -647,6 +648,7 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+@@ -641,6 +642,7 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
      uint32_t button_serial;
      struct wl_seat *wl_seat;
      struct wayland_surface *surface;
@@ -566,7 +562,7 @@ index bd5a1f79038..b6dfb48eaec 100644
  
      TRACE("cmd=%lx hwnd=%p, %lx, %lx\n",
            (long)command, hwnd, (long)wparam, lparam);
-@@ -660,11 +662,11 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+@@ -654,11 +656,11 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
  
      if (command == SC_MOVE || command == SC_SIZE)
      {
@@ -580,7 +576,7 @@ index bd5a1f79038..b6dfb48eaec 100644
              {
                  if (command == SC_MOVE)
                  {
-@@ -677,7 +679,7 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+@@ -671,7 +673,7 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
                  }
              }
              pthread_mutex_unlock(&process_wayland.seat.mutex);
@@ -589,7 +585,7 @@ index bd5a1f79038..b6dfb48eaec 100644
              ret = 0;
          }
      }
-@@ -686,23 +688,6 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+@@ -680,23 +682,6 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
      return ret;
  }
  
@@ -613,7 +609,7 @@ index bd5a1f79038..b6dfb48eaec 100644
  BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffer, HRGN damage_region)
  {
      struct wayland_surface *wayland_surface;
-@@ -713,8 +698,6 @@ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffe
+@@ -707,8 +692,6 @@ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffe
  
      if ((wayland_surface = data->wayland_surface))
      {
@@ -622,7 +618,7 @@ index bd5a1f79038..b6dfb48eaec 100644
          if (wayland_surface_reconfigure(wayland_surface))
          {
              wayland_surface_attach_shm(wayland_surface, shm_buffer, damage_region);
-@@ -725,8 +708,6 @@ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffe
+@@ -719,8 +702,6 @@ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffe
          {
              TRACE("Wayland surface not configured yet, not flushing\n");
          }
@@ -631,7 +627,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      }
  
      /* Update the latest window buffer for the wayland surface. Note that we
-@@ -756,8 +737,11 @@ struct wayland_shm_buffer *get_window_surface_contents(HWND hwnd)
+@@ -750,8 +731,11 @@ struct wayland_shm_buffer *get_window_surface_contents(HWND hwnd)
  void ensure_window_surface_contents(HWND hwnd)
  {
      struct wayland_surface *wayland_surface;
@@ -644,7 +640,7 @@ index bd5a1f79038..b6dfb48eaec 100644
      {
          wayland_surface_ensure_contents(wayland_surface);
  
-@@ -769,7 +753,7 @@ void ensure_window_surface_contents(HWND hwnd)
+@@ -763,7 +747,7 @@ void ensure_window_surface_contents(HWND hwnd)
          {
              wl_surface_commit(wayland_surface->wl_surface);
          }

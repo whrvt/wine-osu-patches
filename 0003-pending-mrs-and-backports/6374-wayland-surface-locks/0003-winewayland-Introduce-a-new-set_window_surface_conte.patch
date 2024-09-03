@@ -1,7 +1,7 @@
-From d6385cdccd4a26c6ee56aec08ea3edede93c940b Mon Sep 17 00:00:00 2001
+From 94d26bf4ca951545f9fc43ba4be227810858c343 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 20 Aug 2024 10:02:46 +0200
-Subject: [PATCH 04/24] winewayland: Introduce a new
+Subject: [PATCH 03/10] winewayland: Introduce a new
  set_window_surface_contents helper.
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH 04/24] winewayland: Introduce a new
  3 files changed, 25 insertions(+), 13 deletions(-)
 
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 9e46b6e59c8..6943d967d82 100644
+index 651478a9863..67a93753bdc 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -297,6 +297,7 @@ struct wayland_win_data
@@ -23,7 +23,7 @@ index 9e46b6e59c8..6943d967d82 100644
  
  /**********************************************************************
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index bde3aede433..d7af0bc3901 100644
+index b78d304351a..8da3654c6bf 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -711,6 +711,29 @@ struct wayland_surface *wayland_surface_lock_hwnd(HWND hwnd)
@@ -57,10 +57,10 @@ index bde3aede433..d7af0bc3901 100644
  {
      struct wayland_surface *wayland_surface;
 diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
-index 570c186861b..0d5eb0bd9ff 100644
+index 7e4ea202e89..5074e851648 100644
 --- a/dlls/winewayland.drv/window_surface.c
 +++ b/dlls/winewayland.drv/window_surface.c
-@@ -386,19 +386,7 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+@@ -385,19 +385,7 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
  
      wayland_shm_buffer_copy_data(shm_buffer, color_bits, &surface_rect, copy_from_window_region);
  

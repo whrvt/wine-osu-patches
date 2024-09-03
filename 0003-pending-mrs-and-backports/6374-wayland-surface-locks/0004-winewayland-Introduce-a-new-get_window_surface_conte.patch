@@ -1,7 +1,7 @@
-From 79e45268b1c6171e9833df424c23305c80462ae7 Mon Sep 17 00:00:00 2001
+From 81aa76378c7c1d436619a4db23c9ca09b66a67d6 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 20 Aug 2024 10:06:04 +0200
-Subject: [PATCH 05/24] winewayland: Introduce a new
+Subject: [PATCH 04/10] winewayland: Introduce a new
  get_window_surface_contents helper.
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH 05/24] winewayland: Introduce a new
  3 files changed, 27 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index 6943d967d82..580e367e1bf 100644
+index 67a93753bdc..35c18ffe468 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
 @@ -298,6 +298,7 @@ struct wayland_win_data *wayland_win_data_get(HWND hwnd);
@@ -23,7 +23,7 @@ index 6943d967d82..580e367e1bf 100644
  
  /**********************************************************************
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index d7af0bc3901..a8fa6e73b4d 100644
+index 8da3654c6bf..ce755de6b9e 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
 @@ -728,12 +728,32 @@ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffe
@@ -60,7 +60,7 @@ index d7af0bc3901..a8fa6e73b4d 100644
  {
      struct wayland_surface *wayland_surface;
 diff --git a/dlls/winewayland.drv/window_surface.c b/dlls/winewayland.drv/window_surface.c
-index 0d5eb0bd9ff..0e4747fce2f 100644
+index 5074e851648..1781018a17f 100644
 --- a/dlls/winewayland.drv/window_surface.c
 +++ b/dlls/winewayland.drv/window_surface.c
 @@ -324,7 +324,7 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
@@ -72,7 +72,7 @@ index 0d5eb0bd9ff..0e4747fce2f 100644
      BOOL flushed = FALSE;
      HRGN surface_damage_region = NULL;
      HRGN copy_from_window_region;
-@@ -353,12 +353,12 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+@@ -352,12 +352,12 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
          goto done;
      }
  
@@ -88,7 +88,7 @@ index 0d5eb0bd9ff..0e4747fce2f 100644
          {
              HRGN copy_from_latest_region = NtGdiCreateRectRgn(0, 0, 0, 0);
              if (!copy_from_latest_region)
-@@ -368,13 +368,14 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+@@ -367,13 +367,14 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
              }
              NtGdiCombineRgn(copy_from_latest_region, shm_buffer->damage_region,
                              surface_damage_region, RGN_DIFF);
@@ -104,7 +104,7 @@ index 0d5eb0bd9ff..0e4747fce2f 100644
      }
      else
      {
-@@ -390,12 +391,6 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
+@@ -389,12 +390,6 @@ static BOOL wayland_window_surface_flush(struct window_surface *window_surface,
      wl_display_flush(process_wayland.wl_display);
  
      NtGdiSetRectRgn(shm_buffer->damage_region, 0, 0, 0, 0);
