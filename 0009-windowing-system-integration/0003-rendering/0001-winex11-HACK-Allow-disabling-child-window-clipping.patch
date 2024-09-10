@@ -44,20 +44,22 @@ index 11111111111..11111111111 100644
  
              gl->drawable = pglXCreateWindow( gdi_display, gl->format->fbconfig, gl->window, NULL );
 -            pXCompositeRedirectWindow( gdi_display, gl->window, CompositeRedirectManual );
-+            if (!gl_disable_child_window_clipping) pXCompositeRedirectWindow( gdi_display, gl->window, CompositeRedirectManual );
++            if (usexcomposite) pXCompositeRedirectWindow( gdi_display, gl->window, CompositeRedirectManual );
  
              if ((data = get_win_data( hwnd )))
              {
-@@ -1299,6 +1306,9 @@ static BOOL set_pixel_format( HDC hdc, int format, BOOL internal )
-  */
- void sync_gl_drawable( HWND hwnd, BOOL known_child )
- {
-+    /* Since we never have a known_child, this entire function is a no-op */
-+    if (gl_disable_child_window_clipping) return; 
-+
-     struct gl_drawable *old, *new;
- 
-     if (!(old = get_gl_drawable( hwnd, 0 ))) return;
+@@ -1320,6 +1327,11 @@ void sync_gl_drawable( HWND hwnd, BOOL known_child )
+         if (!known_child) break; /* Still a childless top-level window */
+         /* fall through */
+     case DC_GL_PIXMAP_WIN:
++        if (gl_disable_child_window_clipping)
++        {
++            XFlush( gdi_display );
++            break;
++        }
+         if (!(new = create_gl_drawable( hwnd, old->format, known_child, old->mutable_pf ))) break;
+         mark_drawable_dirty( old, new );
+         XFlush( gdi_display );
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/x11drv_main.c

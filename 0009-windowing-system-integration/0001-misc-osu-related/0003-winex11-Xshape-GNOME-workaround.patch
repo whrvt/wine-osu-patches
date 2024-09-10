@@ -6,18 +6,17 @@ diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1791,7 +1791,10 @@ Window get_dummy_parent(void)
+@@ -1791,7 +1791,9 @@ Window get_dummy_parent(void)
          attrib.colormap = default_colormap;
  
  #ifdef HAVE_LIBXSHAPE
-+        const char *override_env = getenv("WINE_XWAYLAND_FPS_LOCK_WORKAROUND");
-+        if (!wm_is_mutter( gdi_display ) && !(override_env && *override_env != '\0' && *override_env != '0'))
++        if (!wm_is_mutter( gdi_display ))
          {
 +            TRACE("Not using Xshape fallback, WM isn't Mutter.\n");
              static XRectangle empty_rect;
              dummy_parent = XCreateWindow( gdi_display, root_window, 0, 0, 1, 1, 0,
                                            default_visual.depth, InputOutput, default_visual.visual,
-@@ -1799,11 +1802,15 @@ Window get_dummy_parent(void)
+@@ -1799,11 +1801,15 @@ Window get_dummy_parent(void)
              XShapeCombineRectangles( gdi_display, dummy_parent, ShapeBounding, 0, 0, &empty_rect, 1,
                                       ShapeSet, YXBanded );
          }

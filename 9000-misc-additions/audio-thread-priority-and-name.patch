@@ -2,7 +2,16 @@ diff --git a/dlls/avrt/main.c b/dlls/avrt/main.c
 index 11111111111..11111111111 100644
 --- a/dlls/avrt/main.c
 +++ b/dlls/avrt/main.c
-@@ -70,6 +70,11 @@ HANDLE WINAPI AvSetMmThreadCharacteristicsW(const WCHAR *name, DWORD *index)
+@@ -56,8 +56,6 @@ HANDLE WINAPI AvSetMmThreadCharacteristicsA(const char *name, DWORD *index)
+ 
+ HANDLE WINAPI AvSetMmThreadCharacteristicsW(const WCHAR *name, DWORD *index)
+ {
+-    FIXME("(%s,%p): stub\n", debugstr_w(name), index);
+-
+     if (!name)
+     {
+         SetLastError(ERROR_INVALID_TASK_NAME);
+@@ -70,6 +68,11 @@ HANDLE WINAPI AvSetMmThreadCharacteristicsW(const WCHAR *name, DWORD *index)
          return NULL;
      }
  
