@@ -1,0 +1,51 @@
+From 7a4aded9e8ce42d47770246a632b1c047d058577 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 4 Sep 2024 15:50:34 -0600
+Subject: [PATCH 5/5] ntdll: Call instrumentation callback for
+ KiUserModeCallback on x64.
+
+---
+ dlls/ntdll/tests/exception.c    | 2 +-
+ dlls/ntdll/unix/signal_x86_64.c | 6 +++++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
+index e27bae09826..247c4958457 100644
+--- a/dlls/ntdll/tests/exception.c
++++ b/dlls/ntdll/tests/exception.c
+@@ -5674,7 +5674,7 @@ static void test_instrumentation_callback(void)
+         if (data.call_data[i].r10 == pKiUserCallbackDispatcher)
+             break;
+     }
+-    todo_wine ok( i < data.call_count, "KiUserCallbackDispatcher not found.\n" );
++    ok( i < data.call_count, "KiUserCallbackDispatcher not found.\n" );
+ 
+     init_instrumentation_data( &curr_data );
+     memset(&info, 0, sizeof(info));
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index d811d014fd4..46d92356e7a 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -1614,6 +1614,7 @@ __ASM_GLOBAL_FUNC( call_user_mode_callback,
+                    "movq %r10,0xa0(%rsp)\n\t"  /* frame->prev_frame */
+                    "movq 0xb8(%r10),%r10\n\t"  /* prev_frame->instrumentation_callback */
+                    "movq %r10,0xb8(%rsp)\n\t"  /* frame->instrumentation_callback */
++                   "movq (%r10),%r10\n\t"
+                    "movq %rsp,0x328(%r8)\n\t"  /* amd64_thread_data()->syscall_frame */
+                    /* switch to user stack */
+                    "movq %rdi,%rsp\n\t"        /* user_rsp */
+@@ -1623,7 +1624,10 @@ __ASM_GLOBAL_FUNC( call_user_mode_callback,
+                    "movw 0x338(%r8),%fs\n"     /* amd64_thread_data()->fs */
+                    "1:\n\t"
+ #endif
+-                   "jmpq *%rcx" )              /* func */
++                   "test %r10,%r10\n\t"
++                   "jz 1f\n\t"
++                   "xchgq %rcx,%r10\n\t"
++                   "1\t:jmpq *%rcx" )          /* func */
+ 
+ 
+ /***********************************************************************
+-- 
+2.46.0
+

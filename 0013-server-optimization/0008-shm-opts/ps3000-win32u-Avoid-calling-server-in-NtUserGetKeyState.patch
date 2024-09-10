@@ -1,0 +1,113 @@
+From 9e74abe442418b8423cf7c8d454e1f9399ae4435 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 8 Sep 2024 04:43:08 -0700
+Subject: [PATCH] win32u: Avoid calling server in NtUserGetKeyState()
+when input keystate is in sync.
+
+The original patch is by Paul Gofman for Proton.
+---
+ dlls/win32u/input.c | 12 ++++++++----
+ server/protocol.def |  2 ++
+ server/queue.c      |  4 ++++
+ server/winstation.c |  1 +
+ 4 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 05b25dd0e68..d531c4b91db 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -950,15 +950,19 @@ HKL WINAPI NtUserGetKeyboardLayout( DWORD thread_id )
+  */
+ SHORT WINAPI NtUserGetKeyState( INT vkey )
+ {
+-    struct object_lock lock = OBJECT_LOCK_INIT;
++    struct object_lock input_lock = OBJECT_LOCK_INIT;
++    struct object_lock desktop_lock = OBJECT_LOCK_INIT;
+     const input_shm_t *input_shm;
++    const desktop_shm_t *desktop_shm;
+     BOOL ret = FALSE;
+     SHORT retval = 0;
+-    NTSTATUS status;
++    NTSTATUS input_status, desktop_status;
+ 
+-    while ((status = get_shared_input( GetCurrentThreadId(), &lock, &input_shm )) == STATUS_PENDING)
++    while ((input_status = get_shared_input( GetCurrentThreadId(), &input_lock, &input_shm )) == STATUS_PENDING)
+     {
+-        ret = !!input_shm->keystate_lock; /* needs a request for sync_input_keystate */
++        if (!(ret = !!input_shm->keystate_lock))
++            while ((desktop_status = get_shared_desktop( &desktop_lock, &desktop_shm )) == STATUS_PENDING)
++                ret = input_shm->sync_serial == desktop_shm->update_serial; /* needs a request for sync_input_keystate */
+         retval = (signed char)(input_shm->keystate[vkey & 0xff] & 0x81);
+     }
+ 
+diff --git a/server/protocol.def b/server/protocol.def
+index b258a25074c..7bf34756425 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -914,6 +914,7 @@ typedef volatile struct
+     unsigned int         flags;            /* desktop flags */
+     struct shared_cursor cursor;           /* global cursor information */
+     unsigned char        keystate[256];    /* asynchronous key state */
++    __int64              update_serial;
+ } desktop_shm_t;
+ 
+ typedef volatile struct
+@@ -939,6 +940,7 @@ typedef volatile struct
+     int                  cursor_count;     /* cursor show count */
+     unsigned char        keystate[256];    /* key state */
+     int                  keystate_lock;    /* keystate is locked */
++    __int64              sync_serial;
+ } input_shm_t;
+ 
+ typedef volatile union
+diff --git a/server/queue.c b/server/queue.c
+index 9a438532514..ec29c0e559d 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -397,6 +397,7 @@ static void sync_input_keystate( struct thread_input *input )
+             if (input->desktop_keystate[i] == desktop_shm->keystate[i]) continue;
+             shared->keystate[i] = input->desktop_keystate[i] = desktop_shm->keystate[i];
+         }
++        shared->sync_serial = desktop_shm->update_serial;
+     }
+     SHARED_WRITE_END;
+ }
+@@ -1792,6 +1793,7 @@ static void update_desktop_key_state( struct desktop *desktop, unsigned int msg,
+ {
+     SHARED_WRITE_BEGIN( desktop->shared, desktop_shm_t )
+     {
++        ++shared->update_serial;
+         update_key_state( shared->keystate, msg, wparam, 1 );
+     }
+     SHARED_WRITE_END;
+@@ -3845,6 +3847,7 @@ DECL_HANDLER(get_key_state)
+         if (!(desktop = get_thread_desktop( current, 0 ))) return;
+         SHARED_WRITE_BEGIN( desktop->shared, desktop_shm_t )
+         {
++            ++shared->update_serial;
+             reply->state = shared->keystate[req->key & 0xff];
+             shared->keystate[req->key & 0xff] &= ~0x40;
+         }
+@@ -3883,6 +3886,7 @@ DECL_HANDLER(set_key_state)
+     {
+         SHARED_WRITE_BEGIN( desktop->shared, desktop_shm_t )
+         {
++            ++shared->update_serial;
+             memcpy( (void *)shared->keystate, get_req_data(), size );
+         }
+         SHARED_WRITE_END;
+diff --git a/server/winstation.c b/server/winstation.c
+index 75324f8b3a7..fcc15f5fb82 100644
+--- a/server/winstation.c
++++ b/server/winstation.c
+@@ -319,6 +319,7 @@ static struct desktop *create_desktop( const struct unicode_str *name, unsigned
+                 shared->cursor.clip.right = 0;
+                 shared->cursor.clip.bottom = 0;
+                 memset( (void *)shared->keystate, 0, sizeof(shared->keystate) );
++                shared->update_serial = 1;
+             }
+             SHARED_WRITE_END;
+         }
+-- 
+2.46.0
+

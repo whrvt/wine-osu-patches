@@ -1,0 +1,89 @@
+From fa99da3d12f4d9169bdc6f31099b1961814fc901 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 6 Sep 2024 19:22:07 -0700
+Subject: [PATCH] ntdll: Allow toggling WINE_SIMULATE_ASYNC_READ separately
+ from AC:Odyssey hacks.
+
+---
+ dlls/ntdll/unix/file.c         |  6 +++---
+ dlls/ntdll/unix/loader.c       | 11 +++++++----
+ dlls/ntdll/unix/unix_private.h |  1 +
+ 3 files changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index 854ab843236..8a939d8c123 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -6901,7 +6901,7 @@ NTSTATUS WINAPI NtReadFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, vo
+             goto done;
+         }
+ 
+-        if (ac_odyssey && async_read && length && event && !apc)
++        if (async_read_hack && async_read && length && event && !apc)
+         {
+             status = queue_async_file_read( handle, unix_handle, needs_close, event, io, buffer, length, offset );
+             needs_close = 0;
+@@ -7739,7 +7739,7 @@ NTSTATUS WINAPI NtCancelIoFile( HANDLE handle, IO_STATUS_BLOCK *io_status )
+ 
+     TRACE( "%p %p\n", handle, io_status );
+ 
+-    if (ac_odyssey && !cancel_async_file_read( handle, NULL ))
++    if (async_read_hack && !cancel_async_file_read( handle, NULL ))
+         return (io_status->Status = STATUS_SUCCESS);
+ 
+     SERVER_START_REQ( cancel_async )
+@@ -7767,7 +7767,7 @@ NTSTATUS WINAPI NtCancelIoFileEx( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_
+ 
+     TRACE( "%p %p %p\n", handle, io, io_status );
+ 
+-    if (ac_odyssey && !cancel_async_file_read( handle, io ))
++    if (async_read_hack && !cancel_async_file_read( handle, io ))
+         return (io_status->Status = STATUS_SUCCESS);
+ 
+     SERVER_START_REQ( cancel_async )
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index d212fff9259..e004bf710cf 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1854,6 +1854,7 @@ static ULONG_PTR get_image_address(void)
+ }
+ 
+ BOOL ac_odyssey;
++BOOL async_read_hack;
+ BOOL fsync_simulate_sched_quantum;
+ BOOL alert_simulate_sched_quantum;
+ BOOL fsync_yield_to_waiters;
+@@ -1863,12 +1864,14 @@ static void hacks_init(void)
+     const char *sgi = getenv( "SteamGameId" );
+     const char *env_str;
+ 
+-    env_str = getenv("WINE_SIMULATE_ASYNC_READ");
++    env_str = getenv("WINE_SIMULATE_ASYNC_READ_STANDALONE");
+     if (env_str)
+-        ac_odyssey = !!atoi(env_str);
+-    else if (main_argc > 1 && (strstr(main_argv[1], "ACOdyssey.exe") || strstr(main_argv[1], "ImmortalsFenyxRising.exe")))
++        async_read_hack = !!atoi(env_str);
++    if (main_argc > 1 && (strstr(main_argv[1], "ACOdyssey.exe") || strstr(main_argv[1], "ImmortalsFenyxRising.exe")))
++    {
++        async_read_hack = TRUE;
+         ac_odyssey = TRUE;
+-
++    }
+     if (ac_odyssey)
+         ERR("HACK: AC Odyssey sync tweak on.\n");
+ 
+diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+index f00213e4f00..47a7da77c4b 100644
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -210,6 +210,7 @@ extern struct ldt_copy __wine_ldt_copy;
+ extern void *instrumentation_callback;
+ 
+ extern BOOL ac_odyssey;
++extern BOOL async_read_hack;
+ extern BOOL fsync_simulate_sched_quantum;
+ extern BOOL alert_simulate_sched_quantum;
+ extern BOOL fsync_yield_to_waiters;
+-- 
+2.46.0
+

@@ -1,5 +1,6 @@
-## winemenubuilder is bloat
+winemenubuilder is bloat
 ## wine(bus/sys/hid) are prone to crashing after some time (maybe fixed?) with strange error messages; they are unnecessary for osu anyways
+^ this is now achieved achieved through a different method (fake load driver) that doesn't cause error messages on startup
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
 index 11111111111..11111111111 100644
 --- a/loader/wine.inf.in
@@ -48,7 +49,7 @@ index 11111111111..11111111111 100644
  SortFiles = 10,globalization\sorting
 +
 +[Overrides]
-+HKCU,Software\Wine\DllOverrides,"winebus.sys",0x2,""
-+HKCU,Software\Wine\DllOverrides,"winehid.sys",0x2,""
-+HKCU,Software\Wine\DllOverrides,"wineusb.sys",0x2,""
++;;HKCU,Software\Wine\DllOverrides,"winebus.sys",0x2,""
++;;HKCU,Software\Wine\DllOverrides,"winehid.sys",0x2,""
++;;HKCU,Software\Wine\DllOverrides,"wineusb.sys",0x2,""
 +

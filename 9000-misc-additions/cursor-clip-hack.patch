@@ -4,12 +4,12 @@ diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
 index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -980,5 +980,18 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+@@ -988,5 +988,17 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
      return (p - dst) * sizeof(WCHAR);
  }
- extern BOOL gl_disable_child_window_rendering;
+ extern BOOL gl_disable_child_window_clipping;
 +extern BOOL cursor_clip_hack;
-+
+ 
 +static inline BOOL use_cursor_clip_hack(void)
 +{
 +    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
@@ -21,7 +21,6 @@ index 11111111111..11111111111 100644
 +
 +    return FALSE;
 +}
- 
  #endif  /* __WINE_X11DRV_H */
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
 index 11111111111..11111111111 100644
@@ -179,3 +178,98 @@ index f2c36f29a94..ed1c8714ab6 100644
 #     input.type = INPUT_MOUSE;
 #     input.mi.dx = screen.x;
 #     input.mi.dy = screen.y;
+From 9e275acd6e7df20066206e08ad3aaab60d42edab Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 9 Sep 2024 18:02:55 -0700
+Subject: [PATCH] winex11: don't try XGrabPointer with cursor_clip_hack=2
+
+---
+ dlls/winex11.drv/event.c       |  2 +-
+ dlls/winex11.drv/mouse.c       |  2 +-
+ dlls/winex11.drv/window.c      |  2 +-
+ dlls/winex11.drv/x11drv.h      | 10 +++++-----
+ dlls/winex11.drv/x11drv_main.c |  2 +-
+ 5 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 801f60b5093..52afdace5fe 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -266,7 +266,7 @@ static void wait_grab_pointer( Display *display )
+     NtUserGetClipCursor( &rect );
+     NtUserClipCursor( NULL );
+ 
+-    while (XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
++    while (cursor_clip_hack < 2 && XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
+                          None, None, CurrentTime ) != GrabSuccess)
+     {
+         LARGE_INTEGER timeout = {.QuadPart = -10 * (ULONGLONG)10000};
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 7a2b70e084a..5791e443c29 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -524,7 +524,7 @@ static BOOL grab_clipping_window( const RECT *clip )
+         clip->right < clip_rect.right || clip->bottom < clip_rect.bottom)
+         data->warp_serial = NextRequest( data->display );
+ 
+-    if (!XGrabPointer( data->display, clip_window, False,
++    if (cursor_clip_hack < 2 && !XGrabPointer( data->display, clip_window, False,
+                        PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+                        GrabModeAsync, GrabModeAsync, clip_window, None, CurrentTime ))
+         clipping_cursor = TRUE;
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index bbd2a793c11..e9c025cd9b4 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2680,7 +2680,7 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags )
+ 
+     if (!(flags & (GUI_INMOVESIZE | GUI_INMENUMODE))) return;
+ 
+-    if (hwnd)
++    if (cursor_clip_hack < 2 && hwnd)
+     {
+         if (!(data = get_win_data( NtUserGetAncestor( hwnd, GA_ROOT )))) return;
+         if (data->whole_window)
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 3382a65086c..00c54b19767 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -970,17 +970,17 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     return (p - dst) * sizeof(WCHAR);
+ }
+ extern BOOL gl_disable_child_window_clipping;
+-extern BOOL cursor_clip_hack;
++extern int cursor_clip_hack;
+ 
+-static inline BOOL use_cursor_clip_hack(void)
++static inline int use_cursor_clip_hack(void)
+ {
+-    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
++    if (!getenv("WAYLAND_DISPLAY")) return 0;
+ 
+     {
+         const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
+-        if (e && *e != '\0' && *e != '0') return TRUE;
++        if (e && *e != '\0' && *e != '0') return atoi(e);
+     }
+ 
+-    return FALSE;
++    return 0;
+ }
+ #endif  /* __WINE_X11DRV_H */
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 17d1cf54efe..28f530892bc 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -86,7 +86,7 @@ int primary_monitor = 0;
+ BOOL client_side_graphics = TRUE;
+ BOOL client_side_with_render = TRUE;
+ BOOL shape_layered_windows = TRUE;
+-BOOL cursor_clip_hack = FALSE;
++int cursor_clip_hack = 0;
+ int copy_default_colors = 128;
+ int alloc_system_colors = 256;
+ int xrender_error_base = 0;
+-- 
+2.46.0
+

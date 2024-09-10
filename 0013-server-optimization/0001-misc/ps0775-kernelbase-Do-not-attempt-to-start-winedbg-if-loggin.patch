@@ -1,0 +1,27 @@
+From 051d16b7814d176cfd74249b36faace38e402374 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 15 Feb 2023 21:00:47 -0600
+Subject: [PATCH 0775/1793] kernelbase: Do not attempt to start winedbg if
+ logging is disabled.
+
+CW-Bug-Id: #20812
+---
+ dlls/kernelbase/debug.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
+index 17ce2e7be05..6423ff4573d 100644
+--- a/dlls/kernelbase/debug.c
++++ b/dlls/kernelbase/debug.c
+@@ -635,6 +635,8 @@ static BOOL start_debugger_atomic( EXCEPTION_POINTERS *epointers )
+ {
+     static HANDLE once;
+ 
++    if (!ERR_ON(seh)) return FALSE;
++
+     if (once == 0)
+     {
+ 	OBJECT_ATTRIBUTES attr;
+-- 
+2.46.0
+

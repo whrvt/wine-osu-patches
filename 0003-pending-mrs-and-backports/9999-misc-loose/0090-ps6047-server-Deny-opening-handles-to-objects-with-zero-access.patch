@@ -414,3 +414,29 @@ index 0ba34511cd5..b3cf550349a 100644
 -- 
 GitLab
 
+From 322ce67c5916b0eb67350274142cfb8dbd972295 Mon Sep 17 00:00:00 2001
+From: Arkadiusz Hiler <ahiler@codeweavers.com>
+Date: Wed, 4 Sep 2024 12:47:30 +0300
+Subject: [PATCH] ntoskrnl.exe: Use non-zero access mask when deleting symbolic
+ links.
+
+Fixes: d6d9d726f02c ("server: Do not allow zero access mask when opening some objects.")
+CW-Bug-Id: #24206
+CW-Bug-Id: #24016
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 4668b58ef16..b62ef007250 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -1803,7 +1803,7 @@ NTSTATUS WINAPI IoDeleteSymbolicLink( UNICODE_STRING *name )
+     attr.SecurityDescriptor       = NULL;
+     attr.SecurityQualityOfService = NULL;
+ 
+-    if (!(status = NtOpenSymbolicLinkObject( &handle, DELETE, &attr )))
++    if (!(status = NtOpenSymbolicLinkObject( &handle, SYMBOLIC_LINK_ALL_ACCESS, &attr )))
+     {
+         NtMakeTemporaryObject( handle );
+         NtClose( handle );

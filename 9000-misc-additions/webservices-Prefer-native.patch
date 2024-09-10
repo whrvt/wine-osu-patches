@@ -1,0 +1,26 @@
+From 124b98506fd7f289b71fbad79d10df24d953e09d Mon Sep 17 00:00:00 2001
+From: Jacek Caban <jacek@codeweavers.com>
+Date: Mon, 8 Mar 2021 16:41:19 +0100
+Subject: [PATCH 1031/1793] webservices: Prefer native.
+
+CW-Bug-Id: #18637
+---
+ dlls/webservices/Makefile.in | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/webservices/Makefile.in b/dlls/webservices/Makefile.in
+index 78b7e06af4b..8a613eb6414 100644
+--- a/dlls/webservices/Makefile.in
++++ b/dlls/webservices/Makefile.in
+@@ -2,6 +2,8 @@ MODULE    = webservices.dll
+ IMPORTLIB = webservices
+ IMPORTS   = winhttp rpcrt4 user32 ws2_32
+ 
++EXTRADLLFLAGS = -Wb,--prefer-native
++
+ SOURCES = \
+ 	channel.c \
+ 	error.c \
+-- 
+2.46.0
+

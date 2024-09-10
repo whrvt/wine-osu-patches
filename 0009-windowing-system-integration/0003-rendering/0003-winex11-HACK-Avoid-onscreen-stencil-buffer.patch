@@ -15,7 +15,7 @@ index aaf81bc19cc..51f0549e1e7 100644
                   * with a depth of 32 in addition to the default 24 bit. In order to prevent BadMatch errors we only
                   * list formats with the same depth. */
 -                if(visinfo->depth != default_visual.depth)
-+                if((visinfo->depth != default_visual.depth) || (gl_disable_child_window_rendering && !pglXGetFBConfigAttrib( display, cfgs[i], GLX_STENCIL_SIZE, &tmp_value ) && tmp_value))
++                if((visinfo->depth != default_visual.depth) || (gl_disable_child_window_clipping && !pglXGetFBConfigAttrib( display, cfgs[i], GLX_STENCIL_SIZE, &tmp_value ) && tmp_value))
                  {
                      XFree(visinfo);
                      continue;
