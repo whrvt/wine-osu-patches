@@ -1,0 +1,1277 @@
+From 8c6e80b66af82e97b8c9b3e51fcfe72056b3df68 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 22 Aug 2024 14:58:39 +0200
+Subject: [PATCH 1/9] mfsrcsnk: Get the IMFByteStream url from
+ MF_BYTESTREAM_ORIGIN_NAME.
+
+---
+ dlls/mfsrcsnk/media_source.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/dlls/mfsrcsnk/media_source.c b/dlls/mfsrcsnk/media_source.c
+index 95430a21d6b..fe71d4616c0 100644
+--- a/dlls/mfsrcsnk/media_source.c
++++ b/dlls/mfsrcsnk/media_source.c
+@@ -35,6 +35,7 @@ struct media_source
+     CRITICAL_SECTION cs;
+     IMFMediaEventQueue *queue;
+     IMFByteStream *stream;
++    WCHAR *url;
+     float rate;
+ 
+     enum
+@@ -286,6 +287,7 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
+ 
+         IMFMediaEventQueue_Release(source->queue);
+         IMFByteStream_Release(source->stream);
++        free(source->url);
+ 
+         source->cs.DebugInfo->Spare[0] = 0;
+         DeleteCriticalSection(&source->cs);
+@@ -417,6 +419,28 @@ static const IMFMediaSourceVtbl media_source_vtbl =
+     media_source_Shutdown,
+ };
+ 
++static WCHAR *get_byte_stream_url(IMFByteStream *stream, const WCHAR *url)
++{
++    IMFAttributes *attributes;
++    WCHAR buffer[MAX_PATH];
++    UINT32 size;
++    HRESULT hr;
++
++    TRACE("stream %p, url %s\n", stream, debugstr_w(url));
++
++    if (SUCCEEDED(hr = IMFByteStream_QueryInterface(stream, &IID_IMFAttributes, (void **)&attributes)))
++    {
++        if (FAILED(hr = IMFAttributes_GetString(attributes, &MF_BYTESTREAM_ORIGIN_NAME,
++                buffer, ARRAY_SIZE(buffer), &size)))
++            WARN("Failed to get MF_BYTESTREAM_ORIGIN_NAME got size %#x, hr %#lx\n", size, hr);
++        else
++            url = buffer;
++        IMFAttributes_Release(attributes);
++    }
++
++    return url ? wcsdup(url) : NULL;
++}
++
+ static HRESULT media_source_create(const WCHAR *url, IMFByteStream *stream, IMFMediaSource **out)
+ {
+     struct media_source *source;
+@@ -438,6 +462,7 @@ static HRESULT media_source_create(const WCHAR *url, IMFByteStream *stream, IMFM
+         return hr;
+     }
+ 
++    source->url = get_byte_stream_url(stream, url);
+     IMFByteStream_AddRef((source->stream = stream));
+ 
+     source->rate = 1.0f;
+-- 
+GitLab
+
+
+From 075ab0ccbdd97a31b1b3cdaa16a7576a580d7f3e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 22 Aug 2024 14:04:19 +0200
+Subject: [PATCH 2/9] mfsrcsnk: Seek and get the media source IMFByteStream
+ length.
+
+---
+ dlls/mfsrcsnk/media_source.c | 77 +++++++++++++++++++++++++++++++++++-
+ 1 file changed, 76 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/mfsrcsnk/media_source.c b/dlls/mfsrcsnk/media_source.c
+index fe71d4616c0..cccf501b222 100644
+--- a/dlls/mfsrcsnk/media_source.c
++++ b/dlls/mfsrcsnk/media_source.c
+@@ -24,12 +24,59 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
+ 
++#define DEFINE_MF_ASYNC_CALLBACK_(type, name, impl_from, pfx, mem, expr)                           \
++    static struct type *impl_from(IMFAsyncCallback *iface)                                         \
++    {                                                                                              \
++        return CONTAINING_RECORD(iface, struct type, mem);                                         \
++    }                                                                                              \
++    static HRESULT WINAPI pfx##_QueryInterface(IMFAsyncCallback *iface, REFIID iid, void **out)    \
++    {                                                                                              \
++        if (IsEqualIID(iid, &IID_IUnknown) || IsEqualIID(iid, &IID_IMFAsyncCallback))              \
++        {                                                                                          \
++            IMFAsyncCallback_AddRef((*out = iface));                                               \
++            return S_OK;                                                                           \
++        }                                                                                          \
++        *out = NULL;                                                                               \
++        return E_NOINTERFACE;                                                                      \
++    }                                                                                              \
++    static ULONG WINAPI pfx##_AddRef(IMFAsyncCallback *iface)                                      \
++    {                                                                                              \
++        struct type *object = impl_from(iface);                                                    \
++        return IUnknown_AddRef((IUnknown *)(expr));                                                \
++    }                                                                                              \
++    static ULONG WINAPI pfx##_Release(IMFAsyncCallback *iface)                                     \
++    {                                                                                              \
++        struct type *object = impl_from(iface);                                                    \
++        return IUnknown_Release((IUnknown *)(expr));                                               \
++    }                                                                                              \
++    static HRESULT WINAPI pfx##_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue) \
++    {                                                                                              \
++        return E_NOTIMPL;                                                                          \
++    }                                                                                              \
++    static HRESULT WINAPI pfx##_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)            \
++    {                                                                                              \
++        struct type *object = impl_from(iface);                                                    \
++        return type##_##name(object, result);                                                      \
++    }                                                                                              \
++    static const IMFAsyncCallbackVtbl pfx##_vtbl =                                                 \
++    {                                                                                              \
++            pfx##_QueryInterface,                                                                  \
++            pfx##_AddRef,                                                                          \
++            pfx##_Release,                                                                         \
++            pfx##_GetParameters,                                                                   \
++            pfx##_Invoke,                                                                          \
++    };
++
++#define DEFINE_MF_ASYNC_CALLBACK(type, name, base_iface)                                           \
++    DEFINE_MF_ASYNC_CALLBACK_(type, name, type##_from_##name, type##_##name, name##_iface, &object->base_iface)
++
+ struct media_source
+ {
+     IMFMediaSource IMFMediaSource_iface;
+     IMFGetService IMFGetService_iface;
+     IMFRateSupport IMFRateSupport_iface;
+     IMFRateControl IMFRateControl_iface;
++    IMFAsyncCallback async_create_iface;
+     LONG refcount;
+ 
+     CRITICAL_SECTION cs;
+@@ -38,6 +85,8 @@ struct media_source
+     WCHAR *url;
+     float rate;
+ 
++    UINT64 file_size;
++
+     enum
+     {
+         SOURCE_STOPPED,
+@@ -419,6 +468,30 @@ static const IMFMediaSourceVtbl media_source_vtbl =
+     media_source_Shutdown,
+ };
+ 
++static HRESULT media_source_async_create(struct media_source *source, IMFAsyncResult *result)
++{
++    IUnknown *state = IMFAsyncResult_GetStateNoAddRef(result);
++    HRESULT hr;
++
++    TRACE("source %p, result %p\n", source, result);
++
++    if (FAILED(hr = IMFByteStream_GetLength(source->stream, &source->file_size)))
++    {
++        WARN("Failed to get byte stream length, hr %#lx\n", hr);
++        source->file_size = -1;
++    }
++    if (FAILED(hr = IMFByteStream_SetCurrentPosition(source->stream, 0)))
++    {
++        WARN("Failed to set byte stream position, hr %#lx\n", hr);
++        hr = S_OK;
++    }
++
++    IMFAsyncResult_SetStatus(result, hr);
++    return MFInvokeCallback((IMFAsyncResult *)state);
++}
++
++DEFINE_MF_ASYNC_CALLBACK(media_source, async_create, IMFMediaSource_iface)
++
+ static WCHAR *get_byte_stream_url(IMFByteStream *stream, const WCHAR *url)
+ {
+     IMFAttributes *attributes;
+@@ -454,6 +527,7 @@ static HRESULT media_source_create(const WCHAR *url, IMFByteStream *stream, IMFM
+     source->IMFGetService_iface.lpVtbl = &media_source_IMFGetService_vtbl;
+     source->IMFRateSupport_iface.lpVtbl = &media_source_IMFRateSupport_vtbl;
+     source->IMFRateControl_iface.lpVtbl = &media_source_IMFRateControl_vtbl;
++    source->async_create_iface.lpVtbl = &media_source_async_create_vtbl;
+     source->refcount = 1;
+ 
+     if (FAILED(hr = MFCreateEventQueue(&source->queue)))
+@@ -553,7 +627,8 @@ static HRESULT WINAPI byte_stream_handler_BeginCreateObject(IMFByteStreamHandler
+         return hr;
+     if (SUCCEEDED(hr = MFCreateAsyncResult((IUnknown *)source, callback, state, &result)))
+     {
+-        hr = MFPutWorkItemEx(MFASYNC_CALLBACK_QUEUE_IO, result);
++        struct media_source *media_source = media_source_from_IMFMediaSource(source);
++        hr = MFPutWorkItem(MFASYNC_CALLBACK_QUEUE_IO, &media_source->async_create_iface, (IUnknown *)result);
+         IMFAsyncResult_Release(result);
+     }
+     IMFMediaSource_Release(source);
+-- 
+GitLab
+
+
+From 7611625532e621effb45a110afc40732d86075a6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 27 Aug 2024 10:04:54 +0200
+Subject: [PATCH 3/9] winedmo: Export new winedmo_demuxer_(create|destroy)
+ functions.
+
+---
+ dlls/winedmo/main.c         | 34 ++++++++++++++++++++++++++++++++++
+ dlls/winedmo/unix_demuxer.c | 36 ++++++++++++++++++++++++++++++++++++
+ dlls/winedmo/unix_private.h |  2 ++
+ dlls/winedmo/unixlib.c      |  4 ++++
+ dlls/winedmo/unixlib.h      | 13 +++++++++++++
+ dlls/winedmo/winedmo.spec   |  2 ++
+ include/wine/winedmo.h      |  4 ++++
+ 7 files changed, 95 insertions(+)
+
+diff --git a/dlls/winedmo/main.c b/dlls/winedmo/main.c
+index b9bbfa664c7..c2bdf4f89f5 100644
+--- a/dlls/winedmo/main.c
++++ b/dlls/winedmo/main.c
+@@ -51,3 +51,37 @@ NTSTATUS CDECL winedmo_demuxer_check( const char *mime_type )
+     if ((status = UNIX_CALL( demuxer_check, &params ))) WARN( "returning %#lx\n", status );
+     return status;
+ }
++
++NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_demuxer *demuxer )
++{
++    struct demuxer_create_params params = {0};
++    NTSTATUS status;
++
++    TRACE( "demuxer %p\n", demuxer );
++
++    if ((status = UNIX_CALL( demuxer_create, &params )))
++    {
++        WARN( "demuxer_create failed, status %#lx\n", status );
++        return status;
++    }
++
++    *demuxer = params.demuxer;
++    TRACE( "created %#I64x\n", demuxer->handle );
++    return STATUS_SUCCESS;
++}
++
++NTSTATUS CDECL winedmo_demuxer_destroy( struct winedmo_demuxer *demuxer )
++{
++    struct demuxer_destroy_params params = {.demuxer = *demuxer};
++    NTSTATUS status;
++
++    if (!demuxer->handle) return STATUS_SUCCESS;
++
++    TRACE( "demuxer %#I64x\n", demuxer->handle );
++
++    demuxer->handle = 0;
++    status = UNIX_CALL( demuxer_destroy, &params );
++    if (status) WARN( "demuxer_destroy failed, status %#lx\n", status );
++
++    return status;
++}
+diff --git a/dlls/winedmo/unix_demuxer.c b/dlls/winedmo/unix_demuxer.c
+index 1abb173fdc7..bc352d96599 100644
+--- a/dlls/winedmo/unix_demuxer.c
++++ b/dlls/winedmo/unix_demuxer.c
+@@ -29,6 +29,11 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ 
++static AVFormatContext *get_demuxer( struct winedmo_demuxer demuxer )
++{
++    return (AVFormatContext *)(UINT_PTR)demuxer.handle;
++}
++
+ NTSTATUS demuxer_check( void *arg )
+ {
+     struct demuxer_check_params *params = arg;
+@@ -49,4 +54,35 @@ NTSTATUS demuxer_check( void *arg )
+     return format ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+ }
+ 
++NTSTATUS demuxer_create( void *arg )
++{
++    struct demuxer_create_params *params = arg;
++    AVFormatContext *ctx;
++
++    TRACE( "params %p\n", params );
++
++    if (!(ctx = avformat_alloc_context())) return STATUS_NO_MEMORY;
++    if (!(ctx->pb = avio_alloc_context( NULL, 0, 0, NULL, NULL, NULL, NULL )))
++    {
++        avformat_free_context( ctx );
++        return STATUS_NO_MEMORY;
++    }
++
++    params->demuxer.handle = (UINT_PTR)ctx;
++    return STATUS_SUCCESS;
++}
++
++NTSTATUS demuxer_destroy( void *arg )
++{
++    struct demuxer_destroy_params *params = arg;
++    AVFormatContext *ctx = get_demuxer( params->demuxer );
++
++    TRACE( "context %p\n", ctx );
++
++    avio_context_free( &ctx->pb );
++    avformat_free_context( ctx );
++
++    return STATUS_SUCCESS;
++}
++
+ #endif /* HAVE_FFMPEG */
+diff --git a/dlls/winedmo/unix_private.h b/dlls/winedmo/unix_private.h
+index cc58df9d818..d84645b835b 100644
+--- a/dlls/winedmo/unix_private.h
++++ b/dlls/winedmo/unix_private.h
+@@ -30,3 +30,5 @@
+ 
+ /* unix_demuxer.c */
+ extern NTSTATUS demuxer_check( void * );
++extern NTSTATUS demuxer_create( void * );
++extern NTSTATUS demuxer_destroy( void * );
+diff --git a/dlls/winedmo/unixlib.c b/dlls/winedmo/unixlib.c
+index 2d7980b1790..6a37469a052 100644
+--- a/dlls/winedmo/unixlib.c
++++ b/dlls/winedmo/unixlib.c
+@@ -69,6 +69,8 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     X( process_attach ),
+ 
+     X( demuxer_check ),
++    X( demuxer_create ),
++    X( demuxer_destroy ),
+ };
+ 
+ C_ASSERT(ARRAY_SIZE(__wine_unix_call_funcs) == unix_funcs_count);
+@@ -81,6 +83,8 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+     X( process_attach ),
+ 
+     X( demuxer_check ),
++    X( demuxer_create ),
++    X( demuxer_destroy ),
+ };
+ 
+ C_ASSERT(ARRAY_SIZE(__wine_unix_call_wow64_funcs) == unix_funcs_count);
+diff --git a/dlls/winedmo/unixlib.h b/dlls/winedmo/unixlib.h
+index 787fe141174..a8a2e00dc19 100644
+--- a/dlls/winedmo/unixlib.h
++++ b/dlls/winedmo/unixlib.h
+@@ -28,6 +28,7 @@
+ #include "winbase.h"
+ 
+ #include "wine/unixlib.h"
++#include "wine/winedmo.h"
+ 
+ 
+ struct demuxer_check_params
+@@ -35,12 +36,24 @@ struct demuxer_check_params
+     char mime_type[256];
+ };
+ 
++struct demuxer_create_params
++{
++    struct winedmo_demuxer demuxer;
++};
++
++struct demuxer_destroy_params
++{
++    struct winedmo_demuxer demuxer;
++};
++
+ 
+ enum unix_funcs
+ {
+     unix_process_attach,
+ 
+     unix_demuxer_check,
++    unix_demuxer_create,
++    unix_demuxer_destroy,
+ 
+     unix_funcs_count,
+ };
+diff --git a/dlls/winedmo/winedmo.spec b/dlls/winedmo/winedmo.spec
+index 661703b6c50..2cea1655719 100644
+--- a/dlls/winedmo/winedmo.spec
++++ b/dlls/winedmo/winedmo.spec
+@@ -1 +1,3 @@
+ @ cdecl winedmo_demuxer_check(str)
++@ cdecl winedmo_demuxer_create(ptr)
++@ cdecl winedmo_demuxer_destroy(ptr)
+diff --git a/include/wine/winedmo.h b/include/wine/winedmo.h
+index 06ac1e04261..e60995d4f6b 100644
+--- a/include/wine/winedmo.h
++++ b/include/wine/winedmo.h
+@@ -26,6 +26,10 @@
+ #include "winbase.h"
+ #include "winternl.h"
+ 
++struct winedmo_demuxer { UINT64 handle; };
++
+ NTSTATUS CDECL winedmo_demuxer_check( const char *mime_type );
++NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_demuxer *demuxer );
++NTSTATUS CDECL winedmo_demuxer_destroy( struct winedmo_demuxer *demuxer );
+ 
+ #endif /* __WINE_WINEDMO_H */
+-- 
+GitLab
+
+
+From d938382be0509259d7a9c091763ea92e7db1f9d7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 22 Aug 2024 14:04:19 +0200
+Subject: [PATCH 4/9] mfsrcsnk: Create a winedmo_demuxer object on the media
+ sources.
+
+---
+ dlls/mfsrcsnk/media_source.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/dlls/mfsrcsnk/media_source.c b/dlls/mfsrcsnk/media_source.c
+index cccf501b222..9315b1bc06b 100644
+--- a/dlls/mfsrcsnk/media_source.c
++++ b/dlls/mfsrcsnk/media_source.c
+@@ -16,6 +16,8 @@
+  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+  */
+ 
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
+ #include "mfsrcsnk_private.h"
+ 
+ #include "wine/list.h"
+@@ -85,6 +87,7 @@ struct media_source
+     WCHAR *url;
+     float rate;
+ 
++    struct winedmo_demuxer winedmo_demuxer;
+     UINT64 file_size;
+ 
+     enum
+@@ -334,6 +337,8 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
+     {
+         IMFMediaSource_Shutdown(iface);
+ 
++        winedmo_demuxer_destroy(&source->winedmo_demuxer);
++
+         IMFMediaEventQueue_Release(source->queue);
+         IMFByteStream_Release(source->stream);
+         free(source->url);
+@@ -471,6 +476,7 @@ static const IMFMediaSourceVtbl media_source_vtbl =
+ static HRESULT media_source_async_create(struct media_source *source, IMFAsyncResult *result)
+ {
+     IUnknown *state = IMFAsyncResult_GetStateNoAddRef(result);
++    NTSTATUS status;
+     HRESULT hr;
+ 
+     TRACE("source %p, result %p\n", source, result);
+@@ -486,6 +492,12 @@ static HRESULT media_source_async_create(struct media_source *source, IMFAsyncRe
+         hr = S_OK;
+     }
+ 
++    if ((status = winedmo_demuxer_create(&source->winedmo_demuxer)))
++    {
++        WARN("Failed to create demuxer, status %#lx\n", status);
++        hr = HRESULT_FROM_NT(status);
++    }
++
+     IMFAsyncResult_SetStatus(result, hr);
+     return MFInvokeCallback((IMFAsyncResult *)state);
+ }
+-- 
+GitLab
+
+
+From f59219287a5076877f94ff5701e39ff65c938d13 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 2 Sep 2024 23:45:47 +0200
+Subject: [PATCH 5/9] winedmo: Implement FFmpeg seek and read with user
+ callbacks.
+
+---
+ dlls/winedmo/main.c         | 24 ++++++++++++++++++++-
+ dlls/winedmo/unix_demuxer.c | 16 +++++++++++++-
+ dlls/winedmo/unix_private.h |  7 ++++++
+ dlls/winedmo/unixlib.c      | 43 +++++++++++++++++++++++++++++++++++++
+ dlls/winedmo/unixlib.h      | 21 ++++++++++++++++++
+ 5 files changed, 109 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winedmo/main.c b/dlls/winedmo/main.c
+index c2bdf4f89f5..9fc572082cd 100644
+--- a/dlls/winedmo/main.c
++++ b/dlls/winedmo/main.c
+@@ -22,17 +22,39 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ 
++
++static NTSTATUS WINAPI seek_callback( void *args, ULONG size )
++{
++    struct seek_callback_params *params = args;
++    FIXME( "context %#I64x, offset %#I64x, stub!\n", params->context, params->offset );
++    return STATUS_NOT_IMPLEMENTED;
++}
++
++static NTSTATUS WINAPI read_callback( void *args, ULONG size )
++{
++    struct read_callback_params *params = args;
++    FIXME( "context %#I64x, size %#x, stub!\n", params->context, params->size );
++    return STATUS_NOT_IMPLEMENTED;
++}
++
++
+ BOOL WINAPI DllMain( HINSTANCE instance, DWORD reason, void *reserved )
+ {
+     TRACE( "instance %p, reason %lu, reserved %p\n", instance, reason, reserved );
+ 
+     if (reason == DLL_PROCESS_ATTACH)
+     {
++        struct process_attach_params params =
++        {
++            .seek_callback = (UINT_PTR)seek_callback,
++            .read_callback = (UINT_PTR)read_callback,
++        };
+         NTSTATUS status;
++
+         DisableThreadLibraryCalls( instance );
+ 
+         status = __wine_init_unix_call();
+-        if (!status) status = UNIX_CALL( process_attach, NULL );
++        if (!status) status = UNIX_CALL( process_attach, &params );
+         if (status) WARN( "Failed to init unixlib, status %#lx\n", status );
+     }
+ 
+diff --git a/dlls/winedmo/unix_demuxer.c b/dlls/winedmo/unix_demuxer.c
+index bc352d96599..3a177559b5a 100644
+--- a/dlls/winedmo/unix_demuxer.c
++++ b/dlls/winedmo/unix_demuxer.c
+@@ -29,6 +29,11 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ 
++static inline const char *debugstr_averr( int err )
++{
++    return wine_dbg_sprintf( "%d (%s)", err, av_err2str(err) );
++}
++
+ static AVFormatContext *get_demuxer( struct winedmo_demuxer demuxer )
+ {
+     return (AVFormatContext *)(UINT_PTR)demuxer.handle;
+@@ -58,16 +63,25 @@ NTSTATUS demuxer_create( void *arg )
+ {
+     struct demuxer_create_params *params = arg;
+     AVFormatContext *ctx;
++    int ret;
+ 
+     TRACE( "params %p\n", params );
+ 
+     if (!(ctx = avformat_alloc_context())) return STATUS_NO_MEMORY;
+-    if (!(ctx->pb = avio_alloc_context( NULL, 0, 0, NULL, NULL, NULL, NULL )))
++    if (!(ctx->pb = avio_alloc_context( NULL, 0, 0, NULL, unix_read_callback, NULL, unix_seek_callback )))
+     {
+         avformat_free_context( ctx );
+         return STATUS_NO_MEMORY;
+     }
+ 
++    if ((ret = avformat_open_input( &ctx, NULL, NULL, NULL )) < 0)
++    {
++        ERR( "Failed to open input, error %s.\n", debugstr_averr(ret) );
++        avio_context_free( &ctx->pb );
++        avformat_free_context( ctx );
++        return STATUS_UNSUCCESSFUL;
++    }
++
+     params->demuxer.handle = (UINT_PTR)ctx;
+     return STATUS_SUCCESS;
+ }
+diff --git a/dlls/winedmo/unix_private.h b/dlls/winedmo/unix_private.h
+index d84645b835b..41607ae1e3c 100644
+--- a/dlls/winedmo/unix_private.h
++++ b/dlls/winedmo/unix_private.h
+@@ -20,6 +20,8 @@
+ # error You must include config.h to use this header
+ #endif
+ 
++#include <stdint.h>
++
+ #ifdef HAVE_FFMPEG
+ #include <libavutil/avutil.h>
+ #include <libavutil/imgutils.h>
+@@ -27,6 +29,11 @@
+ #endif /* HAVE_FFMPEG */
+ 
+ #include "unixlib.h"
++#include "wine/debug.h"
++
++/* unixlib.c */
++extern int64_t unix_seek_callback( void *opaque, int64_t offset, int whence );
++extern int unix_read_callback( void *opaque, uint8_t *buffer, int size );
+ 
+ /* unix_demuxer.c */
+ extern NTSTATUS demuxer_check( void * );
+diff --git a/dlls/winedmo/unixlib.c b/dlls/winedmo/unixlib.c
+index 6a37469a052..006861a00ca 100644
+--- a/dlls/winedmo/unixlib.c
++++ b/dlls/winedmo/unixlib.c
+@@ -29,6 +29,44 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ 
++static UINT64 seek_callback;
++static UINT64 read_callback;
++
++int64_t unix_seek_callback( void *opaque, int64_t offset, int whence )
++{
++    struct seek_callback_params params = {.dispatch = {.callback = seek_callback}, .context = (UINT_PTR)opaque};
++    void *ret_ptr;
++    ULONG ret_len;
++    int status;
++
++    TRACE( "opaque %p, offset %#"PRIx64", whence %#x\n", opaque, offset, whence );
++
++    params.offset = offset;
++    status = KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
++    if (status || ret_len != sizeof(UINT64)) return AVERROR( EINVAL );
++    offset = *(UINT64 *)ret_ptr;
++
++    return offset;
++}
++
++int unix_read_callback( void *opaque, uint8_t *buffer, int size )
++{
++    struct read_callback_params params = {.dispatch = {.callback = read_callback}, .context = (UINT_PTR)opaque};
++    int status, total;
++    void *ret_ptr;
++    ULONG ret_len;
++
++    TRACE( "opaque %p, buffer %p, size %#x\n", opaque, buffer, size );
++
++    params.size = size;
++    status = KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
++    if (status || ret_len != sizeof(ULONG)) return AVERROR( EINVAL );
++    total = *(ULONG *)ret_ptr;
++
++    if (!total) return AVERROR_EOF;
++    return total;
++}
++
+ static void vlog( void *ctx, int level, const char *fmt, va_list va_args )
+ {
+     enum __wine_debug_class dbcl = __WINE_DBCL_TRACE;
+@@ -44,6 +82,7 @@ static const char *debugstr_version( UINT version )
+ 
+ static NTSTATUS process_attach( void *arg )
+ {
++    struct process_attach_params *params = arg;
+     const AVInputFormat *demuxer;
+     void *opaque;
+ 
+@@ -60,6 +99,10 @@ static NTSTATUS process_attach( void *arg )
+     }
+ 
+     av_log_set_callback( vlog );
++
++    seek_callback = params->seek_callback;
++    read_callback = params->read_callback;
++
+     return STATUS_SUCCESS;
+ }
+ 
+diff --git a/dlls/winedmo/unixlib.h b/dlls/winedmo/unixlib.h
+index a8a2e00dc19..4b0f533cbb4 100644
+--- a/dlls/winedmo/unixlib.h
++++ b/dlls/winedmo/unixlib.h
+@@ -26,10 +26,31 @@
+ #define WIN32_NO_STATUS
+ #include "windef.h"
+ #include "winbase.h"
++#include "ntuser.h"
+ 
+ #include "wine/unixlib.h"
+ #include "wine/winedmo.h"
+ 
++struct process_attach_params
++{
++    UINT64 seek_callback;
++    UINT64 read_callback;
++};
++
++struct seek_callback_params
++{
++    struct dispatch_callback_params dispatch;
++    UINT64 context;
++    INT64 offset;
++};
++
++struct read_callback_params
++{
++    struct dispatch_callback_params dispatch;
++    UINT64 context;
++    INT32 size;
++};
++
+ 
+ struct demuxer_check_params
+ {
+-- 
+GitLab
+
+
+From d59ac22b0b9ad689f16f5a9f47d9232c3123d1e0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 4 Sep 2024 09:48:17 +0200
+Subject: [PATCH 6/9] winedmo: Allocate a client-side stream context with the
+ demuxers.
+
+---
+ dlls/winedmo/main.c         | 18 +++++++++++++++++
+ dlls/winedmo/unix_demuxer.c |  5 +++--
+ dlls/winedmo/unixlib.c      | 40 +++++++++++++++++++++++++++++++++++--
+ dlls/winedmo/unixlib.h      |  7 +++++++
+ 4 files changed, 66 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winedmo/main.c b/dlls/winedmo/main.c
+index 9fc572082cd..0c3187697bb 100644
+--- a/dlls/winedmo/main.c
++++ b/dlls/winedmo/main.c
+@@ -23,6 +23,21 @@
+ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ 
+ 
++static struct stream_context *stream_context_create(void)
++{
++    struct stream_context *context;
++
++    if (!(context = malloc( sizeof(*context) ))) return NULL;
++
++    return context;
++}
++
++static void stream_context_destroy( struct stream_context *context )
++{
++    free( context );
++}
++
++
+ static NTSTATUS WINAPI seek_callback( void *args, ULONG size )
+ {
+     struct seek_callback_params *params = args;
+@@ -81,9 +96,11 @@ NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_demuxer *demuxer )
+ 
+     TRACE( "demuxer %p\n", demuxer );
+ 
++    if (!(params.context = stream_context_create())) return STATUS_NO_MEMORY;
+     if ((status = UNIX_CALL( demuxer_create, &params )))
+     {
+         WARN( "demuxer_create failed, status %#lx\n", status );
++        stream_context_destroy( params.context );
+         return status;
+     }
+ 
+@@ -104,6 +121,7 @@ NTSTATUS CDECL winedmo_demuxer_destroy( struct winedmo_demuxer *demuxer )
+     demuxer->handle = 0;
+     status = UNIX_CALL( demuxer_destroy, &params );
+     if (status) WARN( "demuxer_destroy failed, status %#lx\n", status );
++    else stream_context_destroy( params.context );
+ 
+     return status;
+ }
+diff --git a/dlls/winedmo/unix_demuxer.c b/dlls/winedmo/unix_demuxer.c
+index 3a177559b5a..e4e8c949d0d 100644
+--- a/dlls/winedmo/unix_demuxer.c
++++ b/dlls/winedmo/unix_demuxer.c
+@@ -65,10 +65,10 @@ NTSTATUS demuxer_create( void *arg )
+     AVFormatContext *ctx;
+     int ret;
+ 
+-    TRACE( "params %p\n", params );
++    TRACE( "context %p\n", params->context );
+ 
+     if (!(ctx = avformat_alloc_context())) return STATUS_NO_MEMORY;
+-    if (!(ctx->pb = avio_alloc_context( NULL, 0, 0, NULL, unix_read_callback, NULL, unix_seek_callback )))
++    if (!(ctx->pb = avio_alloc_context( NULL, 0, 0, params->context, unix_read_callback, NULL, unix_seek_callback )))
+     {
+         avformat_free_context( ctx );
+         return STATUS_NO_MEMORY;
+@@ -93,6 +93,7 @@ NTSTATUS demuxer_destroy( void *arg )
+ 
+     TRACE( "context %p\n", ctx );
+ 
++    params->context = ctx->pb->opaque;
+     avio_context_free( &ctx->pb );
+     avformat_free_context( ctx );
+ 
+diff --git a/dlls/winedmo/unixlib.c b/dlls/winedmo/unixlib.c
+index 006861a00ca..4f5abd9c1a1 100644
+--- a/dlls/winedmo/unixlib.c
++++ b/dlls/winedmo/unixlib.c
+@@ -120,14 +120,50 @@ C_ASSERT(ARRAY_SIZE(__wine_unix_call_funcs) == unix_funcs_count);
+ 
+ #ifdef _WIN64
+ 
++typedef ULONG PTR32;
++
++static NTSTATUS wow64_demuxer_create( void *arg )
++{
++    struct
++    {
++        PTR32 context;
++        struct winedmo_demuxer demuxer;
++    } *params32 = arg;
++    struct demuxer_create_params params;
++    NTSTATUS status;
++
++    params.context = UintToPtr( params32->context );
++    if ((status = demuxer_create( &params ))) return status;
++    params32->demuxer = params.demuxer;
++
++    return status;
++}
++
++static NTSTATUS wow64_demuxer_destroy( void *arg )
++{
++    struct
++    {
++        struct winedmo_demuxer demuxer;
++        PTR32 context;
++    } *params32 = arg;
++    struct demuxer_create_params params;
++    NTSTATUS status;
++
++    params.demuxer = params32->demuxer;
++    if ((status = demuxer_destroy( &params ))) return status;
++    params32->context = PtrToUint( params.context );
++
++    return status;
++}
++
+ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+ {
+ #define X64( name ) [unix_##name] = wow64_##name
+     X( process_attach ),
+ 
+     X( demuxer_check ),
+-    X( demuxer_create ),
+-    X( demuxer_destroy ),
++    X64( demuxer_create ),
++    X64( demuxer_destroy ),
+ };
+ 
+ C_ASSERT(ARRAY_SIZE(__wine_unix_call_wow64_funcs) == unix_funcs_count);
+diff --git a/dlls/winedmo/unixlib.h b/dlls/winedmo/unixlib.h
+index 4b0f533cbb4..891d401aeb5 100644
+--- a/dlls/winedmo/unixlib.h
++++ b/dlls/winedmo/unixlib.h
+@@ -37,6 +37,11 @@ struct process_attach_params
+     UINT64 read_callback;
+ };
+ 
++struct stream_context
++{
++    UINT64 placeholder;
++};
++
+ struct seek_callback_params
+ {
+     struct dispatch_callback_params dispatch;
+@@ -59,12 +64,14 @@ struct demuxer_check_params
+ 
+ struct demuxer_create_params
+ {
++    struct stream_context *context;
+     struct winedmo_demuxer demuxer;
+ };
+ 
+ struct demuxer_destroy_params
+ {
+     struct winedmo_demuxer demuxer;
++    struct stream_context *context;
+ };
+ 
+ 
+-- 
+GitLab
+
+
+From 02bcf6b0790bdb8ae0ea5e5305a58848b212ae10 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 13 Aug 2024 08:53:05 +0200
+Subject: [PATCH 7/9] winedmo: Use the stream context to track stream position.
+
+---
+ dlls/winedmo/main.c    | 2 ++
+ dlls/winedmo/unixlib.c | 8 ++++++++
+ dlls/winedmo/unixlib.h | 3 ++-
+ 3 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winedmo/main.c b/dlls/winedmo/main.c
+index 0c3187697bb..5bd66733d86 100644
+--- a/dlls/winedmo/main.c
++++ b/dlls/winedmo/main.c
+@@ -28,6 +28,8 @@ static struct stream_context *stream_context_create(void)
+     struct stream_context *context;
+ 
+     if (!(context = malloc( sizeof(*context) ))) return NULL;
++    context->length = 0;
++    context->position = 0;
+ 
+     return context;
+ }
+diff --git a/dlls/winedmo/unixlib.c b/dlls/winedmo/unixlib.c
+index 4f5abd9c1a1..dab6b907967 100644
+--- a/dlls/winedmo/unixlib.c
++++ b/dlls/winedmo/unixlib.c
+@@ -35,23 +35,30 @@ static UINT64 read_callback;
+ int64_t unix_seek_callback( void *opaque, int64_t offset, int whence )
+ {
+     struct seek_callback_params params = {.dispatch = {.callback = seek_callback}, .context = (UINT_PTR)opaque};
++    struct stream_context *context = opaque;
+     void *ret_ptr;
+     ULONG ret_len;
+     int status;
+ 
+     TRACE( "opaque %p, offset %#"PRIx64", whence %#x\n", opaque, offset, whence );
+ 
++    if (whence == AVSEEK_SIZE) return context->length;
++    if (whence == SEEK_END) offset += context->length;
++    if (whence == SEEK_CUR) offset += context->position;
++
+     params.offset = offset;
+     status = KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
+     if (status || ret_len != sizeof(UINT64)) return AVERROR( EINVAL );
+     offset = *(UINT64 *)ret_ptr;
+ 
++    context->position = offset;
+     return offset;
+ }
+ 
+ int unix_read_callback( void *opaque, uint8_t *buffer, int size )
+ {
+     struct read_callback_params params = {.dispatch = {.callback = read_callback}, .context = (UINT_PTR)opaque};
++    struct stream_context *context = opaque;
+     int status, total;
+     void *ret_ptr;
+     ULONG ret_len;
+@@ -64,6 +71,7 @@ int unix_read_callback( void *opaque, uint8_t *buffer, int size )
+     total = *(ULONG *)ret_ptr;
+ 
+     if (!total) return AVERROR_EOF;
++    context->position += total;
+     return total;
+ }
+ 
+diff --git a/dlls/winedmo/unixlib.h b/dlls/winedmo/unixlib.h
+index 891d401aeb5..e97e47ea259 100644
+--- a/dlls/winedmo/unixlib.h
++++ b/dlls/winedmo/unixlib.h
+@@ -39,7 +39,8 @@ struct process_attach_params
+ 
+ struct stream_context
+ {
+-    UINT64 placeholder;
++    UINT64 length;
++    UINT64 position;
+ };
+ 
+ struct seek_callback_params
+-- 
+GitLab
+
+
+From abd72c13f2eb89ea45cb7d0215277fba22e1c604 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 23 Aug 2024 11:38:25 +0200
+Subject: [PATCH 8/9] winedmo: Use the stream context as a buffer for larger
+ reads.
+
+---
+ dlls/winedmo/main.c    |  3 ++-
+ dlls/winedmo/unixlib.c | 26 ++++++++++++++++++--------
+ dlls/winedmo/unixlib.h |  4 ++++
+ 3 files changed, 24 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/winedmo/main.c b/dlls/winedmo/main.c
+index 5bd66733d86..9de56e64902 100644
+--- a/dlls/winedmo/main.c
++++ b/dlls/winedmo/main.c
+@@ -27,9 +27,10 @@ static struct stream_context *stream_context_create(void)
+ {
+     struct stream_context *context;
+ 
+-    if (!(context = malloc( sizeof(*context) ))) return NULL;
++    if (!(context = malloc( 0x10000 ))) return NULL;
+     context->length = 0;
+     context->position = 0;
++    context->buffer_size = 0x10000 - offsetof(struct stream_context, buffer);
+ 
+     return context;
+ }
+diff --git a/dlls/winedmo/unixlib.c b/dlls/winedmo/unixlib.c
+index dab6b907967..1d411f39125 100644
+--- a/dlls/winedmo/unixlib.c
++++ b/dlls/winedmo/unixlib.c
+@@ -57,18 +57,28 @@ int64_t unix_seek_callback( void *opaque, int64_t offset, int whence )
+ 
+ int unix_read_callback( void *opaque, uint8_t *buffer, int size )
+ {
+-    struct read_callback_params params = {.dispatch = {.callback = read_callback}, .context = (UINT_PTR)opaque};
+     struct stream_context *context = opaque;
+-    int status, total;
+-    void *ret_ptr;
+-    ULONG ret_len;
++    int ret, status, total = 0;
+ 
+     TRACE( "opaque %p, buffer %p, size %#x\n", opaque, buffer, size );
+ 
+-    params.size = size;
+-    status = KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
+-    if (status || ret_len != sizeof(ULONG)) return AVERROR( EINVAL );
+-    total = *(ULONG *)ret_ptr;
++    if (!size) return AVERROR_EOF;
++
++    do
++    {
++        struct read_callback_params params = {.dispatch = {.callback = read_callback}, .context = (UINT_PTR)context};
++        void *ret_ptr;
++        ULONG ret_len;
++
++        params.size = min( size, context->buffer_size );
++        status = KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
++        if (status || ret_len != sizeof(ULONG)) return AVERROR( EINVAL );
++        if (!(ret = *(ULONG *)ret_ptr)) break;
++        memcpy( buffer, context->buffer, ret );
++        buffer += ret;
++        total += ret;
++        size -= ret;
++    } while (size && ret == context->buffer_size);
+ 
+     if (!total) return AVERROR_EOF;
+     context->position += total;
+diff --git a/dlls/winedmo/unixlib.h b/dlls/winedmo/unixlib.h
+index e97e47ea259..5aa4cc42ba2 100644
+--- a/dlls/winedmo/unixlib.h
++++ b/dlls/winedmo/unixlib.h
+@@ -41,8 +41,12 @@ struct stream_context
+ {
+     UINT64 length;
+     UINT64 position;
++    UINT64 buffer_size;
++    BYTE buffer[];
+ };
+ 
++C_ASSERT( sizeof(struct stream_context) == offsetof( struct stream_context, buffer[0] ) );
++
+ struct seek_callback_params
+ {
+     struct dispatch_callback_params dispatch;
+-- 
+GitLab
+
+
+From 191fb70bd5eed32fd4f02db57f10d68a579bf82a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 4 Sep 2024 09:50:37 +0200
+Subject: [PATCH 9/9] winedmo: Introduce a winedmo_stream callback interface
+ for I/O.
+
+---
+ dlls/mfsrcsnk/media_source.c | 26 +++++++++++++++++-
+ dlls/winedmo/main.c          | 53 +++++++++++++++++++++++++++++-------
+ dlls/winedmo/unixlib.h       |  1 +
+ dlls/winedmo/winedmo.spec    |  2 +-
+ include/wine/winedmo.h       |  8 +++++-
+ 5 files changed, 77 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/mfsrcsnk/media_source.c b/dlls/mfsrcsnk/media_source.c
+index 9315b1bc06b..11592be102a 100644
+--- a/dlls/mfsrcsnk/media_source.c
++++ b/dlls/mfsrcsnk/media_source.c
+@@ -88,6 +88,7 @@ struct media_source
+     float rate;
+ 
+     struct winedmo_demuxer winedmo_demuxer;
++    struct winedmo_stream winedmo_stream;
+     UINT64 file_size;
+ 
+     enum
+@@ -473,6 +474,26 @@ static const IMFMediaSourceVtbl media_source_vtbl =
+     media_source_Shutdown,
+ };
+ 
++static NTSTATUS CDECL media_source_seek_cb(struct winedmo_stream *stream, UINT64 *pos)
++{
++    struct media_source *source = CONTAINING_RECORD(stream, struct media_source, winedmo_stream);
++    TRACE("stream %p, pos %p\n", stream, pos);
++
++    if (FAILED(IMFByteStream_Seek(source->stream, msoBegin, *pos, 0, pos)))
++        return STATUS_UNSUCCESSFUL;
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS CDECL media_source_read_cb(struct winedmo_stream *stream, BYTE *buffer, ULONG *size)
++{
++    struct media_source *source = CONTAINING_RECORD(stream, struct media_source, winedmo_stream);
++    TRACE("stream %p, buffer %p, size %p\n", stream, buffer, size);
++
++    if (FAILED(IMFByteStream_Read(source->stream, buffer, *size, size)))
++        return STATUS_UNSUCCESSFUL;
++    return STATUS_SUCCESS;
++}
++
+ static HRESULT media_source_async_create(struct media_source *source, IMFAsyncResult *result)
+ {
+     IUnknown *state = IMFAsyncResult_GetStateNoAddRef(result);
+@@ -492,7 +513,10 @@ static HRESULT media_source_async_create(struct media_source *source, IMFAsyncRe
+         hr = S_OK;
+     }
+ 
+-    if ((status = winedmo_demuxer_create(&source->winedmo_demuxer)))
++    source->winedmo_stream.p_seek = media_source_seek_cb;
++    source->winedmo_stream.p_read = media_source_read_cb;
++
++    if ((status = winedmo_demuxer_create(&source->winedmo_stream, &source->file_size, &source->winedmo_demuxer)))
+     {
+         WARN("Failed to create demuxer, status %#lx\n", status);
+         hr = HRESULT_FROM_NT(status);
+diff --git a/dlls/winedmo/main.c b/dlls/winedmo/main.c
+index 9de56e64902..96a5027fdd8 100644
+--- a/dlls/winedmo/main.c
++++ b/dlls/winedmo/main.c
+@@ -23,12 +23,13 @@
+ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ 
+ 
+-static struct stream_context *stream_context_create(void)
++static struct stream_context *stream_context_create( struct winedmo_stream *stream, UINT64 *stream_size )
+ {
+     struct stream_context *context;
+ 
+     if (!(context = malloc( 0x10000 ))) return NULL;
+-    context->length = 0;
++    context->stream = (UINT_PTR)stream;
++    context->length = *stream_size;
+     context->position = 0;
+     context->buffer_size = 0x10000 - offsetof(struct stream_context, buffer);
+ 
+@@ -41,18 +42,50 @@ static void stream_context_destroy( struct stream_context *context )
+ }
+ 
+ 
++static struct stream_context *get_stream_context( UINT64 handle )
++{
++    return (struct stream_context *)(UINT_PTR)handle;
++}
++
++static struct winedmo_stream *get_stream( UINT64 handle )
++{
++    return (struct winedmo_stream *)(UINT_PTR)handle;
++}
++
+ static NTSTATUS WINAPI seek_callback( void *args, ULONG size )
+ {
+     struct seek_callback_params *params = args;
+-    FIXME( "context %#I64x, offset %#I64x, stub!\n", params->context, params->offset );
+-    return STATUS_NOT_IMPLEMENTED;
++    struct stream_context *context = get_stream_context( params->context );
++    struct winedmo_stream *stream = get_stream( context->stream );
++    NTSTATUS status = STATUS_NOT_IMPLEMENTED;
++    UINT64 pos = params->offset;
++
++    TRACE( "stream %p, offset %#I64x\n", stream, params->offset );
++
++    if (!stream->p_seek || (status = stream->p_seek( stream, &pos )))
++        WARN( "Failed to seek stream %p, status %#lx\n", stream, status );
++    else
++        TRACE( "Seeked stream %p to %#I64x\n", stream, pos );
++
++    return NtCallbackReturn( &pos, sizeof(pos), status );
+ }
+ 
+ static NTSTATUS WINAPI read_callback( void *args, ULONG size )
+ {
+     struct read_callback_params *params = args;
+-    FIXME( "context %#I64x, size %#x, stub!\n", params->context, params->size );
+-    return STATUS_NOT_IMPLEMENTED;
++    struct stream_context *context = get_stream_context( params->context );
++    struct winedmo_stream *stream = get_stream( context->stream );
++    NTSTATUS status = STATUS_NOT_IMPLEMENTED;
++    ULONG ret = params->size;
++
++    TRACE( "stream %p, size %#x\n", stream, params->size );
++
++    if (!stream->p_read || (status = stream->p_read( stream, context->buffer, &ret )))
++        WARN( "Failed to read from stream %p, status %#lx\n", stream, status );
++    else
++        TRACE( "Read %#lx bytes from stream %p\n", ret, stream );
++
++    return NtCallbackReturn( &ret, sizeof(ret), status );
+ }
+ 
+ 
+@@ -92,14 +125,14 @@ NTSTATUS CDECL winedmo_demuxer_check( const char *mime_type )
+     return status;
+ }
+ 
+-NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_demuxer *demuxer )
++NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_stream *stream, UINT64 *stream_size, struct winedmo_demuxer *demuxer )
+ {
+     struct demuxer_create_params params = {0};
+     NTSTATUS status;
+ 
+-    TRACE( "demuxer %p\n", demuxer );
++    TRACE( "stream %p, stream_size %I64x, demuxer %p\n", stream, *stream_size, demuxer );
+ 
+-    if (!(params.context = stream_context_create())) return STATUS_NO_MEMORY;
++    if (!(params.context = stream_context_create( stream, stream_size ))) return STATUS_NO_MEMORY;
+     if ((status = UNIX_CALL( demuxer_create, &params )))
+     {
+         WARN( "demuxer_create failed, status %#lx\n", status );
+@@ -108,7 +141,7 @@ NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_demuxer *demuxer )
+     }
+ 
+     *demuxer = params.demuxer;
+-    TRACE( "created %#I64x\n", demuxer->handle );
++    TRACE( "created demuxer %#I64x, stream %p, stream_size %#I64x\n", demuxer->handle, stream, *stream_size );
+     return STATUS_SUCCESS;
+ }
+ 
+diff --git a/dlls/winedmo/unixlib.h b/dlls/winedmo/unixlib.h
+index 5aa4cc42ba2..8d39dfd5760 100644
+--- a/dlls/winedmo/unixlib.h
++++ b/dlls/winedmo/unixlib.h
+@@ -39,6 +39,7 @@ struct process_attach_params
+ 
+ struct stream_context
+ {
++    UINT64 stream;
+     UINT64 length;
+     UINT64 position;
+     UINT64 buffer_size;
+diff --git a/dlls/winedmo/winedmo.spec b/dlls/winedmo/winedmo.spec
+index 2cea1655719..ef718289f9d 100644
+--- a/dlls/winedmo/winedmo.spec
++++ b/dlls/winedmo/winedmo.spec
+@@ -1,3 +1,3 @@
+ @ cdecl winedmo_demuxer_check(str)
+-@ cdecl winedmo_demuxer_create(ptr)
++@ cdecl winedmo_demuxer_create(ptr ptr ptr)
+ @ cdecl winedmo_demuxer_destroy(ptr)
+diff --git a/include/wine/winedmo.h b/include/wine/winedmo.h
+index e60995d4f6b..07192242a2a 100644
+--- a/include/wine/winedmo.h
++++ b/include/wine/winedmo.h
+@@ -26,10 +26,16 @@
+ #include "winbase.h"
+ #include "winternl.h"
+ 
++struct winedmo_stream
++{
++    NTSTATUS (CDECL *p_seek)( struct winedmo_stream *stream, UINT64 *pos );
++    NTSTATUS (CDECL *p_read)( struct winedmo_stream *stream, BYTE *buffer, ULONG *size );
++};
++
+ struct winedmo_demuxer { UINT64 handle; };
+ 
+ NTSTATUS CDECL winedmo_demuxer_check( const char *mime_type );
+-NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_demuxer *demuxer );
++NTSTATUS CDECL winedmo_demuxer_create( struct winedmo_stream *stream, UINT64 *stream_size, struct winedmo_demuxer *demuxer );
+ NTSTATUS CDECL winedmo_demuxer_destroy( struct winedmo_demuxer *demuxer );
+ 
+ #endif /* __WINE_WINEDMO_H */
+-- 
+GitLab
+

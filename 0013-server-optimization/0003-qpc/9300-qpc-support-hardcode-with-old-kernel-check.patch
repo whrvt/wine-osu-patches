@@ -1,3 +1,23 @@
+diff --git a/dlls/ntdll/time.c b/dlls/ntdll/time.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/time.c
++++ b/dlls/ntdll/time.c
+@@ -391,12 +391,12 @@ static UINT64 multiply_tsc(UINT64 a, UINT64 b)
+  */
+ BOOL WINAPI DECLSPEC_HOTPATCH RtlQueryPerformanceCounter( LARGE_INTEGER *counter )
+ {
+-    if (user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
++    if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
+     {
+         unsigned __int64 tsc;
+         unsigned int aux;
+ 
+-        if (user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
++        if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
+             tsc = __rdtscp(&aux);
+         else
+         {
+Check for old kernel without necessary struct members
 diff --git a/configure.ac b/configure.ac
 index 11111111111..11111111111 100644
 --- a/configure.ac
@@ -65,8 +85,7 @@ index 11111111111..11111111111 100644
 +
      if (monotonic_time_raw( &ts ))
          return STATUS_NOT_SUPPORTED;
-
-
+ 
 Only hardcode QPC/TSC support if Wine is compiled on a fully compliant kernel (i.e. not Linux 5.4 through WineBuilder)
 diff --git a/dlls/ntdll/time.c b/dlls/ntdll/time.c
 index 11111111111..11111111111 100644

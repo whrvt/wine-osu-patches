@@ -90,7 +90,7 @@ index 77b7fa50db6..dccbaa15c1c 100644
 +static void handle_xdnd_drop_event( HWND hwnd, XEvent *xev )
  {
 +    XClientMessageEvent *event = &xev->xclient;
-     struct dnd_drop_event_params params = {.dispatch.callback = dnd_leave_event_callback, .hwnd = HandleToULong(hwnd)};
+     struct dnd_drop_event_params params = {.dispatch.callback = dnd_drop_event_callback, .hwnd = HandleToULong(hwnd)};
      XClientMessageEvent e;
      void *ret_ptr;
 @@ -1818,7 +1827,7 @@ static void handle_xdnd_drop_event( HWND hwnd, XClientMessageEvent *event )

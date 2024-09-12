@@ -1,0 +1,123 @@
+From: Esme Povirk <esme@codeweavers.com>
+Subject: [PATCH] mountmgr: Add SCSI addresses of udisks2 devices to the registry.
+Message-Id: <20201107171450.2377-1-esme@codeweavers.com>
+Date: Sat,  7 Nov 2020 11:14:50 -0600
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=49788
+Signed-off-by: Esme Povirk <esme@codeweavers.com>
+---
+ dlls/mountmgr.sys/dbus.c | 63 +++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 59 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/mountmgr.sys/dbus.c b/dlls/mountmgr.sys/dbus.c
+index 11111111111..11111111111 100644
+--- a/dlls/mountmgr.sys/dbus.c
++++ b/dlls/mountmgr.sys/dbus.c
+@@ -336,7 +336,8 @@ static const char *udisks2_string_from_array( DBusMessageIter *iter )
+ 
+ /* find the drive entry in the dictionary and get its parameters */
+ static void udisks2_get_drive_info( const char *drive_name, DBusMessageIter *dict,
+-                                    enum device_type *drive_type, int *removable, const char **serial )
++                                    enum device_type *drive_type, int *removable, const char **serial,
++                                    int *optical, const char **model )
+ {
+     DBusMessageIter iter, drive, variant;
+     const char *name;
+@@ -356,11 +357,59 @@ static void udisks2_get_drive_info( const char *drive_name, DBusMessageIter *dic
+                     *drive_type = udisks_parse_media_compatibility( &variant );
+                 else if (!strcmp( name, "Id" ))
+                     p_dbus_message_iter_get_basic( &variant, serial );
++                else if (!strcmp( name, "Optical" ))
++                    p_dbus_message_iter_get_basic( &variant, optical );
++                else if (!strcmp( name, "Model" ))
++                    p_dbus_message_iter_get_basic( &variant, model );
+             }
+         }
+     }
+ }
+ 
++static void udisks2_get_scsi_info( const char *unix_device, int optical,
++    const char *model, struct scsi_info *scsi_info )
++{
++    WCHAR name[MAX_PATH] = {'\\','?','?','\\','u','n','i','x',0};
++    UNICODE_STRING string;
++    OBJECT_ATTRIBUTES attr = {sizeof(attr)};
++    IO_STATUS_BLOCK iosb;
++    NTSTATUS status;
++    HANDLE handle;
++    DWORD len;
++
++    if (!unix_device)
++        return;
++
++    len = ntdll_umbstowcs( unix_device, strlen( unix_device ) + 1, &name[8], ARRAY_SIZE(name) - 8 );
++    if (len >= ARRAY_SIZE(name) - 8)
++    {
++        ERR("Failed to convert %s to NT, path too long\n", debugstr_a(unix_device));
++        return;
++    }
++
++    string.Buffer = name;
++    string.Length = len + 8;
++    string.MaximumLength = string.Length;
++    attr.ObjectName = &string;
++    status = NtCreateFile( &handle, GENERIC_READ | SYNCHRONIZE, &attr, &iosb, NULL, FILE_ATTRIBUTE_NORMAL,
++                           FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_NON_DIRECTORY_FILE, NULL, 0 );
++    if (!NT_SUCCESS(status))
++    {
++        WARN("Failed to open %s, status %u\n", debugstr_a(unix_device), status);
++        return;
++    }
++
++    if (NtDeviceIoControlFile( handle, 0, NULL, NULL, &iosb, IOCTL_SCSI_GET_ADDRESS, NULL, 0, &scsi_info->addr, sizeof(scsi_info->addr) ))
++    {
++        scsi_info->type = optical ? SCSI_CDROM_PERIPHERAL : SCSI_DISK_PERIPHERAL;
++        scsi_info->init_id = 255; /* FIXME */
++        strcpy( scsi_info->driver, optical ? "atapi" : "WINE SCSI" ); /* FIXME */
++        lstrcpynA( scsi_info->model, model, sizeof(scsi_info->model) );
++    }
++
++    NtClose( handle );
++}
++
+ static void udisks2_add_device( const char *udi, DBusMessageIter *dict, DBusMessageIter *block )
+ {
+     DBusMessageIter iter, variant, paths, string;
+@@ -370,9 +419,10 @@ static void udisks2_add_device( const char *udi, DBusMessageIter *dict, DBusMess
+     const char *drive = NULL;
+     const char *id = NULL;
+     const char *label = NULL;
++    const char *model = NULL;
+     GUID guid, *guid_ptr = NULL;
+     const char *iface, *name;
+-    int removable = FALSE;
++    int removable = FALSE, optical = FALSE;
+     enum device_type drive_type = DEVICE_UNKNOWN;
+ 
+     while ((iface = udisks_next_dict_entry( block, &iter )))
+@@ -405,7 +455,7 @@ static void udisks2_add_device( const char *udi, DBusMessageIter *dict, DBusMess
+                 else if (!strcmp( name, "Drive" ))
+                 {
+                     p_dbus_message_iter_get_basic( &variant, &drive );
+-                    udisks2_get_drive_info( drive, dict, &drive_type, &removable, &id );
++                    udisks2_get_drive_info( drive, dict, &drive_type, &removable, &id, &optical, &model );
+                 }
+                 else if (!strcmp( name, "IdUUID" ))
+                 {
+@@ -439,7 +489,12 @@ static void udisks2_add_device( const char *udi, DBusMessageIter *dict, DBusMess
+     }
+     if (device)
+     {
+-        if (removable) queue_device_op( ADD_DOS_DEVICE, udi, device, mount_point, drive_type, guid_ptr, id, label, NULL );
++        if (removable)
++        {
++            struct scsi_info scsi_info = {0};
++            udisks2_get_scsi_info( device, optical, model, &scsi_info );
++            queue_device_op( ADD_DOS_DEVICE, udi, device, mount_point, drive_type, guid_ptr, id, label, scsi_info.type ? &scsi_info : NULL );
++        }
+         else if (guid_ptr) queue_device_op( ADD_VOLUME, udi, device, mount_point, DEVICE_HARDDISK_VOL, guid_ptr, id, label, NULL );
+     }
+ }
+-- 
+0.0.0
+
