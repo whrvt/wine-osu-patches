@@ -1,0 +1,36 @@
+From 040be470607d98eef22645c58e5f6336085ee723 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 12 Sep 2024 10:06:50 +0200
+Subject: [PATCH] win32u: Leave window surface alpha bits to -1 when unset.
+
+Fixes: 05d727a935b9009f188cc74ca77e14afc44aef30
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57160
+---
+ dlls/win32u/window.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 77471213431..ab58cabb40e 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1949,14 +1949,14 @@ static struct window_surface *get_window_surface( HWND hwnd, UINT swp_flags, BOO
+ 
+     if (new_surface && !is_layered)
+     {
+-        DWORD lwa_flags = 0;
++        DWORD lwa_flags = 0, alpha_bits = -1;
+         COLORREF key;
+         BYTE alpha;
+ 
+         if (!NtUserGetLayeredWindowAttributes( hwnd, &key, &alpha, &lwa_flags )) lwa_flags = 0;
+-        if (!(lwa_flags & LWA_ALPHA)) alpha = 255;
++        if (lwa_flags & LWA_ALPHA) alpha_bits = alpha << 24;
+         if (!(lwa_flags & LWA_COLORKEY)) key = CLR_INVALID;
+-        window_surface_set_layered( new_surface, key, alpha << 24, 0 );
++        window_surface_set_layered( new_surface, key, alpha_bits, 0 );
+     }
+ 
+     return new_surface;
+-- 
+GitLab
+

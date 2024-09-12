@@ -184,26 +184,12 @@ Date: Mon, 9 Sep 2024 18:02:55 -0700
 Subject: [PATCH] winex11: don't try XGrabPointer with cursor_clip_hack=2
 
 ---
- dlls/winex11.drv/event.c       |  2 +-
  dlls/winex11.drv/mouse.c       |  2 +-
  dlls/winex11.drv/window.c      |  2 +-
  dlls/winex11.drv/x11drv.h      | 10 +++++-----
  dlls/winex11.drv/x11drv_main.c |  2 +-
- 5 files changed, 9 insertions(+), 9 deletions(-)
+ 4 files changed, 8 insertions(+), 8 deletions(-)
 
-diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 801f60b5093..52afdace5fe 100644
---- a/dlls/winex11.drv/event.c
-+++ b/dlls/winex11.drv/event.c
-@@ -266,7 +266,7 @@ static void wait_grab_pointer( Display *display )
-     NtUserGetClipCursor( &rect );
-     NtUserClipCursor( NULL );
- 
--    while (XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
-+    while (cursor_clip_hack < 2 && XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
-                          None, None, CurrentTime ) != GrabSuccess)
-     {
-         LARGE_INTEGER timeout = {.QuadPart = -10 * (ULONGLONG)10000};
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
 index 7a2b70e084a..5791e443c29 100644
 --- a/dlls/winex11.drv/mouse.c

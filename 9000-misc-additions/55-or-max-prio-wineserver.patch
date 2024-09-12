@@ -1,0 +1,13 @@
+diff --git a/server/scheduler.c b/server/scheduler.c
+index 11111111111..11111111111 100644
+--- a/server/scheduler.c
++++ b/server/scheduler.c
+@@ -54,7 +54,7 @@ static int get_priority( const char *variable, int min, int max )
+     int val;
+ 
+     env = getenv( variable );
+-    if (!env) return -1;
++    if (!env) return 55 <= max && 55 >= min ? 55 : max;
+ 
+     val = atoi( env );
+     if (val >= min && val <= max) return val;

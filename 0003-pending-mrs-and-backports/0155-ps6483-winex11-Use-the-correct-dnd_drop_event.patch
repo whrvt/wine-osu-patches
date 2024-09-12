@@ -1,0 +1,28 @@
+From 9b87605adb101a75a5a80a39e0a46d666823b274 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 12 Sep 2024 10:14:52 +0200
+Subject: [PATCH] winex11: Use the correct dnd_drop_event user dispatch
+ callback.
+
+Fixes: b58349e5b519c8af18ae38062fd9e86916392d25
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57173
+---
+ dlls/winex11.drv/event.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index b8f10a73b6f..9271758090e 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1791,7 +1791,7 @@ static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
+ 
+ static void handle_xdnd_drop_event( HWND hwnd, XClientMessageEvent *event )
+ {
+-    struct dnd_drop_event_params params = {.dispatch.callback = dnd_leave_event_callback, .hwnd = HandleToULong(hwnd)};
++    struct dnd_drop_event_params params = {.dispatch.callback = dnd_drop_event_callback, .hwnd = HandleToULong(hwnd)};
+     XClientMessageEvent e;
+     void *ret_ptr;
+     ULONG ret_len;
+-- 
+GitLab
+

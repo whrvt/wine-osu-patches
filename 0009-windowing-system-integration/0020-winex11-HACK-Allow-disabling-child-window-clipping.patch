@@ -1,0 +1,96 @@
+From: William Horvath <william@horvath.blog>
+Date: Tue, 13 Aug 2024 02:58:30 +0000
+Subject: [PATCH] winex11: Allow disabling child window clipping.
+
+Improves performance in osu! by ~2x, so disable it by default. Breaks map editor
+menu bar, because clipping the (possibly letterboxed) main game surface is
+necessary in order to not draw over it. There should be a way to work around this,
+because menu dropdowns work properly (e.g. pressing the "File" menu renders
+it properly), but I don't know how.
+
+See: https://github.com/ValveSoftware/wine/commit/afcbb6a2a29de850d58b8b01435db7509d389c64
+     https://github.com/ValveSoftware/wine/commit/a8514f9606ee3fdc3d912c988f651edc5d7d0d55
+for other examples of this idea.
+
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -1106,6 +1106,13 @@ static BOOL needs_offscreen_rendering( HWND hwnd, BOOL known_child )
+ {
+     if (NtUserGetDpiForWindow( hwnd ) != get_win_monitor_dpi( hwnd )) return TRUE;
+ 
++    static unsigned int cache;
++    if (gl_disable_child_window_clipping) {
++        if (!cache++)
++            MESSAGE("OpenGL speedhack enabled, which will cause the editor top menu bar to render incorrectly\n\texport WINE_DISABLE_GLCHILD_HACK=1 to disable.\n");
++        known_child = FALSE;
++    }
++
+     if (!known_child && !NtUserGetWindowRelative( hwnd, GW_CHILD ) &&
+         NtUserGetAncestor( hwnd, GA_PARENT ) == NtUserGetDesktopWindow())
+         return FALSE;  /* childless top-level window */
+@@ -1155,7 +1162,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+         TRACE( "%p created client %lx drawable %lx\n", hwnd, gl->window, gl->drawable );
+     }
+ #ifdef SONAME_LIBXCOMPOSITE
+-    else if(usexcomposite)
++    else if(usexcomposite || gl_disable_child_window_clipping)
+     {
+         gl->type = DC_GL_CHILD_WIN;
+         gl->colormap = XCreateColormap( gdi_display, get_dummy_parent(), visual->visual,
+@@ -1167,7 +1174,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+             struct x11drv_win_data *data;
+ 
+             gl->drawable = pglXCreateWindow( gdi_display, gl->format->fbconfig, gl->window, NULL );
+-            pXCompositeRedirectWindow( gdi_display, gl->window, CompositeRedirectManual );
++            if (usexcomposite && !gl_disable_child_window_clipping) pXCompositeRedirectWindow( gdi_display, gl->window, CompositeRedirectManual );
+ 
+             if ((data = get_win_data( hwnd )))
+             {
+@@ -1299,6 +1306,9 @@ static BOOL set_pixel_format( HDC hdc, int format, BOOL internal )
+  */
+ void sync_gl_drawable( HWND hwnd, BOOL known_child )
+ {
++    /* Since we never have a known_child, this entire function is a no-op */
++    if (gl_disable_child_window_clipping) return;
++
+     struct gl_drawable *old, *new;
+ 
+     if (!(old = get_gl_drawable( hwnd, 0 ))) return;
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -71,6 +71,7 @@ BOOL use_take_focus = TRUE;
+ BOOL use_primary_selection = FALSE;
+ BOOL use_system_cursors = TRUE;
+ BOOL grab_fullscreen = FALSE;
++BOOL gl_disable_child_window_clipping = TRUE;
+ int keyboard_layout = -1;
+ BOOL keyboard_scancode_detect = FALSE;
+ BOOL managed_mode = TRUE;
+@@ -937,6 +937,11 @@ static NTSTATUS x11drv_init( void *arg )
+             (e && *e != '\0' && *e != '0');
+     }
+ 
++    {
++        const char *e = getenv("WINE_DISABLE_GLCHILD_HACK");
++        if (e && *e != '\0' && *e != '0') gl_disable_child_window_clipping = FALSE;
++    }
++
+     init_user_driver();
+     X11DRV_DisplayDevices_Init(FALSE);
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -1020,6 +1020,7 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     while ((*p++ = *src++));
+     return (p - dst) * sizeof(WCHAR);
+ }
++extern BOOL gl_disable_child_window_clipping;
+ 
+ extern BOOL layered_window_client_hack;
+ 
