@@ -1,0 +1,95 @@
+From 47f6e6c075e23dce56bd256eb1c1feaa27736424 Mon Sep 17 00:00:00 2001
+From: Dmitry Timoshkov <dmitry@baikal.ru>
+Date: Tue, 17 Sep 2024 15:21:07 +0300
+Subject: [PATCH] services: Add support for
+ QueryServiceConfig2(SERVICE_CONFIG_DELAYED_AUTO_START_INFO).
+
+Signed-off-by: Dmitry Timoshkov <dmitry@baikal.ru>
+---
+ dlls/advapi32/tests/service.c |  6 ------
+ dlls/sechost/service.c        |  3 +++
+ programs/services/rpc.c       | 12 ++++++++++++
+ 3 files changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/advapi32/tests/service.c b/dlls/advapi32/tests/service.c
+index 3f1a9015429..47ad4b0e2ba 100644
+--- a/dlls/advapi32/tests/service.c
++++ b/dlls/advapi32/tests/service.c
+@@ -2477,11 +2477,8 @@ static void test_queryconfig2(void)
+     auto_start_info.fDelayedAutostart = 0xdeadbeef;
+     ret = pQueryServiceConfig2W(svc_handle, SERVICE_CONFIG_DELAYED_AUTO_START_INFO,
+             (LPBYTE)&auto_start_info, sizeof(auto_start_info), &needed);
+-    todo_wine
+     ok(ret, "expected QueryServiceConfig2W to succeed (%ld)\n", GetLastError());
+-    todo_wine
+     ok(needed == sizeof(auto_start_info), "needed = %ld\n", needed);
+-    todo_wine
+     ok(auto_start_info.fDelayedAutostart == 0, "fDelayedAutostart = %d\n", auto_start_info.fDelayedAutostart);
+ 
+     SetLastError(0xdeadbeef);
+@@ -2502,11 +2499,8 @@ static void test_queryconfig2(void)
+     auto_start_info.fDelayedAutostart = 0xdeadbeef;
+     ret = pQueryServiceConfig2W(svc_handle, SERVICE_CONFIG_DELAYED_AUTO_START_INFO,
+             (LPBYTE)&auto_start_info, sizeof(auto_start_info), &needed);
+-    todo_wine
+     ok(ret, "expected QueryServiceConfig2W to succeed (%ld)\n", GetLastError());
+-    todo_wine
+     ok(needed == sizeof(auto_start_info), "needed = %ld\n", needed);
+-    todo_wine
+     ok(auto_start_info.fDelayedAutostart == 1, "fDelayedAutostart = %d\n", auto_start_info.fDelayedAutostart);
+ 
+ cleanup:
+diff --git a/dlls/sechost/service.c b/dlls/sechost/service.c
+index 159f9e1d2a3..788bb61bf48 100644
+--- a/dlls/sechost/service.c
++++ b/dlls/sechost/service.c
+@@ -798,6 +798,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH QueryServiceConfig2A( SC_HANDLE service, DWORD lev
+             }
+             break;
+         case SERVICE_CONFIG_PRESHUTDOWN_INFO:
++        case SERVICE_CONFIG_DELAYED_AUTO_START_INFO:
+             if (buffer && bufferW && *ret_size <= size)
+                 memcpy(buffer, bufferW, *ret_size);
+             break;
+@@ -839,6 +840,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH QueryServiceConfig2W( SC_HANDLE service, DWORD lev
+         break;
+ 
+     case SERVICE_CONFIG_PRESHUTDOWN_INFO:
++    case SERVICE_CONFIG_DELAYED_AUTO_START_INFO:
+         bufptr = buffer;
+         break;
+ 
+@@ -904,6 +906,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH QueryServiceConfig2W( SC_HANDLE service, DWORD lev
+         break;
+     }
+     case SERVICE_CONFIG_PRESHUTDOWN_INFO:
++    case SERVICE_CONFIG_DELAYED_AUTO_START_INFO:
+         return set_error( err );
+ 
+     default:
+diff --git a/programs/services/rpc.c b/programs/services/rpc.c
+index 5bc692a3e18..730256e3352 100644
+--- a/programs/services/rpc.c
++++ b/programs/services/rpc.c
+@@ -1048,6 +1048,18 @@ DWORD __cdecl svcctl_QueryServiceConfig2W( SC_RPC_HANDLE hService, DWORD level,
+         service_unlock(service->service_entry);
+         break;
+ 
++    case SERVICE_CONFIG_DELAYED_AUTO_START_INFO:
++        service_lock(service->service_entry);
++
++        *needed = sizeof(SERVICE_DELAYED_AUTO_START_INFO);
++        if (size >= *needed)
++            ((SERVICE_DELAYED_AUTO_START_INFO *)buffer)->fDelayedAutostart =
++                service->service_entry->delayed_autostart;
++        else err = ERROR_INSUFFICIENT_BUFFER;
++
++        service_unlock(service->service_entry);
++        break;
++
+     default:
+         WINE_FIXME("level %lu not implemented\n", level);
+         err = ERROR_INVALID_LEVEL;
+-- 
+GitLab
+

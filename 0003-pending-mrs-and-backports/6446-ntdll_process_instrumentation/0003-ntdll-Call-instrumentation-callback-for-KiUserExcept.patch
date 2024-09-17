@@ -1,7 +1,7 @@
-From 001a7957e7454191f0c808aaccd99e8ef6a8bb41 Mon Sep 17 00:00:00 2001
+From dd1eed9de5ed1275c3a334807362bba10659bca0 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 4 Sep 2024 16:20:28 -0600
-Subject: [PATCH 3/5] ntdll: Call instrumentation callback for
+Subject: [PATCH 3/6] ntdll: Call instrumentation callback for
  KiUserExceptionDispatcher on x64.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 3/5] ntdll: Call instrumentation callback for
  2 files changed, 8 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
-index 6a684fc82a3..12c99c9975f 100644
+index 4d8439ec673..19326f3cc18 100644
 --- a/dlls/ntdll/tests/exception.c
 +++ b/dlls/ntdll/tests/exception.c
-@@ -5577,8 +5577,8 @@ static void test_instrumentation_callback(void)
+@@ -5617,8 +5617,8 @@ static void test_instrumentation_callback(void)
      init_instrumentation_data( &curr_data );
      DbgBreakPoint();
      data = curr_data;
@@ -49,5 +49,5 @@ index c57df9d916e..8aab736d63a 100644
  }
  
 -- 
-2.46.0
+2.46.1
 

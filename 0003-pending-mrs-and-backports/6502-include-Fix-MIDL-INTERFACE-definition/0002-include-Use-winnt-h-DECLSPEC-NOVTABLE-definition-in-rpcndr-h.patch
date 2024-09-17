@@ -1,0 +1,32 @@
+From 20f95366e540b197bb290f2a912daf2eb4b543d6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 16 Sep 2024 11:53:43 +0200
+Subject: [PATCH] include: Use winnt.h DECLSPEC_NOVTABLE definition in
+ rpcndr.h.
+
+---
+ include/rpcndr.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/include/rpcndr.h b/include/rpcndr.h
+index 9fcdf706709..de6a0663650 100644
+--- a/include/rpcndr.h
++++ b/include/rpcndr.h
+@@ -112,6 +112,14 @@ typedef void (__RPC_USER *NDR_RUNDOWN)(void *context);
+ typedef void (__RPC_USER *NDR_NOTIFY_ROUTINE)(void);
+ typedef void (__RPC_USER *NDR_NOTIFY2_ROUTINE)(boolean flag);
+ 
++#ifndef DECLSPEC_NOVTABLE
++# if defined(_MSC_VER) && (_MSC_VER >= 1100) && defined(__cplusplus)
++#  define DECLSPEC_NOVTABLE __declspec(novtable)
++# else
++#  define DECLSPEC_NOVTABLE
++# endif
++#endif
++
+ #ifndef DECLSPEC_UUID
+ # if defined(_MSC_VER) && (_MSC_VER >= 1100) && defined (__cplusplus)
+ #  define DECLSPEC_UUID(x) __declspec(uuid(x))
+-- 
+GitLab
+

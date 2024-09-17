@@ -1,21 +1,22 @@
-From ffaf31f72de5e71f522a6b3bfdadfab917cb85d0 Mon Sep 17 00:00:00 2001
+From 47d1f427fef7eae111f7690844ade4565ced0a35 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 4 Sep 2024 16:16:00 -0600
-Subject: [PATCH 2/5] ntdll: Call instrumentation callback from
+Subject: [PATCH 2/6] ntdll: Call instrumentation callback from
  wine_syscall_dispatcher on x64.
 
 ---
  dlls/ntdll/tests/exception.c    | 28 ++++++++++++-------------
- dlls/ntdll/unix/process.c       | 11 ++++++++--
+ dlls/ntdll/unix/process.c       |  8 ++++++++
  dlls/ntdll/unix/signal_x86_64.c | 36 +++++++++++++++++++++++++++++----
  dlls/ntdll/unix/unix_private.h  |  1 +
- 4 files changed, 56 insertions(+), 20 deletions(-)
+ dlls/wow64/process.c            |  2 +-
+ 5 files changed, 56 insertions(+), 19 deletions(-)
 
 diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
-index 067a4a83736..6a684fc82a3 100644
+index 93b43a02608..4d8439ec673 100644
 --- a/dlls/ntdll/tests/exception.c
 +++ b/dlls/ntdll/tests/exception.c
-@@ -5558,11 +5558,11 @@ static void test_instrumentation_callback(void)
+@@ -5598,11 +5598,11 @@ static void test_instrumentation_callback(void)
      status = NtQueryInformationProcess( GetCurrentProcess(), ProcessInstrumentationCallback, &info, sizeof(info), NULL );
      data = curr_data;
      ok( status == STATUS_INVALID_INFO_CLASS, "got %#lx.\n", status );
@@ -30,7 +31,7 @@ index 067a4a83736..6a684fc82a3 100644
  
      memset(&info, 0, sizeof(info));
      info.Callback = code_mem;
-@@ -5570,7 +5570,7 @@ static void test_instrumentation_callback(void)
+@@ -5610,7 +5610,7 @@ static void test_instrumentation_callback(void)
      status = NtSetInformationProcess( GetCurrentProcess(), ProcessInstrumentationCallback, &info, sizeof(info) );
      data = curr_data;
      ok( status == STATUS_SUCCESS, "got %#lx.\n", status );
@@ -39,7 +40,7 @@ index 067a4a83736..6a684fc82a3 100644
  
      vectored_handler = AddVectoredExceptionHandler( TRUE, test_instrumentation_callback_handler );
      ok( !!vectored_handler, "failed.\n" );
-@@ -5595,8 +5595,8 @@ static void test_instrumentation_callback(void)
+@@ -5635,8 +5635,8 @@ static void test_instrumentation_callback(void)
      else if (pass == 3)
      {
          data = curr_data;
@@ -50,7 +51,7 @@ index 067a4a83736..6a684fc82a3 100644
              pKiUserExceptionDispatcher );
          init_instrumentation_data( &curr_data );
          NtContinue( &ctx, FALSE );
-@@ -5614,8 +5614,8 @@ static void test_instrumentation_callback(void)
+@@ -5654,8 +5654,8 @@ static void test_instrumentation_callback(void)
      else if (pass == 5)
      {
          data = curr_data;
@@ -61,7 +62,7 @@ index 067a4a83736..6a684fc82a3 100644
          init_instrumentation_data( &curr_data );
      }
      ok( pass == 5, "got %ld.\n", pass );
-@@ -5628,8 +5628,8 @@ static void test_instrumentation_callback(void)
+@@ -5668,8 +5668,8 @@ static void test_instrumentation_callback(void)
      SleepEx( 0, TRUE );
      data = curr_data;
      ok( apc_called, "APC was not called.\n" );
@@ -72,7 +73,7 @@ index 067a4a83736..6a684fc82a3 100644
  
      instrumentation_callback_thread_ready = CreateEventW( NULL, FALSE, FALSE, NULL );
      instrumentation_callback_thread_wait = CreateEventW( NULL, FALSE, FALSE, NULL );
-@@ -5637,7 +5637,7 @@ static void test_instrumentation_callback(void)
+@@ -5677,7 +5677,7 @@ static void test_instrumentation_callback(void)
      thread = CreateThread( NULL, 0, test_instrumentation_callback_thread, 0, 0, NULL );
      NtWaitForSingleObject( instrumentation_callback_thread_ready, FALSE, NULL );
      data = curr_data;
@@ -81,7 +82,7 @@ index 067a4a83736..6a684fc82a3 100644
      pLdrInitializeThunk = GetProcAddress( ntdll, "LdrInitializeThunk" );
      for (i = 0; i < data.call_count; ++i)
      {
-@@ -5649,14 +5649,14 @@ static void test_instrumentation_callback(void)
+@@ -5689,14 +5689,14 @@ static void test_instrumentation_callback(void)
      SetEvent( instrumentation_callback_thread_wait );
      NtWaitForSingleObject( instrumentation_callback_thread_ready, FALSE, NULL );
      data = curr_data;
@@ -98,7 +99,7 @@ index 067a4a83736..6a684fc82a3 100644
  
      SetEvent( instrumentation_callback_thread_wait );
      WaitForSingleObject( thread, INFINITE );
-@@ -5668,7 +5668,7 @@ static void test_instrumentation_callback(void)
+@@ -5708,7 +5708,7 @@ static void test_instrumentation_callback(void)
      init_instrumentation_data( &curr_data );
      DestroyWindow( hwnd );
      data = curr_data;
@@ -108,7 +109,7 @@ index 067a4a83736..6a684fc82a3 100644
      {
          if (data.call_data[i].r10 == pKiUserCallbackDispatcher)
 diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
-index e00b5ca6ca6..6ec53aaa5b2 100644
+index e00b5ca6ca6..915bf04c412 100644
 --- a/dlls/ntdll/unix/process.c
 +++ b/dlls/ntdll/unix/process.c
 @@ -78,6 +78,8 @@ static ULONG execute_flags = MEM_EXECUTE_OPTION_DISABLE;
@@ -120,18 +121,13 @@ index e00b5ca6ca6..6ec53aaa5b2 100644
  static char **build_argv( const UNICODE_STRING *cmdline, int reserved )
  {
      char **argv, *arg, *src, *dst;
-@@ -1712,10 +1714,15 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
-     {
-         PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION *instr = info;
+@@ -1716,6 +1718,12 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
  
--        FIXME( "ProcessInstrumentationCallback stub.\n" );
--
          if (size < sizeof(*instr)) return STATUS_INFO_LENGTH_MISMATCH;
-+
          ret = STATUS_SUCCESS;
 +        if (handle != GetCurrentProcess())
 +        {
-+            FIXME( "Setting ProcessInstrumentationCallback not yet supported for other process.\n" );
++            FIXME( "Setting ProcessInstrumentationCallback is not yet supported for other process.\n" );
 +            break;
 +        }
 +        InterlockedExchangePointer( &instrumentation_callback, instr->Callback );
@@ -256,6 +252,19 @@ index 8ce45dfa0bc..23305df2080 100644
  
  extern void init_environment(void);
  extern void init_startup_info(void);
+diff --git a/dlls/wow64/process.c b/dlls/wow64/process.c
+index 14b9307b447..9b2a6de01b3 100644
+--- a/dlls/wow64/process.c
++++ b/dlls/wow64/process.c
+@@ -894,7 +894,7 @@ NTSTATUS WINAPI wow64_NtSetInformationProcess( UINT *args )
+         else return STATUS_INVALID_PARAMETER;
+ 
+     case ProcessInstrumentationCallback:   /* PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION */
+-        if (len == sizeof(PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION32))
++        if (len >= sizeof(PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION32))
+         {
+             FIXME( "ProcessInstrumentationCallback stub\n" );
+             return STATUS_SUCCESS;
 -- 
-2.46.0
+2.46.1
 

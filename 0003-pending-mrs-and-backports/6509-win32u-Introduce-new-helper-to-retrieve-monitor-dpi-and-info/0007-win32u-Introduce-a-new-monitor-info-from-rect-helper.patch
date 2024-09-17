@@ -1,0 +1,160 @@
+From 37aaaf909010f3ca05eecf7127b242b41365d98c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 8 Sep 2024 11:09:44 +0200
+Subject: [PATCH] win32u: Introduce a new monitor_info_from_rect helper.
+
+---
+ dlls/win32u/defwnd.c         | 21 +++++++--------------
+ dlls/win32u/menu.c           | 10 +++-------
+ dlls/win32u/sysparams.c      | 15 ++++++++++-----
+ dlls/win32u/win32u_private.h |  3 +--
+ dlls/win32u/window.c         |  5 +----
+ 5 files changed, 22 insertions(+), 32 deletions(-)
+
+diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
+index c8b9897644c..c6103276cf9 100644
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -670,7 +670,6 @@ static void sys_command_size_move( HWND hwnd, WPARAM wparam )
+     UINT style = get_window_long( hwnd, GWL_STYLE );
+     POINT capture_point, pt;
+     MINMAXINFO minmax;
+-    HMONITOR mon = 0;
+     HWND parent;
+     UINT dpi;
+     HDC hdc;
+@@ -724,7 +723,6 @@ static void sys_command_size_move( HWND hwnd, WPARAM wparam )
+     {
+         parent = 0;
+         mouse_rect = get_virtual_screen_rect( get_thread_dpi() );
+-        mon = monitor_from_point( pt, MONITOR_DEFAULTTONEAREST, dpi );
+     }
+ 
+     if (on_left_border( hittest ))
+@@ -819,20 +817,15 @@ static void sys_command_size_move( HWND hwnd, WPARAM wparam )
+ 
+         if (!parent)
+         {
+-            HMONITOR newmon;
+             MONITORINFO info;
++            RECT rect;
+ 
+-            if ((newmon = monitor_from_point( pt, MONITOR_DEFAULTTONULL, get_thread_dpi() )))
+-                mon = newmon;
+-
+-            info.cbSize = sizeof(info);
+-            if (mon && get_monitor_info( mon, &info, get_thread_dpi() ))
+-            {
+-                pt.x = max( pt.x, info.rcWork.left );
+-                pt.x = min( pt.x, info.rcWork.right - 1 );
+-                pt.y = max( pt.y, info.rcWork.top );
+-                pt.y = min( pt.y, info.rcWork.bottom - 1 );
+-            }
++            SetRect( &rect, pt.x, pt.y, pt.x, pt.y );
++            info = monitor_info_from_rect( rect, get_thread_dpi() );
++            pt.x = max( pt.x, info.rcWork.left );
++            pt.x = min( pt.x, info.rcWork.right - 1 );
++            pt.y = max( pt.y, info.rcWork.top );
++            pt.y = min( pt.y, info.rcWork.bottom - 1 );
+         }
+ 
+         dx = pt.x - capture_point.x;
+diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
+index 81b5fda6176..1f1e5f68e21 100644
+--- a/dlls/win32u/menu.c
++++ b/dlls/win32u/menu.c
+@@ -3046,10 +3046,9 @@ static BOOL show_popup( HWND owner, HMENU hmenu, UINT id, UINT flags,
+                         int x, int y, INT xanchor, INT yanchor )
+ {
+     struct menu *menu;
+-    HMONITOR monitor;
+     MONITORINFO info;
+     UINT max_height;
+-    POINT pt;
++    RECT rect;
+ 
+     TRACE( "owner=%p hmenu=%p id=0x%04x x=0x%04x y=0x%04x xa=0x%04x ya=0x%04x\n",
+            owner, hmenu, id, x, y, xanchor, yanchor );
+@@ -3064,11 +3063,8 @@ static BOOL show_popup( HWND owner, HMENU hmenu, UINT id, UINT flags,
+     menu->nScrollPos = 0;
+ 
+     /* FIXME: should use item rect */
+-    pt.x = x;
+-    pt.y = y;
+-    monitor = monitor_from_point( pt, MONITOR_DEFAULTTONEAREST, get_thread_dpi() );
+-    info.cbSize = sizeof(info);
+-    get_monitor_info( monitor, &info, get_thread_dpi() );
++    SetRect( &rect, x, y, x, y );
++    info = monitor_info_from_rect( rect, get_thread_dpi() );
+ 
+     max_height = info.rcWork.bottom - info.rcWork.top;
+     if (menu->cyMax) max_height = min( max_height, menu->cyMax );
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index e16e8869b40..c54659a0e2e 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -3787,7 +3787,7 @@ BOOL get_monitor_info( HMONITOR handle, MONITORINFO *info, UINT dpi )
+     return FALSE;
+ }
+ 
+-HMONITOR monitor_from_rect( const RECT *rect, UINT flags, UINT dpi )
++static HMONITOR monitor_from_rect( const RECT *rect, UINT flags, UINT dpi )
+ {
+     struct monitor *monitor;
+     HMONITOR ret = 0;
+@@ -3803,11 +3803,16 @@ HMONITOR monitor_from_rect( const RECT *rect, UINT flags, UINT dpi )
+     return ret;
+ }
+ 
+-HMONITOR monitor_from_point( POINT pt, UINT flags, UINT dpi )
++MONITORINFO monitor_info_from_rect( RECT rect, UINT dpi )
+ {
+-    RECT rect;
+-    SetRect( &rect, pt.x, pt.y, pt.x + 1, pt.y + 1 );
+-    return monitor_from_rect( &rect, flags, dpi );
++    MONITORINFO info = {.cbSize = sizeof(info)};
++    struct monitor *monitor;
++
++    if (!lock_display_devices()) return info;
++    if ((monitor = get_monitor_from_rect( rect, MONITOR_DEFAULTTONEAREST, dpi ))) monitor_get_info( monitor, &info, dpi );
++    unlock_display_devices();
++
++    return info;
+ }
+ 
+ UINT monitor_dpi_from_rect( RECT rect, UINT dpi )
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index fff5004c950..2c0defe06ea 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -189,9 +189,8 @@ extern BOOL message_beep( UINT i );
+ extern POINT point_phys_to_win_dpi( HWND hwnd, POINT pt );
+ extern POINT point_thread_to_win_dpi( HWND hwnd, POINT pt );
+ extern RECT rect_thread_to_win_dpi( HWND hwnd, RECT rect );
+-extern HMONITOR monitor_from_point( POINT pt, UINT flags, UINT dpi );
+-extern HMONITOR monitor_from_rect( const RECT *rect, UINT flags, UINT dpi );
+ extern HMONITOR monitor_from_window( HWND hwnd, UINT flags, UINT dpi );
++extern MONITORINFO monitor_info_from_rect( RECT rect, UINT dpi );
+ extern UINT monitor_dpi_from_rect( RECT rect, UINT dpi );
+ extern BOOL update_display_cache( BOOL force );
+ extern void user_lock(void);
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 88bf35ccb8e..9e20316f3e1 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2741,11 +2741,8 @@ BOOL WINAPI NtUserGetWindowPlacement( HWND hwnd, WINDOWPLACEMENT *placement )
+ /* make sure the specified rect is visible on screen */
+ static void make_rect_onscreen( RECT *rect )
+ {
+-    MONITORINFO info;
+-    HMONITOR monitor = monitor_from_rect( rect, MONITOR_DEFAULTTONEAREST, get_thread_dpi() );
++    MONITORINFO info = monitor_info_from_rect( *rect, get_thread_dpi() );
+ 
+-    info.cbSize = sizeof(info);
+-    if (!monitor || !get_monitor_info( monitor, &info, get_thread_dpi() )) return;
+     /* FIXME: map coordinates from rcWork to rcMonitor */
+     if (rect->right <= info.rcWork.left)
+     {
+-- 
+GitLab
+

@@ -1,7 +1,7 @@
-From 7ddf3cd17cc9632843b1dfa8b8e468aa2c025d98 Mon Sep 17 00:00:00 2001
+From d8f2de528f17b4c25c7bc7738edd753ba1c5c499 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 4 Sep 2024 16:21:12 -0600
-Subject: [PATCH 4/5] ntdll: Call instrumentation callback for
+Subject: [PATCH 4/6] ntdll: Call instrumentation callback for
  LdrInitializeThunk on x64.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 4/5] ntdll: Call instrumentation callback for
  2 files changed, 7 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
-index 12c99c9975f..e27bae09826 100644
+index 19326f3cc18..582df9729c3 100644
 --- a/dlls/ntdll/tests/exception.c
 +++ b/dlls/ntdll/tests/exception.c
-@@ -5643,7 +5643,7 @@ static void test_instrumentation_callback(void)
+@@ -5683,7 +5683,7 @@ static void test_instrumentation_callback(void)
      {
          if (data.call_data[i].r10 == pLdrInitializeThunk) break;
      }
@@ -47,5 +47,5 @@ index 8aab736d63a..d811d014fd4 100644
      pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
      __wine_syscall_dispatcher_return( frame, 0 );
 -- 
-2.46.0
+2.46.1
 

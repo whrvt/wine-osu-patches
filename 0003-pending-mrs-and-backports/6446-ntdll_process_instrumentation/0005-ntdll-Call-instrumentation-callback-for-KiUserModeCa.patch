@@ -1,19 +1,20 @@
-From 7a4aded9e8ce42d47770246a632b1c047d058577 Mon Sep 17 00:00:00 2001
+From 46cb07151119c8a6fa27891f85cb42295b398792 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 4 Sep 2024 15:50:34 -0600
-Subject: [PATCH 5/5] ntdll: Call instrumentation callback for
+Subject: [PATCH 5/6] ntdll: Call instrumentation callback for
  KiUserModeCallback on x64.
 
 ---
  dlls/ntdll/tests/exception.c    | 2 +-
+ dlls/ntdll/unix/process.c       | 2 +-
  dlls/ntdll/unix/signal_x86_64.c | 6 +++++-
- 2 files changed, 6 insertions(+), 2 deletions(-)
+ 3 files changed, 7 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
-index e27bae09826..247c4958457 100644
+index 582df9729c3..5d692334c0a 100644
 --- a/dlls/ntdll/tests/exception.c
 +++ b/dlls/ntdll/tests/exception.c
-@@ -5674,7 +5674,7 @@ static void test_instrumentation_callback(void)
+@@ -5714,7 +5714,7 @@ static void test_instrumentation_callback(void)
          if (data.call_data[i].r10 == pKiUserCallbackDispatcher)
              break;
      }
@@ -22,6 +23,19 @@ index e27bae09826..247c4958457 100644
  
      init_instrumentation_data( &curr_data );
      memset(&info, 0, sizeof(info));
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 915bf04c412..fa8785897c3 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1714,7 +1714,7 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
+     {
+         PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION *instr = info;
+ 
+-        FIXME( "ProcessInstrumentationCallback stub.\n" );
++        if (!is_win64 || is_wow64() || is_arm64ec()) FIXME( "ProcessInstrumentationCallback stub.\n" );
+ 
+         if (size < sizeof(*instr)) return STATUS_INFO_LENGTH_MISMATCH;
+         ret = STATUS_SUCCESS;
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
 index d811d014fd4..46d92356e7a 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
@@ -47,5 +61,5 @@ index d811d014fd4..46d92356e7a 100644
  
  /***********************************************************************
 -- 
-2.46.0
+2.46.1
 

@@ -1,0 +1,125 @@
+From a31d884509371f79bf634580e869ce9c389e4ec2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 17 Sep 2024 16:50:30 +0200
+Subject: [PATCH] joy.cpl: Add advanced settings controls in the main panel.
+
+---
+ dlls/joy.cpl/joy.rc     |  4 ++++
+ dlls/joy.cpl/main.c     | 43 +++++++++++++++++++++++++++++++++++++++++
+ dlls/joy.cpl/resource.h |  3 +++
+ 3 files changed, 50 insertions(+)
+
+diff --git a/dlls/joy.cpl/joy.rc b/dlls/joy.cpl/joy.rc
+index 24ba8162532..b9f244b6518 100644
+--- a/dlls/joy.cpl/joy.rc
++++ b/dlls/joy.cpl/joy.rc
+@@ -46,6 +46,10 @@ FONT 8, "Ms Shell Dlg"
+     LISTBOX         IDC_XI_ENABLED_LIST, 10, 90, 180, 60, WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY
+     LTEXT           "Disabled", IDC_STATIC, 10, 150, 180, 10
+     LISTBOX         IDC_DISABLED_LIST, 10, 160, 180, 60, WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY
++
++    GROUPBOX        "Advanced settings (restart prefix required to take effect)", IDC_ADVANCED, 10, 220, 300, 70
++    AUTOCHECKBOX    "Enable SDL", IDC_ENABLE_SDL, 20, 235, 100, 10
++    AUTOCHECKBOX    "Disable hidraw", IDC_DISABLE_HIDRAW, 20, 245, 100, 10
+ }
+ 
+ IDD_TEST_DI DIALOG 0, 0, 320, 300
+diff --git a/dlls/joy.cpl/main.c b/dlls/joy.cpl/main.c
+index ebd33208721..041f35d866c 100644
+--- a/dlls/joy.cpl/main.c
++++ b/dlls/joy.cpl/main.c
+@@ -124,6 +124,13 @@ static BOOL get_app_key(HKEY *defkey, HKEY *appkey)
+     return *defkey || *appkey;
+ }
+ 
++static BOOL get_advanced_key(HKEY *key)
++{
++    /* Registry key can be found in HKLM\System\CurrentControlSet\Services\WineBus */
++    return !RegCreateKeyExW(HKEY_LOCAL_MACHINE, L"System\\CurrentControlSet\\Services\\WineBus", 0, NULL, 0,
++                KEY_SET_VALUE | KEY_READ, NULL, key, NULL);
++}
++
+ /******************************************************************************
+  * set_config_key [internal]
+  * Writes a string value to a registry key, deletes the key if value == NULL
+@@ -172,6 +179,25 @@ static void enable_joystick(WCHAR *joy_name, BOOL enable)
+     if (appkey) RegCloseKey(appkey);
+ }
+ 
++static void set_advanced_option( const WCHAR *option, DWORD value )
++{
++    HKEY hkey;
++    if (!get_advanced_key( &hkey )) return;
++    RegSetValueExW( hkey, option, 0, REG_DWORD, (BYTE *)&value, sizeof(value) );
++    RegCloseKey( hkey );
++}
++
++static DWORD get_advanced_option( const WCHAR *option, DWORD default_value )
++{
++    DWORD value, size;
++    HKEY hkey;
++    if (!get_advanced_key( &hkey )) return default_value;
++    if (RegGetValueW( hkey, NULL, option, RRF_RT_REG_DWORD, NULL, (BYTE *)&value, &size ))
++        value = default_value;
++    RegCloseKey( hkey );
++    return value;
++}
++
+ static void refresh_joystick_list( HWND hwnd )
+ {
+     IDirectInput8W *dinput;
+@@ -265,6 +291,8 @@ static INT_PTR CALLBACK list_dlgproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
+     {
+     case WM_INITDIALOG:
+     {
++        BOOL enable_sdl, disable_hidraw;
++
+         refresh_joystick_list( hwnd );
+ 
+         EnableWindow( GetDlgItem( hwnd, IDC_BUTTON_ENABLE ), FALSE );
+@@ -272,6 +300,11 @@ static INT_PTR CALLBACK list_dlgproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
+         EnableWindow( GetDlgItem( hwnd, IDC_BUTTON_DI_RESET ), FALSE );
+         EnableWindow( GetDlgItem( hwnd, IDC_BUTTON_XI_OVERRIDE ), FALSE );
+ 
++        enable_sdl = get_advanced_option( L"Enable SDL", TRUE );
++        SendMessageW( GetDlgItem( hwnd, IDC_ENABLE_SDL ), BM_SETCHECK, enable_sdl, 0 );
++        disable_hidraw = get_advanced_option( L"DisableHidraw", FALSE );
++        SendMessageW( GetDlgItem( hwnd, IDC_DISABLE_HIDRAW ), BM_SETCHECK, disable_hidraw, 0 );
++
+         devnotify = RegisterDeviceNotificationW( hwnd, &filter, DEVICE_NOTIFY_WINDOW_HANDLE );
+         return TRUE;
+     }
+@@ -351,6 +384,16 @@ static INT_PTR CALLBACK list_dlgproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
+             EnableWindow( GetDlgItem( hwnd, IDC_BUTTON_DI_RESET ), FALSE );
+             EnableWindow( GetDlgItem( hwnd, IDC_BUTTON_XI_OVERRIDE ), FALSE );
+             break;
++
++        case IDC_ENABLE_SDL:
++            sel = SendMessageW( GetDlgItem( hwnd, IDC_ENABLE_SDL ), BM_GETCHECK, 0, 0 );
++            set_advanced_option( L"Enable SDL", sel );
++            break;
++
++        case IDC_DISABLE_HIDRAW:
++            sel = SendMessageW( GetDlgItem( hwnd, IDC_DISABLE_HIDRAW ), BM_GETCHECK, 0, 0 );
++            set_advanced_option( L"DisableHidraw", sel );
++            break;
+         }
+ 
+         return TRUE;
+diff --git a/dlls/joy.cpl/resource.h b/dlls/joy.cpl/resource.h
+index 44a756cea5f..d2c16a27288 100644
+--- a/dlls/joy.cpl/resource.h
++++ b/dlls/joy.cpl/resource.h
+@@ -41,6 +41,9 @@
+ #define IDC_DI_ENABLED_LIST    2000
+ #define IDC_XI_ENABLED_LIST    2001
+ #define IDC_DISABLED_LIST      2002
++#define IDC_ADVANCED           2003
++#define IDC_DISABLE_HIDRAW     2004
++#define IDC_ENABLE_SDL         2005
+ 
+ #define IDC_BUTTON_DI_DISABLE   2010
+ #define IDC_BUTTON_DI_RESET     2011
+-- 
+GitLab
+

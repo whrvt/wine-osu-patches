@@ -1,0 +1,32 @@
+From 1dc4004c06a32f35603d95015cbbb8dfbf9f9197 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 22 Jun 2024 11:18:31 +0200
+Subject: [PATCH] include: Use winnt.h DECLSPEC_UUID definition in rpcndr.h.
+
+---
+ include/rpcndr.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/include/rpcndr.h b/include/rpcndr.h
+index 93ebb0a4aa7..9fcdf706709 100644
+--- a/include/rpcndr.h
++++ b/include/rpcndr.h
+@@ -112,7 +112,14 @@ typedef void (__RPC_USER *NDR_RUNDOWN)(void *context);
+ typedef void (__RPC_USER *NDR_NOTIFY_ROUTINE)(void);
+ typedef void (__RPC_USER *NDR_NOTIFY2_ROUTINE)(boolean flag);
+ 
+-#define DECLSPEC_UUID(x)
++#ifndef DECLSPEC_UUID
++# if defined(_MSC_VER) && (_MSC_VER >= 1100) && defined (__cplusplus)
++#  define DECLSPEC_UUID(x) __declspec(uuid(x))
++# else
++#  define DECLSPEC_UUID(x)
++# endif
++#endif
++
+ #define MIDL_INTERFACE(x)   struct
+ 
+ struct _MIDL_STUB_MESSAGE;
+-- 
+GitLab
+

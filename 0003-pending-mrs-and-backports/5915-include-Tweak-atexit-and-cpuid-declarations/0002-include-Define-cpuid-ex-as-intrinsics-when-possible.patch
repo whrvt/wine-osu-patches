@@ -1,0 +1,51 @@
+From 029ca1360ecfae95b8aa8d7901b9e956b04ba237 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 20 Jun 2024 16:16:23 +0200
+Subject: [PATCH] include: Define __cpuid(ex) as intrinsics when possible.
+
+---
+ include/msvcrt/intrin.h | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/include/msvcrt/intrin.h b/include/msvcrt/intrin.h
+index 7981e2798ba..ba825b7b09e 100644
+--- a/include/msvcrt/intrin.h
++++ b/include/msvcrt/intrin.h
+@@ -15,17 +15,34 @@
+ extern "C" {
+ #endif
+ 
++#ifndef __has_builtin
++# define __has_builtin(x) 0
++#endif
++
+ #if defined(__i386__) || (defined(__x86_64__) && !defined(__arm64ec__))
++
++#if __has_builtin(__cpuidex) || (defined(_MSC_VER) && !defined(__clang__))
++void __cpuidex(int info[4], int ax, int cx);
++#pragma intrinsic(__cpuidex)
++#else
+ static inline void __cpuidex(int info[4], int ax, int cx)
+ {
+   __asm__ ("cpuid" : "=a"(info[0]), "=b" (info[1]), "=c"(info[2]), "=d"(info[3]) : "a"(ax), "c"(cx));
+ }
++#endif
++
++#if __has_builtin(__cpuid) || (defined(_MSC_VER) && !defined(__clang__))
++void __cpuid(int info[4], int ax);
++#pragma intrinsic(__cpuid)
++#else
+ static inline void __cpuid(int info[4], int ax)
+ {
+     return __cpuidex(info, ax, 0);
+ }
+ #endif
+ 
++#endif
++
+ #if defined(__aarch64__) || defined(__arm64ec__)
+ typedef enum _tag_ARM64INTR_BARRIER_TYPE
+ {
+-- 
+GitLab
+

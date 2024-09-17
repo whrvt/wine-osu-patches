@@ -1,0 +1,90 @@
+From 711bcb31687a54318ca4c7f702c459205c5745cd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 16 Sep 2024 15:07:06 +0200
+Subject: [PATCH] winewayland: Attach client client surfaces to their toplevel
+ surface.
+
+---
+ dlls/winewayland.drv/wayland_surface.c |  1 +
+ dlls/winewayland.drv/window.c          | 18 +++++++++++-------
+ 2 files changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 9ac95454cfa..be54e818219 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -849,6 +849,7 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
+     }
+ 
+     NtUserGetClientRect(client->hwnd, &client_rect, get_win_monitor_dpi(client->hwnd));
++    NtUserMapWindowPoints(client->hwnd, toplevel, (POINT *)&client_rect, 2, get_win_monitor_dpi(client->hwnd));
+ 
+     wayland_surface_reconfigure_client(surface, client, &client_rect);
+     /* Commit to apply subsurface positioning. */
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index f3072e6d487..e73b5c4fb48 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -436,10 +436,12 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
+ {
+     struct wayland_client_surface *client;
+     struct wayland_win_data *data;
++    HWND toplevel;
+     BOOL managed;
+ 
+     TRACE("hwnd %p new_rects %s after %p flags %08x\n", hwnd, debugstr_window_rects(new_rects), insert_after, swp_flags);
+ 
++    if ((toplevel = NtUserGetAncestor(hwnd, GA_ROOT)) == hwnd) toplevel = 0;
+     /* Get the managed state with win_data unlocked, as is_window_managed
+      * may need to query win_data information about other HWNDs and thus
+      * acquire the lock itself internally. */
+@@ -454,7 +456,10 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, UINT swp_flags, cons
+     {
+         if ((client = data->client_surface))
+         {
+-            wayland_client_surface_detach(client);
++            if (toplevel && NtUserIsWindowVisible(hwnd))
++                wayland_client_surface_attach(client, toplevel);
++            else
++                wayland_client_surface_detach(client);
+         }
+ 
+         if (data->wayland_surface)
+@@ -710,20 +715,19 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+ struct wayland_client_surface *get_client_surface(HWND hwnd)
+ {
+     struct wayland_client_surface *client;
+-    struct wayland_surface *surface;
+     struct wayland_win_data *data;
++    HWND toplevel;
++
++    if ((toplevel = NtUserGetAncestor(hwnd, GA_ROOT)) == hwnd) toplevel = 0;
+ 
+     if ((data = wayland_win_data_get(hwnd)))
+     {
+-        surface = data->wayland_surface;
+-
+         /* ownership is shared with one of the callers, the last caller to release
+          * its reference will also destroy it and clear our pointer. */
+         if ((client = data->client_surface)) InterlockedIncrement(&client->ref);
+     }
+     else
+     {
+-        surface = NULL;
+         client = NULL;
+     }
+ 
+@@ -734,8 +738,8 @@ struct wayland_client_surface *get_client_surface(HWND hwnd)
+     }
+     if (!data) return client;
+ 
+-    if (surface && NtUserIsWindowVisible(hwnd))
+-        wayland_client_surface_attach(client, data->hwnd);
++    if (toplevel && NtUserIsWindowVisible(hwnd))
++        wayland_client_surface_attach(client, toplevel);
+     else
+         wayland_client_surface_detach(client);
+ 
+-- 
+GitLab
+

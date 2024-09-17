@@ -1,0 +1,67 @@
+From 4cbd572daa445c52e173e722371d47af29936afc Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 13 Sep 2024 14:24:39 -0600
+Subject: [PATCH] server: Correct STATUS_NOT_FOUND return from (cancel_async).
+
+---
+ dlls/ntdll/tests/pipe.c  | 9 +++++++++
+ dlls/ws2_32/tests/sock.c | 2 +-
+ server/async.c           | 2 +-
+ 3 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index 697774dfa09..cdf5cdb4151 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -614,6 +614,10 @@ static void test_cancelio(void)
+ 
+     ok(ioapc_called, "IOAPC didn't run\n");
+ 
++    res = pNtCancelIoFile(hPipe, &cancel_sb);
++    ok(!res, "NtCancelIoFile returned %lx\n", res);
++    ok(iosb.Status == STATUS_CANCELLED, "Wrong iostatus %lx\n", iosb.Status);
++
+     CloseHandle(hPipe);
+ 
+     if (pNtCancelIoFileEx)
+@@ -631,6 +635,11 @@ static void test_cancelio(void)
+         ok(iosb.Status == STATUS_CANCELLED, "Wrong iostatus %lx\n", iosb.Status);
+         ok(WaitForSingleObject(hEvent, 0) == 0, "hEvent not signaled\n");
+ 
++        iosb.Status = 0xdeadbeef;
++        res = pNtCancelIoFileEx(hPipe, NULL, &cancel_sb);
++        ok(res == STATUS_NOT_FOUND, "NtCancelIoFileEx returned %lx\n", res);
++        ok(iosb.Status == 0xdeadbeef, "Wrong iostatus %lx\n", iosb.Status);
++
+         CloseHandle(hPipe);
+     }
+     else
+diff --git a/dlls/ws2_32/tests/sock.c b/dlls/ws2_32/tests/sock.c
+index 30ce3db307f..4fd5fc00cdd 100644
+--- a/dlls/ws2_32/tests/sock.c
++++ b/dlls/ws2_32/tests/sock.c
+@@ -14286,7 +14286,7 @@ static DWORD WINAPI test_send_buffering_thread(void *arg)
+     ok(WSAGetLastError() == WSAEWOULDBLOCK, "got error %u.\n", WSAGetLastError());
+     ok(d->sent_size, "got 0.\n");
+     ret = CancelIoEx((HANDLE)d->server, NULL);
+-    todo_wine ok(!ret && GetLastError() == ERROR_NOT_FOUND, "got ret %d, error %lu.\n", ret, GetLastError());
++    ok(!ret && GetLastError() == ERROR_NOT_FOUND, "got ret %d, error %lu.\n", ret, GetLastError());
+     ret = CancelIo((HANDLE)d->server);
+     ok(ret, "got error %lu.\n", GetLastError());
+     shutdown(d->server, SD_BOTH);
+diff --git a/server/async.c b/server/async.c
+index c81957d214e..749c547af4f 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -819,7 +819,7 @@ DECL_HANDLER(cancel_async)
+     if (obj)
+     {
+         int count = cancel_async( current->process, obj, thread, req->iosb );
+-        if (!count && req->iosb) set_error( STATUS_NOT_FOUND );
++        if (!count && !thread) set_error( STATUS_NOT_FOUND );
+         release_object( obj );
+     }
+ }
+-- 
+GitLab
+

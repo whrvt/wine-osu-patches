@@ -1,0 +1,141 @@
+From 9ff584def0b0b2bf429812543f77a12130f51b05 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 10 Sep 2024 09:39:39 +0200
+Subject: [PATCH] winewayland: Use window DPI for the OpenGL client surface
+ size.
+
+---
+ dlls/winewayland.drv/opengl.c     | 35 ++++++++++++-------------------
+ dlls/winewayland.drv/vulkan.c     |  3 +--
+ dlls/winewayland.drv/waylanddrv.h |  2 +-
+ dlls/winewayland.drv/window.c     |  6 +-----
+ 4 files changed, 16 insertions(+), 30 deletions(-)
+
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index ecb1a65c38c..9515b5a10cd 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -192,7 +192,7 @@ static inline EGLConfig egl_config_for_format(int format)
+ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int format)
+ {
+     struct wayland_gl_drawable *gl;
+-    int client_width = 0, client_height = 0;
++    int client_width, client_height;
+     RECT client_rect;
+ 
+     TRACE("hwnd=%p format=%d\n", hwnd, format);
+@@ -204,14 +204,15 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
+     gl->hwnd = hwnd;
+     gl->swap_interval = 1;
+ 
++    NtUserGetClientRect(gl->hwnd, &client_rect, NtUserGetDpiForWindow(gl->hwnd));
++    client_width = client_rect.right - client_rect.left;
++    client_height = client_rect.bottom - client_rect.top;
++    if (client_width == 0 || client_height == 0) client_width = client_height = 1;
++
+     /* Get the client surface for the HWND. If don't have a wayland surface
+      * (e.g., HWND_MESSAGE windows) just create a dummy surface to act as the
+      * target render surface. */
+-    if (!(gl->client = get_client_surface(hwnd, &client_rect))) goto err;
+-    client_width = client_rect.right - client_rect.left;
+-    client_height = client_rect.bottom - client_rect.top;
+-    if (client_width == 0 || client_height == 0)
+-        client_width = client_height = 1;
++    if (!(gl->client = get_client_surface(hwnd))) goto err;
+ 
+     gl->wl_egl_window = wl_egl_window_create(gl->client->wl_surface,
+                                              client_width, client_height);
+@@ -273,25 +274,15 @@ static void wayland_update_gl_drawable(HWND hwnd, struct wayland_gl_drawable *ne
+ 
+ static void wayland_gl_drawable_sync_size(struct wayland_gl_drawable *gl)
+ {
+-    int client_width = 0, client_height = 0;
+-    struct wayland_surface *wayland_surface;
+-    struct wayland_win_data *data;
++    int client_width, client_height;
++    RECT client_rect;
+ 
+     if (InterlockedCompareExchange(&gl->resized, FALSE, TRUE))
+     {
+-        if (!(data = wayland_win_data_get(gl->hwnd))) return;
+-
+-        if ((wayland_surface = data->wayland_surface))
+-        {
+-            client_width = wayland_surface->window.client_rect.right -
+-                           wayland_surface->window.client_rect.left;
+-            client_height = wayland_surface->window.client_rect.bottom -
+-                            wayland_surface->window.client_rect.top;
+-        }
+-
+-        if (client_width == 0 || client_height == 0)
+-            client_width = client_height = 1;
+-        wayland_win_data_release(data);
++        NtUserGetClientRect(gl->hwnd, &client_rect, NtUserGetDpiForWindow(gl->hwnd));
++        client_width = client_rect.right - client_rect.left;
++        client_height = client_rect.bottom - client_rect.top;
++        if (client_width == 0 || client_height == 0) client_width = client_height = 1;
+ 
+         wl_egl_window_resize(gl->wl_egl_window, client_width, client_height, 0, 0);
+     }
+diff --git a/dlls/winewayland.drv/vulkan.c b/dlls/winewayland.drv/vulkan.c
+index 2874ae339d3..6e794a88cf7 100644
+--- a/dlls/winewayland.drv/vulkan.c
++++ b/dlls/winewayland.drv/vulkan.c
+@@ -74,11 +74,10 @@ static VkResult wayland_vulkan_surface_create(HWND hwnd, VkInstance instance, Vk
+     VkResult res;
+     VkWaylandSurfaceCreateInfoKHR create_info_host;
+     struct wayland_client_surface *client;
+-    RECT client_rect;
+ 
+     TRACE("%p %p %p %p\n", hwnd, instance, surface, private);
+ 
+-    if (!(client = get_client_surface(hwnd, &client_rect)))
++    if (!(client = get_client_surface(hwnd)))
+     {
+         ERR("Failed to create client surface for hwnd=%p\n", hwnd);
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 9de42758aa1..043d17f7cd0 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -292,7 +292,7 @@ struct wayland_win_data
+ struct wayland_win_data *wayland_win_data_get(HWND hwnd);
+ void wayland_win_data_release(struct wayland_win_data *data);
+ 
+-struct wayland_client_surface *get_client_surface(HWND hwnd, RECT *client_rect);
++struct wayland_client_surface *get_client_surface(HWND hwnd);
+ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffer, HRGN damage_region);
+ struct wayland_shm_buffer *get_window_surface_contents(HWND hwnd);
+ void ensure_window_surface_contents(HWND hwnd);
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index d27a16456d2..cd382799715 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -695,7 +695,7 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
+ /**********************************************************************
+  *          get_client_surface
+  */
+-struct wayland_client_surface *get_client_surface(HWND hwnd, RECT *client_rect)
++struct wayland_client_surface *get_client_surface(HWND hwnd)
+ {
+     struct wayland_client_surface *client;
+     struct wayland_surface *surface;
+@@ -708,15 +708,11 @@ struct wayland_client_surface *get_client_surface(HWND hwnd, RECT *client_rect)
+         /* ownership is shared with one of the callers, the last caller to release
+          * its reference will also destroy it and clear our pointer. */
+         if ((client = data->client_surface)) InterlockedIncrement(&client->ref);
+-
+-        if (!data->wayland_surface) *client_rect = data->rects.client;
+-        else *client_rect = data->wayland_surface->window.client_rect;
+     }
+     else
+     {
+         surface = NULL;
+         client = NULL;
+-        SetRectEmpty(client_rect);
+     }
+ 
+     if (!client && !(client = wayland_client_surface_create(hwnd)))
+-- 
+GitLab
+

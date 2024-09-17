@@ -1,0 +1,160 @@
+From 223ac03fc81b93d1d4c94a481b727004213f4f29 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 8 Sep 2024 12:15:12 +0200
+Subject: [PATCH] win32u: Introduce a new monitor_info_from_window helper.
+
+---
+ dlls/win32u/input.c          | 13 +++++++------
+ dlls/win32u/sysparams.c      | 10 +++++++++-
+ dlls/win32u/win32u_private.h |  2 +-
+ dlls/win32u/window.c         | 23 ++++-------------------
+ 4 files changed, 21 insertions(+), 27 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 9a4ee0e25a1..8e27a841dd2 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2549,10 +2549,9 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
+ {
+     struct user_thread_info *thread_info = get_user_thread_info();
+     MONITORINFO monitor_info = {.cbSize = sizeof(MONITORINFO)};
+-    RECT rect;
+-    HMONITOR monitor;
++    RECT rect, virtual_rect;
+     DWORD style;
+-    UINT dpi;
++    UINT dpi, ctx;
+     BOOL ret;
+ 
+     if (hwnd == NtUserGetDesktopWindow()) return FALSE;
+@@ -2571,11 +2570,13 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
+     if (NtGetTickCount() - thread_info->clipping_reset < 1000) return FALSE;
+     if (!reset && clipping_cursor && thread_info->clipping_cursor) return FALSE;  /* already clipping */
+ 
+-    if (!(monitor = NtUserMonitorFromWindow( hwnd, MONITOR_DEFAULTTONEAREST ))) return FALSE;
+-    if (!get_monitor_info( monitor, &monitor_info, 0 )) return FALSE;
++    ctx = set_thread_dpi_awareness_context( NTUSER_DPI_PER_MONITOR_AWARE );
++    monitor_info = monitor_info_from_window( hwnd, MONITOR_DEFAULTTONEAREST );
++    virtual_rect = NtUserGetVirtualScreenRect();
++    set_thread_dpi_awareness_context( ctx );
++
+     if (!grab_fullscreen)
+     {
+-        RECT virtual_rect = NtUserGetVirtualScreenRect();
+         if (!EqualRect( &monitor_info.rcMonitor, &virtual_rect )) return FALSE;
+         if (is_virtual_desktop()) return FALSE;
+     }
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index c54659a0e2e..70e330e6017 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -3763,7 +3763,7 @@ BOOL WINAPI NtUserEnumDisplayMonitors( HDC hdc, RECT *rect, MONITORENUMPROC proc
+     return ret;
+ }
+ 
+-BOOL get_monitor_info( HMONITOR handle, MONITORINFO *info, UINT dpi )
++static BOOL get_monitor_info( HMONITOR handle, MONITORINFO *info, UINT dpi )
+ {
+     struct monitor *monitor;
+ 
+@@ -3848,6 +3848,14 @@ HMONITOR monitor_from_window( HWND hwnd, UINT flags, UINT dpi )
+     return monitor_from_rect( &rect, flags, dpi );
+ }
+ 
++MONITORINFO monitor_info_from_window( HWND hwnd, UINT flags )
++{
++    MONITORINFO info = {.cbSize = sizeof(info)};
++    HMONITOR monitor = monitor_from_window( hwnd, flags, get_thread_dpi() );
++    get_monitor_info( monitor, &info, get_thread_dpi() );
++    return info;
++}
++
+ /***********************************************************************
+  *	     NtUserGetSystemDpiForProcess    (win32u.@)
+  */
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 2c0defe06ea..aa411d8addb 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -167,7 +167,6 @@ extern LONG get_char_dimensions( HDC hdc, TEXTMETRICW *metric, int *height );
+ extern HBITMAP get_display_bitmap(void);
+ extern INT get_display_depth( UNICODE_STRING *name );
+ extern RECT get_display_rect( const WCHAR *display );
+-extern BOOL get_monitor_info( HMONITOR handle, MONITORINFO *info, UINT dpi );
+ extern UINT get_win_monitor_dpi( HWND hwnd );
+ extern RECT get_primary_monitor_rect( UINT dpi );
+ extern DWORD get_process_layout(void);
+@@ -191,6 +190,7 @@ extern POINT point_thread_to_win_dpi( HWND hwnd, POINT pt );
+ extern RECT rect_thread_to_win_dpi( HWND hwnd, RECT rect );
+ extern HMONITOR monitor_from_window( HWND hwnd, UINT flags, UINT dpi );
+ extern MONITORINFO monitor_info_from_rect( RECT rect, UINT dpi );
++extern MONITORINFO monitor_info_from_window( HWND hwnd, UINT flags );
+ extern UINT monitor_dpi_from_rect( RECT rect, UINT dpi );
+ extern BOOL update_display_cache( BOOL force );
+ extern void user_lock(void);
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 9e20316f3e1..0e9963c670c 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2585,14 +2585,10 @@ HWND WINAPI NtUserRealChildWindowFromPoint( HWND parent, LONG x, LONG y )
+  */
+ static BOOL get_work_rect( HWND hwnd, RECT *rect )
+ {
+-    HMONITOR monitor = monitor_from_window( hwnd, MONITOR_DEFAULTTOPRIMARY, get_thread_dpi() );
+     MONITORINFO mon_info;
+     DWORD style;
+ 
+-    if (!monitor) return FALSE;
+-
+-    mon_info.cbSize = sizeof(mon_info);
+-    get_monitor_info( monitor, &mon_info, get_thread_dpi() );
++    mon_info = monitor_info_from_window( hwnd, MONITOR_DEFAULTTOPRIMARY );
+     *rect = mon_info.rcMonitor;
+ 
+     style = get_window_long( hwnd, GWL_STYLE );
+@@ -4259,11 +4255,7 @@ static POINT get_minimized_pos( HWND hwnd, POINT pt )
+     parent = NtUserGetAncestor( hwnd, GA_PARENT );
+     if (parent == get_desktop_window())
+     {
+-        MONITORINFO mon_info;
+-        HMONITOR monitor = monitor_from_window( hwnd, MONITOR_DEFAULTTOPRIMARY, get_thread_dpi() );
+-
+-        mon_info.cbSize = sizeof( mon_info );
+-        get_monitor_info( monitor, &mon_info, get_thread_dpi() );
++        MONITORINFO mon_info = monitor_info_from_window( hwnd, MONITOR_DEFAULTTOPRIMARY );
+         parent_rect = mon_info.rcWork;
+     }
+     else get_client_rect( parent, &parent_rect, get_thread_dpi() );
+@@ -4443,11 +4435,7 @@ static UINT arrange_iconic_windows( HWND parent )
+ 
+     if (parent == get_desktop_window())
+     {
+-        MONITORINFO mon_info;
+-        HMONITOR monitor = monitor_from_window( 0, MONITOR_DEFAULTTOPRIMARY, get_thread_dpi() );
+-
+-        mon_info.cbSize = sizeof( mon_info );
+-        get_monitor_info( monitor, &mon_info, get_thread_dpi() );
++        MONITORINFO mon_info = monitor_info_from_window( 0, MONITOR_DEFAULTTOPRIMARY );
+         parent_rect = mon_info.rcWork;
+     }
+     else get_client_rect( parent, &parent_rect, get_thread_dpi() );
+@@ -5294,15 +5282,12 @@ static void fix_cs_coordinates( CREATESTRUCTW *cs, INT *sw )
+     else  /* overlapped window */
+     {
+         RTL_USER_PROCESS_PARAMETERS *params = NtCurrentTeb()->Peb->ProcessParameters;
+-        HMONITOR monitor;
+         MONITORINFO mon_info;
+ 
+         if (!is_default_coord( cs->x ) && !is_default_coord( cs->cx ) && !is_default_coord( cs->cy ))
+             return;
+ 
+-        monitor = monitor_from_window( cs->hwndParent, MONITOR_DEFAULTTOPRIMARY, get_thread_dpi() );
+-        mon_info.cbSize = sizeof(mon_info);
+-        get_monitor_info( monitor, &mon_info, get_thread_dpi() );
++        mon_info = monitor_info_from_window( cs->hwndParent, MONITOR_DEFAULTTOPRIMARY );
+ 
+         if (is_default_coord( cs->x ))
+         {
+-- 
+GitLab
+

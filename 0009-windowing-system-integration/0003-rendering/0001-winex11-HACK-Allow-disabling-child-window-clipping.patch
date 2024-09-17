@@ -12,14 +12,14 @@ See: https://github.com/ValveSoftware/wine/commit/afcbb6a2a29de850d58b8b01435db7
      https://github.com/ValveSoftware/wine/commit/a8514f9606ee3fdc3d912c988f651edc5d7d0d55
 for other examples of this idea.
 
-diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
-index 11111111111..11111111111 100644
---- a/dlls/winex11.drv/opengl.c
-+++ b/dlls/winex11.drv/opengl.c
-@@ -1106,6 +1106,13 @@ static BOOL needs_offscreen_rendering( HWND hwnd, BOOL known_child )
- {
-     if (NtUserGetDpiForWindow( hwnd ) != get_win_monitor_dpi( hwnd )) return TRUE;
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index e7a6132fd87..3b535964988 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -196,6 +196,13 @@ static HFONT X11DRV_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
  
+ BOOL needs_offscreen_rendering( HWND hwnd, BOOL known_child )
+ {
 +    static unsigned int cache;
 +    if (gl_disable_child_window_clipping) {
 +        if (!cache++)
@@ -27,10 +27,14 @@ index 11111111111..11111111111 100644
 +        known_child = FALSE;
 +    }
 +
-     if (!known_child && !NtUserGetWindowRelative( hwnd, GW_CHILD ) &&
-         NtUserGetAncestor( hwnd, GA_PARENT ) == NtUserGetDesktopWindow())
-         return FALSE;  /* childless top-level window */
-@@ -1155,7 +1162,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+     if (NtUserGetDpiForWindow( hwnd ) != get_win_monitor_dpi( hwnd )) return TRUE; /* needs DPI scaling */
+     if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
+     if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return TRUE; /* window has children, needs compositing */
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -1155,7 +1155,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
          TRACE( "%p created client %lx drawable %lx\n", hwnd, gl->window, gl->drawable );
      }
  #ifdef SONAME_LIBXCOMPOSITE
@@ -39,7 +43,7 @@ index 11111111111..11111111111 100644
      {
          gl->type = DC_GL_CHILD_WIN;
          gl->colormap = XCreateColormap( gdi_display, get_dummy_parent(), visual->visual,
-@@ -1167,7 +1174,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+@@ -1167,7 +1167,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
              struct x11drv_win_data *data;
  
              gl->drawable = pglXCreateWindow( gdi_display, gl->format->fbconfig, gl->window, NULL );
@@ -94,3 +98,16 @@ index 11111111111..11111111111 100644
  
  extern BOOL layered_window_client_hack;
  
+diff --git a/dlls/winex11.drv/vulkan.c b/dlls/winex11.drv/vulkan.c
+index 59714b522fb..04c8996043a 100644
+--- a/dlls/winex11.drv/vulkan.c
++++ b/dlls/winex11.drv/vulkan.c
+@@ -161,7 +161,7 @@ static void vulkan_surface_update_size( HWND hwnd, struct vulkan_surface *surfac
+ 
+ static void vulkan_surface_update_offscreen( HWND hwnd, struct vulkan_surface *surface )
+ {
+-    BOOL offscreen = needs_offscreen_rendering( hwnd, FALSE );
++    BOOL offscreen = needs_offscreen_rendering( hwnd, FALSE ) && !gl_disable_child_window_clipping;
+     struct x11drv_win_data *data;
+ 
+     if (offscreen == surface->offscreen) return;

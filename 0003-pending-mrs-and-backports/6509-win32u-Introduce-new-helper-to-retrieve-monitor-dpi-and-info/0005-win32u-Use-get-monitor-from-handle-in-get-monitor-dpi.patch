@@ -1,0 +1,60 @@
+From e3864d4f7c538a7510ba5eb8fb652dcb90051570 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 8 Sep 2024 16:19:22 +0200
+Subject: [PATCH] win32u: Use get_monitor_from_handle in get_monitor_dpi.
+
+---
+ dlls/win32u/sysparams.c | 23 ++++++++++++++++++-----
+ 1 file changed, 18 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index d1ff1430a5b..481c568ce02 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -2127,10 +2127,8 @@ static void release_display_dc( HDC hdc )
+     pthread_mutex_unlock( &display_dc_lock );
+ }
+ 
+-/**********************************************************************
+- *           get_monitor_dpi
+- */
+-UINT get_monitor_dpi( HMONITOR monitor )
++/* display_lock must be held */
++static UINT monitor_get_dpi( struct monitor *monitor )
+ {
+     /* FIXME: use the monitor DPI instead */
+     return system_dpi;
+@@ -2140,7 +2138,7 @@ UINT get_monitor_dpi( HMONITOR monitor )
+ static RECT monitor_get_rect( struct monitor *monitor, BOOL work, UINT dpi )
+ {
+     RECT rect = work ? monitor->rc_work : monitor->rc_monitor;
+-    return map_dpi_rect( rect, get_monitor_dpi( monitor->handle ), dpi );
++    return map_dpi_rect( rect, monitor_get_dpi( monitor ), dpi );
+ }
+ 
+ static void monitor_get_info( struct monitor *monitor, MONITORINFO *info, UINT dpi )
+@@ -2233,6 +2231,21 @@ static struct monitor *get_monitor_from_handle( HMONITOR handle )
+     return NULL;
+ }
+ 
++/**********************************************************************
++ *           get_monitor_dpi
++ */
++UINT get_monitor_dpi( HMONITOR handle )
++{
++    struct monitor *monitor;
++    UINT dpi = system_dpi;
++
++    if (!lock_display_devices()) return 0;
++    if ((monitor = get_monitor_from_handle( handle ))) dpi = monitor_get_dpi( monitor );
++    unlock_display_devices();
++
++    return dpi;
++}
++
+ /**********************************************************************
+  *              get_win_monitor_dpi
+  */
+-- 
+GitLab
+

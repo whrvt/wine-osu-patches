@@ -1,0 +1,39 @@
+From a82fea6b4a99b9c3ff7884ad3e9a67b7509349c8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 8 Sep 2024 11:20:40 +0200
+Subject: [PATCH] win32u: Use map_dpi_rect in map_dpi_winpos.
+
+---
+ dlls/win32u/window.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 3252260ce0a..4d5e57d3710 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -3249,15 +3249,15 @@ static void dump_winpos_flags( UINT flags )
+  */
+ static void map_dpi_winpos( WINDOWPOS *winpos )
+ {
+-    UINT dpi_from = get_thread_dpi();
+-    UINT dpi_to = get_dpi_for_window( winpos->hwnd );
++    RECT rect = {winpos->x, winpos->y, winpos->x + winpos->cx, winpos->y + winpos->cy};
++    UINT dpi_from = get_thread_dpi(), dpi_to = get_dpi_for_window( winpos->hwnd );
+ 
+     if (!dpi_from) dpi_from = get_win_monitor_dpi( winpos->hwnd );
+-    if (dpi_from == dpi_to) return;
+-    winpos->x  = muldiv( winpos->x, dpi_to, dpi_from );
+-    winpos->y  = muldiv( winpos->y, dpi_to, dpi_from );
+-    winpos->cx = muldiv( winpos->cx, dpi_to, dpi_from );
+-    winpos->cy = muldiv( winpos->cy, dpi_to, dpi_from );
++    rect = map_dpi_rect( rect, dpi_from, dpi_to );
++    winpos->x = rect.left;
++    winpos->y = rect.top;
++    winpos->cx = rect.right - rect.left;
++    winpos->cy = rect.bottom - rect.top;
+ }
+ 
+ /***********************************************************************
+-- 
+GitLab
+

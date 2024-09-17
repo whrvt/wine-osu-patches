@@ -1,0 +1,40 @@
+From 2afe653a45b003b21f7d3d536889a3a3b64f7730 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 12 Sep 2024 15:28:54 +0200
+Subject: [PATCH] include: Remove __need_wint_t/__need_wchar_t definitions.
+
+We don't use them, and leaking them breaks libc++ compilation.
+---
+ include/msvcrt/inttypes.h | 1 -
+ include/msvcrt/stdint.h   | 3 ---
+ 2 files changed, 4 deletions(-)
+
+diff --git a/include/msvcrt/inttypes.h b/include/msvcrt/inttypes.h
+index d6ad4868d05..a0a569d8adc 100644
+--- a/include/msvcrt/inttypes.h
++++ b/include/msvcrt/inttypes.h
+@@ -10,7 +10,6 @@
+ 
+ #include <corecrt.h>
+ #include <stdint.h>
+-#define __need_wchar_t
+ #include <stddef.h>
+ 
+ #ifdef	__cplusplus
+diff --git a/include/msvcrt/stdint.h b/include/msvcrt/stdint.h
+index b6dc5cb0b5c..6efea0b73cf 100644
+--- a/include/msvcrt/stdint.h
++++ b/include/msvcrt/stdint.h
+@@ -26,9 +26,6 @@
+ #define _STDINT_H
+ 
+ #include <corecrt.h>
+-
+-#define __need_wint_t
+-#define __need_wchar_t
+ #include <stddef.h>
+ 
+ /* 7.18.1.1  Exact-width integer types */
+-- 
+GitLab
+

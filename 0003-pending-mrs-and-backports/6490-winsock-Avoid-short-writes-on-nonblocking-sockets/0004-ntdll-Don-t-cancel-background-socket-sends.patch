@@ -1,0 +1,326 @@
+From 1b827248e4319a9afd7cd59462d8579483271d4b Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 12 Sep 2024 20:22:52 -0600
+Subject: [PATCH] ntdll: Don't cancel background socket sends.
+
+---
+ dlls/ntdll/unix/socket.c | 15 ++++++++-------
+ dlls/ws2_32/tests/sock.c |  2 +-
+ server/async.c           | 23 ++++++++++++++++++-----
+ server/fd.c              | 10 +++++-----
+ server/file.h            |  3 ++-
+ server/protocol.def      |  4 +++-
+ server/sock.c            | 12 +++++++-----
+ 7 files changed, 44 insertions(+), 25 deletions(-)
+
+diff --git a/dlls/ntdll/unix/socket.c b/dlls/ntdll/unix/socket.c
+index e1cbf65079b..a02194f843f 100644
+--- a/dlls/ntdll/unix/socket.c
++++ b/dlls/ntdll/unix/socket.c
+@@ -1105,7 +1105,7 @@ static void sock_save_icmp_id( struct async_send_ioctl *async )
+ }
+ 
+ static NTSTATUS sock_send( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc_user,
+-                           IO_STATUS_BLOCK *io, int fd, struct async_send_ioctl *async, int force_async )
++                           IO_STATUS_BLOCK *io, int fd, struct async_send_ioctl *async, unsigned int server_flags )
+ {
+     HANDLE wait_handle;
+     BOOL nonblocking;
+@@ -1114,7 +1114,7 @@ static NTSTATUS sock_send( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, voi
+ 
+     SERVER_START_REQ( send_socket )
+     {
+-        req->force_async = force_async;
++        req->flags = server_flags;
+         req->async  = server_async( handle, &async->io, event, apc, apc_user, iosb_client_ptr(io) );
+         status = wine_server_call( req );
+         wait_handle = wine_server_ptr_handle( reply->wait );
+@@ -1132,7 +1132,7 @@ static NTSTATUS sock_send( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, voi
+     if (status == STATUS_ALERTED)
+     {
+         status = try_send( fd, async );
+-        if (status == STATUS_DEVICE_NOT_READY && (force_async || !nonblocking))
++        if (status == STATUS_DEVICE_NOT_READY && ((server_flags & SERVER_SOCKET_IO_FORCE_ASYNC) || !nonblocking))
+             status = STATUS_PENDING;
+ 
+         /* If we had a short write and the socket is nonblocking (and we are
+@@ -1186,7 +1186,8 @@ static NTSTATUS sock_send( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, voi
+                 p += sizeof(IO_STATUS_BLOCK);
+                 rem_io->Pointer = p;
+                 p += sizeof(IO_STATUS_BLOCK32);
+-                status = sock_send( handle, NULL, NULL, NULL, rem_io, fd, rem_async, TRUE );
++                status = sock_send( handle, NULL, NULL, NULL, rem_io, fd, rem_async,
++                                    SERVER_SOCKET_IO_FORCE_ASYNC | SERVER_SOCKET_IO_SYSTEM );
+                 if (status == STATUS_PENDING) status = STATUS_SUCCESS;
+                 if (!status)
+                 {
+@@ -1251,7 +1252,7 @@ static NTSTATUS sock_ioctl_send( HANDLE handle, HANDLE event, PIO_APC_ROUTINE ap
+     async->iov_cursor = 0;
+     async->sent_len = 0;
+ 
+-    return sock_send( handle, event, apc, apc_user, io, fd, async, force_async );
++    return sock_send( handle, event, apc, apc_user, io, fd, async, force_async ? SERVER_SOCKET_IO_FORCE_ASYNC : 0 );
+ }
+ 
+ 
+@@ -1274,7 +1275,7 @@ NTSTATUS sock_write( HANDLE handle, int fd, HANDLE event, PIO_APC_ROUTINE apc,
+     async->iov_cursor = 0;
+     async->sent_len = 0;
+ 
+-    return sock_send( handle, event, apc, apc_user, io, fd, async, 1 );
++    return sock_send( handle, event, apc, apc_user, io, fd, async, SERVER_SOCKET_IO_FORCE_ASYNC );
+ }
+ 
+ 
+@@ -1438,7 +1439,7 @@ static NTSTATUS sock_transmit( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc,
+ 
+     SERVER_START_REQ( send_socket )
+     {
+-        req->force_async = 1;
++        req->flags = SERVER_SOCKET_IO_FORCE_ASYNC;
+         req->async  = server_async( handle, &async->io, event, apc, apc_user, iosb_client_ptr(io) );
+         status = wine_server_call( req );
+         wait_handle = wine_server_ptr_handle( reply->wait );
+diff --git a/dlls/ws2_32/tests/sock.c b/dlls/ws2_32/tests/sock.c
+index 1d50515ee8e..30ce3db307f 100644
+--- a/dlls/ws2_32/tests/sock.c
++++ b/dlls/ws2_32/tests/sock.c
+@@ -14369,7 +14369,7 @@ static void test_send_buffering(void)
+         ok(recv_size <= d.sent_size, "got ret %d, recv_size %d, sent_size %d.\n", ret, recv_size, d.sent_size);
+     }
+     ok(!ret && !WSAGetLastError(), "got ret %d, error %u.\n", ret, WSAGetLastError());
+-    todo_wine ok(recv_size == d.sent_size, "got %d, expected %d.\n", recv_size, d.sent_size);
++    ok(recv_size == d.sent_size, "got %d, expected %d.\n", recv_size, d.sent_size);
+     closesocket(client);
+ }
+ 
+diff --git a/server/async.c b/server/async.c
+index 3c9b9588c6e..c81957d214e 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -57,6 +57,7 @@ struct async
+     unsigned int         canceled :1;     /* have we already queued cancellation for this async? */
+     unsigned int         unknown_status :1; /* initial status is not known yet */
+     unsigned int         blocking :1;     /* async is blocking */
++    unsigned int         is_system :1;    /* background system operation not affecting userspace visible state. */
+     struct completion   *completion;      /* completion associated with fd */
+     apc_param_t          comp_key;        /* completion key associated with fd */
+     unsigned int         comp_flags;      /* completion flags */
+@@ -243,7 +244,7 @@ void queue_async( struct async_queue *queue, struct async *async )
+     grab_object( async );
+     list_add_tail( &queue->queue, &async->queue_entry );
+ 
+-    set_fd_signaled( async->fd, 0 );
++    if (!async->is_system) set_fd_signaled( async->fd, 0 );
+ }
+ 
+ /* create an async on a given queue of a fd */
+@@ -277,6 +278,7 @@ struct async *create_async( struct fd *fd, struct thread *thread, const async_da
+     async->canceled      = 0;
+     async->unknown_status = 0;
+     async->blocking      = !is_fd_overlapped( fd );
++    async->is_system     = 0;
+     async->completion    = fd_get_completion( fd, &async->comp_key );
+     async->comp_flags    = 0;
+     async->completion_callback = NULL;
+@@ -529,7 +531,7 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+             }
+ 
+             if (async->event) set_event( async->event );
+-            else if (async->fd) set_fd_signaled( async->fd, 1 );
++            else if (async->fd && !async->is_system) set_fd_signaled( async->fd, 1 );
+         }
+ 
+         if (!async->signaled)
+@@ -584,7 +586,7 @@ static int cancel_async( struct process *process, struct object *obj, struct thr
+ restart:
+     LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
+     {
+-        if (async->terminated || async->canceled) continue;
++        if (async->terminated || async->canceled || async->is_system) continue;
+         if ((!obj || (get_fd_user( async->fd ) == obj)) &&
+             (!thread || async->thread == thread) &&
+             (!iosb || async->data.iosb == iosb))
+@@ -621,7 +623,16 @@ restart:
+ 
+ void cancel_process_asyncs( struct process *process )
+ {
+-    cancel_async( process, NULL, NULL, 0 );
++    struct async *async;
++
++restart:
++    LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
++    {
++        if (async->terminated || async->canceled) continue;
++        async->canceled = 1;
++        fd_cancel_async( async->fd, async );
++        goto restart;
++    }
+ }
+ 
+ int async_close_obj_handle( struct object *obj, struct process *process, obj_handle_t handle )
+@@ -655,6 +666,7 @@ restart:
+     {
+         if (async->thread != thread || async->terminated || async->canceled) continue;
+         if (async->completion && async->data.apc_context && !async->event) continue;
++        if (async->is_system) continue;
+ 
+         async->canceled = 1;
+         fd_cancel_async( async->fd, async );
+@@ -741,7 +753,7 @@ static struct iosb *create_iosb( const void *in_data, data_size_t in_size, data_
+ 
+ /* create an async associated with iosb for async-based requests
+  * returned async must be passed to async_handoff */
+-struct async *create_request_async( struct fd *fd, unsigned int comp_flags, const async_data_t *data )
++struct async *create_request_async( struct fd *fd, unsigned int comp_flags, const async_data_t *data, int is_system )
+ {
+     struct async *async;
+     struct iosb *iosb;
+@@ -760,6 +772,7 @@ struct async *create_request_async( struct fd *fd, unsigned int comp_flags, cons
+         }
+         async->pending       = 0;
+         async->direct_result = 1;
++        async->is_system     = !!is_system;
+         async->comp_flags    = comp_flags;
+     }
+     return async;
+diff --git a/server/fd.c b/server/fd.c
+index f62e7b60efe..bed6575ab4c 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -2719,7 +2719,7 @@ DECL_HANDLER(flush)
+ 
+     if (!fd) return;
+ 
+-    if ((async = create_request_async( fd, fd->comp_flags, &req->async )))
++    if ((async = create_request_async( fd, fd->comp_flags, &req->async, 0 )))
+     {
+         fd->fd_ops->flush( fd, async );
+         reply->event = async_handoff( async, NULL, 1 );
+@@ -2748,7 +2748,7 @@ DECL_HANDLER(get_volume_info)
+ 
+     if (!fd) return;
+ 
+-    if ((async = create_request_async( fd, fd->comp_flags, &req->async )))
++    if ((async = create_request_async( fd, fd->comp_flags, &req->async, 0 )))
+     {
+         fd->fd_ops->get_volume_info( fd, async, req->info_class );
+         reply->wait = async_handoff( async, NULL, 1 );
+@@ -2824,7 +2824,7 @@ DECL_HANDLER(read)
+ 
+     if (!fd) return;
+ 
+-    if ((async = create_request_async( fd, fd->comp_flags, &req->async )))
++    if ((async = create_request_async( fd, fd->comp_flags, &req->async, 0 )))
+     {
+         fd->fd_ops->read( fd, async, req->pos );
+         reply->wait = async_handoff( async, NULL, 0 );
+@@ -2842,7 +2842,7 @@ DECL_HANDLER(write)
+ 
+     if (!fd) return;
+ 
+-    if ((async = create_request_async( fd, fd->comp_flags, &req->async )))
++    if ((async = create_request_async( fd, fd->comp_flags, &req->async, 0 )))
+     {
+         fd->fd_ops->write( fd, async, req->pos );
+         reply->wait = async_handoff( async, &reply->size, 0 );
+@@ -2861,7 +2861,7 @@ DECL_HANDLER(ioctl)
+ 
+     if (!fd) return;
+ 
+-    if ((async = create_request_async( fd, fd->comp_flags, &req->async )))
++    if ((async = create_request_async( fd, fd->comp_flags, &req->async, 0 )))
+     {
+         fd->fd_ops->ioctl( fd, req->code, async );
+         reply->wait = async_handoff( async, NULL, 0 );
+diff --git a/server/file.h b/server/file.h
+index 006b5a8e324..f486f823f25 100644
+--- a/server/file.h
++++ b/server/file.h
+@@ -250,7 +250,8 @@ typedef void (*async_completion_callback)( void *private );
+ 
+ extern void free_async_queue( struct async_queue *queue );
+ extern struct async *create_async( struct fd *fd, struct thread *thread, const async_data_t *data, struct iosb *iosb );
+-extern struct async *create_request_async( struct fd *fd, unsigned int comp_flags, const async_data_t *data );
++extern struct async *create_request_async( struct fd *fd, unsigned int comp_flags, const async_data_t *data,
++                                           int is_system );
+ extern obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_blocking );
+ extern void queue_async( struct async_queue *queue, struct async *async );
+ extern void async_set_timeout( struct async *async, timeout_t timeout, unsigned int status );
+diff --git a/server/protocol.def b/server/protocol.def
+index de3f9f1b764..e9c213d344e 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1578,13 +1578,15 @@ enum server_fd_type
+ /* Perform a send on a socket */
+ @REQ(send_socket)
+     async_data_t async;         /* async I/O parameters */
+-    int          force_async;   /* Force asynchronous mode? */
++    unsigned int flags;         /* SERVER_SOCKET_IO_* flags */
+ @REPLY
+     obj_handle_t wait;          /* handle to wait on for blocking send */
+     unsigned int options;       /* device open options */
+     int          nonblocking;   /* is socket non-blocking? */
+ @END
+ 
++#define SERVER_SOCKET_IO_FORCE_ASYNC 0x01
++#define SERVER_SOCKET_IO_SYSTEM      0x02
+ 
+ /* Get socket event flags */
+ @REQ(socket_get_events)
+diff --git a/server/sock.c b/server/sock.c
+index f80f833c302..d2ec882554f 100644
+--- a/server/sock.c
++++ b/server/sock.c
+@@ -3915,7 +3915,7 @@ DECL_HANDLER(recv_socket)
+     sock->pending_events &= ~(req->oob ? AFD_POLL_OOB : AFD_POLL_READ);
+     sock->reported_events &= ~(req->oob ? AFD_POLL_OOB : AFD_POLL_READ);
+ 
+-    if ((async = create_request_async( fd, get_fd_comp_flags( fd ), &req->async )))
++    if ((async = create_request_async( fd, get_fd_comp_flags( fd ), &req->async, 0 )))
+     {
+         set_error( status );
+ 
+@@ -3963,6 +3963,7 @@ DECL_HANDLER(send_socket)
+     struct async *async;
+     struct fd *fd;
+     int bind_errno = 0;
++    BOOL force_async = req->flags & SERVER_SOCKET_IO_FORCE_ASYNC;
+ 
+     if (!sock) return;
+     fd = sock->fd;
+@@ -3985,7 +3986,7 @@ DECL_HANDLER(send_socket)
+         else if (!bind_errno) bind_errno = errno;
+     }
+ 
+-    if (!req->force_async && !sock->nonblocking && is_fd_overlapped( fd ))
++    if (!force_async && !sock->nonblocking && is_fd_overlapped( fd ))
+         timeout = (timeout_t)sock->sndtimeo * -10000;
+ 
+     if (bind_errno) status = sock_get_ntstatus( bind_errno );
+@@ -3996,7 +3997,7 @@ DECL_HANDLER(send_socket)
+          * asyncs will not consume all available space; if there's no space
+          * available, the current request won't be immediately satiable.
+          */
+-        if ((!req->force_async && sock->nonblocking) || check_fd_events( sock->fd, POLLOUT ))
++        if ((!force_async && sock->nonblocking) || check_fd_events( sock->fd, POLLOUT ))
+         {
+             /* Give the client opportunity to complete synchronously.
+              * If it turns out that the I/O request is not actually immediately satiable,
+@@ -4021,10 +4022,11 @@ DECL_HANDLER(send_socket)
+         }
+     }
+ 
+-    if (status == STATUS_PENDING && !req->force_async && sock->nonblocking)
++    if (status == STATUS_PENDING && !force_async && sock->nonblocking)
+         status = STATUS_DEVICE_NOT_READY;
+ 
+-    if ((async = create_request_async( fd, get_fd_comp_flags( fd ), &req->async )))
++    if ((async = create_request_async( fd, get_fd_comp_flags( fd ), &req->async,
++                                       req->flags & SERVER_SOCKET_IO_SYSTEM )))
+     {
+         struct send_req *send_req;
+         struct iosb *iosb = async_get_iosb( async );
+-- 
+GitLab
+
