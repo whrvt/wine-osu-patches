@@ -1,0 +1,119 @@
+From 245c1702cc4e72562fe1a758f62c677c8d911730 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Sat, 24 Aug 2024 10:50:46 +0900
+Subject: [PATCH] server: Introduce async_terminated() helper to compute the
+ 'terminated' flag.
+
+This helper will later be rewritten to compute the flag from a state
+enum.
+---
+ server/async.c | 25 +++++++++++++++----------
+ 1 file changed, 15 insertions(+), 10 deletions(-)
+
+diff --git a/server/async.c b/server/async.c
+index 749c547af4f..9c7218a2e54 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -161,12 +161,17 @@ static void async_destroy( struct object *obj )
+     release_object( async->thread );
+ }
+ 
++static int async_terminated( const struct async *async )
++{
++    return async->terminated;
++}
++
+ /* notifies client thread of new status of its async request */
+ void async_terminate( struct async *async, unsigned int status )
+ {
+     struct iosb *iosb = async->iosb;
+ 
+-    if (async->terminated) return;
++    if (async_terminated( async )) return;
+ 
+     async->terminated = 1;
+     if (async->iosb && async->iosb->status == STATUS_PENDING) async->iosb->status = status;
+@@ -491,7 +496,7 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+ 
+     if (obj->ops != &async_ops) return;  /* in case the client messed up the APC results */
+ 
+-    assert( async->terminated );  /* it must have been woken up if we get a result */
++    assert( async_terminated( async ) );  /* it must have been woken up if we get a result */
+ 
+     if (async->unknown_status) async_set_initial_status( async, status );
+ 
+@@ -571,7 +576,7 @@ int async_waiting( struct async_queue *queue )
+ 
+     if (!(ptr = list_head( &queue->queue ))) return 0;
+     async = LIST_ENTRY( ptr, struct async, queue_entry );
+-    return !async->terminated;
++    return !async_terminated( async );
+ }
+ 
+ static int cancel_async( struct process *process, struct object *obj, struct thread *thread, client_ptr_t iosb )
+@@ -586,7 +591,7 @@ static int cancel_async( struct process *process, struct object *obj, struct thr
+ restart:
+     LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
+     {
+-        if (async->terminated || async->canceled || async->is_system) continue;
++        if (async_terminated( async ) || async->canceled || async->is_system) continue;
+         if ((!obj || (get_fd_user( async->fd ) == obj)) &&
+             (!thread || async->thread == thread) &&
+             (!iosb || async->data.iosb == iosb))
+@@ -608,7 +613,7 @@ static int cancel_blocking( struct process *process, struct thread *thread, clie
+ restart:
+     LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
+     {
+-        if (async->terminated || async->canceled) continue;
++        if (async_terminated( async ) || async->canceled) continue;
+         if (async->blocking && async->thread == thread &&
+             (!iosb || async->data.iosb == iosb))
+         {
+@@ -628,7 +633,7 @@ void cancel_process_asyncs( struct process *process )
+ restart:
+     LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
+     {
+-        if (async->terminated || async->canceled) continue;
++        if (async_terminated( async ) || async->canceled) continue;
+         async->canceled = 1;
+         fd_cancel_async( async->fd, async );
+         goto restart;
+@@ -647,7 +652,7 @@ int async_close_obj_handle( struct object *obj, struct process *process, obj_han
+ restart:
+     LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
+     {
+-        if (async->terminated || async->canceled || get_fd_user( async->fd ) != obj) continue;
++        if (async_terminated( async ) || async->canceled || get_fd_user( async->fd ) != obj) continue;
+         if (!async->completion || !async->data.apc_context || async->event) continue;
+ 
+         async->canceled = 1;
+@@ -664,7 +669,7 @@ void cancel_terminating_thread_asyncs( struct thread *thread )
+ restart:
+     LIST_FOR_EACH_ENTRY( async, &thread->process->asyncs, struct async, process_entry )
+     {
+-        if (async->thread != thread || async->terminated || async->canceled) continue;
++        if (async->thread != thread || async_terminated( async ) || async->canceled) continue;
+         if (async->completion && async->data.apc_context && !async->event) continue;
+         if (async->is_system) continue;
+ 
+@@ -793,7 +798,7 @@ struct async *find_pending_async( struct async_queue *queue )
+ {
+     struct async *async;
+     LIST_FOR_EACH_ENTRY( async, &queue->queue, struct async, queue_entry )
+-        if (!async->terminated) return (struct async *)grab_object( async );
++        if (!async_terminated( async )) return (struct async *)grab_object( async );
+     return NULL;
+ }
+ 
+@@ -863,7 +868,7 @@ DECL_HANDLER(set_async_direct_result)
+ 
+     if (!async) return;
+ 
+-    if (!async->unknown_status || !async->terminated || !async->alerted)
++    if (!async->unknown_status || !async_terminated( async ) || !async->alerted)
+     {
+         set_error( STATUS_INVALID_PARAMETER );
+         release_object( &async->obj );
+-- 
+GitLab
+

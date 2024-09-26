@@ -1,0 +1,52 @@
+From c5728b0c489486be9dc4f91f60c97bbe0cdc847c Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 19 Sep 2024 16:38:06 -0700
+Subject: [PATCH] server: Use clock_gettime for set_current_time if available.
+
+It's more precise. Also, in doing this, I came across a possible memory
+ordering bug between this function and the USD time update, causing hanging
+on startup; it doesn't work without the fence.
+
+I only tested this with '-march=znver4 -O3' on clang 19.1.0, so it's possible
+that it wouldn't show up with less aggressive compiler optimizations.
+---
+ server/fd.c | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/server/fd.c b/server/fd.c
+index c565b524d58..43bed51d5b0 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -479,9 +479,27 @@ struct fd *poll_exit_fd;
+ void set_current_time(void)
+ {
+     static const timeout_t ticks_1601_to_1970 = (timeout_t)86400 * (369 * 365 + 89) * TICKS_PER_SEC;
++
++#ifdef HAVE_CLOCK_GETTIME
++    struct timespec ts;
++    clock_gettime(CLOCK_REALTIME, &ts);
++    timeout_t seconds = (timeout_t)ts.tv_sec * TICKS_PER_SEC;
++    timeout_t nanoseconds = (timeout_t)(ts.tv_nsec / 100);
++
++    current_time = seconds + nanoseconds + ticks_1601_to_1970;
++#else
+     struct timeval now;
+-    gettimeofday( &now, NULL );
+-    current_time = (timeout_t)now.tv_sec * TICKS_PER_SEC + now.tv_usec * 10 + ticks_1601_to_1970;
++    gettimeofday(&now, NULL);
++    timeout_t seconds = (timeout_t)now.tv_sec * TICKS_PER_SEC;
++    timeout_t microseconds = (timeout_t)now.tv_usec * 10;
++
++    current_time = seconds + microseconds + ticks_1601_to_1970;
++#endif
++    /* Somehow, the clock_gettime path revealed a memory ordering bug
++     * that either didn't ever occur, or only rarely did, with the gettimeofday path
++     */
++    __atomic_signal_fence(__ATOMIC_SEQ_CST);
++
+     monotonic_time = monotonic_counter();
+     if (user_shared_data) set_user_shared_data_time();
+ }
+-- 
+2.46.1
+

@@ -1,0 +1,32 @@
+From 5335d732cd51d8d0b0e73c57d3bcc8af031b0d43 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Sat, 24 Aug 2024 11:56:08 +0900
+Subject: [PATCH] server: Signal async unconditionally in async_set_result().
+
+This helps simplify further refactoring that gets rid of 'signaled' flag
+entirely.
+---
+ server/async.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/server/async.c b/server/async.c
+index bc5ed56df7c..924c2364826 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -707,11 +707,8 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+         }
+ 
+         async->state = ASYNC_COMPLETED;
+-        if (!async->signaled)
+-        {
+-            async->signaled = 1;
+-            wake_up( &async->obj, 0 );
+-        }
++        async->signaled = 1;
++        wake_up( &async->obj, 0 );
+ 
+         async_call_completion_callback( async );
+ 
+-- 
+GitLab
+

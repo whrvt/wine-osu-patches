@@ -1,0 +1,177 @@
+From 1381a3d00759a796639f6956ff09d88b5a38b6f3 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <openglfreak@googlemail.com>
+Date: Thu, 25 May 2023 23:57:06 +0200
+Subject: [PATCH] server: Do USD time updates in a dedicated thread.
+
+Updated to use clock_nanosleep instead of usleep.
+---
+
+diff --git a/server/Makefile.in b/server/Makefile.in
+index d6e422c7bc1..dbaa215a422 100644
+--- a/server/Makefile.in
++++ b/server/Makefile.in
+@@ -50,6 +50,6 @@ SOURCES = \
+ 	wineserver.man.in \
+ 	winstation.c
+ 
+-UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS)
++UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS) $(PTHREAD_LIBS)
+ 
+ unicode_EXTRADEFS = -DBINDIR="\"${bindir}\"" -DDATADIR="\"${datadir}\""
+diff --git a/server/fd.c b/server/fd.c
+index 11111111111..11111111111 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -402,7 +402,7 @@ static void atomic_store_long(volatile LONG *ptr, LONG value)
+ #endif
+ }
+ 
+-static void set_user_shared_data_time(void)
++static void set_user_shared_data_time(timeout_t current_time, timeout_t monotonic_time)
+ {
+     timeout_t tick_count = monotonic_time / 10000;
+     static timeout_t last_timezone_update;
+@@ -474,7 +474,7 @@ pthread_mutex_t global_lock = PTHREAD_MUTEX_INITIALIZER;
+ int poll_exit_pipe[2];
+ struct fd *poll_exit_fd;
+ 
+-void set_current_time(void)
++static void get_current_time(timeout_t *current_time, timeout_t *monotonic_time)
+ {
+     static const timeout_t ticks_1601_to_1970 = (timeout_t)86400 * (369 * 365 + 89) * TICKS_PER_SEC;
+ 
+@@ -484,22 +484,21 @@ void set_current_time(void)
+     timeout_t seconds = (timeout_t)ts.tv_sec * TICKS_PER_SEC;
+     timeout_t nanoseconds = (timeout_t)(ts.tv_nsec / 100);
+ 
+-    current_time = seconds + nanoseconds + ticks_1601_to_1970;
++    *current_time = seconds + nanoseconds + ticks_1601_to_1970;
+ #else
+     struct timeval now;
+     gettimeofday(&now, NULL);
+     timeout_t seconds = (timeout_t)now.tv_sec * TICKS_PER_SEC;
+     timeout_t microseconds = (timeout_t)now.tv_usec * 10;
+ 
+-    current_time = seconds + microseconds + ticks_1601_to_1970;
++    *current_time = seconds + microseconds + ticks_1601_to_1970;
+ #endif
+-    /* Somehow, the clock_gettime path revealed a memory ordering bug
+-     * that either didn't ever occur, or only rarely did, with the gettimeofday path
+-     */
+-    __atomic_signal_fence(__ATOMIC_SEQ_CST);
++    *monotonic_time = monotonic_counter();
++}
+ 
+-    monotonic_time = monotonic_counter();
+-    if (user_shared_data) set_user_shared_data_time();
++void set_current_time(void)
++{
++    get_current_time(&current_time, &monotonic_time);
+ }
+ 
+ /* add a timeout user */
+@@ -590,6 +589,7 @@ static struct fd **freelist;                /* list of free entries in the array
+ unsigned long poll_generation;              /* current poll array generation */
+ 
+ static int get_next_timeout(void);
++static void *update_user_shared_data_time_thread(void *param);
+ 
+ static inline void fd_poll_event( struct fd *fd, int event )
+ {
+@@ -1053,6 +1058,49 @@ static int get_next_timeout(void)
+     return ret;
+ }
+ 
++static void *update_user_shared_data_time_thread(void *param)
++{
++    struct timespec ts;
++    const timeout_t update_interval = user_shared_data_timeout * TICKS_PER_SEC / 1000;
++    timeout_t next_update_time;
++    
++    get_current_time(&current_time, &monotonic_time);
++    set_user_shared_data_time(current_time, monotonic_time);
++
++    next_update_time = monotonic_time + update_interval;
++
++    while (active_users)
++    {
++        ts.tv_sec = next_update_time / TICKS_PER_SEC;
++        ts.tv_nsec = (next_update_time % TICKS_PER_SEC) * 100;
++
++        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR);
++
++        get_current_time(&current_time, &monotonic_time);
++        set_user_shared_data_time(current_time, monotonic_time);
++
++        next_update_time += update_interval;
++
++        if (next_update_time <= monotonic_time)
++            next_update_time = monotonic_time + update_interval;
++    }
++    return NULL;
++}
++
++static void start_user_shared_data_time_thread(void)
++{
++    pthread_t pthread;
++    int policy;
++    struct sched_param param;
++    if (pthread_create( &pthread, NULL, update_user_shared_data_time_thread, NULL ))
++        fatal_error( "failed to create time update thread\n" );
++    if (!pthread_getschedparam( pthread_self(), &policy, &param ) && (policy || param.sched_priority))
++        if (pthread_setschedparam( pthread, policy | SCHED_RESET_ON_FORK, &param ))
++            pthread_setschedparam( pthread, policy, &param );
++    pthread_setname_np( pthread, "usd_time_thread" );
++    pthread_detach( pthread );
++}
++
+ /* server main poll() loop */
+ void main_loop(void)
+ {
+@@ -1089,6 +1135,8 @@ void main_loop(void)
+     set_current_time();
+     server_start_time = current_time;
+ 
++    start_user_shared_data_time_thread();
++
+     main_loop_epoll();
+     /* fall through to normal poll loop */
+ 
+-- 
+0.0.0
+diff --git a/server/fd.c b/server/fd.c
+index 3fc1633ddbc..0d6554fad38 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -1096,9 +1096,6 @@ static void *update_user_shared_data_time_thread(void *param)
+     struct timespec ts;
+     const timeout_t update_interval = user_shared_data_timeout * TICKS_PER_SEC / 1000;
+     timeout_t next_update_time;
+-    
+-    get_current_time(&current_time, &monotonic_time);
+-    set_user_shared_data_time(current_time, monotonic_time);
+ 
+     next_update_time = monotonic_time + update_interval;
+ 
+@@ -1144,6 +1141,7 @@ void main_loop(void)
+     set_current_time();
+     server_start_time = current_time;
+ 
++    set_user_shared_data_time(current_time, monotonic_time);
+     start_user_shared_data_time_thread();
+ 
+     main_loop_epoll();
+-- 
+0.0.0
+diff --git a/server/fd.c b/server/fd.c
+index 72896bd71a1..e8c3fa8ae2f 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -29,6 +29,7 @@
+ #include <signal.h>
+ #include <stdarg.h>
+ #include <stdio.h>
++#include <pthread.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <stdint.h>

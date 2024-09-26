@@ -19,7 +19,7 @@ diff --git a/server/fd.c b/server/fd.c
 index df6fb1f..d8a2ea0 100644
 --- a/server/fd.c
 +++ b/server/fd.c
-@@ -373,7 +373,7 @@ static void atomic_store_ulong(volatile ULONG *ptr, ULONG value)
+@@ -366,7 +366,7 @@ static void atomic_store_ulong(volatile ULONG *ptr, ULONG value)
  #if defined(__i386__) || defined(__x86_64__)
      *ptr = value;
  #else
@@ -28,7 +28,7 @@ index df6fb1f..d8a2ea0 100644
  #endif
  }
  
-@@ -386,7 +386,7 @@ static void atomic_store_long(volatile LONG *ptr, LONG value)
+@@ -375,7 +375,7 @@ static void atomic_store_long(volatile LONG *ptr, LONG value)
  #if defined(__i386__) || defined(__x86_64__)
      *ptr = value;
  #else

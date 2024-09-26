@@ -1,0 +1,97 @@
+From b2dd402992d6f74248161c403afcc763b56433d9 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Tue, 27 Aug 2024 21:54:15 +0900
+Subject: [PATCH] server: Remove "signaled" field from struct async.
+
+---
+ server/async.c | 21 +++++----------------
+ 1 file changed, 5 insertions(+), 16 deletions(-)
+
+diff --git a/server/async.c b/server/async.c
+index 9b9b3683b41..0599972ddbe 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -92,7 +92,6 @@ struct async
+     obj_handle_t         wait_handle;     /* pre-allocated wait handle */
+     unsigned int         initial_status;  /* status returned from initial request */
+     enum async_state     state;
+-    unsigned int         signaled :1;
+     unsigned int         pending :1;      /* request successfully queued, but pending */
+     unsigned int         alerted :1;      /* fd is signaled, but we are waiting for client-side I/O */
+     unsigned int         terminated :1;   /* async has been terminated */
+@@ -158,27 +157,22 @@ static int async_signaled( struct object *obj, struct wait_queue_entry *entry )
+     case ASYNC_INITIAL_DIRECT_RESULT:
+     case ASYNC_UNKNOWN_STATUS:
+     case ASYNC_FINALIZING_SYNC_APC_RESULT:
+-        assert( async->signaled == 0 );
+-        break;
++        return 0;
+     case ASYNC_FINALIZING_SYNC_DIRECT_RESULT:
+         /* The client will "wait" on the async to signal completion. */
+-        assert( async->signaled == 1 );
+-        break;
++        return 1;
+     case ASYNC_IN_PROGRESS:
+     case ASYNC_ALERTED:
+     case ASYNC_FINALIZING_ASYNC:
+         /* If nonblocking, the client will "wait" on the async to close it. */
+-        assert( async->signaled == (!async->blocking) );
+-        break;
++        return !async->blocking;
+     case ASYNC_COMPLETED:
+         /* If there is an open async handle, notify the waiter of completion. */
+-        assert( async->signaled == 1 );
+-        break;
++        return 1;
+     default:
+         assert( 0 );
+-        break;
++        return 0;
+     }
+-    return async->signaled;
+ }
+ 
+ static void async_satisfied( struct object *obj, struct wait_queue_entry *entry )
+@@ -324,7 +318,6 @@ void async_terminate( struct async *async, unsigned int status )
+     if (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT ||
+         (async->state != ASYNC_FINALIZING_SYNC_APC_RESULT && async->state != ASYNC_UNKNOWN_STATUS && !async->blocking))
+     {
+-        async->signaled = 1;
+         wake_up( &async->obj, 0 );
+     }
+ 
+@@ -425,7 +418,6 @@ struct async *create_async( struct fd *fd, struct thread *thread, const async_da
+     async->fd            = (struct fd *)grab_object( fd );
+     async->initial_status = STATUS_PENDING;
+     async->state         = ASYNC_INITIAL;
+-    async->signaled      = 0;
+     async->pending       = 1;
+     async->wait_handle   = 0;
+     async->alerted       = 0;
+@@ -479,7 +471,6 @@ void async_wake_obj( struct async *async )
+     async->state = ASYNC_IN_PROGRESS;
+     if (!async->blocking)
+     {
+-        async->signaled = 1;
+         wake_up( &async->obj, 0 );
+     }
+ }
+@@ -558,7 +549,6 @@ obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_
+     if (async->iosb->status != STATUS_PENDING)
+     {
+         if (result) *result = async->iosb->result;
+-        async->signaled = 1;
+     }
+     else
+     {
+@@ -699,7 +689,6 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+         }
+ 
+         async->state = ASYNC_COMPLETED;
+-        async->signaled = 1;
+         wake_up( &async->obj, 0 );
+ 
+         async_call_completion_callback( async );
+-- 
+GitLab
+

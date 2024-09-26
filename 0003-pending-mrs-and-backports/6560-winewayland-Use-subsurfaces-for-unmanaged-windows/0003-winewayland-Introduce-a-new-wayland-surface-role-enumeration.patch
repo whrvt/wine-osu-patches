@@ -1,0 +1,156 @@
+From 67bf99756b6ffb653461438082653362c631a0e4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 6 Sep 2024 10:49:43 +0200
+Subject: [PATCH] winewayland: Introduce a new wayland_surface role
+ enumeration.
+
+---
+ dlls/winewayland.drv/wayland_surface.c | 30 +++++++++++++++++-------
+ dlls/winewayland.drv/waylanddrv.h      | 20 ++++++++++++++--
+ dlls/winewayland.drv/window.c          | 32 ++++++++++++++++++--------
+ 3 files changed, 62 insertions(+), 20 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index ba2ba4a345f..33fa19ee161 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -234,6 +234,12 @@ void wayland_surface_make_toplevel(struct wayland_surface *surface)
+ 
+     TRACE("surface=%p\n", surface);
+ 
++    assert(!surface->role || surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL);
++    if (surface->xdg_surface && surface->xdg_toplevel) return;
++
++    wayland_surface_clear_role(surface);
++    surface->role = WAYLAND_SURFACE_ROLE_TOPLEVEL;
++
+     surface->xdg_surface =
+         xdg_wm_base_get_xdg_surface(process_wayland.xdg_wm_base, surface->wl_surface);
+     if (!surface->xdg_surface) goto err;
+@@ -271,16 +277,24 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
+ {
+     TRACE("surface=%p\n", surface);
+ 
+-    if (surface->xdg_toplevel)
++    switch (surface->role)
+     {
+-        xdg_toplevel_destroy(surface->xdg_toplevel);
+-        surface->xdg_toplevel = NULL;
+-    }
++    case WAYLAND_SURFACE_ROLE_NONE:
++        break;
+ 
+-    if (surface->xdg_surface)
+-    {
+-        xdg_surface_destroy(surface->xdg_surface);
+-        surface->xdg_surface = NULL;
++    case WAYLAND_SURFACE_ROLE_TOPLEVEL:
++        if (surface->xdg_toplevel)
++        {
++            xdg_toplevel_destroy(surface->xdg_toplevel);
++            surface->xdg_toplevel = NULL;
++        }
++
++        if (surface->xdg_surface)
++        {
++            xdg_surface_destroy(surface->xdg_surface);
++            surface->xdg_surface = NULL;
++        }
++        break;
+     }
+ 
+     memset(&surface->pending, 0, sizeof(surface->pending));
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 4b49b4fbb2f..5234ad0e49b 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -73,6 +73,12 @@ enum wayland_surface_config_state
+     WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN = (1 << 3)
+ };
+ 
++enum wayland_surface_role
++{
++    WAYLAND_SURFACE_ROLE_NONE,
++    WAYLAND_SURFACE_ROLE_TOPLEVEL,
++};
++
+ struct wayland_keyboard
+ {
+     struct wl_keyboard *wl_keyboard;
+@@ -194,10 +200,20 @@ struct wayland_client_surface
+ struct wayland_surface
+ {
+     HWND hwnd;
++
+     struct wl_surface *wl_surface;
+-    struct xdg_surface *xdg_surface;
+-    struct xdg_toplevel *xdg_toplevel;
+     struct wp_viewport *wp_viewport;
++
++    enum wayland_surface_role role;
++    union
++    {
++        struct
++        {
++            struct xdg_surface *xdg_surface;
++            struct xdg_toplevel *xdg_toplevel;
++        };
++    };
++
+     struct wayland_surface_config pending, requested, processing, current;
+     BOOL resizing;
+     struct wayland_window_config window;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 4ab08de9388..c31374cc564 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -210,24 +210,36 @@ static BOOL wayland_win_data_update_wayland_surface(struct wayland_win_data *dat
+ {
+     struct wayland_client_surface *client = data->client_surface;
+     struct wayland_surface *surface;
+-    BOOL visible, xdg_visible;
++    enum wayland_surface_role role;
++    BOOL visible;
+ 
+     TRACE("hwnd=%p\n", data->hwnd);
+ 
+     visible = (NtUserGetWindowLongW(data->hwnd, GWL_STYLE) & WS_VISIBLE) == WS_VISIBLE;
+-    if (!visible && client) wayland_client_surface_detach(client);
++    if (!visible) role = WAYLAND_SURFACE_ROLE_NONE;
++    else role = WAYLAND_SURFACE_ROLE_TOPLEVEL;
++
++    /* we can temporarily clear the role of a surface but cannot assign a different one after it's set */
++    if ((surface = data->wayland_surface) && role && surface->role && surface->role != role)
++    {
++        if (client) wayland_client_surface_detach(client);
++        wayland_surface_destroy(data->wayland_surface);
++        data->wayland_surface = NULL;
++    }
+ 
+     if (!(surface = data->wayland_surface) && !(surface = wayland_surface_create(data->hwnd))) return FALSE;
+-    xdg_visible = surface->xdg_toplevel != NULL;
+ 
+-    if (visible != xdg_visible)
++    /* If the window is a visible toplevel make it a wayland
++     * xdg_toplevel. Otherwise keep it role-less to avoid polluting the
++     * compositor with empty xdg_toplevels. */
++    switch (role)
+     {
+-        /* If we have a pre-existing surface ensure it has no role. */
+-        if (data->wayland_surface) wayland_surface_clear_role(surface);
+-        /* If the window is a visible toplevel make it a wayland
+-         * xdg_toplevel. Otherwise keep it role-less to avoid polluting the
+-         * compositor with empty xdg_toplevels. */
+-        if (visible) wayland_surface_make_toplevel(surface);
++    case WAYLAND_SURFACE_ROLE_NONE:
++        wayland_surface_clear_role(surface);
++        break;
++    case WAYLAND_SURFACE_ROLE_TOPLEVEL:
++        wayland_surface_make_toplevel(surface);
++        break;
+     }
+ 
+     if (visible && client) wayland_client_surface_attach(client, data->hwnd);
+-- 
+GitLab
+

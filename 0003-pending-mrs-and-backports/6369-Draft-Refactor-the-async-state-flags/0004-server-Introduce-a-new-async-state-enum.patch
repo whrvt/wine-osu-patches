@@ -1,0 +1,298 @@
+From 52e44bc8f8636a89cf5fc279d6a8b2632bc932f5 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Mon, 26 Aug 2024 23:05:15 +0900
+Subject: [PATCH] server: Introduce a new async state enum.
+
+---
+ server/async.c | 159 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 159 insertions(+)
+
+diff --git a/server/async.c b/server/async.c
+index a664b6bc93c..bc5ed56df7c 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -34,6 +34,48 @@
+ #include "process.h"
+ #include "handle.h"
+ 
++enum async_state
++{
++    /* The I/O operation has just initiated, or initial status is known. */
++    ASYNC_INITIAL,
++
++    /* The I/O operation has just initiated via create_request_async(). */
++    ASYNC_INITIAL_DIRECT_RESULT,
++
++    /* The initial status is not known yet. It will be determined by the client or winedevice.exe. */
++    ASYNC_UNKNOWN_STATUS,
++
++    /* The I/O operation is being processed by the wineserver or winedevice.eze. */
++    ASYNC_IN_PROGRESS,
++
++    /* The I/O operation is being processed by the client. */
++    ASYNC_ALERTED,
++
++    /* The I/O operation has finished synchronously (APC result) but not been
++     * acknowledged by the client.
++     *
++     * The completion is being delivered to the client indirectly via
++     * APC_ASYNC_IO.  The client had no chance to fill the IOSB synchronously,
++     * due to unknwon initial status (e.g., processed by winedevice.exe).
++     */
++    ASYNC_FINALIZING_SYNC_APC_RESULT,
++
++    /* The I/O operation has finished synchronously (direct result) but not
++     * been acknowledged by the client.
++     *
++     * The completion is being delivered to the client directly via server
++     * request return.  The client may proceed to fill the IOSB synchronously,
++     * and notify the server that it has done so.
++     */
++    ASYNC_FINALIZING_SYNC_DIRECT_RESULT,
++
++    /* The I/O operation has finished asynchronously but not been acknowledged by the client. */
++    ASYNC_FINALIZING_ASYNC,
++
++    /* The I/O operation has finished and the result has been acknowledged by the client. */
++    ASYNC_COMPLETED
++};
++
+ struct async
+ {
+     struct object        obj;             /* object header */
+@@ -49,6 +91,7 @@ struct async
+     struct iosb         *iosb;            /* I/O status block */
+     obj_handle_t         wait_handle;     /* pre-allocated wait handle */
+     unsigned int         initial_status;  /* status returned from initial request */
++    enum async_state     state;
+     unsigned int         signaled :1;
+     unsigned int         pending :1;      /* request successfully queued, but pending */
+     unsigned int         direct_result :1;/* a flag if we're passing result directly from request instead of APC  */
+@@ -110,6 +153,32 @@ static int async_signaled( struct object *obj, struct wait_queue_entry *entry )
+ {
+     struct async *async = (struct async *)obj;
+     assert( obj->ops == &async_ops );
++    switch (async->state)
++    {
++    case ASYNC_INITIAL:
++    case ASYNC_INITIAL_DIRECT_RESULT:
++    case ASYNC_UNKNOWN_STATUS:
++    case ASYNC_FINALIZING_SYNC_APC_RESULT:
++        assert( async->signaled == 0 );
++        break;
++    case ASYNC_FINALIZING_SYNC_DIRECT_RESULT:
++        /* The client will "wait" on the async to signal completion. */
++        assert( async->signaled == 1 );
++        break;
++    case ASYNC_IN_PROGRESS:
++    case ASYNC_ALERTED:
++    case ASYNC_FINALIZING_ASYNC:
++        /* If nonblocking, the client will "wait" on the async to close it. */
++        assert( async->signaled == (!async->blocking) );
++        break;
++    case ASYNC_COMPLETED:
++        /* If there is an open async handle, notify the waiter of completion. */
++        assert( async->signaled == 1 );
++        break;
++    default:
++        assert( 0 );
++        break;
++    }
+     return async->signaled;
+ }
+ 
+@@ -121,6 +190,7 @@ static void async_satisfied( struct object *obj, struct wait_queue_entry *entry
+     /* we only return an async handle for asyncs created via create_request_async() */
+     assert( async->iosb );
+ 
++    assert( async->direct_result == (async->state == ASYNC_INITIAL_DIRECT_RESULT || async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT) );
+     if (async->direct_result)
+     {
+         async_set_result( &async->obj, async->iosb->status, async->iosb->result );
+@@ -163,16 +233,58 @@ static void async_destroy( struct object *obj )
+ 
+ static int async_terminated( const struct async *async )
+ {
++    switch (async->state)
++    {
++    case ASYNC_INITIAL:
++    case ASYNC_INITIAL_DIRECT_RESULT:
++    case ASYNC_IN_PROGRESS:
++        assert( async->terminated == 0 );
++        break;
++    case ASYNC_UNKNOWN_STATUS:
++    case ASYNC_ALERTED:
++    case ASYNC_FINALIZING_SYNC_APC_RESULT:
++    case ASYNC_FINALIZING_SYNC_DIRECT_RESULT:
++    case ASYNC_FINALIZING_ASYNC:
++    case ASYNC_COMPLETED:
++        assert( async->terminated == 1 );
++        break;
++    default:
++        assert( 0 );
++        break;
++    }
+     return async->terminated;
+ }
+ 
+ static int async_alerted( const struct async *async )
+ {
++    switch (async->state)
++    {
++    case ASYNC_INITIAL_DIRECT_RESULT:
++    case ASYNC_IN_PROGRESS:
++    case ASYNC_FINALIZING_SYNC_APC_RESULT:
++    case ASYNC_FINALIZING_SYNC_DIRECT_RESULT:
++    case ASYNC_FINALIZING_ASYNC:
++    case ASYNC_COMPLETED:
++        assert( async->alerted == 0 );
++        break;
++    case ASYNC_INITIAL:
++        /* initial status set from set_async_direct_result */
++        assert( async->alerted == 1 );
++        break;
++    case ASYNC_UNKNOWN_STATUS:
++    case ASYNC_ALERTED:
++        assert( async->alerted == 1 );
++        break;
++    default:
++        assert( 0 );
++        break;
++    }
+     return async->alerted;
+ }
+ 
+ static int async_unknown_status( const struct async *async )
+ {
++    assert( async->unknown_status == (async->state == ASYNC_UNKNOWN_STATUS) );
+     return async->unknown_status;
+ }
+ 
+@@ -182,17 +294,50 @@ void async_terminate( struct async *async, unsigned int status )
+     struct iosb *iosb = async->iosb;
+ 
+     if (async_terminated( async )) return;
++    assert( async->state == ASYNC_INITIAL || async->state == ASYNC_INITIAL_DIRECT_RESULT || async->state == ASYNC_IN_PROGRESS );
++
++    if (status == STATUS_ALERTED)
++    {
++        assert( async->direct_result == (async->state == ASYNC_INITIAL_DIRECT_RESULT) );
++        if (async->direct_result)
++        {
++            assert( async->unknown_status );
++            async->state = ASYNC_UNKNOWN_STATUS;
++        }
++        else
++        {
++            assert( !async->unknown_status );
++            async->state = ASYNC_ALERTED;
++        }
++    }
++    else
++    {
++        if (async->state == ASYNC_INITIAL)
++            async->state = ASYNC_FINALIZING_SYNC_APC_RESULT;
++        else if (async->state == ASYNC_INITIAL_DIRECT_RESULT)
++            async->state = ASYNC_FINALIZING_SYNC_DIRECT_RESULT;
++        else
++            async->state = ASYNC_FINALIZING_ASYNC;
++    }
+ 
+     async->terminated = 1;
+     if (async->iosb && async->iosb->status == STATUS_PENDING) async->iosb->status = status;
+     if (status == STATUS_ALERTED)
+         async->alerted = 1;
+ 
++    if (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT ||
++        (async->state != ASYNC_FINALIZING_SYNC_APC_RESULT && async->state != ASYNC_UNKNOWN_STATUS && !async->blocking))
++    {
++        async->signaled = 1;
++        wake_up( &async->obj, 0 );
++    }
++
+     /* if no APC could be queued (e.g. the process is terminated),
+      * thread_queue_apc() may trigger async_set_result(), which may drop the
+      * last reference to the async, so grab a temporary reference here */
+     grab_object( async );
+ 
++    assert( (!async->direct_result) == (async->state != ASYNC_FINALIZING_SYNC_DIRECT_RESULT && async->state != ASYNC_UNKNOWN_STATUS) );
+     if (!async->direct_result)
+     {
+         apc_call_t data;
+@@ -284,6 +429,7 @@ struct async *create_async( struct fd *fd, struct thread *thread, const async_da
+     async->queue         = NULL;
+     async->fd            = (struct fd *)grab_object( fd );
+     async->initial_status = STATUS_PENDING;
++    async->state         = ASYNC_INITIAL;
+     async->signaled      = 0;
+     async->pending       = 1;
+     async->wait_handle   = 0;
+@@ -321,10 +467,13 @@ void async_set_initial_status( struct async *async, unsigned int status )
+ {
+     async->initial_status = status;
+     async->unknown_status = 0;
++    if (async->state == ASYNC_UNKNOWN_STATUS)
++        async->state = ASYNC_INITIAL;
+ }
+ 
+ void set_async_pending( struct async *async )
+ {
++    assert( (!async->terminated) == (async->state == ASYNC_INITIAL_DIRECT_RESULT || async->state == ASYNC_UNKNOWN_STATUS) );
+     if (!async->terminated)
+         async->pending = 1;
+ }
+@@ -332,6 +481,8 @@ void set_async_pending( struct async *async )
+ void async_wake_obj( struct async *async )
+ {
+     assert( !async_unknown_status( async ) );
++    assert( async->state == ASYNC_INITIAL );
++    async->state = ASYNC_IN_PROGRESS;
+     if (!async->blocking)
+     {
+         async->signaled = 1;
+@@ -417,6 +568,8 @@ obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_
+     }
+     else
+     {
++        assert( async->state == ASYNC_INITIAL_DIRECT_RESULT );
++        async->state = ASYNC_IN_PROGRESS;
+         async->direct_result = 0;
+         async->pending = 1;
+         if (!async->blocking)
+@@ -472,6 +625,8 @@ void async_request_complete_alloc( struct async *async, unsigned int status, dat
+ /* mark an async as having unknown initial status */
+ void async_set_unknown_status( struct async *async )
+ {
++    assert( async->state == ASYNC_INITIAL_DIRECT_RESULT );
++    async->state = ASYNC_UNKNOWN_STATUS;
+     async->unknown_status = 1;
+     async->direct_result = 0;
+ }
+@@ -512,6 +667,8 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+ 
+     if (async_alerted( async ) && status == STATUS_PENDING)  /* restart it */
+     {
++        assert( async->state == ASYNC_INITIAL || async->state == ASYNC_ALERTED );
++        async->state = ASYNC_IN_PROGRESS;
+         async->terminated = 0;
+         async->alerted = 0;
+         async_reselect( async );
+@@ -549,6 +706,7 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+             else if (async->fd && !async->is_system) set_fd_signaled( async->fd, 1 );
+         }
+ 
++        async->state = ASYNC_COMPLETED;
+         if (!async->signaled)
+         {
+             async->signaled = 1;
+@@ -786,6 +944,7 @@ struct async *create_request_async( struct fd *fd, unsigned int comp_flags, cons
+             return NULL;
+         }
+         async->pending       = 0;
++        async->state         = ASYNC_INITIAL_DIRECT_RESULT;
+         async->direct_result = 1;
+         async->is_system     = !!is_system;
+         async->comp_flags    = comp_flags;
+-- 
+GitLab
+

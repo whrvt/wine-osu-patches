@@ -114,7 +114,7 @@ index f975986a9d9..75d01df1009 100644
      set_mwm_hints( data, style, ex_style );
 +    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
 +     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
-+    if (wm_is_kde( data->display ) && NtUserIsWindowRectFullScreen( &data->rects.visible, get_win_monitor_dpi( data->hwnd ) ))
++    if (wm_is_kde( data->display ) && data->is_fullscreen )
 +    {
 +        original_rect = data->rects.visible;
 +        SetRectEmpty( &data->rects.visible );

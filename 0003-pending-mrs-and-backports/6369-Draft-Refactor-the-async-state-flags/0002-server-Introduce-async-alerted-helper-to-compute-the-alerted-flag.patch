@@ -1,0 +1,49 @@
+From 4fd765e203b71f598da5d644cca029e82cf257f9 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Sat, 24 Aug 2024 10:52:53 +0900
+Subject: [PATCH] server: Introduce async_alerted() helper to compute the
+ 'alerted' flag.
+
+This helper will later be rewritten to compute the flag from a state
+enum.
+---
+ server/async.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/server/async.c b/server/async.c
+index 9c7218a2e54..4754d9f2a86 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -166,6 +166,11 @@ static int async_terminated( const struct async *async )
+     return async->terminated;
+ }
+ 
++static int async_alerted( const struct async *async )
++{
++    return async->alerted;
++}
++
+ /* notifies client thread of new status of its async request */
+ void async_terminate( struct async *async, unsigned int status )
+ {
+@@ -500,7 +505,7 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+ 
+     if (async->unknown_status) async_set_initial_status( async, status );
+ 
+-    if (async->alerted && status == STATUS_PENDING)  /* restart it */
++    if (async_alerted( async ) && status == STATUS_PENDING)  /* restart it */
+     {
+         async->terminated = 0;
+         async->alerted = 0;
+@@ -868,7 +873,7 @@ DECL_HANDLER(set_async_direct_result)
+ 
+     if (!async) return;
+ 
+-    if (!async->unknown_status || !async_terminated( async ) || !async->alerted)
++    if (!async->unknown_status || !async_terminated( async ) || !async_alerted( async ))
+     {
+         set_error( STATUS_INVALID_PARAMETER );
+         release_object( &async->obj );
+-- 
+GitLab
+

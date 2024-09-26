@@ -1,0 +1,181 @@
+From d50eeaa45a7dd8131782984823ef4d1959783779 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 18 Sep 2024 13:23:09 -0700
+Subject: [PATCH] winex11: Custom frame limiter for OpenGL
+
+---
+ dlls/winex11.drv/opengl.c      | 61 ++++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h      |  2 ++
+ dlls/winex11.drv/x11drv_main.c | 26 +++++++++++++++
+ 3 files changed, 89 insertions(+)
+
+# This is added in another patch
+# diff --git a/configure.ac b/configure.ac
+# index d539ee50bda..7585324602c 100644
+# --- a/configure.ac
+# +++ b/configure.ac
+# @@ -2170,6 +2170,17 @@ case $host_os in
+#      ;;
+#  esac
+#  
+# +dnl Check for clock_nanosleep which may be in -lrt
+# +case $host_os in
+# +    darwin*|macosx*) ;;
+# +    *) ac_save_LIBS=$LIBS
+# +        AC_SEARCH_LIBS(clock_nanosleep, rt,
+# +            [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define to 1 if you have the `clock_nanosleep' function.])
+# +                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
+# +    LIBS=$ac_save_LIBS
+# +    ;;
+# +esac
+# +
+#  AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
+#                  AC_LINK_IFELSE([AC_LANG_PROGRAM(
+#  [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 008a92dad98..f46b03ca2e4 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -28,7 +28,8 @@
+ #endif
+ 
+ #include "config.h"
+ 
++#include <errno.h>
+ #include <assert.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -2807,6 +2808,61 @@ static void X11DRV_WineGL_LoadExtensions(void)
+     }
+ }
+ 
++/**
++ * Precise-ish frame limiter
++ * 
++ * Note about "defined(HAVE_CLOCK_NANOSLEEP)":
++ * it's checked for only because of the use-clock_nanosleep-for-delay patch.
++ * Without it, you need to add the configure.ac patch separately.
++ */
++#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
++static long long last_frame_time = 0;
++
++static long long get_time_ns() {
++    struct timespec ts;
++    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
++        ERR("clock_gettime failed with errno %d\n", errno);
++        return 0;
++    }
++    return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
++}
++
++static void precise_sleep(long long ns) {
++    struct timespec req, rem;
++    req.tv_sec = ns / 1000000000LL;
++    req.tv_nsec = ns % 1000000000LL;
++
++    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &req, &rem) == EINTR) {
++        req = rem;
++    }
++}
++
++static void limit_frame_rate() {
++    if (!custom_fps) return;
++
++    long long current_time = get_time_ns();
++    long long frame_time = current_time - last_frame_time;
++    long long target_frame_time = 1000000000LL / custom_fps;
++
++    if (frame_time < target_frame_time) {
++        long long sleep_time = target_frame_time - frame_time;
++
++        if (sleep_time < busy_wait_threshold) {
++            while (get_time_ns() < current_time + sleep_time) {
++                YieldProcessor();
++            }
++        } else {
++            precise_sleep(sleep_time - busy_wait_threshold);
++            while (get_time_ns() < current_time + sleep_time) {
++                YieldProcessor();
++            }
++        }
++    }
++
++    last_frame_time = get_time_ns();
++}
++#endif
++
+ /**
+  * glxdrv_SwapBuffers
+  *
+@@ -2880,6 +2936,11 @@ static BOOL glxdrv_wglSwapBuffers( HDC hdc )
+     present_gl_drawable( hwnd, ctx ? ctx->hdc : hdc, gl, !pglXWaitForSbcOML );
+     update_gl_drawable_size( gl );
+     release_gl_drawable( gl );
++
++#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
++    limit_frame_rate();
++#endif
++
+     return TRUE;
+ }
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index e6bf0bed08d..abf5b166cf1 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -653,6 +653,8 @@ extern void sync_gl_drawable( HWND hwnd, BOOL known_child );
+ extern void set_gl_drawable_parent( HWND hwnd, HWND parent );
+ extern void destroy_gl_drawable( HWND hwnd );
+ extern void destroy_vk_surface( HWND hwnd );
++extern int custom_fps;
++extern long long busy_wait_threshold;
+ 
+ extern void wait_for_withdrawn_state( HWND hwnd, BOOL set );
+ extern Window init_clip_window(void);
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index c483744ce82..360889dd270 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -82,6 +82,8 @@ int keyboard_layout = -1;
+ BOOL keyboard_scancode_detect = FALSE;
+ BOOL managed_mode = TRUE;
+ BOOL private_color_map = FALSE;
++int custom_fps = 0;
++long long busy_wait_threshold = 100000; // nanoseconds, 0.1ms
+ int primary_monitor = 0;
+ BOOL client_side_graphics = TRUE;
+ BOOL client_side_with_render = TRUE;
+@@ -852,6 +854,30 @@ static NTSTATUS x11drv_init( void *arg )
+         if (e && *e != '\0' && *e != '0') gl_disable_child_window_clipping = FALSE;
+     }
+ 
++#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
++    {
++        const char* e = getenv("WINE_CUSTOM_FPS");
++        if (e) {
++            int custom_fps_tmp = atoi(e);
++            if (custom_fps_tmp > 0) {
++                custom_fps = custom_fps_tmp;
++                TRACE("Custom frame limiter enabled with target FPS %d\n", custom_fps);
++            }
++        }
++    }
++    if (custom_fps)
++    {
++        const char* e = getenv("WINE_CUSTOM_FPS_BUSYTHRESH");
++        if (e) {
++            long long busy_wait_threshold_tmp = atoll(e);
++            if (busy_wait_threshold_tmp > 0) {
++                busy_wait_threshold = busy_wait_threshold_tmp;
++                TRACE("Custom frame limiter busywait threshold set to %lld\n", busy_wait_threshold);
++            }
++        }
++    }
++#endif
++
+     cursor_clip_hack = use_cursor_clip_hack();
+     init_user_driver();
+     X11DRV_DisplayDevices_RegisterEventHandlers();
+-- 
+2.46.1
+

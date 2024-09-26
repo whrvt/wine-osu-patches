@@ -1,0 +1,161 @@
+From b60359f2e82171edf94f70192aa3977c9e5cd385 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 24 Sep 2024 11:43:35 -0700
+Subject: [PATCH] winex11: Update the osu!-specific child window hacks to only
+ load for osu!.exe.
+
+Also try to make some other related optimizations.
+---
+ dlls/ntdll/unix/loader.c       |  9 +++++
+ dlls/winex11.drv/init.c        |  5 +--
+ dlls/winex11.drv/opengl.c      |  2 +-
+ dlls/winex11.drv/vulkan.c      |  2 +-
+ dlls/winex11.drv/window.c      | 63 ++++++++++++++++++++++++++++++----
+ dlls/winex11.drv/x11drv.h      |  2 +-
+ dlls/winex11.drv/x11drv_main.c | 22 ++++++++----
+ include/winbase.h              |  2 ++
+ 8 files changed, 88 insertions(+), 19 deletions(-)
+
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index 17195402e8b..c9b8b59c114 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1876,6 +1876,14 @@ static void hacks_init(void)
+         async_read_hack = TRUE;
+         ac_odyssey = TRUE;
+     }
++    if (main_argc > 1 && (strstr(main_argv[1], "osu!.exe")))
++    {
++        env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
++        if (!(env_str && *env_str != '\0' && *env_str != '0'))
++        {
++            setenv( "OSU_CHILD_HACK", "1", 0 );
++        }
++    }
+     if (ac_odyssey)
+         ERR("HACK: AC Odyssey sync tweak on.\n");
+ 
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 4ef21001ee4..9837ecdee04 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -196,9 +196,10 @@ static HFONT X11DRV_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
+ BOOL needs_offscreen_rendering( HWND hwnd, BOOL known_child )
+ {
+     static unsigned int cache;
+-    if (!cache++ && gl_disable_child_window_clipping)
++    if (!cache++ && osu_child_hack)
+         MESSAGE("OpenGL speedhack enabled, which will cause the editor top menu bar to render incorrectly\n\texport WINE_DISABLE_GLCHILD_HACK=1 to disable.\n");
+ 
++    if (osu_child_hack) return FALSE;
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd )) return TRUE; /* needs DPI scaling */
+     if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
+     if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return TRUE; /* window has children, needs compositing */
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 7b2ec9c700c..2e0444e3731 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -835,7 +835,7 @@ static void init_pixel_formats( Display *display )
+                  * As of the introduction of composition managers at least Nvidia now also offers ARGB visuals
+                  * with a depth of 32 in addition to the default 24 bit. In order to prevent BadMatch errors we only
+                  * list formats with the same depth. */
+-                if((visinfo->depth != default_visual.depth) || (gl_disable_child_window_clipping && !pglXGetFBConfigAttrib( display, cfgs[i], GLX_STENCIL_SIZE, &tmp_value ) && tmp_value))
++                if((visinfo->depth != default_visual.depth) || (osu_child_hack && !pglXGetFBConfigAttrib( display, cfgs[i], GLX_STENCIL_SIZE, &tmp_value ) && tmp_value))
+                 {
+                     XFree(visinfo);
+                     continue;
+# diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+# index 0ad0478eaf9..64dadb65827 100644
+# --- a/dlls/winex11.drv/window.c
+# +++ b/dlls/winex11.drv/window.c
+# @@ -271,6 +271,39 @@ static void remove_startup_notification(Display *display, Window window)
+#      }
+#  }
+ 
+# +/***********************************************************************
+# + *		get_class_name
+# + *
+# + * Just a helper to get a UTF-8 class name for a HWND.
+# + * Could be buggy, wide char strings are a nightmare.
+# + */
+# +static void get_class_name(HWND hwnd, char *class_name, size_t max_length) {
+# +    UNICODE_STRING ucs_class_name;
+# +    WCHAR ucs_name_buffer[max_length];
+# +
+# +    ucs_class_name.MaximumLength = sizeof(ucs_name_buffer);
+# +    ucs_class_name.Buffer = ucs_name_buffer;
+# +
+# +    NtUserGetClassName(hwnd, FALSE, &ucs_class_name);
+# +
+# +    ucs_class_name.Length = wcslen(ucs_class_name.Buffer) * sizeof(WCHAR);
+# +
+# +    size_t length = ucs_class_name.Length / sizeof(WCHAR);
+# +
+# +    char *buffer = (char *)malloc(max_length);
+# +    if (!buffer) {
+# +        class_name[0] = '\0';
+# +        return;
+# +    }
+# +
+# +    ntdll_wcstoumbs(ucs_class_name.Buffer, length, buffer, max_length, FALSE);
+# +
+# +    size_t copy_length = (length < max_length - 1) ? length : max_length - 1;
+# +    memcpy(class_name, buffer, copy_length);
+# +    class_name[copy_length] = '\0';
+# +    free(buffer);
+# +}
+# +
+#  static BOOL is_managed( HWND hwnd )
+#  {
+#      struct x11drv_win_data *data = get_win_data( hwnd );
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 6af820598ea..127f12051ae 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -77,7 +77,7 @@ BOOL use_xfixes = FALSE;
+ BOOL use_primary_selection = FALSE;
+ BOOL use_system_cursors = TRUE;
+ BOOL grab_fullscreen = FALSE;
+-BOOL gl_disable_child_window_clipping = TRUE;
++BOOL osu_child_hack = FALSE;
+ int keyboard_layout = -1;
+ BOOL keyboard_scancode_detect = FALSE;
+ BOOL managed_mode = TRUE;
+@@ -848,11 +848,7 @@ static NTSTATUS x11drv_init( void *arg )
+     X11DRV_InitKeyboard( gdi_display );
+     X11DRV_InitMouse( gdi_display );
+     if (use_xim) use_xim = xim_init( input_style );
+-
+-    {
+-        const char *e = getenv("WINE_DISABLE_GLCHILD_HACK");
+-        if (e && *e != '\0' && *e != '0') gl_disable_child_window_clipping = FALSE;
+-    }
++    if (getenv("OSU_CHILD_HACK")) osu_child_hack = TRUE;
+ 
+ #if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
+     {
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 9af7b3ceccc..b5e5ce66783 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -985,6 +985,5 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     while ((*p++ = *src++));
+     return (p - dst) * sizeof(WCHAR);
+ }
+-extern BOOL gl_disable_child_window_clipping;
+ 
+ #endif  /* __WINE_X11DRV_H */
+diff --git a/include/winbase.h b/include/winbase.h
+index fe143cc7a61..83605016fcc 100644
+--- a/include/winbase.h
++++ b/include/winbase.h
+@@ -3070,4 +3070,6 @@ BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved );
+ }
+ #endif
+ 
++extern BOOL osu_child_hack;
++
+ #endif  /* __WINE_WINBASE_H */
+-- 
+2.46.1
+

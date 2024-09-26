@@ -1,0 +1,93 @@
+From 30f2a85cfdf8d9afec29b016a0e7ded8002cf027 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Tue, 27 Aug 2024 22:00:08 +0900
+Subject: [PATCH] server: Remove "unknown_status" field from struct async.
+
+---
+ server/async.c | 18 +++++-------------
+ 1 file changed, 5 insertions(+), 13 deletions(-)
+
+diff --git a/server/async.c b/server/async.c
+index 8a69dad1f93..0ebafed59df 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -94,7 +94,6 @@ struct async
+     enum async_state     state;
+     unsigned int         pending :1;      /* request successfully queued, but pending */
+     unsigned int         canceled :1;     /* have we already queued cancellation for this async? */
+-    unsigned int         unknown_status :1; /* initial status is not known yet */
+     unsigned int         blocking :1;     /* async is blocking */
+     unsigned int         is_system :1;    /* background system operation not affecting userspace visible state. */
+     struct completion   *completion;      /* completion associated with fd */
+@@ -266,8 +265,7 @@ static int async_alerted( const struct async *async )
+ 
+ static int async_unknown_status( const struct async *async )
+ {
+-    assert( async->unknown_status == (async->state == ASYNC_UNKNOWN_STATUS) );
+-    return async->unknown_status;
++    return async->state == ASYNC_UNKNOWN_STATUS;
+ }
+ 
+ /* notifies client thread of new status of its async request */
+@@ -282,12 +280,10 @@ void async_terminate( struct async *async, unsigned int status )
+     {
+         if (async->state == ASYNC_INITIAL_DIRECT_RESULT)
+         {
+-            assert( async->unknown_status );
+             async->state = ASYNC_UNKNOWN_STATUS;
+         }
+         else
+         {
+-            assert( !async->unknown_status );
+             async->state = ASYNC_ALERTED;
+         }
+     }
+@@ -409,7 +405,6 @@ struct async *create_async( struct fd *fd, struct thread *thread, const async_da
+     async->pending       = 1;
+     async->wait_handle   = 0;
+     async->canceled      = 0;
+-    async->unknown_status = 0;
+     async->blocking      = !is_fd_overlapped( fd );
+     async->is_system     = 0;
+     async->completion    = fd_get_completion( fd, &async->comp_key );
+@@ -438,7 +433,6 @@ struct async *create_async( struct fd *fd, struct thread *thread, const async_da
+ void async_set_initial_status( struct async *async, unsigned int status )
+ {
+     async->initial_status = status;
+-    async->unknown_status = 0;
+     if (async->state == ASYNC_UNKNOWN_STATUS)
+         async->state = ASYNC_INITIAL;
+ }
+@@ -489,17 +483,16 @@ obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_
+          * instead.
+          *
+          * since we're deferring the initial I/O (to the client), we mark the
+-         * async as having unknown initial status (unknown_status = 1).  note
+-         * that we don't reuse async_set_unknown_status() here.  this is because
+-         * the one responsible for performing the I/O is not the device driver,
+-         * but instead the client that requested the I/O in the first place.
++         * async as having unknown initial status.  note that we don't reuse
++         * async_set_unknown_status() here.  this is because the one
++         * responsible for performing the I/O is not the device driver, but
++         * instead the client that requested the I/O in the first place.
+          *
+          * also, async_set_unknown_status() would eventually force APC_ASYNC_IO
+          * to fire in async_terminate(), which is not useful due to subtle
+          * semantic differences between synchronous and asynchronous
+          * completion.
+          */
+-        async->unknown_status = 1;
+         async_terminate( async, STATUS_ALERTED );
+         return async->wait_handle;
+     }
+@@ -595,7 +588,6 @@ void async_set_unknown_status( struct async *async )
+ {
+     assert( async->state == ASYNC_INITIAL_DIRECT_RESULT );
+     async->state = ASYNC_UNKNOWN_STATUS;
+-    async->unknown_status = 1;
+ }
+ 
+ /* set the timeout of an async operation */
+-- 
+GitLab
+

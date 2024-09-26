@@ -16,7 +16,7 @@ index 28cd0a11677..5f083a787e9 100644
 @@ -2605,11 +2605,11 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
  {
      struct user_thread_info *thread_info = get_user_thread_info();
-     RECT rect, virtual_rect = NtUserGetVirtualScreenRect();
+     RECT rect, virtual_rect = get_virtual_screen_rect( 0 );
 -    BOOL was_clipping, empty = !!(flags & SET_CURSOR_NOCLIP);
 +    BOOL empty = !!(flags & SET_CURSOR_NOCLIP);
  

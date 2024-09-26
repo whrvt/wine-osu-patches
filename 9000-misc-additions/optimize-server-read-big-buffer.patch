@@ -2,7 +2,7 @@ diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
 index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/file.c
 +++ b/dlls/ntdll/unix/file.c
-@@ -6957,7 +6957,7 @@ NTSTATUS WINAPI NtReadFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, vo
+@@ -6883,7 +6883,7 @@ NTSTATUS WINAPI NtReadFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, vo
      status = server_get_unix_fd( handle, FILE_READ_DATA, &unix_handle, &needs_close, &type, &options );
      if (status && status != STATUS_BAD_DEVICE_TYPE) return status;
  
@@ -11,19 +11,28 @@ index 11111111111..11111111111 100644
  
      if (status == STATUS_BAD_DEVICE_TYPE)
          return server_read_file( handle, event, apc, apc_user, io, buffer, length, offset, key );
-diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index 11111111111..11111111111 100644
---- a/dlls/ntdll/unix/server.c
-+++ b/dlls/ntdll/unix/server.c
-@@ -538,7 +538,7 @@ unsigned int CDECL wine_server_call( void *req_ptr )
+@@ -7679,7 +7679,7 @@ NTSTATUS WINAPI NtFlushBuffersFile( HANDLE handle, IO_STATUS_BLOCK *io )
+     enum server_fd_type type;
+     int fd, needs_close;
  
-     /* trigger write watches, otherwise read() might return EFAULT */
-     if (req->u.req.request_header.reply_size &&
--        !virtual_check_buffer_for_write( req->reply_data, req->u.req.request_header.reply_size ))
-+        !check_buffer_write_access( req->reply_data, req->u.req.request_header.reply_size ))
-     {
-         return STATUS_ACCESS_VIOLATION;
-     }
+-    if (!io || !virtual_check_buffer_for_write( io, sizeof(*io) )) return STATUS_ACCESS_VIOLATION;
++    if (!io || !check_buffer_write_access( io, sizeof(*io) )) return STATUS_ACCESS_VIOLATION;
+ 
+     ret = server_get_unix_fd( handle, FILE_WRITE_DATA, &fd, &needs_close, &type, NULL );
+     if (ret == STATUS_ACCESS_DENIED)
+#diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+#index 11111111111..11111111111 100644
+#--- a/dlls/ntdll/unix/server.c
+#+++ b/dlls/ntdll/unix/server.c
+#@@ -538,7 +538,7 @@ unsigned int CDECL wine_server_call( void *req_ptr )
+# 
+#     /* trigger write watches, otherwise read() might return EFAULT */
+#     if (req->u.req.request_header.reply_size &&
+#-        !virtual_check_buffer_for_write( req->reply_data, req->u.req.request_header.reply_size ))
+#+        !check_buffer_write_access( req->reply_data, req->u.req.request_header.reply_size ))
+#     {
+#         return STATUS_ACCESS_VIOLATION;
+#     }
 diff --git a/dlls/ntdll/unix/socket.c b/dlls/ntdll/unix/socket.c
 index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/socket.c

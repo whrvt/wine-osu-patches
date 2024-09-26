@@ -84,7 +84,7 @@ diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index 636a699303a..aab67d9b08f 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -215,6 +215,13 @@ static BYTE **pages_vprot;
+@@ -214,6 +214,13 @@ static BYTE **pages_vprot;
  static BYTE *pages_vprot;
  #endif
  
@@ -98,16 +98,16 @@ index 636a699303a..aab67d9b08f 100644
  static struct file_view *view_block_start, *view_block_end, *next_free_view;
  #ifdef _WIN64
  static const size_t view_block_size = 0x200000;
-@@ -1162,7 +1169,7 @@ static int get_unix_prot( BYTE vprot )
-         /* FIXME: Architecture needs implementation of signal_init_early. */
+@@ -1163,7 +1170,7 @@ static int get_unix_prot( BYTE vprot )
+         if (vprot & VPROT_WRITE) prot |= PROT_WRITE | PROT_READ;
          if (vprot & VPROT_WRITECOPY) prot |= PROT_WRITE | PROT_READ;
- #endif
+         if (vprot & VPROT_EXEC) prot |= PROT_EXEC | PROT_READ;
 -        if (vprot & VPROT_WRITEWATCH) prot &= ~PROT_WRITE;
 +        if (vprot & VPROT_WRITEWATCH && !use_kernel_writewatch) prot &= ~PROT_WRITE;
      }
      if (!prot) prot = PROT_NONE;
      return prot;
-@@ -1538,6 +1545,13 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
+@@ -1539,6 +1546,13 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
          TRACE( "forcing exec permission on %p-%p\n", base, (char *)base + size - 1 );
          mprotect( base, size, unix_prot | PROT_EXEC );
      }
@@ -121,16 +121,16 @@ index 636a699303a..aab67d9b08f 100644
      return STATUS_SUCCESS;
  }
  
-@@ -1661,7 +1675,7 @@ static BOOL set_vprot( struct file_view *view, void *base, size_t size, BYTE vpr
+@@ -1656,7 +1670,7 @@ static void mprotect_range( void *base, size_t size, BYTE set, BYTE clear )
+  */
+ static BOOL set_vprot( struct file_view *view, void *base, size_t size, BYTE vprot )
  {
-     int unix_prot = get_unix_prot(vprot);
- 
 -    if (view->protect & VPROT_WRITEWATCH)
 +    if (!use_kernel_writewatch && view->protect & VPROT_WRITEWATCH)
      {
          /* each page may need different protections depending on write watch flag */
-         set_page_vprot_bits( base, size, vprot & ~VPROT_WRITEWATCH, ~vprot & ~(VPROT_WRITEWATCH|VPROT_WRITTEN) );
-@@ -1748,8 +1762,24 @@ static void update_write_watches( void *base, size_t size, size_t accessed_size
+         set_page_vprot_bits( base, size, vprot & ~VPROT_WRITEWATCH, ~vprot & ~VPROT_WRITEWATCH );
+@@ -1734,8 +1748,24 @@ static void update_write_watches( void *base, size_t size, size_t accessed_size
   */
  static void reset_write_watches( void *base, SIZE_T size )
  {
@@ -157,7 +157,7 @@ index 636a699303a..aab67d9b08f 100644
  }
  
  
-@@ -2082,7 +2112,11 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
+@@ -2068,7 +2098,11 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
  
          view->protect = vprot | VPROT_PLACEHOLDER;
          set_vprot( view, base, size, vprot );
@@ -170,7 +170,7 @@ index 636a699303a..aab67d9b08f 100644
          *view_ret = view;
          return STATUS_SUCCESS;
      }
-@@ -2251,6 +2285,9 @@ static NTSTATUS decommit_pages( struct file_view *view, size_t start, size_t siz
+@@ -2247,6 +2281,9 @@ static NTSTATUS decommit_pages( struct file_view *view, size_t start, size_t siz
      if (!size) size = view->size;
      if (anon_mmap_fixed( (char *)view->base + start, size, PROT_NONE, 0 ) != MAP_FAILED)
      {
@@ -180,7 +180,7 @@ index 636a699303a..aab67d9b08f 100644
          set_page_vprot_bits( (char *)view->base + start, size, 0, VPROT_COMMITTED );
          return STATUS_SUCCESS;
      }
-@@ -3356,6 +3393,7 @@ void virtual_init(void)
+@@ -3353,6 +3390,7 @@ void virtual_init(void)
      size_t size;
      int i;
      pthread_mutexattr_t attr;
@@ -188,7 +188,7 @@ index 636a699303a..aab67d9b08f 100644
  
      pthread_mutexattr_init( &attr );
      pthread_mutexattr_settype( &attr, PTHREAD_MUTEX_RECURSIVE );
-@@ -3369,6 +3407,24 @@ void virtual_init(void)
+@@ -3366,6 +3404,24 @@ void virtual_init(void)
      host_addr_space_limit = address_space_limit;
  #endif
  
@@ -213,7 +213,7 @@ index 636a699303a..aab67d9b08f 100644
      if (preload_info && *preload_info)
          for (i = 0; (*preload_info)[i].size; i++)
              mmap_add_reserved_area( (*preload_info)[i].addr, (*preload_info)[i].size );
-@@ -4127,7 +4183,7 @@ NTSTATUS virtual_handle_fault( void *addr, DWORD err, void *stack )
+@@ -4126,7 +4182,7 @@ NTSTATUS virtual_handle_fault( EXCEPTION_RECORD *rec, void *stack )
          }
          else ret = grow_thread_stack( page, &stack_info );
      }
@@ -222,25 +222,21 @@ index 636a699303a..aab67d9b08f 100644
      {
          if (vprot & VPROT_WRITEWATCH)
          {
-@@ -4228,7 +4284,7 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
+@@ -4220,11 +4276,11 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
      for (i = 0; i < size; i += page_size)
      {
          BYTE vprot = get_page_vprot( addr + i );
 -        if (vprot & VPROT_WRITEWATCH) *has_write_watch = TRUE;
 +        if (!use_kernel_writewatch && vprot & VPROT_WRITEWATCH) *has_write_watch = TRUE;
-         if (vprot & VPROT_WRITECOPY)
-         {
-             vprot = (vprot & ~VPROT_WRITECOPY) | VPROT_WRITE;
-@@ -4237,7 +4293,7 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
          if (!(get_unix_prot( vprot & ~VPROT_WRITEWATCH ) & PROT_WRITE))
              return STATUS_INVALID_USER_BUFFER;
      }
 -    if (*has_write_watch)
 +    if (!use_kernel_writewatch && *has_write_watch)
-         mprotect_range( addr, size, VPROT_WRITE, VPROT_WRITEWATCH | VPROT_WRITECOPY );  /* temporarily enable write access */
+         mprotect_range( addr, size, 0, VPROT_WRITEWATCH );  /* temporarily enable write access */
      return STATUS_SUCCESS;
  }
-@@ -6147,17 +6203,90 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
+@@ -6134,17 +6190,90 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
          char *addr = base;
          char *end = addr + size;
  
