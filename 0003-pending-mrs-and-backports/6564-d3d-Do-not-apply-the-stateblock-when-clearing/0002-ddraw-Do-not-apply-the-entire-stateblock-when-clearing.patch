@@ -1,0 +1,177 @@
+From 7638c37939817cca3be68b96b3fb95b83fc98ebc Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Tue, 24 Sep 2024 14:41:30 -0500
+Subject: [PATCH] ddraw: Do not apply the entire stateblock when clearing.
+
+---
+ dlls/ddraw/device.c       |  2 +-
+ dlls/wined3d/stateblock.c | 93 +++++++++++++++++++++------------------
+ dlls/wined3d/wined3d.spec |  1 +
+ include/wine/wined3d.h    |  1 +
+ 4 files changed, 53 insertions(+), 44 deletions(-)
+
+diff --git a/dlls/ddraw/device.c b/dlls/ddraw/device.c
+index 896eea68f14..65e0715b5e7 100644
+--- a/dlls/ddraw/device.c
++++ b/dlls/ddraw/device.c
+@@ -5173,7 +5173,7 @@ static HRESULT d3d_device7_Clear(IDirect3DDevice7 *iface, DWORD count,
+     }
+ 
+     wined3d_mutex_lock();
+-    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
++    wined3d_stateblock_apply_clear_state(device->state, device->wined3d_device);
+     d3d_device_sync_rendertarget(device);
+     hr = wined3d_device_clear(device->wined3d_device, count, (RECT *)rects, flags, &c, z, stencil);
+     wined3d_mutex_unlock();
+diff --git a/dlls/wined3d/stateblock.c b/dlls/wined3d/stateblock.c
+index 966091f9533..f2307b97e08 100644
+--- a/dlls/wined3d/stateblock.c
++++ b/dlls/wined3d/stateblock.c
+@@ -2861,6 +2861,54 @@ static void sampler_desc_from_sampler_states(struct wined3d_sampler_desc *desc,
+     }
+ }
+ 
++void CDECL wined3d_stateblock_apply_clear_state(struct wined3d_stateblock *stateblock, struct wined3d_device *device)
++{
++    const struct wined3d_stateblock_state *state = &stateblock->stateblock_state;
++    struct wined3d_device_context *context = &device->cs->c;
++
++    /* Clear state depends on the viewport, scissor rect, and scissor enable. */
++
++    if (stateblock->changed.viewport)
++        wined3d_device_context_set_viewports(context, 1, &state->viewport);
++    if (stateblock->changed.scissorRect)
++        wined3d_device_context_set_scissor_rects(context, 1, &state->scissor_rect);
++
++    if (stateblock->changed.rasterizer_state)
++    {
++        struct wined3d_rasterizer_state *rasterizer_state;
++        struct wined3d_rasterizer_state_desc desc;
++        struct wine_rb_entry *entry;
++
++        memset(&desc, 0, sizeof(desc));
++        desc.fill_mode = state->rs[WINED3D_RS_FILLMODE];
++        desc.cull_mode = state->rs[WINED3D_RS_CULLMODE];
++        desc.depth_bias = int_to_float(state->rs[WINED3D_RS_DEPTHBIAS]);
++        desc.scale_bias = int_to_float(state->rs[WINED3D_RS_SLOPESCALEDEPTHBIAS]);
++        desc.depth_clip = TRUE;
++        desc.scissor = state->rs[WINED3D_RS_SCISSORTESTENABLE];
++        desc.line_antialias = state->rs[WINED3D_RS_ANTIALIASEDLINEENABLE];
++
++        if ((entry = wine_rb_get(&device->rasterizer_states, &desc)))
++        {
++            rasterizer_state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_rasterizer_state, entry);
++            wined3d_device_context_set_rasterizer_state(context, rasterizer_state);
++        }
++        else if (SUCCEEDED(wined3d_rasterizer_state_create(device, &desc, NULL,
++                &wined3d_null_parent_ops, &rasterizer_state)))
++        {
++            wined3d_device_context_set_rasterizer_state(context, rasterizer_state);
++            if (wine_rb_put(&device->rasterizer_states, &desc, &rasterizer_state->entry) == -1)
++            {
++                ERR("Failed to insert rasterizer state.\n");
++                wined3d_rasterizer_state_decref(rasterizer_state);
++            }
++        }
++    }
++
++    if (wined3d_bitmap_is_set(stateblock->changed.renderState, WINED3D_RS_SRGBWRITEENABLE))
++        wined3d_device_set_render_state(device, WINED3D_RS_SRGBWRITEENABLE, state->rs[WINED3D_RS_SRGBWRITEENABLE]);
++}
++
+ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
+         struct wined3d_stateblock *stateblock)
+ {
+@@ -2877,6 +2925,8 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
+ 
+     TRACE("device %p, stateblock %p.\n", device, stateblock);
+ 
++    wined3d_stateblock_apply_clear_state(stateblock, device);
++
+     if (changed->vertexShader)
+     {
+         wined3d_device_context_set_shader(context, WINED3D_SHADER_TYPE_VERTEX, state->vs);
+@@ -3211,45 +3261,6 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
+         }
+     }
+ 
+-    if (changed->rasterizer_state)
+-    {
+-        struct wined3d_rasterizer_state *rasterizer_state;
+-        struct wined3d_rasterizer_state_desc desc;
+-        struct wine_rb_entry *entry;
+-        union
+-        {
+-            DWORD d;
+-            float f;
+-        } bias;
+-
+-        memset(&desc, 0, sizeof(desc));
+-        desc.fill_mode = state->rs[WINED3D_RS_FILLMODE];
+-        desc.cull_mode = state->rs[WINED3D_RS_CULLMODE];
+-        bias.d = state->rs[WINED3D_RS_DEPTHBIAS];
+-        desc.depth_bias = bias.f;
+-        bias.d = state->rs[WINED3D_RS_SLOPESCALEDEPTHBIAS];
+-        desc.scale_bias = bias.f;
+-        desc.depth_clip = TRUE;
+-        desc.scissor = state->rs[WINED3D_RS_SCISSORTESTENABLE];
+-        desc.line_antialias = state->rs[WINED3D_RS_ANTIALIASEDLINEENABLE];
+-
+-        if ((entry = wine_rb_get(&device->rasterizer_states, &desc)))
+-        {
+-            rasterizer_state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_rasterizer_state, entry);
+-            wined3d_device_context_set_rasterizer_state(context, rasterizer_state);
+-        }
+-        else if (SUCCEEDED(wined3d_rasterizer_state_create(device, &desc, NULL,
+-                &wined3d_null_parent_ops, &rasterizer_state)))
+-        {
+-            wined3d_device_context_set_rasterizer_state(context, rasterizer_state);
+-            if (wine_rb_put(&device->rasterizer_states, &desc, &rasterizer_state->entry) == -1)
+-            {
+-                ERR("Failed to insert rasterizer state.\n");
+-                wined3d_rasterizer_state_decref(rasterizer_state);
+-            }
+-        }
+-    }
+-
+     if (set_blend_state || changed->alpha_to_coverage
+             || wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_ADAPTIVETESS_Y))
+     {
+@@ -3498,10 +3509,6 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
+     wined3d_device_set_base_vertex_index(device, state->base_vertex_index);
+     if (changed->vertexDecl)
+         wined3d_device_context_set_vertex_declaration(context, state->vertex_declaration);
+-    if (changed->viewport)
+-        wined3d_device_context_set_viewports(context, 1, &state->viewport);
+-    if (changed->scissorRect)
+-        wined3d_device_context_set_scissor_rects(context, 1, &state->scissor_rect);
+ 
+     map = changed->streamSource | changed->streamFreq;
+     while (map)
+diff --git a/dlls/wined3d/wined3d.spec b/dlls/wined3d/wined3d.spec
+index 3bfe6d2b200..4d19e6d975f 100644
+--- a/dlls/wined3d/wined3d.spec
++++ b/dlls/wined3d/wined3d.spec
+@@ -228,6 +228,7 @@
+ @ cdecl wined3d_state_get_feature_level(ptr)
+ 
+ @ cdecl wined3d_stateblock_apply(ptr ptr)
++@ cdecl wined3d_stateblock_apply_clear_state(ptr ptr)
+ @ cdecl wined3d_stateblock_capture(ptr ptr)
+ @ cdecl wined3d_stateblock_create(ptr ptr long ptr)
+ @ cdecl wined3d_stateblock_decref(ptr)
+diff --git a/include/wine/wined3d.h b/include/wine/wined3d.h
+index 2d2d097497e..73af1be484b 100644
+--- a/include/wine/wined3d.h
++++ b/include/wine/wined3d.h
+@@ -2754,6 +2754,7 @@ enum wined3d_feature_level __cdecl wined3d_state_get_feature_level(const struct
+ 
+ void __cdecl wined3d_stateblock_apply(const struct wined3d_stateblock *stateblock,
+         struct wined3d_stateblock *device_state);
++void __cdecl wined3d_stateblock_apply_clear_state(struct wined3d_stateblock *stateblock, struct wined3d_device *device);
+ void __cdecl wined3d_stateblock_capture(struct wined3d_stateblock *stateblock,
+         const struct wined3d_stateblock *device_state);
+ HRESULT __cdecl wined3d_stateblock_create(struct wined3d_device *device, const struct wined3d_stateblock *device_state,
+-- 
+GitLab
+

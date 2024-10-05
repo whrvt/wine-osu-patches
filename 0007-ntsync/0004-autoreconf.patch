@@ -1,0 +1,44 @@
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Fri, 16 Sep 2022 17:56:13 -0500
+Subject: [PATCH 04/32] autoreconf
+
+---
+ configure           | 6 ++++++
+ include/config.h.in | 3 +++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/configure b/configure
+index ca5b35c7e42..bb28d7a5dcf 100755
+--- a/configure
++++ b/configure
+@@ -7988,6 +7988,12 @@ if test "x$ac_cv_header_linux_major_h" = xyes
+ then :
+   printf "%s\n" "#define HAVE_LINUX_MAJOR_H 1" >>confdefs.h
+ 
++fi
++ac_fn_c_check_header_compile "$LINENO" "linux/ntsync.h" "ac_cv_header_linux_ntsync_h" "$ac_includes_default"
++if test "x$ac_cv_header_linux_ntsync_h" = xyes
++then :
++  printf "%s\n" "#define HAVE_LINUX_NTSYNC_H 1" >>confdefs.h
++
+ fi
+ ac_fn_c_check_header_compile "$LINENO" "linux/param.h" "ac_cv_header_linux_param_h" "$ac_includes_default"
+ if test "x$ac_cv_header_linux_param_h" = xyes
+diff --git a/include/config.h.in b/include/config.h.in
+index aa066a87ad7..41e4696f028 100644
+--- a/include/config.h.in
++++ b/include/config.h.in
+@@ -180,6 +180,9 @@
+ /* Define to 1 if you have the <linux/major.h> header file. */
+ #undef HAVE_LINUX_MAJOR_H
+ 
++/* Define to 1 if you have the <linux/ntsync.h> header file. */
++#undef HAVE_LINUX_NTSYNC_H
++
+ /* Define to 1 if you have the <linux/param.h> header file. */
+ #undef HAVE_LINUX_PARAM_H
+ 
+-- 
+2.46.0
+
+

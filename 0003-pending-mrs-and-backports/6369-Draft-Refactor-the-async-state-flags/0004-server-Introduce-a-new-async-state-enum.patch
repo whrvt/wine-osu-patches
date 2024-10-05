@@ -1,4 +1,4 @@
-From 52e44bc8f8636a89cf5fc279d6a8b2632bc932f5 Mon Sep 17 00:00:00 2001
+From 2a61bb98dc219a6a4e5c04b3a95a98b694d07036 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Mon, 26 Aug 2024 23:05:15 +0900
 Subject: [PATCH] server: Introduce a new async state enum.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Introduce a new async state enum.
  1 file changed, 159 insertions(+)
 
 diff --git a/server/async.c b/server/async.c
-index a664b6bc93c..bc5ed56df7c 100644
+index a664b6bc93c..68c248728d0 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -34,6 +34,48 @@
@@ -105,7 +105,7 @@ index a664b6bc93c..bc5ed56df7c 100644
      /* we only return an async handle for asyncs created via create_request_async() */
      assert( async->iosb );
  
-+    assert( async->direct_result == (async->state == ASYNC_INITIAL_DIRECT_RESULT || async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT) );
++    assert( async->direct_result == (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT) );
      if (async->direct_result)
      {
          async_set_result( &async->obj, async->iosb->status, async->iosb->result );
@@ -204,7 +204,7 @@ index a664b6bc93c..bc5ed56df7c 100644
          async->alerted = 1;
  
 +    if (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT ||
-+        (async->state != ASYNC_FINALIZING_SYNC_APC_RESULT && async->state != ASYNC_UNKNOWN_STATUS && !async->blocking))
++        (async->state == ASYNC_ALERTED || async->state == ASYNC_FINALIZING_ASYNC) && !async->blocking)
 +    {
 +        async->signaled = 1;
 +        wake_up( &async->obj, 0 );

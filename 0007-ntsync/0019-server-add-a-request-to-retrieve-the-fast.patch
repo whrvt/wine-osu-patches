@@ -1,0 +1,61 @@
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Mon, 8 Mar 2021 17:46:06 -0600
+Subject: [PATCH 19/32] server: Add a request to retrieve the fast
+ synchronization device.
+
+---
+ server/fast_sync.c  | 17 +++++++++++++++++
+ server/protocol.def |  7 +++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/server/fast_sync.c b/server/fast_sync.c
+index 4b9fc8a8f76..926aff0e132 100644
+--- a/server/fast_sync.c
++++ b/server/fast_sync.c
+@@ -29,6 +29,8 @@
+ #include "winternl.h"
+ 
+ #include "file.h"
++#include "handle.h"
++#include "request.h"
+ #include "thread.h"
+ 
+ #ifdef HAVE_LINUX_NTSYNC_H
+@@ -368,3 +370,18 @@ void fast_abandon_mutex( thread_id_t tid, struct fast_sync *fast_sync )
+ }
+ 
+ #endif
++
++DECL_HANDLER(get_linux_sync_device)
++{
++#ifdef HAVE_LINUX_NTSYNC_H
++    struct linux_device *device;
++
++    if ((device = get_linux_device()))
++    {
++        reply->handle = alloc_handle( current->process, device, 0, 0 );
++        release_object( device );
++    }
++#else
++    set_error( STATUS_NOT_IMPLEMENTED );
++#endif
++}
+diff --git a/server/protocol.def b/server/protocol.def
+index 1f718bf80b8..bce8e15d038 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -3965,3 +3965,10 @@ enum fast_sync_type
+     FAST_SYNC_MANUAL_SERVER,
+     FAST_SYNC_QUEUE,
+ };
++
++
++/* Obtain a handle to the fast synchronization device object */
++@REQ(get_linux_sync_device)
++@REPLY
++    obj_handle_t handle;          /* handle to the device */
++@END
+-- 
+2.46.0
+
+

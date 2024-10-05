@@ -1,4 +1,4 @@
-From 2fc6bdd9dcaed0f86f1da1be50c5d7156eb1981b Mon Sep 17 00:00:00 2001
+From 772c8ca0a658e12e582c0e821bd465953832dda2 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Sat, 21 Sep 2024 23:01:03 +0900
 Subject: [PATCH] server: Remove "direct_result" field from struct async.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Remove "direct_result" field from struct async.
  1 file changed, 7 insertions(+), 17 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index 924c2364826..9b9b3683b41 100644
+index 336bf10ac1a..3a37c105a2b 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -94,7 +94,6 @@ struct async
@@ -23,9 +23,9 @@ index 924c2364826..9b9b3683b41 100644
      /* we only return an async handle for asyncs created via create_request_async() */
      assert( async->iosb );
  
--    assert( async->direct_result == (async->state == ASYNC_INITIAL_DIRECT_RESULT || async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT) );
+-    assert( async->direct_result == (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT) );
 -    if (async->direct_result)
-+    if (async->state == ASYNC_INITIAL_DIRECT_RESULT || async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT)
++    if (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT)
      {
          async_set_result( &async->obj, async->iosb->status, async->iosb->result );
 -        async->direct_result = 0;

@@ -1,4 +1,4 @@
-From 89f096c5cbd2dd4ee9950254c8793a7b7350c6d8 Mon Sep 17 00:00:00 2001
+From c7f22bdaf626d962e24fd50f90cb8ad1cb134354 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Tue, 27 Aug 2024 21:58:35 +0900
 Subject: [PATCH] server: Remove "alerted" field from struct async.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Remove "alerted" field from struct async.
  1 file changed, 4 insertions(+), 13 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index eae57f666fa..8a69dad1f93 100644
+index e515629dcda..23bc257a7a5 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -93,7 +93,6 @@ struct async
@@ -53,7 +53,7 @@ index eae57f666fa..8a69dad1f93 100644
 -        async->alerted = 1;
  
      if (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT ||
-         (async->state != ASYNC_FINALIZING_SYNC_APC_RESULT && async->state != ASYNC_UNKNOWN_STATUS && !async->blocking))
+         (async->state == ASYNC_ALERTED || async->state == ASYNC_FINALIZING_ASYNC) && !async->blocking)
 @@ -415,7 +408,6 @@ struct async *create_async( struct fd *fd, struct thread *thread, const async_da
      async->state         = ASYNC_INITIAL;
      async->pending       = 1;

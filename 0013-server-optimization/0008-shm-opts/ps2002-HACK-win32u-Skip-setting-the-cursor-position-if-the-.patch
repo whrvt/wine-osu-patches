@@ -24,7 +24,7 @@ index 11111111111..11111111111 100644
      INT prev_x, prev_y, new_x, new_y;
 @@ -714,6 +717,15 @@ BOOL WINAPI NtUserSetCursorPos( INT x, INT y )
      INT prev_x, prev_y, new_x, new_y;
-     UINT dpi;
+     UINT dpi, raw_dpi;
  
 +    /* HACK: Doesn't generate any window messages but skips the server call. */
 +    while ((status = get_shared_desktop( &lock, &desktop_shm )) == STATUS_PENDING)
@@ -35,7 +35,7 @@ index 11111111111..11111111111 100644
 +    }
 +    if (ret) return TRUE;
 +
-     dpi = monitor_dpi_from_rect( rect, get_thread_dpi() );
+     dpi = monitor_dpi_from_rect( rect, get_thread_dpi(), &raw_dpi );
      rect = map_dpi_rect( rect, get_thread_dpi(), dpi );
  
 -- 

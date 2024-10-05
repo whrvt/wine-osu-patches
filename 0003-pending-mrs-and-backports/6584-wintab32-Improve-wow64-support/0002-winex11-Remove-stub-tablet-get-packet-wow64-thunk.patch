@@ -1,0 +1,41 @@
+From 5498c126f75f3d42d689a192040cc6d0d956d57f Mon Sep 17 00:00:00 2001
+From: John Chadwick <john@jchw.io>
+Date: Sun, 29 Sep 2024 19:29:05 -0400
+Subject: [PATCH] winex11: Remove stub tablet_get_packet wow64 thunk
+
+The previous commit ensures that the WTPACKET fields align between
+32-bit and 64-bit architectures, so now we can use the same
+tablet_get_packet without needing another thunk.
+---
+ dlls/winex11.drv/x11drv_main.c | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 3f8e48a7a8d..c4ec133cb0b 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -826,12 +826,6 @@ C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_funcs_count );
+ 
+ #ifdef _WIN64
+ 
+-static NTSTATUS x11drv_wow64_tablet_get_packet( void *arg )
+-{
+-    FIXME( "%p\n", arg );
+-    return 0;
+-}
+-
+ static NTSTATUS x11drv_wow64_tablet_info( void *arg )
+ {
+     struct
+@@ -852,7 +846,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+ {
+     x11drv_init,
+     x11drv_tablet_attach_queue,
+-    x11drv_wow64_tablet_get_packet,
++    x11drv_tablet_get_packet,
+     x11drv_wow64_tablet_info,
+     x11drv_tablet_load_info,
+ };
+-- 
+GitLab
+

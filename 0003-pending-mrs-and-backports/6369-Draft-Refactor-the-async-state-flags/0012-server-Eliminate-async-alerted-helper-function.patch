@@ -1,4 +1,4 @@
-From d50d3d0bd58924ca2e33e7ac721ec962e42a9d91 Mon Sep 17 00:00:00 2001
+From 33e5f4acdfdfd2554c56774630c36cc8972b611a Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Tue, 27 Aug 2024 22:05:43 +0900
 Subject: [PATCH] server: Eliminate async_alerted() helper function.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Eliminate async_alerted() helper function.
  1 file changed, 3 insertions(+), 25 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index b96df666b17..c43505cab8e 100644
+index 87fbb9d2ae2..74dca104628 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -240,29 +240,6 @@ static int async_terminated( const struct async *async )

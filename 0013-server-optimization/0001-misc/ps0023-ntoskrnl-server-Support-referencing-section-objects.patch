@@ -65,9 +65,9 @@ index 4c90673a5c5..67896165048 100644
      no_open_file,                /* open_file */
 -    no_kernel_obj_list,          /* get_kernel_obj_list */
 +    mapping_get_kernel_obj_list, /* get_kernel_obj_list */
+     no_get_fast_sync,            /* get_fast_sync */
      no_close_handle,             /* close_handle */
      mapping_destroy              /* destroy */
- };
 @@ -903,6 +905,8 @@ static struct mapping *create_mapping( struct object *root, const struct unicode
      if (get_error() == STATUS_OBJECT_NAME_EXISTS)
          return mapping;  /* Nothing else to do */

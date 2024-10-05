@@ -1,0 +1,114 @@
+From c0c3606c0c94677248824f028191b678f4bed362 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 28 Sep 2024 3:36:13 -0700
+Subject: [PATCH] winex11: Improved osu! childwindow hack.
+
+'WindowsForms10.Window.808.app.0.360e033_r26_ad1' is the name of the editor
+window class, so just look around to see if it's visible to determine whether
+or not we really need to render offscreen. If not, we can maintain the
+composition-free page-flipping rendering path instead of blitting.
+---
+ dlls/ntdll/unix/loader.c  |  8 +++++
+ dlls/winex11.drv/init.c   | 42 ++++++++++++++++++++++++++++++++++++---
+ dlls/winex11.drv/x11drv.h |  9 +++++++++
+ 3 files changed, 56 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index 4738cf6a0f8..5b96c460c71 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1902,6 +1902,14 @@ static void hacks_init(void)
+         setenv( "WINESTEAMNOEXEC", "1", 0 );
+         break;
+     }
++    if (main_argc > 1 && (strstr(main_argv[1], "osu!.exe")))
++    {
++        const char* env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
++        if (!(env_str && *env_str != '\0' && *env_str != '0'))
++        {
++            setenv( "OSU_CHILD_HACK", "1", 0 );
++        }
++    }
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 0bba9727136..5703f1ad009 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -194,12 +194,48 @@ static HFONT X11DRV_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
+     return dev->funcs->pSelectFont( dev, hfont, aa_flags );
+ }
+ 
++static BOOL editor_class_matches( HWND hwnd )
++{
++    WCHAR buffer[256];
++    UNICODE_STRING name = { .Buffer = buffer, .MaximumLength = sizeof(buffer) };
++
++    INT length = NtUserGetClassName( hwnd, FALSE, &name );
++
++    if (length > 0)
++    {
++        static const WCHAR substr[] = {'W','i','n','d','o','w','s','F','o','r','m','s','1','0','.','W','i','n','d','o','w','.','8','0','8','.','a','p','p','.', 0};
++        return wcsncmp( buffer, substr, wcslen(substr) - 1 ) == 0;
++    }
++    return FALSE;
++}
++
++static BOOL editor_visible( HWND current )
++{
++    while (current)
++    {
++        if (editor_class_matches( current ))
++            return TRUE;
++
++        HWND child = NtUserGetWindowRelative( current, GW_CHILD );
++        if (child)
++        {
++            if (editor_visible( child ))
++                return TRUE;
++        }
++        current = NtUserGetWindowRelative( current, GW_HWNDNEXT );
++    }
++    return FALSE;
++}
++
+ BOOL needs_offscreen_rendering( HWND hwnd, BOOL known_child )
+ {
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_DEFAULT )) return TRUE; /* needs DPI scaling */
+-    if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
+-    if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return TRUE; /* window has children, needs compositing */
+-    if (known_child) return TRUE; /* window is/have children, needs compositing */
++    if (!use_osu_child_hack() || editor_visible( NtUserGetDesktopWindow() ))
++    {
++        if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
++        if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return TRUE; /* window has children, needs compositing */
++        if (known_child) return TRUE; /* window is/have children, needs compositing */
++    }
+     return FALSE;
+ }
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index d2eb35b454e..8cd1d9137c7 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -926,6 +926,15 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+ 
+ /* registry helpers */
+ 
++static inline BOOL use_osu_child_hack(void)
++{
++    const char *e = getenv("OSU_CHILD_HACK");
++    if (e && *e != '\0' && *e != '0') return TRUE;
++
++    return FALSE;
++}
++
++
+ extern HKEY open_hkcu_key( const char *name );
+ extern ULONG query_reg_value( HKEY hkey, const WCHAR *name,
+                               KEY_VALUE_PARTIAL_INFORMATION *info, ULONG size );
+-- 
+2.46.2
+
+

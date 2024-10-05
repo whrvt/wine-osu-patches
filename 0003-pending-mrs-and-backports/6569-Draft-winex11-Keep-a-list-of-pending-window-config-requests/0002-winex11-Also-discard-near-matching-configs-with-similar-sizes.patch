@@ -1,0 +1,55 @@
+From 2b7885ce2595abdcf4dc67081408ab1cfaf77d00 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 26 Sep 2024 13:31:24 +0200
+Subject: [PATCH] winex11: Also discard near-matching configs with similar
+ sizes.
+
+When more reconfigurations are known to be pending, and no exact match
+is found.
+---
+ dlls/winex11.drv/window.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 40abbde74a1..33c775b4e7c 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1243,7 +1243,8 @@ static void discard_pending_configs( struct x11drv_win_data *data, BOOL all, uns
+ /* lookup a window config request that matches or supersedes the received event rect / serial */
+ BOOL has_pending_window_config( struct x11drv_win_data *data, const RECT *visible_rect, unsigned long serial )
+ {
+-    struct config_entry *entry, *next, *exact = NULL;
++    struct config_entry *entry, *next, *exact = NULL, *near = NULL;
++    SIZE current_size, config_size;
+     UINT ticks = NtGetTickCount();
+     BOOL found = FALSE;
+     struct list *ptr;
+@@ -1256,15 +1257,25 @@ BOOL has_pending_window_config( struct x11drv_win_data *data, const RECT *visibl
+     if (entry->serial > serial) return TRUE; /* ignore any serial older than our earliest queued event */
+ 
+     /* lookup for a matching pending window config */
++    current_size.cx = visible_rect->right - visible_rect->left;
++    current_size.cy = visible_rect->bottom - visible_rect->top;
+     LIST_FOR_EACH_ENTRY( entry, &data->pending_configs, struct config_entry, entry )
+     {
++        config_size.cx = entry->visible_rect.right - entry->visible_rect.left;
++        config_size.cy = entry->visible_rect.bottom - entry->visible_rect.top;
++        if (!near && current_size.cx == config_size.cx && current_size.cy == config_size.cy) near = entry;
+         if (EqualRect( &entry->visible_rect, visible_rect )) exact = entry;
+         if (exact) break;
+     }
+ 
++    /* only match with near configs if we have more pending configs */
++    if (near && !list_next( &data->pending_configs, &near->entry )) near = NULL;
++    else if (exact) near = NULL;
++
+     /* discard every event before the matching one */
+     LIST_FOR_EACH_ENTRY_SAFE( entry, next, &data->pending_configs, struct config_entry, entry )
+     {
++        if ((found = (entry == near))) break; /* keep near matches in case we can later match them exactly */
+         found = entry == exact;
+         if (!found) WARN( "Discarding window %p/%lx entry %p, visible_rect %s, serial %ld, ticks %u\n", data->hwnd,
+                           data->whole_window, entry, wine_dbgstr_rect(&entry->visible_rect), entry->serial, entry->ticks );
+-- 
+GitLab
+

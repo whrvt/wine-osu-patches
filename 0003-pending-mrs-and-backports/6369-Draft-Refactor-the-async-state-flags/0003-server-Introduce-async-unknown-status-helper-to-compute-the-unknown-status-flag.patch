@@ -1,4 +1,4 @@
-From 0f18304a256dcc4c24cd7ba6c84951d396ea4a40 Mon Sep 17 00:00:00 2001
+From 953e68eeaf08887d141a5d0751f19aca7e309efd Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Sat, 24 Aug 2024 10:58:42 +0900
 Subject: [PATCH] server: Introduce async_unknown_status() helper to compute

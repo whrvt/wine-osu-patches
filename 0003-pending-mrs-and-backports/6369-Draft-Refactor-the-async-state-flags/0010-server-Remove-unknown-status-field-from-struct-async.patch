@@ -1,4 +1,4 @@
-From 30f2a85cfdf8d9afec29b016a0e7ded8002cf027 Mon Sep 17 00:00:00 2001
+From 373569c436d17bd4a64b1693adb6330d0efe9ec7 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Tue, 27 Aug 2024 22:00:08 +0900
 Subject: [PATCH] server: Remove "unknown_status" field from struct async.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Remove "unknown_status" field from struct async.
  1 file changed, 5 insertions(+), 13 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index 8a69dad1f93..0ebafed59df 100644
+index 23bc257a7a5..cbc4607327c 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -94,7 +94,6 @@ struct async

@@ -1,0 +1,62 @@
+From 1f297ef7a982012eeb999a2ab91b4a7d87953dfb Mon Sep 17 00:00:00 2001
+From: Connor McAdams <cmcadams@codeweavers.com>
+Date: Tue, 24 Sep 2024 10:02:17 -0400
+Subject: [PATCH] d3dx9: Always align and mask channel bits in
+ format_to_d3dx_color().
+
+Signed-off-by: Connor McAdams <cmcadams@codeweavers.com>
+---
+ dlls/d3dx9_36/surface.c | 25 ++++++++++---------------
+ 1 file changed, 10 insertions(+), 15 deletions(-)
+
+diff --git a/dlls/d3dx9_36/surface.c b/dlls/d3dx9_36/surface.c
+index 8c5e89f1f9c..b0fc6e42ea4 100644
+--- a/dlls/d3dx9_36/surface.c
++++ b/dlls/d3dx9_36/surface.c
+@@ -1542,6 +1542,7 @@ void format_to_d3dx_color(const struct pixel_format_desc *format, const BYTE *sr
+ 
+             memcpy(&tmp, src + format->shift[c] / 8,
+                     min(sizeof(DWORD), (format->shift[c] % 8 + format->bits[c] + 7) / 8));
++            tmp = (tmp >> (format->shift[c] % 8)) & mask;
+ 
+             switch (dst_ctype)
+             {
+@@ -1555,26 +1556,20 @@ void format_to_d3dx_color(const struct pixel_format_desc *format, const BYTE *sr
+             case CTYPE_LUMA:
+             case CTYPE_INDEX:
+             case CTYPE_UNORM:
+-                *dst_component = (float)((tmp >> format->shift[c] % 8) & mask) / mask;
++                *dst_component = (float)tmp / mask;
+                 break;
+ 
+             case CTYPE_SNORM:
+             {
+                 const uint32_t sign_bit = (1u << (format->bits[c] - 1));
+-                uint32_t tmp_extended, tmp_masked = (tmp >> format->shift[c] % 8) & mask;
+-
+-                tmp_extended = tmp_masked;
+-                if (tmp_masked & sign_bit)
+-                {
+-                    tmp_extended |= ~(sign_bit - 1);
+-
+-                    /*
+-                     * In order to clamp to an even range, we need to ignore
+-                     * the maximum negative value.
+-                     */
+-                    if (tmp_masked == sign_bit)
+-                        tmp_extended |= 1;
+-                }
++                uint32_t tmp_extended = (tmp & sign_bit) ? (tmp | ~(sign_bit - 1)) : tmp;
++
++                /*
++                 * In order to clamp to an even range, we need to ignore
++                 * the maximum negative value.
++                 */
++                if (tmp == sign_bit)
++                    tmp_extended |= 1;
+ 
+                 *dst_component = (float)(((int32_t)tmp_extended)) / (sign_bit - 1);
+                 break;
+-- 
+GitLab
+

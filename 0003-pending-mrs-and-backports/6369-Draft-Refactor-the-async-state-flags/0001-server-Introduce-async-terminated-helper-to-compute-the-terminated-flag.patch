@@ -1,4 +1,4 @@
-From 245c1702cc4e72562fe1a758f62c677c8d911730 Mon Sep 17 00:00:00 2001
+From 2247381180a72ffa6b8033d5add4fa401bf90601 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Sat, 24 Aug 2024 10:50:46 +0900
 Subject: [PATCH] server: Introduce async_terminated() helper to compute the

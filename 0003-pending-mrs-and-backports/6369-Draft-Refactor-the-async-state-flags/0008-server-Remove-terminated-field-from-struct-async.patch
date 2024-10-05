@@ -1,4 +1,4 @@
-From 6dc40c9982585a45f3f799d5f182d702cbbe0d29 Mon Sep 17 00:00:00 2001
+From 996ef3f02db6b006712f4a3483a5d1ce40a4190f Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Tue, 27 Aug 2024 21:56:36 +0900
 Subject: [PATCH] server: Remove "terminated" field from struct async.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Remove "terminated" field from struct async.
  1 file changed, 4 insertions(+), 13 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index 0599972ddbe..eae57f666fa 100644
+index 7f0970a7db9..e515629dcda 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -94,7 +94,6 @@ struct async

@@ -1,0 +1,76 @@
+From 97a1970a6ec51642db09863012d1ad563878caea Mon Sep 17 00:00:00 2001
+From: Connor McAdams <cmcadams@codeweavers.com>
+Date: Tue, 24 Sep 2024 09:17:25 -0400
+Subject: [PATCH] d3dx9: Add support for D3DFMT_A8P8.
+
+Signed-off-by: Connor McAdams <cmcadams@codeweavers.com>
+---
+ dlls/d3dx9_36/tests/surface.c | 11 +----------
+ dlls/d3dx9_36/util.c          |  1 +
+ 2 files changed, 2 insertions(+), 10 deletions(-)
+
+diff --git a/dlls/d3dx9_36/tests/surface.c b/dlls/d3dx9_36/tests/surface.c
+index 72fdb627e78..46ae3c89c8f 100644
+--- a/dlls/d3dx9_36/tests/surface.c
++++ b/dlls/d3dx9_36/tests/surface.c
+@@ -1001,7 +1001,6 @@ static void test_format_conversion(IDirect3DDevice9 *device)
+ 
+         D3DFORMAT dst_format;
+         const void *expected_dst_data;
+-        BOOL partial_todo;
+         BOOL todo;
+     } tests[] = {
+         { D3DFMT_P8,            test_palette, { 0, 0, 2, 2 }, p8_2_2,           D3DFMT_A8R8G8B8,      p8_2_2_expected },
+@@ -1010,7 +1009,7 @@ static void test_format_conversion(IDirect3DDevice9 *device)
+         { D3DFMT_V16U16,        NULL,         { 0, 0, 2, 2 }, v16u16_2_2,       D3DFMT_A32B32G32R32F, v16u16_2_2_expected2,      .todo = TRUE },
+         { D3DFMT_V8U8,          NULL,         { 0, 0, 2, 2 }, v8u8_2_2,         D3DFMT_A32B32G32R32F, v8u8_2_2_expected },
+         { D3DFMT_Q16W16V16U16,  NULL,         { 0, 0, 2, 2 }, q16w16v16u16_2_2, D3DFMT_A32B32G32R32F, q16w16v16u16_2_2_expected, .todo = TRUE },
+-        { D3DFMT_A8P8,          test_palette, { 0, 0, 2, 2 }, a8p8_2_2,         D3DFMT_A8R8G8B8,      a8p8_2_2_expected,         .todo = TRUE },
++        { D3DFMT_A8P8,          test_palette, { 0, 0, 2, 2 }, a8p8_2_2,         D3DFMT_A8R8G8B8,      a8p8_2_2_expected },
+     };
+     uint32_t i;
+ 
+@@ -1037,11 +1036,9 @@ static void test_format_conversion(IDirect3DDevice9 *device)
+             if (SUCCEEDED(hr))
+             {
+                 const uint32_t dst_fmt_bpp = get_bpp_for_d3dformat(tests[i].dst_format);
+-                uint32_t mismatch_count;
+                 D3DLOCKED_RECT lock_rect;
+                 uint32_t x, y;
+ 
+-                mismatch_count = 0;
+                 IDirect3DSurface9_LockRect(surf, &lock_rect, NULL, D3DLOCK_READONLY);
+                 for (y = 0; y < tests[i].src_rect.bottom; ++y)
+                 {
+@@ -1054,16 +1051,10 @@ static void test_format_conversion(IDirect3DDevice9 *device)
+                         const uint8_t *dst_pixel = dst_row + (dst_fmt_bpp * x);
+                         BOOL pixel_match = !memcmp(dst_pixel, dst_expected_pixel, dst_fmt_bpp);
+ 
+-                        if (!pixel_match)
+-                            mismatch_count++;
+-
+-                        if (!pixel_match && tests[i].partial_todo)
+-                            continue;
+                         todo_wine_if(tests[i].todo) ok(pixel_match, "Pixel mismatch at (%u,%u).\n", x, y);
+                     }
+                 }
+ 
+-                todo_wine_if(tests[i].partial_todo || tests[i].todo) ok(!mismatch_count, "%u mismatched pixels.\n", mismatch_count);
+                 IDirect3DSurface9_UnlockRect(surf);
+             }
+ 
+diff --git a/dlls/d3dx9_36/util.c b/dlls/d3dx9_36/util.c
+index b2ddaaba2c1..de9f2d9771e 100644
+--- a/dlls/d3dx9_36/util.c
++++ b/dlls/d3dx9_36/util.c
+@@ -64,6 +64,7 @@ static const struct pixel_format_desc formats[] =
+     {D3DFMT_G32R32F,       { 0, 32, 32,  0}, { 0,  0, 32,  0},  8, 1, 1,  8, CTYPE_EMPTY, CTYPE_FLOAT, 0           },
+     {D3DFMT_A32B32G32R32F, {32, 32, 32, 32}, {96,  0, 32, 64}, 16, 1, 1, 16, CTYPE_FLOAT, CTYPE_FLOAT, 0           },
+     {D3DFMT_P8,            { 8,  8,  8,  8}, { 0,  0,  0,  0},  1, 1, 1,  1, CTYPE_INDEX, CTYPE_INDEX, 0           },
++    {D3DFMT_A8P8,          { 8,  8,  8,  8}, { 8,  0,  0,  0},  2, 1, 1,  2, CTYPE_UNORM, CTYPE_INDEX, 0           },
+     {D3DFMT_Q8W8V8U8,      { 8,  8,  8,  8}, {24,  0,  8, 16},  4, 1, 1,  4, CTYPE_SNORM, CTYPE_SNORM, 0           },
+     {D3DFMT_V8U8,          { 0,  8,  8,  0}, { 0,  0,  8,  0},  2, 1, 1,  2, CTYPE_EMPTY, CTYPE_SNORM, 0           },
+     {D3DFMT_X8L8V8U8,      { 8,  8,  8,  0}, {16,  0,  8,  0},  4, 1, 1,  4, CTYPE_UNORM, CTYPE_SNORM, 0           },
+-- 
+GitLab
+

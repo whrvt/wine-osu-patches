@@ -1,4 +1,4 @@
-From 18678f9297ece9aa37b88bba3ee20fc6aef9238a Mon Sep 17 00:00:00 2001
+From ca62d6e0e5c6df2ba4f314f7e556fae9bbe66c1d Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Tue, 27 Aug 2024 22:02:22 +0900
 Subject: [PATCH] server: Eliminate async_unknown_status() helper function.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Eliminate async_unknown_status() helper function.
  1 file changed, 4 insertions(+), 10 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index 0ebafed59df..b96df666b17 100644
+index cbc4607327c..87fbb9d2ae2 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -263,11 +263,6 @@ static int async_alerted( const struct async *async )

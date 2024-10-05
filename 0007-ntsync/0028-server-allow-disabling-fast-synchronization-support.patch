@@ -1,0 +1,29 @@
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Sat, 13 Mar 2021 16:20:30 -0600
+Subject: [PATCH 28/32] server: Allow disabling fast synchronization support.
+
+---
+ server/fast_sync.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/server/fast_sync.c b/server/fast_sync.c
+index 12cd8eb3c6e..ce7a564926d 100644
+--- a/server/fast_sync.c
++++ b/server/fast_sync.c
+@@ -126,6 +126,12 @@ static struct linux_device *get_linux_device(void)
+     struct linux_device *device;
+     int unix_fd;
+ 
++    if (getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) ))
++    {
++        set_error( STATUS_NOT_IMPLEMENTED );
++        return NULL;
++    }
++
+     if (linux_device_object)
+         return (struct linux_device *)grab_object( linux_device_object );
+ 
+-- 
+2.46.0
+
+

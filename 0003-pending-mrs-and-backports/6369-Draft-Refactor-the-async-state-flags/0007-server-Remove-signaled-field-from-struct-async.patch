@@ -1,4 +1,4 @@
-From b2dd402992d6f74248161c403afcc763b56433d9 Mon Sep 17 00:00:00 2001
+From b0845af16e2a08d0e8ad21cda8cca217b3656b02 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Tue, 27 Aug 2024 21:54:15 +0900
 Subject: [PATCH] server: Remove "signaled" field from struct async.
@@ -8,7 +8,7 @@ Subject: [PATCH] server: Remove "signaled" field from struct async.
  1 file changed, 5 insertions(+), 16 deletions(-)
 
 diff --git a/server/async.c b/server/async.c
-index 9b9b3683b41..0599972ddbe 100644
+index 3a37c105a2b..7f0970a7db9 100644
 --- a/server/async.c
 +++ b/server/async.c
 @@ -92,7 +92,6 @@ struct async
@@ -54,7 +54,7 @@ index 9b9b3683b41..0599972ddbe 100644
  static void async_satisfied( struct object *obj, struct wait_queue_entry *entry )
 @@ -324,7 +318,6 @@ void async_terminate( struct async *async, unsigned int status )
      if (async->state == ASYNC_FINALIZING_SYNC_DIRECT_RESULT ||
-         (async->state != ASYNC_FINALIZING_SYNC_APC_RESULT && async->state != ASYNC_UNKNOWN_STATUS && !async->blocking))
+         (async->state == ASYNC_ALERTED || async->state == ASYNC_FINALIZING_ASYNC) && !async->blocking)
      {
 -        async->signaled = 1;
          wake_up( &async->obj, 0 );

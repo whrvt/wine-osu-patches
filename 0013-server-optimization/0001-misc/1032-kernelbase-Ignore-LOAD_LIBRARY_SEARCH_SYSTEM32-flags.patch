@@ -1,0 +1,33 @@
+From f94a13a11c7595c99988279caf250580fb77f8a7 Mon Sep 17 00:00:00 2001
+From: Jacek Caban <jacek@codeweavers.com>
+Date: Wed, 8 Dec 2021 23:36:27 +0100
+Subject: [PATCH 1032/1793] kernelbase: Ignore LOAD_LIBRARY_SEARCH_SYSTEM32
+ flags for webservices.dll in LoadLibraryExW.
+
+CW-Bug-Id: #18637
+---
+ dlls/kernelbase/loader.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/dlls/kernelbase/loader.c b/dlls/kernelbase/loader.c
+index f9aad8e1207..cbb6e49dab2 100644
+--- a/dlls/kernelbase/loader.c
++++ b/dlls/kernelbase/loader.c
+@@ -536,6 +536,14 @@ HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryExW( LPCWSTR name, HANDLE file, DWOR
+         SetLastError( ERROR_INVALID_PARAMETER );
+         return 0;
+     }
++
++    /* HACK: allow webservices.dll to be shipped together with remote debugger tools. */
++    if (flags == LOAD_LIBRARY_SEARCH_SYSTEM32 && !file && !wcscmp( name, L"webservices.dll" ))
++    {
++        FIXME( "HACK: ignoring LOAD_LIBRARY_SEARCH_SYSTEM32 for webservices.dll\n" );
++        flags = 0;
++    }
++
+     RtlInitUnicodeString( &str, name );
+     if (str.Buffer[str.Length/sizeof(WCHAR) - 1] != ' ') return load_library( &str, flags );
+ 
+-- 
+2.46.0
+

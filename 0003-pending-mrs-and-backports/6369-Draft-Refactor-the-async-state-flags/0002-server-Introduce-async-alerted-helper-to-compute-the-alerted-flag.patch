@@ -1,4 +1,4 @@
-From 4fd765e203b71f598da5d644cca029e82cf257f9 Mon Sep 17 00:00:00 2001
+From a47510678ea8e7de317bed16a305d1b576734629 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Sat, 24 Aug 2024 10:52:53 +0900
 Subject: [PATCH] server: Introduce async_alerted() helper to compute the

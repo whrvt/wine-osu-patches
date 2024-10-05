@@ -1,0 +1,27 @@
+From 90b48751a75b45edc9e8d4ec0b737c3b74365473 Mon Sep 17 00:00:00 2001
+From: Andrew Eikum <aeikum@codeweavers.com>
+Date: Mon, 6 Aug 2018 08:06:03 -0500
+Subject: [PATCH] HACK: proton: server: Set default timeout to 0
+
+The Steam client will be waiting for the wineserver to exit to set up
+some environment variables, so make it wait as short as possible.
+---
+ server/main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/server/main.c b/server/main.c
+index 1248b92f24d..efddef7f715 100644
+--- a/server/main.c
++++ b/server/main.c
+@@ -38,7 +38,7 @@
+ /* command-line options */
+ int debug_level = 0;
+ int foreground = 0;
+-timeout_t master_socket_timeout = 3 * -TICKS_PER_SEC;  /* master socket timeout, default is 3 seconds */
++timeout_t master_socket_timeout = 0; /* master socket timeout, default is 3 seconds */
+ const char *server_argv0;
+ 
+ /* parse-line args */
+-- 
+GitLab
+

@@ -1,0 +1,67 @@
+From f5309046b435b6cd2783377b03afa55f2119f553 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 15 Jun 2022 17:21:55 -0500
+Subject: [PATCH 0748/1793] ntdll: Do not open directory file when setting the
+ same directory path.
+
+CW-Bug-Id: #20815
+---
+ dlls/ntdll/path.c | 22 +++++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/ntdll/path.c b/dlls/ntdll/path.c
+index 6aa4bb3fdff..dda6ba4ee53 100644
+--- a/dlls/ntdll/path.c
++++ b/dlls/ntdll/path.c
+@@ -914,13 +914,13 @@ ULONG WINAPI RtlGetCurrentDirectory_U(ULONG buflen, LPWSTR buf)
+ NTSTATUS WINAPI RtlSetCurrentDirectory_U(const UNICODE_STRING* dir)
+ {
+     FILE_FS_DEVICE_INFORMATION device_info;
++    ULONG size, compare_size;
+     OBJECT_ATTRIBUTES attr;
+     UNICODE_STRING newdir;
+     IO_STATUS_BLOCK io;
+     CURDIR *curdir;
+     HANDLE handle;
+     NTSTATUS nts;
+-    ULONG size;
+     PWSTR ptr;
+ 
+     newdir.Buffer = NULL;
+@@ -938,6 +938,22 @@ NTSTATUS WINAPI RtlSetCurrentDirectory_U(const UNICODE_STRING* dir)
+         goto out;
+     }
+ 
++    size = newdir.Length / sizeof(WCHAR);
++    ptr = newdir.Buffer;
++    ptr += 4;  /* skip \??\ prefix */
++    size -= 4;
++
++    if (size && ptr[size - 1] == '\\') compare_size = size - 1;
++    else                               compare_size = size;
++
++    if (curdir->DosPath.Length == (compare_size + 1) * sizeof(WCHAR)
++        && !memcmp( curdir->DosPath.Buffer, ptr, compare_size * sizeof(WCHAR) ))
++    {
++        TRACE( "dir %s is the same as current.\n", debugstr_us(dir) );
++        nts = STATUS_SUCCESS;
++        goto out;
++    }
++
+     attr.Length = sizeof(attr);
+     attr.RootDirectory = 0;
+     attr.Attributes = OBJ_CASE_INSENSITIVE;
+@@ -962,10 +978,6 @@ NTSTATUS WINAPI RtlSetCurrentDirectory_U(const UNICODE_STRING* dir)
+     curdir->Handle = handle;
+ 
+     /* append trailing \ if missing */
+-    size = newdir.Length / sizeof(WCHAR);
+-    ptr = newdir.Buffer;
+-    ptr += 4;  /* skip \??\ prefix */
+-    size -= 4;
+     if (size && ptr[size - 1] != '\\') ptr[size++] = '\\';
+ 
+     /* convert \??\UNC\ path to \\ prefix */
+-- 
+2.46.0
+

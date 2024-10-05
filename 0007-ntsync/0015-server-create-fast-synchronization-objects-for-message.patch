@@ -1,0 +1,152 @@
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Mon, 8 Mar 2021 17:24:15 -0600
+Subject: [PATCH 15/32] server: Create fast synchronization objects for message
+ queues.
+
+---
+ server/queue.c | 43 ++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 40 insertions(+), 3 deletions(-)
+
+diff --git a/server/queue.c b/server/queue.c
+index c946b8b4a1c..9857c9d85a4 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -133,6 +133,7 @@ struct msg_queue
+     int                    keystate_lock;   /* owns an input keystate lock */
+     const queue_shm_t     *shared;          /* queue in session shared memory */
+     unsigned int           ignore_post_msg; /* ignore post messages newer than this unique id */
++    struct fast_sync      *fast_sync;       /* fast synchronization object */
+ };
+ 
+ struct hotkey
+@@ -150,6 +151,7 @@ static int msg_queue_add_queue( struct object *obj, struct wait_queue_entry *ent
+ static void msg_queue_remove_queue( struct object *obj, struct wait_queue_entry *entry );
+ static int msg_queue_signaled( struct object *obj, struct wait_queue_entry *entry );
+ static void msg_queue_satisfied( struct object *obj, struct wait_queue_entry *entry );
++static struct fast_sync *msg_queue_get_fast_sync( struct object *obj );
+ static void msg_queue_destroy( struct object *obj );
+ static void msg_queue_poll_event( struct fd *fd, int event );
+ static void thread_input_dump( struct object *obj, int verbose );
+@@ -176,7 +178,7 @@ static const struct object_ops msg_queue_ops =
+     NULL,                      /* unlink_name */
+     no_open_file,              /* open_file */
+     no_kernel_obj_list,        /* get_kernel_obj_list */
+-    no_get_fast_sync,          /* get_fast_sync */
++    msg_queue_get_fast_sync,   /* get_fast_sync */
+     no_close_handle,           /* close_handle */
+     msg_queue_destroy          /* destroy */
+ };
+@@ -314,6 +316,7 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
+         queue->last_get_msg    = current_time;
+         queue->keystate_lock   = 0;
+         queue->ignore_post_msg = 0;
++        queue->fast_sync       = NULL;
+         list_init( &queue->send_result );
+         list_init( &queue->callback_result );
+         list_init( &queue->pending_timers );
+@@ -722,7 +725,11 @@ static inline void set_queue_bits( struct msg_queue *queue, unsigned int bits )
+     }
+     SHARED_WRITE_END;
+ 
+-    if (is_signaled( queue )) wake_up( &queue->obj, 0 );
++    if (is_signaled( queue ))
++    {
++        wake_up( &queue->obj, 0 );
++        fast_set_event( queue->fast_sync );
++    }
+ }
+ 
+ /* clear some queue bits */
+@@ -742,6 +749,8 @@ static inline void clear_queue_bits( struct msg_queue *queue, unsigned int bits
+         if (queue->keystate_lock) unlock_input_keystate( queue->input );
+         queue->keystate_lock = 0;
+     }
++    if (!is_signaled( queue ))
++        fast_reset_event( queue->fast_sync );
+ }
+ 
+ /* check if message is matched by the filter */
+@@ -1286,6 +1295,17 @@ static void msg_queue_satisfied( struct object *obj, struct wait_queue_entry *en
+         shared->changed_mask = 0;
+     }
+     SHARED_WRITE_END;
++    fast_reset_event( queue->fast_sync );
++}
++
++static struct fast_sync *msg_queue_get_fast_sync( struct object *obj )
++{
++    struct msg_queue *queue = (struct msg_queue *)obj;
++
++    if (!queue->fast_sync)
++        queue->fast_sync = fast_create_event( FAST_SYNC_QUEUE, is_signaled( queue ) );
++    if (queue->fast_sync) grab_object( queue->fast_sync );
++    return queue->fast_sync;
+ }
+ 
+ static void msg_queue_destroy( struct object *obj )
+@@ -1331,6 +1351,7 @@ static void msg_queue_destroy( struct object *obj )
+     if (queue->hooks) release_object( queue->hooks );
+     if (queue->fd) release_object( queue->fd );
+     if (queue->shared) free_shared_object( queue->shared );
++    if (queue->fast_sync) release_object( queue->fast_sync );
+ }
+ 
+ static void msg_queue_poll_event( struct fd *fd, int event )
+@@ -1341,6 +1362,7 @@ static void msg_queue_poll_event( struct fd *fd, int event )
+     if (event & (POLLERR | POLLHUP)) set_fd_events( fd, -1 );
+     else set_fd_events( queue->fd, 0 );
+     wake_up( &queue->obj, 0 );
++    fast_set_event( queue->fast_sync );
+ }
+ 
+ static void thread_input_dump( struct object *obj, int verbose )
+@@ -3105,8 +3127,17 @@ DECL_HANDLER(set_queue_mask)
+                     shared->changed_mask = 0;
+                 }
+                 SHARED_WRITE_END;
++                fast_reset_event( queue->fast_sync );
++            }
++            else
++            {
++                wake_up( &queue->obj, 0 );
++                fast_set_event( queue->fast_sync );
+             }
+-            else wake_up( &queue->obj, 0 );
++        }
++        else
++        {
++            fast_reset_event( queue->fast_sync );
+         }
+     }
+ }
+@@ -3128,6 +3159,8 @@ DECL_HANDLER(get_queue_status)
+             shared->changed_bits &= ~req->clear_bits;
+         }
+         SHARED_WRITE_END;
++        if (!is_signaled( queue ))
++            fast_reset_event( queue->fast_sync );
+     }
+     else reply->wake_bits = reply->changed_bits = 0;
+ }
+@@ -3325,6 +3358,9 @@ DECL_HANDLER(get_message)
+     }
+     SHARED_WRITE_END;
+ 
++    if (!is_signaled( queue ))
++        fast_reset_event( queue->fast_sync );
++
+     /* then check for posted messages */
+     if ((filter & QS_POSTMESSAGE) &&
+         get_posted_message( queue, get_win, req->get_first, req->get_last, req->flags, reply ))
+@@ -3384,6 +3420,7 @@ DECL_HANDLER(get_message)
+     }
+     SHARED_WRITE_END;
+ 
++    fast_reset_event( queue->fast_sync );
+     set_error( STATUS_PENDING );  /* FIXME */
+ }
+ 
+-- 
+2.46.0
+
+

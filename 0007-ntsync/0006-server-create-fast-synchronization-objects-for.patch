@@ -1,0 +1,213 @@
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Thu, 11 Mar 2021 16:52:55 -0600
+Subject: [PATCH 06/32] server: Create fast synchronization objects for
+ mutexes.
+
+---
+ server/fast_sync.c | 37 ++++++++++++++++++++++++++++++++++++-
+ server/mutex.c     | 42 +++++++++++++++++++++++++++++++++++++-----
+ server/object.h    |  2 ++
+ 3 files changed, 75 insertions(+), 6 deletions(-)
+
+diff --git a/server/fast_sync.c b/server/fast_sync.c
+index 7b21f54e2b6..4b9fc8a8f76 100644
+--- a/server/fast_sync.c
++++ b/server/fast_sync.c
+@@ -270,7 +270,6 @@ struct fast_sync *fast_create_semaphore( unsigned int count, unsigned int max )
+ {
+     struct ntsync_sem_args args = {0};
+     struct linux_device *device;
+-    struct fast_sync *fast_sync;
+ 
+     if (!(device = get_linux_device())) return NULL;
+ 
+@@ -288,6 +287,27 @@ struct fast_sync *fast_create_semaphore( unsigned int count, unsigned int max )
+     return create_fast_sync( FAST_SYNC_SEMAPHORE, args.sem );
+ }
+ 
++struct fast_sync *fast_create_mutex( thread_id_t owner, unsigned int count )
++{
++    struct ntsync_mutex_args args = {0};
++    struct linux_device *device;
++
++    if (!(device = get_linux_device())) return NULL;
++
++    args.owner = owner;
++    args.count = count;
++    if (ioctl( get_unix_fd( device->fd ), NTSYNC_IOC_CREATE_MUTEX, &args ) < 0)
++    {
++        file_set_error();
++        release_object( device );
++        return NULL;
++    }
++
++    release_object( device );
++
++    return create_fast_sync( FAST_SYNC_MUTEX, args.mutex );
++}
++
+ void fast_set_event( struct fast_sync *fast_sync )
+ {
+     __u32 count;
+@@ -310,6 +330,11 @@ void fast_reset_event( struct fast_sync *fast_sync )
+     ioctl( get_unix_fd( fast_sync->fd ), NTSYNC_IOC_EVENT_RESET, &count );
+ }
+ 
++void fast_abandon_mutex( thread_id_t tid, struct fast_sync *fast_sync )
++{
++    ioctl( get_unix_fd( fast_sync->fd ), NTSYNC_IOC_MUTEX_KILL, &tid );
++}
++
+ #else
+ 
+ struct fast_sync *fast_create_event( enum fast_sync_type type, int signaled )
+@@ -324,6 +349,12 @@ struct fast_sync *fast_create_semaphore( unsigned int count, unsigned int max )
+     return NULL;
+ }
+ 
++struct fast_sync *fast_create_mutex( thread_id_t owner, unsigned int count )
++{
++    set_error( STATUS_NOT_IMPLEMENTED );
++    return NULL;
++}
++
+ void fast_set_event( struct fast_sync *fast_sync )
+ {
+ }
+@@ -332,4 +363,8 @@ void fast_reset_event( struct fast_sync *obj )
+ {
+ }
+ 
++void fast_abandon_mutex( thread_id_t tid, struct fast_sync *fast_sync )
++{
++}
++
+ #endif
+diff --git a/server/mutex.c b/server/mutex.c
+index f7ad1e800c9..167c236e014 100644
+--- a/server/mutex.c
++++ b/server/mutex.c
+@@ -38,6 +38,8 @@
+ 
+ static const WCHAR mutex_name[] = {'M','u','t','a','n','t'};
+ 
++static struct list fast_mutexes = LIST_INIT(fast_mutexes);
++
+ struct type_descr mutex_type =
+ {
+     { mutex_name, sizeof(mutex_name) },   /* name */
+@@ -57,6 +59,8 @@ struct mutex
+     unsigned int   count;           /* recursion count */
+     int            abandoned;       /* has it been abandoned? */
+     struct list    entry;           /* entry in owner thread mutex list */
++    struct list    fast_mutexes_entry; /* entry in fast_mutexes list */
++    struct fast_sync *fast_sync;    /* fast synchronization object */
+ };
+ 
+ static void mutex_dump( struct object *obj, int verbose );
+@@ -64,6 +68,7 @@ static int mutex_signaled( struct object *obj, struct wait_queue_entry *entry );
+ static void mutex_satisfied( struct object *obj, struct wait_queue_entry *entry );
+ static void mutex_destroy( struct object *obj );
+ static int mutex_signal( struct object *obj, unsigned int access );
++static struct fast_sync *mutex_get_fast_sync( struct object *obj );
+ 
+ static const struct object_ops mutex_ops =
+ {
+@@ -85,7 +90,7 @@ static const struct object_ops mutex_ops =
+     default_unlink_name,       /* unlink_name */
+     no_open_file,              /* open_file */
+     no_kernel_obj_list,        /* get_kernel_obj_list */
+-    no_get_fast_sync,          /* get_fast_sync */
++    mutex_get_fast_sync,       /* get_fast_sync */
+     no_close_handle,           /* close_handle */
+     mutex_destroy              /* destroy */
+ };
+@@ -128,6 +133,7 @@ static struct mutex *create_mutex( struct object *root, const struct unicode_str
+             mutex->owner = NULL;
+             mutex->abandoned = 0;
+             if (owned) do_grab( mutex, current );
++            mutex->fast_sync = NULL;
+         }
+     }
+     return mutex;
+@@ -135,16 +141,22 @@ static struct mutex *create_mutex( struct object *root, const struct unicode_str
+ 
+ void abandon_mutexes( struct thread *thread )
+ {
++    struct mutex *mutex;
+     struct list *ptr;
+ 
+     while ((ptr = list_head( &thread->mutex_list )) != NULL)
+     {
+-        struct mutex *mutex = LIST_ENTRY( ptr, struct mutex, entry );
++        mutex = LIST_ENTRY( ptr, struct mutex, entry );
+         assert( mutex->owner == thread );
+         mutex->count = 0;
+         mutex->abandoned = 1;
+         do_release( mutex );
+     }
++
++    LIST_FOR_EACH_ENTRY(mutex, &fast_mutexes, struct mutex, fast_mutexes_entry)
++    {
++        fast_abandon_mutex( thread->id, mutex->fast_sync );
++    }
+ }
+ 
+ static void mutex_dump( struct object *obj, int verbose )
+@@ -190,14 +202,34 @@ static int mutex_signal( struct object *obj, unsigned int access )
+     return 1;
+ }
+ 
++static struct fast_sync *mutex_get_fast_sync( struct object *obj )
++{
++    struct mutex *mutex = (struct mutex *)obj;
++
++    if (!mutex->fast_sync)
++    {
++        mutex->fast_sync = fast_create_mutex( mutex->owner ? mutex->owner->id : 0, mutex->count );
++        if (mutex->fast_sync) list_add_tail( &fast_mutexes, &mutex->fast_mutexes_entry );
++    }
++    if (mutex->fast_sync) grab_object( mutex->fast_sync );
++    return mutex->fast_sync;
++}
++
+ static void mutex_destroy( struct object *obj )
+ {
+     struct mutex *mutex = (struct mutex *)obj;
+     assert( obj->ops == &mutex_ops );
+ 
+-    if (!mutex->count) return;
+-    mutex->count = 0;
+-    do_release( mutex );
++    if (mutex->count)
++    {
++        mutex->count = 0;
++        do_release( mutex );
++    }
++    if (mutex->fast_sync)
++    {
++        release_object( mutex->fast_sync );
++        list_remove( &mutex->fast_mutexes_entry );
++    }
+ }
+ 
+ /* create a mutex */
+diff --git a/server/object.h b/server/object.h
+index 237f55a3c9c..6029e31a3a6 100644
+--- a/server/object.h
++++ b/server/object.h
+@@ -228,8 +228,10 @@ extern void abandon_mutexes( struct thread *thread );
+ 
+ extern struct fast_sync *fast_create_event( enum fast_sync_type type, int signaled );
+ extern struct fast_sync *fast_create_semaphore( unsigned int count, unsigned int max );
++extern struct fast_sync *fast_create_mutex( thread_id_t owner, unsigned int count );
+ extern void fast_set_event( struct fast_sync *obj );
+ extern void fast_reset_event( struct fast_sync *obj );
++extern void fast_abandon_mutex( thread_id_t tid, struct fast_sync *fast_sync );
+ 
+ extern struct fast_sync *no_get_fast_sync( struct object *obj );
+ 
+-- 
+2.46.0
+
+
