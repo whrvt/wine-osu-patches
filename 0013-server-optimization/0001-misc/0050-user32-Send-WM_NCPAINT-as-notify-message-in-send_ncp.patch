@@ -1,0 +1,27 @@
+From edb36b7614415ba1f3039e71fafca82284c533f7 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 13 Jul 2022 19:56:49 -0500
+Subject: [PATCH 0855/1793] user32: Send WM_NCPAINT as notify message in
+ send_ncpaint().
+
+CW-Bug-Id: #20969
+---
+ dlls/win32u/dce.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index f70a2a32be9..649b82cdb6b 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -1208,7 +1208,7 @@ static HRGN send_ncpaint( HWND hwnd, HWND *child, UINT *flags )
+                 if (style & WS_VSCROLL)
+                     set_standard_scroll_painted( hwnd, SB_VERT, FALSE );
+ 
+-                send_message( hwnd, WM_NCPAINT, (WPARAM)whole_rgn, 0 );
++                send_notify_message( hwnd, WM_NCPAINT, (WPARAM)whole_rgn, 0, FALSE );
+             }
+             if (whole_rgn > (HRGN)1) NtGdiDeleteObjectApp( whole_rgn );
+         }
+-- 
+2.46.0
+

@@ -1,7 +1,7 @@
 From a25882f3bcbb9b0f174dd45bd2d0866bf7c0f7a5 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:15:33 -0700
-Subject: [PATCH 2/5] winepulse: Don't unconditionally allocate a tmp buffer.
+Subject: [PATCH 2/6] winepulse: Don't unconditionally allocate a tmp buffer.
 
 ---
  dlls/winepulse.drv/pulse.c | 11 ++++++++---

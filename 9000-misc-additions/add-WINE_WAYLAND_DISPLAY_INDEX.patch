@@ -48,4 +48,78 @@ index 11111111111..11111111111 100644
 
 -- 
 2.46.0
-
+fixes for recent changes (why?)
+diff --git a/dlls/winewayland.drv/wayland_output.c b/dlls/winewayland.drv/wayland_output.c
+index a2f05c89aaf..e1a1ab5b62d 100644
+--- a/dlls/winewayland.drv/wayland_output.c
++++ b/dlls/winewayland.drv/wayland_output.c
+@@ -67,14 +67,14 @@ static int wayland_output_mode_cmp_rb(const void *key,
+     return 0;
+ }
+ 
+-static BOOL check_display_wanted(struct wayland_output_state *state)
++static BOOL check_display_wanted(const char* name)
+ {
+     int dpy_index = -1;
+     char dpy_name[32];
+ 
+-    if (!state->name || state->name == '\0') return TRUE;
++    if (!name || *name == '\0') return TRUE;
+ 
+-    TRACE("display name: %s\n", state->name);
++    TRACE("display name: %s\n", name);
+ 
+     const char *e = getenv("WINE_WAYLAND_DISPLAY_INDEX");
+     if (!e || *e == '\0' || (dpy_index = atoi(e)) < 0) return TRUE;
+@@ -83,7 +83,7 @@ static BOOL check_display_wanted(struct wayland_output_state *state)
+ 
+     TRACE("selected: %s\n", dpy_name);
+ 
+-    if (strncmp(state->name, dpy_name, 32) == 0) return TRUE;
++    if (strncmp(name, dpy_name, 32) == 0) return TRUE;
+ 
+     return FALSE;
+ }
+@@ -92,8 +92,6 @@ static void wayland_output_state_add_mode(struct wayland_output_state *state,
+                                           int32_t width, int32_t height,
+                                           int32_t refresh, BOOL current)
+ {
+-    if (!check_display_wanted(state)) return;    
+-
+     struct rb_entry *mode_entry;
+     struct wayland_output_mode *mode;
+     struct wayland_output_mode key =
+@@ -180,8 +178,15 @@ static void wayland_output_done(struct wayland_output *output)
+ 
+     if (output->pending_flags & WAYLAND_OUTPUT_CHANGED_LOGICAL_XY)
+     {
+-        output->current.logical_x = output->pending.logical_x;
+-        output->current.logical_y = output->pending.logical_y;
++        if (getenv("WINE_WAYLAND_DISPLAY_INDEX"))
++        {
++            output->current.logical_x = output->current.logical_y = 0;
++        }
++        else
++        {
++            output->current.logical_x = output->pending.logical_x;
++            output->current.logical_y = output->pending.logical_y;
++        }
+     }
+ 
+     if (output->pending_flags & WAYLAND_OUTPUT_CHANGED_LOGICAL_WH)
+@@ -247,6 +252,7 @@ static void output_handle_done(void *data, struct wl_output *wl_output)
+     if (!output->zxdg_output_v1 ||
+         zxdg_output_v1_get_version(output->zxdg_output_v1) >= 3)
+     {
++        if (!check_display_wanted(output->current.name)) return;
+         wayland_output_done(output);
+     }
+ }
+@@ -293,6 +299,7 @@ static void zxdg_output_v1_handle_done(void *data,
+     if (zxdg_output_v1_get_version(zxdg_output_v1) < 3)
+     {
+         struct wayland_output *output = data;
++        if (!check_display_wanted(output->current.name)) return;
+         wayland_output_done(output);
+     }
+ }

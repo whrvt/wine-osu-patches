@@ -1,6 +1,6 @@
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
-Subject: [PATCH 5/5] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
+Subject: [PATCH 6/6] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
 
 Relevant environment variables are: 
 ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)

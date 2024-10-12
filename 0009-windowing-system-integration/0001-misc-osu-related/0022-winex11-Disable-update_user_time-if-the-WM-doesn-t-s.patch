@@ -1,0 +1,63 @@
+From ae47cfdf18a44d340ac19b0ef08d4fabbaa73970 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 12 Oct 2024 07:12:28 -0700
+Subject: [PATCH] winex11: Disable update_user_time if the WM doesn't support
+ it.
+
+e.g. xwayland
+---
+ dlls/winex11.drv/window.c | 22 +++++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 74d445a9e0a..fcaef1f4c87 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -102,8 +102,10 @@ static XContext win_data_context = 0;
+ static XContext host_window_context = 0;
+ 
+ /* time of last user event and window where it's stored */
++static BOOL is_netwm_supported( Display *display, Atom atom );
+ static Time last_user_time;
+ static Window user_time_window;
++static BOOL user_time_supported = TRUE;
+ 
+ static const WCHAR whole_window_prop[] =
+     {'_','_','w','i','n','e','_','x','1','1','_','w','h','o','l','e','_','w','i','n','d','o','w',0};
+@@ -1226,11 +1228,20 @@ static void set_initial_wm_hints( Display *display, Window window )
+ 
+     XChangeProperty( display, window, x11drv_atom(XdndAware),
+                      XA_ATOM, 32, PropModeReplace, (unsigned char*)&dndVersion, 1 );
+-
+-    update_user_time( 0 );  /* make sure that the user time window exists */
+-    if (user_time_window)
+-        XChangeProperty( display, window, x11drv_atom(_NET_WM_USER_TIME_WINDOW),
+-                         XA_WINDOW, 32, PropModeReplace, (unsigned char *)&user_time_window, 1 );
++    if (user_time_supported &&
++        is_netwm_supported(display, x11drv_atom(_NET_WM_USER_TIME_WINDOW)) &&
++        is_netwm_supported(display, x11drv_atom(_NET_WM_USER_TIME)))
++    {
++        update_user_time( 0 );  /* make sure that the user time window exists */
++        if (user_time_window)
++            XChangeProperty( display, window, x11drv_atom(_NET_WM_USER_TIME_WINDOW),
++                            XA_WINDOW, 32, PropModeReplace, (unsigned char *)&user_time_window, 1 );
++    }
++    else
++    {
++        user_time_supported = FALSE;
++        WARN("X11 User time windows/updates are not supported by your WM.\n");
++    }
+ }
+ 
+ 
+@@ -1301,6 +1312,7 @@ Window init_clip_window(void)
+  */
+ void update_user_time( Time time )
+ {
++    if (!user_time_supported) return;
+     if (!user_time_window)
+     {
+         Window win = XCreateWindow( gdi_display, root_window, -1, -1, 1, 1, 0, CopyFromParent,
+-- 
+2.47.0
+

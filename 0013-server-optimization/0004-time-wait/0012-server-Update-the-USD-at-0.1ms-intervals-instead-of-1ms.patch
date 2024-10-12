@@ -1,0 +1,79 @@
+From d425746531fb996c0ea31f841bd2b59b6985c28c Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 9 Oct 2024 11:15:49 -0700
+Subject: [PATCH] server: Update the USD at 0.1ms intervals instead of 1ms.
+
+Since it's in a separate thread now, it shouldn't harmful.
+---
+ server/fd.c | 28 +++++++++++++++++++++-------
+ 1 file changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/server/fd.c b/server/fd.c
+index ae1d52a3eb3..ff44fec4c53 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -338,6 +338,8 @@ static file_pos_t max_unix_offset = OFF_T_MAX;
+ /****************************************************************/
+ /* timeouts support */
+ 
++#define TICKS_PER_100US 1000
++
+ struct timeout_user
+ {
+     struct list           entry;      /* entry in sorted timeout list */
+@@ -353,7 +355,20 @@ timeout_t monotonic_time;
+ 
+ struct hypervisor_shared_data *hypervisor_shared_data = NULL;
+ struct _KUSER_SHARED_DATA *user_shared_data = NULL;
+-static const int user_shared_data_timeout = 1;
++
++static const int user_shared_data_timeout_ticks = TICKS_PER_100US; /* 0.1 ms */
++
++static void ticks_to_timespec(timeout_t ticks, struct timespec *ts)
++{
++    ts->tv_sec = ticks / TICKS_PER_SEC;
++    ts->tv_nsec = (ticks % TICKS_PER_SEC) * 100;
++}
++
++
++static timeout_t timespec_to_ticks(const struct timespec *ts)
++{
++    return (timeout_t)ts->tv_sec * TICKS_PER_SEC + ts->tv_nsec / 100;
++}
+ 
+ /* 128-bit multiply a by b and return the high 64 bits, same as __umulh */
+ static UINT64 multiply_tsc(UINT64 a, UINT64 b)
+@@ -1025,25 +1040,24 @@ static int get_next_timeout(void)
+ static void *update_user_shared_data_time_thread(void *param)
+ {
+     struct timespec ts;
+-    const timeout_t update_interval = user_shared_data_timeout * TICKS_PER_SEC / 1000;
+     timeout_t next_update_time;
+ 
+-    next_update_time = monotonic_time + update_interval;
++    get_current_time(&current_time, &monotonic_time);
++    next_update_time = monotonic_time + user_shared_data_timeout_ticks;
+ 
+     while (active_users)
+     {
+-        ts.tv_sec = next_update_time / TICKS_PER_SEC;
+-        ts.tv_nsec = (next_update_time % TICKS_PER_SEC) * 100;
++        ticks_to_timespec(next_update_time, &ts);
+ 
+         while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR);
+ 
+         get_current_time(&current_time, &monotonic_time);
+         set_user_shared_data_time(current_time, monotonic_time);
+ 
+-        next_update_time += update_interval;
++        next_update_time += user_shared_data_timeout_ticks;
+ 
+         if (next_update_time <= monotonic_time)
+-            next_update_time = monotonic_time + update_interval;
++            next_update_time = monotonic_time + user_shared_data_timeout_ticks;
+     }
+     return NULL;
+ }
+-- 
+2.47.0
+

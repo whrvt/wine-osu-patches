@@ -1,7 +1,7 @@
 From b1ac681f88154ef80c82d945746cc9c42be2fae2 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 26 Sep 2024 05:12:47 -0700
-Subject: [PATCH] winepulse: Specify the buffer to try memlocking.
+Subject: [PATCH 5/6] winepulse: Specify the buffer to try memlocking.
 
 ---
  dlls/winepulse.drv/pulse.c | 23 ++++++++++++++++++-----

@@ -26,7 +26,7 @@ index 4738cf6a0f8..5b96c460c71 100644
 +        const char* env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
 +        if (!(env_str && *env_str != '\0' && *env_str != '0'))
 +        {
-+            setenv( "OSU_CHILD_HACK", "1", 0 );
++            setenv( "OSU_HACKS_ENABLED", "1", 0 );
 +        }
 +    }
  }
@@ -98,7 +98,7 @@ index d2eb35b454e..8cd1d9137c7 100644
  
 +static inline BOOL use_osu_child_hack(void)
 +{
-+    const char *e = getenv("OSU_CHILD_HACK");
++    const char *e = getenv("OSU_HACKS_ENABLED");
 +    if (e && *e != '\0' && *e != '0') return TRUE;
 +
 +    return FALSE;

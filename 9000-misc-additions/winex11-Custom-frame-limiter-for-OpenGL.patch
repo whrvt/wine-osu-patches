@@ -9,7 +9,7 @@ Subject: [PATCH] winex11: Custom frame limiter for OpenGL
  dlls/winex11.drv/x11drv_main.c | 26 +++++++++++++++
  3 files changed, 89 insertions(+)
 
-# This is added in another patch
+Added in the use-clock_nanosleep-for-delay patch
 # diff --git a/configure.ac b/configure.ac
 # index d539ee50bda..7585324602c 100644
 # --- a/configure.ac
@@ -17,7 +17,7 @@ Subject: [PATCH] winex11: Custom frame limiter for OpenGL
 # @@ -2170,6 +2170,17 @@ case $host_os in
 #      ;;
 #  esac
-#  
+ 
 # +dnl Check for clock_nanosleep which may be in -lrt
 # +case $host_os in
 # +    darwin*|macosx*) ;;
@@ -45,16 +45,13 @@ index 008a92dad98..f46b03ca2e4 100644
  #include <assert.h>
  #include <stdlib.h>
  #include <string.h>
-@@ -2807,6 +2808,61 @@ static void X11DRV_WineGL_LoadExtensions(void)
+@@ -2807,6 +2808,58 @@ static void X11DRV_WineGL_LoadExtensions(void)
      }
  }
  
 +/**
 + * Precise-ish frame limiter
 + * 
-+ * Note about "defined(HAVE_CLOCK_NANOSLEEP)":
-+ * it's checked for only because of the use-clock_nanosleep-for-delay patch.
-+ * Without it, you need to add the configure.ac patch separately.
 + */
 +#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
 +static long long last_frame_time = 0;
@@ -107,7 +104,7 @@ index 008a92dad98..f46b03ca2e4 100644
  /**
   * glxdrv_SwapBuffers
   *
-@@ -2880,6 +2936,11 @@ static BOOL glxdrv_wglSwapBuffers( HDC hdc )
+@@ -2880,6 +2933,11 @@ static BOOL glxdrv_wglSwapBuffers( HDC hdc )
      present_gl_drawable( hwnd, ctx ? ctx->hdc : hdc, gl, !pglXWaitForSbcOML );
      update_gl_drawable_size( gl );
      release_gl_drawable( gl );

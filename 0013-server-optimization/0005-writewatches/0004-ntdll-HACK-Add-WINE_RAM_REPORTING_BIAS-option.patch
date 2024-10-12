@@ -35,7 +35,7 @@ index 994413c1658..a8f6d3f91c0 100644
 +        env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
          if (!(env_str && *env_str != '\0' && *env_str != '0'))
          {
-             setenv( "OSU_CHILD_HACK", "1", 0 );
+             setenv( "OSU_HACKS_ENABLED", "1", 0 );
          }
      }
 +    if ((env_str = getenv("WINE_RAM_REPORTING_BIAS")))
