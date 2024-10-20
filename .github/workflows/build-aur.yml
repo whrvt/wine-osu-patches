@@ -50,7 +50,9 @@ jobs:
           /etc/makepkg.conf
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-${{ env.CACHE_KEY }}
+        key: ${{ runner.os }}-${{ env.CACHE_KEY }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.CACHE_KEY }}-
 
     # Adding chaotic-aur for more prebuilt dependencies
     - name: Set up system (if cache miss)
@@ -193,4 +195,4 @@ jobs:
           /etc/makepkg.conf
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-${{ env.CACHE_KEY }}
+        key: ${{ runner.os }}-${{ env.CACHE_KEY }}-${{ github.run_id }}
