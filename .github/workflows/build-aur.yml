@@ -1,0 +1,191 @@
+name: Build AUR packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      aur_package:
+        description: 'Base package name'
+        required: true
+        default: 'wine-osu-spectator'
+
+env:
+  AUR_PACKAGE: ${{ github.event.inputs.aur_package || 'wine-osu-spectator' }}
+  PARU_CACHE: /home/builder/.cache/paru
+  PACKAGE_CACHE: /home/builder/package_cache
+  CACHE_KEY: stable-v1
+  _CCACHE_DIR: /home/builder/.cache/ccache
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Create build user and directories
+      run: |
+        useradd -m builder
+        echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+        sudo -u builder mkdir -p ${{ env.PARU_CACHE }}/clone ${{ env.PACKAGE_CACHE }} ${{ env._CCACHE_DIR }}
+
+    - name: Initial system update and Node.js installation
+      run: |
+        pacman -Syu --noconfirm git nodejs npm
+
+    - name: Restore pacman setup and package cache
+      id: cache-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: |
+          /etc/pacman.conf
+          /etc/pacman.d/chaotic-mirrorlist
+          /etc/pacman.d/gnupg
+          /etc/makepkg.conf
+          ${{ env.PACKAGE_CACHE }}
+          ${{ env._CCACHE_DIR }}
+        key: ${{ runner.os }}-${{ env.CACHE_KEY }}
+
+    # Adding chaotic-aur for more prebuilt dependencies
+    - name: Set up system (if cache miss)
+      if: steps.cache-restore.outputs.cache-hit != 'true'
+      run: |
+        pacman-key --init
+        pacman-key --populate archlinux
+        echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+
+        pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
+        pacman-key --lsign-key 3056513887B78AEB
+        pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst'
+        pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+        echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" >> /etc/pacman.conf
+
+        echo -e 'MAKEFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
+        echo -e 'NINJAFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
+
+    - name: Update package repositories
+      run: pacman -Syu --noconfirm
+
+    - name: Install cached packages
+      if: steps.cache-restore.outputs.cache-hit == 'true'
+      run: |
+        find ${{ env.PACKAGE_CACHE }} -name "*.pkg.tar.zst" -exec pacman -U --noconfirm {} +
+
+    - name: Setup and build paru
+      run: |
+        sudo -u builder bash << EOF
+        if ! paru --version 1>/dev/null; then
+          cd ${{ env.PARU_CACHE }}/clone
+          if [ ! -d "paru-bin" ]; then
+            git clone https://aur.archlinux.org/paru-bin.git
+          fi
+          cd paru-bin
+          makepkg -si --noconfirm --nocheck
+        else
+          echo "paru already installed, skipping build"
+        fi
+        EOF
+
+    - name: Install and configure customizepkg
+      run: |
+        sudo -u builder bash << EOF
+        if ! paru -Qiq customizepkg-git 1>/dev/null; then
+          paru -S --noconfirm customizepkg-git
+        else
+          echo "customizepkg-git already installed, skipping build"
+        fi
+        mkdir -p ~/.customizepkg
+        echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}
+        echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}-wow64
+        echo "replace#global#pkgver=3.5#pkgver=3.6" > ~/.customizepkg/lib32-x265
+        EOF
+
+        echo -e "\n[bin]\nPreBuildCommand = customizepkg --modify" >> /etc/paru.conf
+
+    - name: Build newer lib32-x265 manually for lib32-ffmpeg
+      run: |
+        sudo -u builder bash << EOF
+        if ! paru -Qq "lib32-x265>=3.6" 1>/dev/null; then
+          paru -S --noconfirm --nocheck lib32-x265
+        else
+          echo "lib32-x265>=3.6 already installed, skipping build"
+        fi
+        EOF
+
+    # Their git repo was down when I made this workflow...
+    - name: Build lib32-ffmpeg manually
+      run: |
+        rm -rf ${{ env.PARU_CACHE }}/clone/lib32-ffmpeg/pkg || true
+        sudo -u builder bash << EOF
+        if ! paru -Qiq lib32-ffmpeg 1>/dev/null; then
+          cd ${{ env.PARU_CACHE }}/clone
+          if [ ! -d "lib32-ffmpeg" ]; then
+            paru -G lib32-ffmpeg
+          fi
+          cd lib32-ffmpeg
+          sed -i 's|git+https://git.ffmpeg.org/ffmpeg.git?signed#tag=${_tag}|ffmpeg::git+https://github.com/FFmpeg/FFmpeg.git?signed#tag=${_tag}|' PKGBUILD
+          sed -i 's|enable-cuda|disable-cuda|' PKGBUILD
+          paru -B --install --noconfirm --nocheck --mflags "--skippgpcheck" .
+        else
+          echo "lib32-ffmpeg already installed, skipping build"
+        fi
+        EOF
+
+    - name: Build AUR packages
+      run: |
+        sudo -u builder bash << EOF
+        cd ~
+        paru -S --nocheck --noconfirm ${AUR_PACKAGE} --assume-installed=ntsync-dkms
+        paru -S --nocheck --noconfirm ${AUR_PACKAGE}-wow64 --assume-installed=ntsync-dkms
+        EOF
+
+    - name: Prepare artifacts
+      id: prepare_artifacts
+      run: |
+        sudo -u builder bash << EOF
+        mkdir -p /tmp/artifact/${AUR_PACKAGE}
+        mkdir -p /tmp/artifact/${AUR_PACKAGE}-wow64
+        mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}/*.pkg.tar.xz /tmp/artifact/${AUR_PACKAGE}/
+        mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64/*.pkg.tar.xz /tmp/artifact/${AUR_PACKAGE}-wow64/
+
+        rm -rf ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}
+        rm -rf ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64
+        EOF
+
+    - name: Upload regular package
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.AUR_PACKAGE }}
+        path: /tmp/artifact/${{ env.AUR_PACKAGE }}
+
+    - name: Upload wow64 package
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.AUR_PACKAGE }}-wow64
+        path: /tmp/artifact/${{ env.AUR_PACKAGE }}-wow64
+
+    - name: Consolidate intermediate compiled dependencies for caching
+      run: |
+        sudo -u builder bash << EOF
+        find ${{ env.PARU_CACHE }}/clone -name "*.pkg.tar.zst" -exec mv {} ${{ env.PACKAGE_CACHE }} \;
+        EOF
+
+    - name: Invalidate cache on failure (rerun action manually)
+      if: failure()
+      run: |
+        echo "Build process failed. Clearing cache (besides ccache)."
+        rm -rf /etc/pacman.conf /etc/pacman.d/chaotic-mirrorlist /etc/pacman.d/gnupg /etc/makepkg.conf ${{ env.PACKAGE_CACHE }}
+
+    - name: Save cache
+      if: always()
+      uses: actions/cache/save@v3
+      with:
+        path: |
+          /etc/pacman.conf
+          /etc/pacman.d/chaotic-mirrorlist
+          /etc/pacman.d/gnupg
+          /etc/makepkg.conf
+          ${{ env.PACKAGE_CACHE }}
+          ${{ env._CCACHE_DIR }}
+        key: ${{ runner.os }}-${{ env.CACHE_KEY }}
