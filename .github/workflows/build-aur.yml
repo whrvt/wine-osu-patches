@@ -3,6 +3,10 @@ name: Build AUR packages
 on:
   workflow_dispatch:
     inputs:
+      run_description:
+        description: 'Custom description for this run'
+        required: true
+        default: 'Build AUR packages'
       aur_package:
         description: 'Base package name'
         required: true
@@ -17,6 +21,7 @@ env:
 
 jobs:
   build:
+    name: ${{ github.event.inputs.run_description }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
@@ -159,13 +164,13 @@ jobs:
         EOF
 
     - name: Upload regular package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ env.AUR_PACKAGE }}
         path: /tmp/artifact/${{ env.AUR_PACKAGE }}
 
     - name: Upload wow64 package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ env.AUR_PACKAGE }}-wow64
         path: /tmp/artifact/${{ env.AUR_PACKAGE }}-wow64
