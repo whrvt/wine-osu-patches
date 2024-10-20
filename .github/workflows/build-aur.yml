@@ -137,6 +137,11 @@ jobs:
         sudo -u builder bash << EOF
         cd ~
         paru -S --nocheck --noconfirm ${AUR_PACKAGE} --assume-installed=ntsync-dkms
+
+        mkdir ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64
+        ln -s ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}/wine ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64/wine
+        ln -s ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}/wine-staging ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64/wine-staging
+
         paru -S --nocheck --noconfirm ${AUR_PACKAGE}-wow64 --assume-installed=ntsync-dkms
         EOF
 

@@ -1,0 +1,121 @@
+From cf4be2d7e708730a6b26dedb3e02f6ecb5a77283 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <openglfreak@googlemail.com>
+Date: Fri, 27 May 2022 00:51:49 +0200
+Subject: [PATCH 1/2] win32u: Factor out and export __wine_msg_wait_objects for
+ high-resolution waits.
+
+---
+ dlls/win32u/message.c | 34 +++++++++++++++++++++++-----------
+ include/winuser.h     |  2 ++
+ 2 files changed, 25 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -3047,10 +3047,10 @@ static inline LARGE_INTEGER *get_nt_timeout( LARGE_INTEGER *time, DWORD timeout
+ }
+ 
+ /* wait for message or signaled handle */
+-static DWORD wait_message( DWORD count, const HANDLE *handles, DWORD timeout, DWORD mask, DWORD flags )
++static DWORD wait_message( DWORD count, const HANDLE *handles,
++                           const LARGE_INTEGER *timeout, DWORD mask, DWORD flags )
+ {
+     struct thunk_lock_params params = {.dispatch.callback = thunk_lock_callback};
+-    LARGE_INTEGER time;
+     DWORD ret;
+     void *ret_ptr;
+     ULONG ret_len;
+@@ -3066,7 +3066,7 @@ static DWORD wait_message( DWORD count, const HANDLE *handles, DWORD timeout, DW
+     else
+     {
+         ret = NtWaitForMultipleObjects( count, handles, !(flags & MWMO_WAITALL),
+-                                        !!(flags & MWMO_ALERTABLE), get_nt_timeout( &time, timeout ));
++                                        !!(flags & MWMO_ALERTABLE), timeout);
+         if (ret == count - 1) user_driver->pProcessEvents( mask );
+         else if (HIWORD(ret)) /* is it an error code? */
+         {
+@@ -3075,7 +3075,7 @@ static DWORD wait_message( DWORD count, const HANDLE *handles, DWORD timeout, DW
+         }
+     }
+ 
+-    if (ret == WAIT_TIMEOUT && !count && !timeout) NtYieldExecution();
++    if (ret == WAIT_TIMEOUT && !count && !timeout->QuadPart) NtYieldExecution();
+     if (ret == count - 1) get_user_thread_info()->last_driver_time = NtGetTickCount();
+ 
+     KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
+@@ -3105,7 +3105,7 @@ static BOOL check_queue_masks( UINT wake_mask, UINT changed_mask )
+  *
+  * Wait for multiple objects including the server queue, with specific queue masks.
+  */
+-static DWORD wait_objects( DWORD count, const HANDLE *handles, DWORD timeout,
++static DWORD wait_objects( DWORD count, const HANDLE *handles, const LARGE_INTEGER *timeout,
+                            DWORD wake_mask, DWORD changed_mask, DWORD flags )
+ {
+     assert( count );  /* we must have at least the server queue */
+@@ -3140,10 +3140,10 @@ static HANDLE normalize_std_handle( HANDLE handle )
+ }
+ 
+ /***********************************************************************
+- *           NtUserMsgWaitForMultipleObjectsEx   (win32u.@)
++ *           __wine_msg_wait_objects   (win32u.@)
+  */
+-DWORD WINAPI NtUserMsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles,
+-                                                DWORD timeout, DWORD mask, DWORD flags )
++DWORD CDECL __wine_msg_wait_objects( DWORD count, const HANDLE *handles,
++                                     const LARGE_INTEGER *timeout, DWORD mask, DWORD flags )
+ {
+     HANDLE wait_handles[MAXIMUM_WAIT_OBJECTS];
+     DWORD i;
+@@ -3162,6 +3162,17 @@ DWORD WINAPI NtUserMsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handl
+                          (flags & MWMO_INPUTAVAILABLE) ? mask : 0, mask, flags );
+ }
+ 
++/***********************************************************************
++ *           NtUserMsgWaitForMultipleObjectsEx   (win32u.@)
++ */
++DWORD WINAPI NtUserMsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles,
++                                                DWORD timeout, DWORD mask, DWORD flags )
++{
++    LARGE_INTEGER time;
++    return __wine_msg_wait_objects( count, handles, get_nt_timeout( &time, timeout ),
++                                    mask, flags );
++}
++
+ /***********************************************************************
+  *           NtUserWaitForInputIdle (win32u.@)
+  */
+@@ -3287,7 +3298,7 @@ BOOL WINAPI NtUserGetMessage( MSG *msg, HWND hwnd, UINT first, UINT last )
+     filter.flags = PM_REMOVE | (mask << 16);
+     while (!(ret = peek_message( msg, &filter, TRUE )))
+     {
+-        wait_objects( 1, &server_queue, INFINITE, mask & (QS_SENDMESSAGE | QS_SMRESULT), mask, 0 );
++        wait_objects( 1, &server_queue, NULL, mask & (QS_SENDMESSAGE | QS_SMRESULT), mask, 0 );
+     }
+     if (ret < 0) return -1;
+ 
+@@ -3416,7 +3427,7 @@ static void wait_message_reply( UINT flags )
+             continue;
+         }
+ 
+-        wait_message( 1, &server_queue, INFINITE, wake_mask, 0 );
++        wait_message( 1, &server_queue, NULL, wake_mask, 0 );
+     }
+ }
+ 
+diff --git a/include/winuser.h b/include/winuser.h
+index 11111111111..11111111111 100644
+--- a/include/winuser.h
++++ b/include/winuser.h
+@@ -4797,6 +4797,8 @@ static inline BOOL WINAPI SetRectEmpty(LPRECT rect)
+ WORD        WINAPI SYSTEM_KillSystemTimer( WORD );
+ 
+ #ifdef __WINESRC__
++WINUSERAPI DWORD CDECL __wine_msg_wait_objects( DWORD count, const HANDLE *handles,
++                                                const LARGE_INTEGER *timeout, DWORD mask, DWORD flags );
+ 
+ /* Uxtheme hook functions and struct */
+ 
+-- 
+0.0.0
+

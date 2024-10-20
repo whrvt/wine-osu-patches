@@ -115,9 +115,9 @@ index fb45fe777b7..db767d9d56b 100644
      test_null_in_object_name();
      test_case_sensitive();
 @@ -3444,4 +3525,5 @@ START_TEST(om)
-     test_object_identity();
      test_query_directory();
      test_object_permanence();
+     test_NtAllocateReserveObject();
 +    test_zero_access();
  }
 -- 

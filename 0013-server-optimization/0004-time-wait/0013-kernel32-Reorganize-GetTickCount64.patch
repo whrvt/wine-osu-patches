@@ -1,0 +1,41 @@
+From 2a202070cd467fdf41b91fb0fdbbce0fc19a313c Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 13 Oct 2024 20:23:16 -0700
+Subject: [PATCH] kernel32: Reorganize GetTickCount64.
+
+Miniscule consistency improvements from a rdtscp benchmark.
+---
+ dlls/kernel32/sync.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/kernel32/sync.c b/dlls/kernel32/sync.c
+index 44fd01002d4..27030642ef2 100644
+--- a/dlls/kernel32/sync.c
++++ b/dlls/kernel32/sync.c
+@@ -82,16 +82,18 @@ static BOOL get_open_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRING
+  */
+ ULONGLONG WINAPI DECLSPEC_HOTPATCH GetTickCount64(void)
+ {
+-    ULONG high, low;
++    ULONG high1, low, high2;
+ 
+     do
+     {
+-        high = user_shared_data->TickCount.High1Time;
+-        low = user_shared_data->TickCount.LowPart;
++        high1 = *(volatile ULONG *)((char *)user_shared_data + offsetof(struct _KUSER_SHARED_DATA, TickCount.High1Time));
++        low = *(volatile ULONG *)((char *)user_shared_data + offsetof(struct _KUSER_SHARED_DATA, TickCount.LowPart));
++        high2 = *(volatile ULONG *)((char *)user_shared_data + offsetof(struct _KUSER_SHARED_DATA, TickCount.High2Time));
+     }
+-    while (high != user_shared_data->TickCount.High2Time);
++    while (high1 != high2);
+     /* note: we ignore TickCountMultiplier */
+-    return (ULONGLONG)high << 32 | low;
++
++    return ((ULONGLONG)high1 << 32) | low;
+ }
+ 
+ /***********************************************************************
+-- 
+2.47.0
+

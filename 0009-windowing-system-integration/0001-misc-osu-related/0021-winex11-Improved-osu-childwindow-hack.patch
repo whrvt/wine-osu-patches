@@ -79,7 +79,7 @@ index 0bba9727136..5703f1ad009 100644
 -    if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
 -    if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return TRUE; /* window has children, needs compositing */
 -    if (known_child) return TRUE; /* window is/have children, needs compositing */
-+    if (!use_osu_child_hack() || editor_visible( NtUserGetDesktopWindow() ))
++    if (!use_osu_child_hack() || (NtUserGetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED) || editor_visible( NtUserGetDesktopWindow() ))
 +    {
 +        if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
 +        if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return TRUE; /* window has children, needs compositing */

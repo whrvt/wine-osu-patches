@@ -49,50 +49,6 @@ index 77b7fa50db6..dccbaa15c1c 100644
      switch (event->data.l[1])
      {
      case XEMBED_EMBEDDED_NOTIFY:
-@@ -1637,8 +1642,9 @@ static void handle_xembed_protocol( HWND hwnd, XClientMessageEvent *event )
- /**********************************************************************
-  *              handle_dnd_protocol
-  */
--static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
-+static void handle_dnd_protocol( HWND hwnd, XEvent *xev )
- {
-+    XClientMessageEvent *event = &xev->xclient;
-     Window root, child;
-     int root_x, root_y, child_x, child_y;
-     unsigned int u;
-@@ -1660,8 +1666,9 @@ static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
-  *
-  * Handle an XdndEnter event.
-  */
--static void handle_xdnd_enter_event( HWND hWnd, XClientMessageEvent *event )
-+static void handle_xdnd_enter_event( HWND hWnd, XEvent *xev )
- {
-+    XClientMessageEvent *event = &xev->xclient;
-     struct dnd_enter_event_params *params;
-     struct format_entry *data;
-     unsigned long count = 0;
-@@ -1764,8 +1771,9 @@ static long drop_effect_to_xdnd_action( UINT effect )
- }
- 
- 
--static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
-+static void handle_xdnd_position_event( HWND hwnd, XEvent *xev )
- {
-+    XClientMessageEvent *event = &xev->xclient;
-     struct dnd_position_event_params params;
-     XClientMessageEvent e;
-     UINT effect;
-@@ -1797,8 +1805,9 @@ static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
- }
- 
- 
--static void handle_xdnd_drop_event( HWND hwnd, XClientMessageEvent *event )
-+static void handle_xdnd_drop_event( HWND hwnd, XEvent *xev )
- {
-+    XClientMessageEvent *event = &xev->xclient;
-     struct dnd_drop_event_params params = {.dispatch.callback = dnd_drop_event_callback, .hwnd = HandleToULong(hwnd)};
-     XClientMessageEvent e;
-     void *ret_ptr;
 @@ -1818,7 +1827,7 @@ static void handle_xdnd_drop_event( HWND hwnd, XClientMessageEvent *event )
  }
  

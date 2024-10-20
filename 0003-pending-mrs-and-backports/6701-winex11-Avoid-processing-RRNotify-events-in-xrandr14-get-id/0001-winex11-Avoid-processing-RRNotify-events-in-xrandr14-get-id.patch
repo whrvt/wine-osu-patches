@@ -1,0 +1,118 @@
+From 7d052c3c94866c1cbf07995a997872ace2e8fef5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 18 Oct 2024 15:52:18 +0200
+Subject: [PATCH] winex11: Avoid processing RRNotify events in xrandr14_get_id.
+
+This reverts commit b3eb55227aef198a637f80a2fa0bce74aa0a7190.
+
+Since 278b98f5b21b56abdf9229b12b2a747be6917018 it should be unnecessary to
+process the events as the current display mode is written to the registry.
+
+This fixes a random deadlock that happens when a window is updating its state
+while another thread changes the current display settings.
+---
+ dlls/winex11.drv/event.c       |  2 +-
+ dlls/winex11.drv/window.c      |  1 +
+ dlls/winex11.drv/x11drv.h      |  1 -
+ dlls/winex11.drv/x11drv_main.c |  1 -
+ dlls/winex11.drv/xrandr.c      | 28 ----------------------------
+ 5 files changed, 2 insertions(+), 31 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 34a364e11e3..f1535b31df0 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -404,7 +404,7 @@ static inline BOOL call_event_handler( Display *display, XEvent *event )
+ /***********************************************************************
+  *           process_events
+  */
+-BOOL process_events( Display *display, Bool (*filter)(Display*, XEvent*,XPointer), ULONG_PTR arg )
++static BOOL process_events( Display *display, Bool (*filter)(Display*, XEvent*,XPointer), ULONG_PTR arg )
+ {
+     XEvent event, prev_event;
+     int count = 0;
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 5400c5bc768..f32e70cf100 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1998,6 +1998,7 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
+                                            CWOverrideRedirect | CWEventMask, &attr );
+         XFlush( data->display );
+         NtUserSetProp( hwnd, clip_window_prop, (HANDLE)data->clip_window );
++        X11DRV_DisplayDevices_RegisterEventHandlers();
+     }
+     return TRUE;
+ }
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 6af72fe3e32..a3b6e065f99 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -681,7 +681,6 @@ extern void ungrab_clipping_window(void);
+ extern void move_resize_window( HWND hwnd, int dir );
+ extern void X11DRV_InitKeyboard( Display *display );
+ extern void X11DRV_InitMouse( Display *display );
+-extern BOOL process_events( Display *display, Bool (*filter)(Display*, XEvent*, XPointer), ULONG_PTR arg );
+ extern BOOL X11DRV_ProcessEvents( DWORD mask );
+ extern HWND *build_hwnd_list(void);
+ 
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 3f8e48a7a8d..a21d85bc6c2 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -688,7 +688,6 @@ static NTSTATUS x11drv_init( void *arg )
+     if (use_xim) use_xim = xim_init( input_style );
+ 
+     init_user_driver();
+-    X11DRV_DisplayDevices_RegisterEventHandlers();
+     return STATUS_SUCCESS;
+ }
+ 
+diff --git a/dlls/winex11.drv/xrandr.c b/dlls/winex11.drv/xrandr.c
+index d8e6f476cf7..8333c4e2c5b 100644
+--- a/dlls/winex11.drv/xrandr.c
++++ b/dlls/winex11.drv/xrandr.c
+@@ -1244,32 +1244,6 @@ static void xrandr14_register_event_handlers(void)
+                                    "XRandR ProviderChange" );
+ }
+ 
+-static Bool filter_rrnotify_event( Display *display, XEvent *event, char *arg )
+-{
+-    ULONG_PTR event_base = (ULONG_PTR)arg;
+-
+-    if (event->type == event_base + RRNotify_CrtcChange
+-            || event->type == event_base + RRNotify_OutputChange
+-            || event->type == event_base + RRNotify_ProviderChange)
+-        return 1;
+-
+-    return 0;
+-}
+-
+-static void process_rrnotify_events(void)
+-{
+-    struct x11drv_thread_data *data = x11drv_thread_data();
+-    int event_base, error_base;
+-
+-    if (!data) return;
+-    if (data->current_event) return; /* don't process nested events */
+-
+-    if (!pXRRQueryExtension( data->display, &event_base, &error_base ))
+-        return;
+-
+-    process_events( data->display, filter_rrnotify_event, event_base );
+-}
+-
+ /* XRandR 1.4 display settings handler */
+ static BOOL xrandr14_get_id( const WCHAR *device_name, BOOL is_primary, x11drv_settings_id *id )
+ {
+@@ -1285,8 +1259,6 @@ static BOOL xrandr14_get_id( const WCHAR *device_name, BOOL is_primary, x11drv_s
+     if (*end)
+         return FALSE;
+ 
+-    process_rrnotify_events();
+-
+     /* Update cache */
+     pthread_mutex_lock( &xrandr_mutex );
+     if (!current_modes)
+-- 
+GitLab
+

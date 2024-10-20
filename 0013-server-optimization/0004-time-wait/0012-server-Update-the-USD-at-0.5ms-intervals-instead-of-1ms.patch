@@ -1,9 +1,9 @@
 From d425746531fb996c0ea31f841bd2b59b6985c28c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 9 Oct 2024 11:15:49 -0700
-Subject: [PATCH] server: Update the USD at 0.1ms intervals instead of 1ms.
+Subject: [PATCH] server: Update the USD at 0.5ms intervals instead of 1ms.
 
-Since it's in a separate thread now, it shouldn't harmful.
+Since it's in a separate thread now, it shouldn't be harmful.
 ---
  server/fd.c | 28 +++++++++++++++++++++-------
  1 file changed, 21 insertions(+), 7 deletions(-)
@@ -27,7 +27,7 @@ index ae1d52a3eb3..ff44fec4c53 100644
  struct _KUSER_SHARED_DATA *user_shared_data = NULL;
 -static const int user_shared_data_timeout = 1;
 +
-+static const int user_shared_data_timeout_ticks = TICKS_PER_100US; /* 0.1 ms */
++static const int user_shared_data_timeout_ticks = TICKS_PER_100US * 5; /* 0.5 ms */
 +
 +static void ticks_to_timespec(timeout_t ticks, struct timespec *ts)
 +{

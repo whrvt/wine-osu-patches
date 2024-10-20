@@ -1,0 +1,51 @@
+From 21321e57179b3f3bffc6ebb7d609e71b7c8d404a Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 12 Oct 2024 14:44:05 -0700
+Subject: [PATCH 2/2] winewayland: Stop trying to ensure contents repeatedly
+ when it's not required for a surface.
+
+Probably breaks stuff.
+---
+ dlls/winewayland.drv/waylanddrv.h | 1 +
+ dlls/winewayland.drv/window.c     | 6 +++++-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 6cbdabedc59..cc28dcc8005 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -226,6 +226,7 @@ struct wayland_surface
+     struct wayland_window_config window;
+     int content_width, content_height;
+     HCURSOR hcursor;
++    BOOL stop_ensuring_contents;
+ };
+ 
+ struct wayland_shm_buffer
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index fe02235da25..8f1421a79e3 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -826,7 +826,7 @@ void ensure_window_surface_contents(HWND hwnd)
+ 
+     if (!(data = wayland_win_data_get(hwnd))) return;
+ 
+-    if ((wayland_surface = data->wayland_surface))
++    if ((wayland_surface = data->wayland_surface) && !wayland_surface->stop_ensuring_contents)
+     {
+         wayland_surface_ensure_contents(wayland_surface);
+ 
+@@ -838,6 +838,10 @@ void ensure_window_surface_contents(HWND hwnd)
+         {
+             wl_surface_commit(wayland_surface->wl_surface);
+         }
++        else
++        {
++            wayland_surface->stop_ensuring_contents = TRUE;
++        }
+     }
+ 
+     wayland_win_data_release(data);
+-- 
+2.47.0
+
