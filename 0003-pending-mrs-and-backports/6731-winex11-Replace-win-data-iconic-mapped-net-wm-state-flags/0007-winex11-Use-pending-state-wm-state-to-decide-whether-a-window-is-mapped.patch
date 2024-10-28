@@ -1,0 +1,76 @@
+From dba762f95b157d1a63853b73fc9fc97301d19b67 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 20 Oct 2024 11:03:10 +0200
+Subject: [PATCH] winex11: Use pending_state.wm_state to decide whether a
+ window is mapped.
+
+---
+ dlls/winex11.drv/event.c  |  2 +-
+ dlls/winex11.drv/window.c | 10 +++++-----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 5e4e1e458dd..11e93a3a100 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -998,7 +998,7 @@ static BOOL X11DRV_MapNotify( HWND hwnd, XEvent *event )
+ 
+     if (!(data = get_win_data( hwnd ))) return FALSE;
+ 
+-    if (!data->managed && !data->embedded && data->mapped)
++    if (!data->managed && !data->embedded && data->pending_state.wm_state == NormalState)
+     {
+         HWND hwndFocus = get_focus();
+         if (hwndFocus && NtUserIsChild( hwnd, hwndFocus ))
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 035f8d5cf0b..dcba464daf8 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1448,7 +1448,7 @@ static void map_window( HWND hwnd, DWORD new_style )
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+ 
+-    if (data->whole_window && !data->mapped)
++    if (data->whole_window && data->pending_state.wm_state == WithdrawnState)
+     {
+         TRACE( "win %p/%lx\n", data->hwnd, data->whole_window );
+ 
+@@ -1479,7 +1479,7 @@ static void unmap_window( HWND hwnd )
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+ 
+-    if (data->mapped)
++    if (data->pending_state.wm_state != WithdrawnState)
+     {
+         TRACE( "win %p/%lx\n", data->hwnd, data->whole_window );
+         window_set_wm_state( data, WithdrawnState );
+@@ -3018,7 +3018,7 @@ void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWO
+             sync_window_opacity( data->display, data->whole_window, alpha, flags );
+ 
+         data->layered = TRUE;
+-        if (!data->mapped)  /* mapping is delayed until attributes are set */
++        if (data->pending_state.wm_state == WithdrawnState)  /* mapping is delayed until attributes are set */
+         {
+             DWORD style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+ 
+@@ -3054,7 +3054,7 @@ void X11DRV_UpdateLayeredWindow( HWND hwnd, UINT flags )
+     BOOL mapped;
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+-    mapped = data->mapped;
++    mapped = data->pending_state.wm_state != WithdrawnState;
+     release_win_data( data );
+ 
+     /* layered windows are mapped only once their attributes are set */
+@@ -3206,7 +3206,7 @@ LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam )
+         if (wparam == SC_SCREENSAVE && hwnd == NtUserGetDesktopWindow()) return start_screensaver();
+         return -1;
+     }
+-    if (!data->whole_window || !data->managed || !data->mapped) goto failed;
++    if (!data->whole_window || !data->managed || data->pending_state.wm_state == WithdrawnState) goto failed;
+ 
+     switch (wparam & 0xfff0)
+     {
+-- 
+GitLab
+

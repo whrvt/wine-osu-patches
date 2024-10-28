@@ -1,0 +1,78 @@
+From 892833113c5867a74a59aea5e514634d9ce90c6a Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <zfigura@codeweavers.com>
+Date: Mon, 6 Jul 2020 12:20:44 -0500
+Subject: [PATCH 0432/2346] ntdll: Implement NtClose().
+
+Wine-Staging: eventfd_synchronization
+---
+ dlls/ntdll/unix/esync.c  | 18 ++++++++++++++++++
+ dlls/ntdll/unix/esync.h  |  1 +
+ dlls/ntdll/unix/server.c |  4 ++++
+ 3 files changed, 23 insertions(+)
+
+diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
+index 50bf84eabe5..e289dc13c01 100644
+--- a/dlls/ntdll/unix/esync.c
++++ b/dlls/ntdll/unix/esync.c
+@@ -181,6 +181,24 @@ static struct esync *get_cached_object( HANDLE handle )
+     return &esync_list[entry][idx];
+ }
+ 
++NTSTATUS esync_close( HANDLE handle )
++{
++    UINT_PTR entry, idx = handle_to_index( handle, &entry );
++
++    TRACE("%p.\n", handle);
++
++    if (entry < ESYNC_LIST_ENTRIES && esync_list[entry])
++    {
++        if (InterlockedExchange((LONG *)&esync_list[entry][idx].type, 0))
++        {
++            close( esync_list[entry][idx].fd );
++            return STATUS_SUCCESS;
++        }
++    }
++
++    return STATUS_INVALID_HANDLE;
++}
++
+ static NTSTATUS create_esync( enum esync_type type, HANDLE *handle, ACCESS_MASK access,
+                               const OBJECT_ATTRIBUTES *attr, int initval, int max )
+ {
+diff --git a/dlls/ntdll/unix/esync.h b/dlls/ntdll/unix/esync.h
+index cbaaed3e308..c63491dcaad 100644
+--- a/dlls/ntdll/unix/esync.h
++++ b/dlls/ntdll/unix/esync.h
+@@ -20,6 +20,7 @@
+ 
+ extern int do_esync(void);
+ extern void esync_init(void);
++extern NTSTATUS esync_close( HANDLE handle );
+ 
+ extern NTSTATUS esync_create_semaphore(HANDLE *handle, ACCESS_MASK access,
+     const OBJECT_ATTRIBUTES *attr, LONG initial, LONG max);
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index 79e2a9171c3..8cbebd34b5f 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -79,6 +79,7 @@
+ #include "wine/server.h"
+ #include "wine/debug.h"
+ #include "unix_private.h"
++#include "esync.h"
+ #include "ddk/wdm.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(server);
+@@ -1841,6 +1842,9 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
+      * retrieve it again */
+     fd = remove_fd_from_cache( handle );
+ 
++    if (do_esync())
++        esync_close( handle );
++
+     SERVER_START_REQ( close_handle )
+     {
+         req->handle = wine_server_obj_handle( handle );
+-- 
+2.47.0
+

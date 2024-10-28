@@ -129,15 +129,15 @@ index f975986a9d9..63f2861c101 100644
 +    /* workaround for mutter gitlab bug #649, we cannot trust the
 +     * data->mapped flag as mapping is asynchronous.
 +     */
-+    if (enable_mutter_workaround)
-+    {
-+        XWindowAttributes attr;
-+
-+        mapped = data->mapped;
-+        if (XGetWindowAttributes( data->display, data->whole_window, &attr ))
-+            mapped = (attr.map_state != IsUnmapped);
-+    }
-+
++//    if (enable_mutter_workaround)
++//    {
++//        XWindowAttributes attr;
++//
++//        mapped = data->mapped;
++//        if (XGetWindowAttributes( data->display, data->whole_window, &attr ))
++//            mapped = (attr.map_state != IsUnmapped);
++//    }
++//
 +    mwm_hints.flags = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS;
 +    mwm_hints.input_mode = 0;
 +    mwm_hints.status = 0;
@@ -146,35 +146,35 @@ index f975986a9d9..63f2861c101 100644
 +                     x11drv_atom(_MOTIF_WM_HINTS), 32, PropModeReplace,
 +                     (unsigned char*)&mwm_hints, sizeof(mwm_hints)/sizeof(long) );
 +
-+    if (enable_mutter_workaround && mapped)
-+    {
-+        DWORD end = NtGetTickCount() + 100;
-+        struct is_unmap_notify_param p;
-+        struct pollfd pfd;
-+        XEvent event;
-+        int timeout;
-+
-+        /* workaround for mutter gitlab bug #649, wait for the map notify
-+         * event each time the decorations are modified before modifying
-+         * them again.
-+         */
-+        p.data = data;
-+        p.found = FALSE;
-+        TRACE("workaround mutter bug #649, waiting for UnmapNotify\n");
-+        pfd.fd = ConnectionNumber(data->display);
-+        pfd.events = POLLIN;
-+        for (;;)
-+        {
-+            XCheckIfEvent( data->display, &event, is_unmap_notify, (XPointer)&p );
-+            if (p.found) break;
-+            timeout = end - NtGetTickCount();
-+            if (timeout <= 0 || poll( &pfd, 1, timeout ) != 1)
-+            {
-+                WARN( "window %p/%lx unmap_notify wait timed out.\n", data->hwnd, data->whole_window );
-+                break;
-+            }
-+        }
-+    }
++//    if (enable_mutter_workaround && mapped)
++//    {
++//        DWORD end = NtGetTickCount() + 100;
++//        struct is_unmap_notify_param p;
++//        struct pollfd pfd;
++//        XEvent event;
++//        int timeout;
++//
++//        /* workaround for mutter gitlab bug #649, wait for the map notify
++//         * event each time the decorations are modified before modifying
++//         * them again.
++//         */
++//        p.data = data;
++//        p.found = FALSE;
++//        TRACE("workaround mutter bug #649, waiting for UnmapNotify\n");
++//        pfd.fd = ConnectionNumber(data->display);
++//        pfd.events = POLLIN;
++//        for (;;)
++//        {
++//            XCheckIfEvent( data->display, &event, is_unmap_notify, (XPointer)&p );
++//            if (p.found) break;
++//            timeout = end - NtGetTickCount();
++//            if (timeout <= 0 || poll( &pfd, 1, timeout ) != 1)
++//            {
++//                WARN( "window %p/%lx unmap_notify wait timed out.\n", data->hwnd, data->whole_window );
++//                break;
++//            }
++//        }
++//    }
 +
 +    if (wm_is_mutter(data->display) && NtUserGetGUIThreadInfo( GetCurrentThreadId(), &info ) &&
 +        info.hwndFocus == data->hwnd && !!data->prev_hints.decorations != !!mwm_hints.decorations)

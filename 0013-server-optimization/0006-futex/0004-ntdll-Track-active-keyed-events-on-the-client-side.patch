@@ -70,7 +70,7 @@ index 11111111111..11111111111 100644
  static const char *debugstr_timeout( const LARGE_INTEGER *timeout )
  {
      if (!timeout) return "(infinite)";
-@@ -3125,18 +3177,23 @@ NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJE
+@@ -3125,16 +3177,21 @@ NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJE
  NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
                                       BOOLEAN alertable, const LARGE_INTEGER *timeout )
  {
@@ -78,8 +78,6 @@ index 11111111111..11111111111 100644
      select_op_t select_op;
      UINT flags = SELECT_INTERRUPTIBLE;
 +    NTSTATUS status;
- 
-    TRACE( "handle %p, key %p, alertable %u, timeout %s\n", handle, key, alertable, debugstr_timeout(timeout) );
  
 -    if (!handle) handle = keyed_event;
      if ((ULONG_PTR)key & 1) return STATUS_INVALID_PARAMETER_1;
@@ -96,7 +94,7 @@ index 11111111111..11111111111 100644
  }
  
  
-@@ -3144,18 +3203,23 @@ NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
+@@ -3144,16 +3203,21 @@ NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
  NTSTATUS WINAPI NtReleaseKeyedEvent( HANDLE handle, const void *key,
                                       BOOLEAN alertable, const LARGE_INTEGER *timeout )
  {
@@ -104,8 +102,6 @@ index 11111111111..11111111111 100644
      select_op_t select_op;
      UINT flags = SELECT_INTERRUPTIBLE;
 +    NTSTATUS status;
- 
-    TRACE( "handle %p, key %p, alertable %u, timeout %s\n", handle, key, alertable, debugstr_timeout(timeout) );
  
 -    if (!handle) handle = keyed_event;
      if ((ULONG_PTR)key & 1) return STATUS_INVALID_PARAMETER_1;

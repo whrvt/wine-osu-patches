@@ -1,0 +1,72 @@
+From 0c73fa6637664622b41210476fdc0db06aab58f1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 19 Oct 2024 10:34:49 +0200
+Subject: [PATCH] winex11: Compute ConfigureNotify updates in terms of style
+ changes.
+
+Making the changes computation more readable, matching styles between
+the current Win32 style and the current X11 (current_state) style.
+---
+ dlls/winex11.drv/event.c | 21 ++++++++++++++-------
+ 1 file changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 21bc5fc2813..2a95552b8d6 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1062,9 +1062,8 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+     struct x11drv_win_data *data;
+     RECT rect;
+     POINT pos = {event->x, event->y};
+-    UINT flags;
++    UINT flags, old_style, new_style;
+     int cx, cy, x, y;
+-    DWORD style;
+ 
+     if (!hwnd) return FALSE;
+     if (!(data = get_win_data( hwnd ))) return FALSE;
+@@ -1083,6 +1082,15 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+     SetRect( &rect, pos.x, pos.y, pos.x + event->width, pos.y + event->height );
+     window_configure_notify( data, event->serial, &rect );
+ 
++    /* Compute the necessary changes to transition from the current Win32
++     * window state (old_style), to the current X11 window state (new_style).
++     */
++    old_style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
++    new_style = old_style & ~(WS_VISIBLE | WS_MINIMIZE | WS_MAXIMIZE);
++    if (data->current_state.wm_state == IconicState) new_style |= WS_MINIMIZE;
++    if (data->current_state.wm_state != WithdrawnState) new_style |= WS_VISIBLE;
++    if (data->current_state.net_wm_state & (1 << NET_WM_STATE_MAXIMIZED)) new_style |= WS_MAXIMIZE;
++
+     if (!data->mapped || data->iconic) goto done;
+     if (!data->whole_window || !data->managed) goto done;
+     if (data->configure_serial && (long)(data->configure_serial - event->serial) > 0)
+@@ -1124,13 +1132,12 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+                hwnd, (int)(data->rects.window.right - data->rects.window.left),
+                (int)(data->rects.window.bottom - data->rects.window.top), cx, cy );
+ 
+-    style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+-    if ((style & WS_CAPTION) == WS_CAPTION || !data->is_fullscreen)
++    if ((old_style & WS_CAPTION) == WS_CAPTION || !data->is_fullscreen)
+     {
+         data->net_wm_state = get_window_net_wm_state( event->display, data->whole_window );
+-        if ((data->net_wm_state & (1 << NET_WM_STATE_MAXIMIZED)))
++        if ((new_style & WS_MAXIMIZE))
+         {
+-            if (!(style & WS_MAXIMIZE))
++            if (!(old_style & WS_MAXIMIZE))
+             {
+                 TRACE( "win %p/%lx is maximized\n", data->hwnd, data->whole_window );
+                 release_win_data( data );
+@@ -1138,7 +1145,7 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+                 return TRUE;
+             }
+         }
+-        else if (style & WS_MAXIMIZE)
++        else if (old_style & WS_MAXIMIZE)
+         {
+             TRACE( "window %p/%lx is no longer maximized\n", data->hwnd, data->whole_window );
+             release_win_data( data );
+-- 
+GitLab
+

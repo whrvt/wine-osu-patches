@@ -11,6 +11,9 @@ on:
         description: 'Base package name'
         required: true
         default: 'wine-osu-spectator'
+  push:
+    tags:
+      - '*'
 
 env:
   AUR_PACKAGE: ${{ github.event.inputs.aur_package || 'wine-osu-spectator' }}
@@ -39,15 +42,11 @@ jobs:
       run: |
         pacman -Syu --noconfirm git nodejs npm
 
-    - name: Restore pacman setup and package cache
+    - name: Restore package cache
       id: cache-restore
       uses: actions/cache/restore@v3
       with:
         path: |
-          /etc/pacman.conf
-          /etc/pacman.d/chaotic-mirrorlist
-          /etc/pacman.d/gnupg
-          /etc/makepkg.conf
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
         key: ${{ runner.os }}-${{ env.CACHE_KEY }}-${{ github.run_id }}
@@ -55,8 +54,7 @@ jobs:
           ${{ runner.os }}-${{ env.CACHE_KEY }}-
 
     # Adding chaotic-aur for more prebuilt dependencies
-    - name: Set up system (if cache miss)
-      if: steps.cache-restore.outputs.cache-hit != 'true'
+    - name: Set up system
       run: |
         pacman-key --init
         pacman-key --populate archlinux
@@ -95,6 +93,8 @@ jobs:
         EOF
 
     - name: Install and configure customizepkg
+      env:
+        CURRENT_TAG: ${{ github.ref_name }}
       run: |
         sudo -u builder bash << EOF
         if ! paru -Qiq customizepkg-git 1>/dev/null; then
@@ -104,7 +104,9 @@ jobs:
         fi
         mkdir -p ~/.customizepkg
         echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}
+        echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}
         echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}-wow64
+        echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}-wow64
         echo "replace#global#pkgver=3.5#pkgver=3.6" > ~/.customizepkg/lib32-x265
         EOF
 
@@ -143,8 +145,8 @@ jobs:
       run: |
         sudo -u builder bash << EOF
         cd ~
-        paru -S --nocheck --noconfirm ${AUR_PACKAGE} --assume-installed=ntsync-dkms
-        paru -S --nocheck --noconfirm ${AUR_PACKAGE}-wow64 --assume-installed=ntsync-dkms
+        paru -S --nocheck --noconfirm --mflags "--skipinteg" ${AUR_PACKAGE} --assume-installed=ntsync-dkms
+        paru -S --nocheck --noconfirm --mflags "--skipinteg" ${AUR_PACKAGE}-wow64 --assume-installed=ntsync-dkms
         EOF
 
     - name: Prepare artifacts
@@ -189,10 +191,44 @@ jobs:
       uses: actions/cache/save@v3
       with:
         path: |
-          /etc/pacman.conf
-          /etc/pacman.d/chaotic-mirrorlist
-          /etc/pacman.d/gnupg
-          /etc/makepkg.conf
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
         key: ${{ runner.os }}-${{ env.CACHE_KEY }}-${{ github.run_id }}
+
+  create-release:
+      needs: build
+      if: startsWith(github.ref, 'refs/tags/')
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write
+      steps:
+        - name: Download all artifacts
+          uses: actions/download-artifact@v4
+          with:
+            path: artifacts
+            
+        - name: Extract version from package name
+          id: get_version
+          run: |
+            PKGFILE=$(ls artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.xz | head -n1)
+
+            # from e.g. wine-osu-spectator-9.20.w1.s5a1b9d5-1-x86_64.pkg.tar.xz
+            # get VERSION=9.20 and RELEASE=1
+            VERSION=$(basename "$PKGFILE" | sed -E 's/.*-([0-9]+\.[0-9]+)\..*-([0-9]+)-.*pkg\.tar\.xz/\1/')
+            RELEASE=$(basename "$PKGFILE" | sed -E 's/.*-([0-9]+\.[0-9]+)\..*-([0-9]+)-.*pkg\.tar\.xz/\2/')
+
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "RELEASE=$RELEASE" >> $GITHUB_OUTPUT
+            echo "FULL_VERSION=$VERSION-$RELEASE" >> $GITHUB_OUTPUT
+
+        - name: Create Release
+          uses: softprops/action-gh-release@v2
+          with:
+            name: Release ${{ env.AUR_PACKAGE }}-${{ steps.get_version.outputs.FULL_VERSION }}
+            draft: false
+            prerelease: false
+            files: |
+              artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.xz
+              artifacts/${{ env.AUR_PACKAGE }}-wow64/*.pkg.tar.xz
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

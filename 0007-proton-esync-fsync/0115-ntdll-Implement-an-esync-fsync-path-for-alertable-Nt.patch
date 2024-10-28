@@ -1,0 +1,98 @@
+From 101bee08d73e9c24077c57c07f5f1865f063cfd3 Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <zfigura@codeweavers.com>
+Date: Fri, 13 Mar 2020 15:52:15 -0500
+Subject: [PATCH 0541/2346] ntdll: Implement an esync/fsync path for alertable
+ NtDelayExecution().
+
+---
+ dlls/ntdll/unix/esync.c |  4 ++--
+ dlls/ntdll/unix/fsync.c |  6 +++---
+ dlls/ntdll/unix/sync.c  | 19 ++++++++++++++++++-
+ 3 files changed, 23 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
+index 7c39f02da50..823e78eaf5a 100644
+--- a/dlls/ntdll/unix/esync.c
++++ b/dlls/ntdll/unix/esync.c
+@@ -858,7 +858,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEA
+             return ret;
+     }
+ 
+-    if (objs[count - 1] && objs[count - 1]->type == ESYNC_QUEUE)
++    if (count && objs[count - 1] && objs[count - 1]->type == ESYNC_QUEUE)
+         msgwait = TRUE;
+ 
+     if (has_esync && has_server)
+@@ -887,7 +887,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEA
+         }
+     }
+ 
+-    if (wait_any || count == 1)
++    if (wait_any || count <= 1)
+     {
+         /* Try to check objects now, so we can obviate poll() at least. */
+         for (i = 0; i < count; i++)
+diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
+index c28b4e27597..f419e4b826d 100644
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -767,7 +767,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+             return ret;
+     }
+ 
+-    if (objs[count - 1] && objs[count - 1]->type == FSYNC_QUEUE)
++    if (count && objs[count - 1] && objs[count - 1]->type == FSYNC_QUEUE)
+         msgwait = TRUE;
+ 
+     if (has_fsync && has_server)
+@@ -796,7 +796,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+         }
+     }
+ 
+-    if (wait_any || count == 1)
++    if (wait_any || count <= 1)
+     {
+         while (1)
+         {
+@@ -1223,7 +1223,7 @@ NTSTATUS fsync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_an
+     struct fsync *obj;
+     NTSTATUS ret;
+ 
+-    if (!get_object( handles[count - 1], &obj ) && obj->type == FSYNC_QUEUE)
++    if (count && !get_object( handles[count - 1], &obj ) && obj->type == FSYNC_QUEUE)
+     {
+         msgwait = TRUE;
+         server_set_msgwait( 1 );
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 565c90bac23..388eb2508d9 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -1639,7 +1639,24 @@ NTSTATUS WINAPI NtYieldExecution(void)
+ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeout )
+ {
+     /* if alertable, we need to query the server */
+-    if (alertable) return server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout );
++    if (alertable)
++    {
++        if (do_fsync())
++        {
++            NTSTATUS ret = fsync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
++            if (ret != STATUS_NOT_IMPLEMENTED)
++                return ret;
++        }
++
++        if (do_esync())
++        {
++            NTSTATUS ret = esync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
++            if (ret != STATUS_NOT_IMPLEMENTED)
++                return ret;
++        }
++
++        return server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout );
++    }
+ 
+     if (!timeout || timeout->QuadPart == TIMEOUT_INFINITE)  /* sleep forever */
+     {
+-- 
+2.47.0
+

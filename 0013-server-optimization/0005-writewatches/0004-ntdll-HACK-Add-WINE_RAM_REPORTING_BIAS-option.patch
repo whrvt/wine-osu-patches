@@ -15,37 +15,24 @@ diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
 index 994413c1658..a8f6d3f91c0 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
-@@ -1851,8 +1851,11 @@ static ULONG_PTR get_image_address(void)
-     return 0;
- }
- 
+@@ -2023,11 +2023,17 @@ BOOL ac_odyssey;
+ BOOL alert_simulate_sched_quantum;
+ BOOL fsync_yield_to_waiters;
+ BOOL no_priv_elevation;
 +long long ram_reporting_bias;
-+
+ 
  static void hacks_init(void)
  {
-+    const char* env_str;
      const char *sgi = getenv( "SteamGameId" );
- 
-     switch (sgi ? atoi( sgi ) : -1)
-@@ -1863,12 +1866,17 @@ static void hacks_init(void)
-     }
-     if (main_argc > 1 && (strstr(main_argv[1], "osu!.exe")))
-     {
--        const char* env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
-+        env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
-         if (!(env_str && *env_str != '\0' && *env_str != '0'))
-         {
-             setenv( "OSU_HACKS_ENABLED", "1", 0 );
-         }
-     }
+     const char *env_str;
 +    if ((env_str = getenv("WINE_RAM_REPORTING_BIAS")))
 +    {
 +        ram_reporting_bias = atoll(env_str) * 1024 * 1024;
 +        ERR( "HACK: ram_reporting_bias %lldMB.\n", ram_reporting_bias / (1024 * 1024) );
 +    }
- }
  
- /***********************************************************************
+     env_str = getenv("WINE_SIMULATE_ASYNC_READ");
+     if (env_str)
 diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
 index 3dc5c704aa9..129136f675d 100644
 --- a/dlls/ntdll/unix/system.c
@@ -70,15 +57,14 @@ diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index bcee4508b65..e14eb43dd0d 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -191,6 +191,8 @@ extern SYSTEM_CPU_INFORMATION cpu_info;
- extern struct ldt_copy __wine_ldt_copy;
- #endif
- 
+@@ -188,6 +188,7 @@ extern BOOL fsync_simulate_sched_quantum;
+ extern BOOL alert_simulate_sched_quantum;
+ extern BOOL fsync_yield_to_waiters;
+ extern BOOL no_priv_elevation;
 +extern long long ram_reporting_bias;
-+
+ 
  extern void init_environment(void);
  extern void init_startup_info(void);
- extern void *create_startup_info( const UNICODE_STRING *nt_image, ULONG process_flags,
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index 4953a2086ec..7ec937a478f 100644
 --- a/dlls/ntdll/unix/virtual.c

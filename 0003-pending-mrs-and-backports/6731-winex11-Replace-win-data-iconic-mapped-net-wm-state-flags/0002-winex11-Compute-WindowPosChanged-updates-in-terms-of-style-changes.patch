@@ -1,0 +1,69 @@
+From 92a31166855bd2c0acd15093890f49815c373080 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 19 Oct 2024 10:25:45 +0200
+Subject: [PATCH] winex11: Compute WindowPosChanged updates in terms of style
+ changes.
+
+Making the changes computation more readable, matching styles between
+the last requested (pending_state) style and the current style.
+---
+ dlls/winex11.drv/window.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 46006874dfa..d75afa33ff9 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2773,13 +2773,21 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags, BOOL
+ {
+     struct x11drv_thread_data *thread_data;
+     struct x11drv_win_data *data;
+-    UINT new_style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
++    UINT new_style = NtUserGetWindowLongW( hwnd, GWL_STYLE ), old_style;
+     struct window_rects old_rects;
+     BOOL was_fullscreen;
+     int event_type;
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+ 
++    /* Compute the necessary changes to transition from the last requested
++     * window state (old_style), to the desired window state (new_style).
++     */
++    old_style = new_style & ~(WS_VISIBLE | WS_MINIMIZE | WS_MAXIMIZE);
++    if (data->pending_state.wm_state == IconicState) old_style |= WS_MINIMIZE;
++    if (data->pending_state.wm_state != WithdrawnState) old_style |= WS_VISIBLE;
++    if (data->pending_state.net_wm_state & (1 << NET_WM_STATE_MAXIMIZED)) old_style |= WS_MAXIMIZE;
++
+     thread_data = x11drv_thread_data();
+ 
+     old_rects = data->rects;
+@@ -2816,7 +2824,7 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags, BOOL
+             event_type = 0;  /* ignore other events */
+     }
+ 
+-    if (data->mapped && event_type != ReparentNotify)
++    if ((old_style & WS_VISIBLE) && event_type != ReparentNotify)
+     {
+         if (((swp_flags & SWP_HIDEWINDOW) && !(new_style & WS_VISIBLE)) ||
+             (!event_type && !(new_style & WS_MINIMIZE) &&
+@@ -2853,7 +2861,7 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags, BOOL
+     if ((new_style & WS_VISIBLE) &&
+         ((new_style & WS_MINIMIZE) || is_window_rect_mapped( &new_rects->window )))
+     {
+-        if (!data->mapped)
++        if (!(old_style & WS_VISIBLE))
+         {
+             BOOL needs_icon = !data->icon_pixmap;
+             BOOL needs_map = TRUE;
+@@ -2866,7 +2874,7 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags, BOOL
+             if (needs_map) map_window( hwnd, new_style );
+             return;
+         }
+-        else if ((swp_flags & SWP_STATECHANGED) && (!data->iconic != !(new_style & WS_MINIMIZE)))
++        else if ((swp_flags & SWP_STATECHANGED) && (old_style & WS_MINIMIZE) != (new_style & WS_MINIMIZE))
+         {
+             set_wm_hints( data );
+             data->iconic = (new_style & WS_MINIMIZE) != 0;
+-- 
+GitLab
+

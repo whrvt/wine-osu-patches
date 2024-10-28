@@ -1,0 +1,90 @@
+From 1d1b08a9f3723c4494c8b3e1817d25dc4add0c4f Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <z.figura12@gmail.com>
+Date: Fri, 8 Jun 2018 22:04:29 -0500
+Subject: [PATCH 0445/2346] server: Create eventfd file descriptors for thread
+ objects.
+
+Wine-Staging: eventfd_synchronization
+---
+ server/thread.c | 17 ++++++++++++++++-
+ server/thread.h |  1 +
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/server/thread.c b/server/thread.c
+index e744b98feaa..69b919d400e 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -181,6 +181,7 @@ struct type_descr thread_type =
+ 
+ static void dump_thread( struct object *obj, int verbose );
+ static int thread_signaled( struct object *obj, struct wait_queue_entry *entry );
++static int thread_get_esync_fd( struct object *obj, enum esync_type *type );
+ static unsigned int thread_map_access( struct object *obj, unsigned int access );
+ static void thread_poll_event( struct fd *fd, int event );
+ static struct list *thread_get_kernel_obj_list( struct object *obj );
+@@ -194,7 +195,7 @@ static const struct object_ops thread_ops =
+     add_queue,                  /* add_queue */
+     remove_queue,               /* remove_queue */
+     thread_signaled,            /* signaled */
+-    NULL,                       /* get_esync_fd */
++    thread_get_esync_fd,        /* get_esync_fd */
+     no_satisfied,               /* satisfied */
+     no_signal,                  /* signal */
+     no_get_fd,                  /* get_fd */
+@@ -262,6 +263,7 @@ static inline void init_thread_structure( struct thread *thread )
+     thread->context         = NULL;
+     thread->teb             = 0;
+     thread->entry_point     = 0;
++    thread->esync_fd        = -1;
+     thread->system_regs     = 0;
+     thread->queue           = NULL;
+     thread->wait            = NULL;
+@@ -474,6 +476,9 @@ struct thread *create_thread( int fd, struct process *process, const struct secu
+         }
+     }
+ 
++    if (do_esync())
++        thread->esync_fd = esync_create_fd( 0, 0 );
++
+     set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
+     add_process_thread( thread->process, thread );
+     return thread;
+@@ -556,6 +561,9 @@ static void destroy_thread( struct object *obj )
+     release_object( thread->process );
+     if (thread->id) free_ptid( thread->id );
+     if (thread->token) release_object( thread->token );
++
++    if (do_esync())
++        close( thread->esync_fd );
+ }
+ 
+ /* dump a thread on stdout for debugging purposes */
+@@ -574,6 +582,13 @@ static int thread_signaled( struct object *obj, struct wait_queue_entry *entry )
+     return (mythread->state == TERMINATED);
+ }
+ 
++static int thread_get_esync_fd( struct object *obj, enum esync_type *type )
++{
++    struct thread *thread = (struct thread *)obj;
++    *type = ESYNC_MANUAL_SERVER;
++    return thread->esync_fd;
++}
++
+ static unsigned int thread_map_access( struct object *obj, unsigned int access )
+ {
+     access = default_map_access( obj, access );
+diff --git a/server/thread.h b/server/thread.h
+index 0c28242533e..8086a98156e 100644
+--- a/server/thread.h
++++ b/server/thread.h
+@@ -54,6 +54,7 @@ struct thread
+     struct process        *process;
+     thread_id_t            id;            /* thread id */
+     struct list            mutex_list;    /* list of currently owned mutexes */
++    int                    esync_fd;      /* esync file descriptor (signalled on exit) */
+     unsigned int           system_regs;   /* which system regs have been set */
+     struct msg_queue      *queue;         /* message queue */
+     struct thread_wait    *wait;          /* current wait condition if sleeping */
+-- 
+2.47.0
+

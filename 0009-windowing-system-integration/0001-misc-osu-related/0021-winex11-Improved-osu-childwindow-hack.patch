@@ -14,24 +14,25 @@ composition-free page-flipping rendering path instead of blitting.
  3 files changed, 56 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
-index 4738cf6a0f8..5b96c460c71 100644
+index 126e9bd3597..a396fdb32c8 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
-@@ -1902,6 +1902,14 @@ static void hacks_init(void)
-         setenv( "WINESTEAMNOEXEC", "1", 0 );
-         break;
+@@ -1870,6 +1870,15 @@ static void hacks_init(void)
+         ERR( "HACK: ram_reporting_bias %lldMB.\n", ram_reporting_bias / (1024 * 1024) );
      }
+ 
 +    if (main_argc > 1 && (strstr(main_argv[1], "osu!.exe")))
 +    {
-+        const char* env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
++        env_str = getenv("WINE_DISABLE_GLCHILD_HACK");
 +        if (!(env_str && *env_str != '\0' && *env_str != '0'))
 +        {
 +            setenv( "OSU_HACKS_ENABLED", "1", 0 );
 +        }
 +    }
- }
- 
- /***********************************************************************
++
+     env_str = getenv("WINE_SIMULATE_ASYNC_READ");
+     if (env_str)
+         ac_odyssey = !!atoi(env_str);
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
 index 0bba9727136..5703f1ad009 100644
 --- a/dlls/winex11.drv/init.c

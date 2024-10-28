@@ -1,0 +1,67 @@
+From 84bbfcdb916752bbe3e72827aaff7752c6ee913d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 25 Oct 2024 08:40:37 +0200
+Subject: [PATCH] winex11: Use the style to decide whether a window is
+ currently visible or iconic.
+
+The mapped and iconic flags should match the last requested state at
+all time. Unless we've missed sending an update this should match the
+current Win32 state, and we should be able use it instead as a more
+accurate source of information about the supposed window state.
+
+When receiving config changes, we don't want to apply changes to a
+window which is supposed to be hidden or minimized. When receiving state
+changes, we don't want to apply changes to a window which is supposed to
+be hidden, regardless of the X11 believes.
+---
+ dlls/winex11.drv/event.c  | 4 ++--
+ dlls/winex11.drv/window.c | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 088a124654e..5e4e1e458dd 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1091,7 +1091,7 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+     if (data->current_state.wm_state != WithdrawnState) new_style |= WS_VISIBLE;
+     if (data->current_state.net_wm_state & (1 << NET_WM_STATE_MAXIMIZED)) new_style |= WS_MAXIMIZE;
+ 
+-    if (!data->mapped || data->iconic) goto done;
++    if (!(old_style & WS_VISIBLE) || (old_style & WS_MINIMIZE)) goto done;
+     if (!data->whole_window || !data->managed) goto done;
+     if (data->configure_serial && (long)(data->configure_serial - event->serial) > 0)
+     {
+@@ -1264,7 +1264,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+         break;
+     }
+ 
+-    if (!update_window || !data->managed || !data->mapped) goto done;
++    if (!update_window || !data->managed || !(old_style & WS_VISIBLE)) goto done;
+ 
+     if ((old_style & WS_MINIMIZE) && !(new_style & WS_MINIMIZE))  /* restore window */
+     {
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index d75afa33ff9..0bb7175c29c 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1613,7 +1613,7 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
+     DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
+     BOOL above = FALSE;
+ 
+-    if (data->managed && data->iconic) return;
++    if (data->managed && (style & WS_MINIMIZE)) return;
+ 
+     if (!(swp_flags & SWP_NOZORDER) || (swp_flags & SWP_SHOWWINDOW))
+     {
+@@ -2927,7 +2927,7 @@ UINT X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp )
+         }
+         goto done;
+     }
+-    if (!data->managed || !data->mapped || data->iconic) goto done;
++    if (!data->managed || !(style & WS_VISIBLE) || (style & WS_MINIMIZE)) goto done;
+ 
+     /* only fetch the new rectangle if the ShowWindow was a result of a window manager event */
+ 
+-- 
+GitLab
+

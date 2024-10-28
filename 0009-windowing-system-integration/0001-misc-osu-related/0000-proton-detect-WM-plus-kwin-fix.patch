@@ -1,9 +1,9 @@
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index f975986a9d9..75d01df1009 100644
+index a693884e0c1..a7ae9799f01 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -113,6 +113,97 @@ static const WCHAR clip_window_prop[] =
- static pthread_mutex_t win_data_mutex = PTHREAD_MUTEX_INITIALIZER;
+@@ -245,6 +245,97 @@ void host_window_set_parent( struct host_window *win, Window parent )
+ }
  
  
 +static int handle_wm_name_badwindow_error( Display *dpy, XErrorEvent *event, void *arg )
@@ -100,38 +100,38 @@ index f975986a9d9..75d01df1009 100644
  /***********************************************************************
   * http://standards.freedesktop.org/startup-notification-spec
   */
-@@ -1413,6 +1504,7 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
- {
-     DWORD style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
-     DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
-+    RECT original_rect = {0};
-     XWindowChanges changes;
-     unsigned int mask = 0;
- 
-@@ -1456,10 +1548,22 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
- 
-     set_size_hints( data, style );
-     set_mwm_hints( data, style, ex_style );
-+    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
-+     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
-+    if (wm_is_kde( data->display ) && data->is_fullscreen )
-+    {
-+        original_rect = data->rects.visible;
-+        SetRectEmpty( &data->rects.visible );
-+    }
-     update_net_wm_states( data );
- 
-     if (data->mapped) queue_pending_config( data, &data->rects.visible, NextRequest( data->display ) );
-     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
-+    if (!IsRectEmpty( &original_rect ))
-+    {
-+        data->rects.visible = original_rect;
-+        update_net_wm_states( data );
-+    }
- 
-     TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x\n",
-            data->hwnd, data->whole_window, (int)data->rects.visible.left, (int)data->rects.visible.top,
-@@ -2000,6 +2104,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
+#@@ -1456,6 +1547,7 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
+# {
+#     DWORD style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+#     DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
+#+    RECT original_rect = {0};
+#     XWindowChanges changes;
+#     unsigned int mask = 0;
+# 
+#@@ -1499,10 +1591,21 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
+# 
+#     set_size_hints( data, style );
+#     set_mwm_hints( data, style, ex_style );
+#+    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
+#+     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
+#+    if (wm_is_kde( data->display ) && data->is_fullscreen )
+#+    {
+#+        original_rect = data->rects.visible;
+#+        SetRectEmpty( &data->rects.visible );
+#+    }
+#     update_net_wm_states( data );
+#     data->configure_serial = NextRequest( data->display );
+#     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
+#-
+#+    if (!IsRectEmpty( &original_rect ))
+#+    {
+#+        data->rects.visible = original_rect;
+#+        update_net_wm_states( data );
+#+    }
+#     TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x serial=%lu\n",
+#            data->hwnd, data->whole_window, (int)data->rects.visible.left, (int)data->rects.visible.top,
+#            (int)(data->rects.visible.right - data->rects.visible.left),
+@@ -2042,6 +2145,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
  {
      unsigned int width, height;
  

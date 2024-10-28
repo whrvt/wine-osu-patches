@@ -1,0 +1,40 @@
+From 543105b17a7d76ec84cb554db0dcc54778e7351d Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 24 Oct 2024 11:19:21 -0700
+Subject: [PATCH 2/6] Revert "kernelbase: Set the proper error code in
+ GetQueuedCompletionStatus{Ex} when the handle is closed."
+
+This reverts commit 764162fc5c855ccd2d238bfc21361cc852e2685c.
+---
+ dlls/kernelbase/sync.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/kernelbase/sync.c b/dlls/kernelbase/sync.c
+index f03a6c3150a..1d935b02ddf 100644
+--- a/dlls/kernelbase/sync.c
++++ b/dlls/kernelbase/sync.c
+@@ -1197,8 +1197,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetQueuedCompletionStatus( HANDLE port, LPDWORD co
+         return FALSE;
+     }
+ 
+-    if (status == STATUS_TIMEOUT)        SetLastError( WAIT_TIMEOUT );
+-    else if (status == STATUS_ABANDONED) SetLastError( ERROR_ABANDONED_WAIT_0 );
++    if (status == STATUS_TIMEOUT) SetLastError( WAIT_TIMEOUT );
+     else SetLastError( RtlNtStatusToDosError(status) );
+     return FALSE;
+ }
+@@ -1218,9 +1217,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetQueuedCompletionStatusEx( HANDLE port, OVERLAPP
+     ret = NtRemoveIoCompletionEx( port, (FILE_IO_COMPLETION_INFORMATION *)entries, count,
+                                   written, get_nt_timeout( &time, timeout ), alertable );
+     if (ret == STATUS_SUCCESS) return TRUE;
+-    else if (ret == STATUS_TIMEOUT)   SetLastError( WAIT_TIMEOUT );
+-    else if (ret == STATUS_USER_APC)  SetLastError( WAIT_IO_COMPLETION );
+-    else if (ret == STATUS_ABANDONED) SetLastError( ERROR_ABANDONED_WAIT_0 );
++    else if (ret == STATUS_TIMEOUT) SetLastError( WAIT_TIMEOUT );
++    else if (ret == STATUS_USER_APC) SetLastError( WAIT_IO_COMPLETION );
+     else SetLastError( RtlNtStatusToDosError(ret) );
+     return FALSE;
+ }
+-- 
+2.47.0
+

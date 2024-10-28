@@ -15,13 +15,13 @@ CW-Bug-Id: #20227
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index ece04a5d..2d4fcce9 100644
+index c6729e89d42..e72aac8c8bd 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
-@@ -1318,7 +1318,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+@@ -1334,7 +1334,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
                  TRACE( "restoring win %p/%lx\n", data->hwnd, data->whole_window );
                  release_win_data( data );
-                 if ((style & (WS_MINIMIZE | WS_VISIBLE)) == (WS_MINIMIZE | WS_VISIBLE))
+                 if ((old_style & (WS_MINIMIZE | WS_VISIBLE)) == (WS_MINIMIZE | WS_VISIBLE))
 -                    NtUserSetActiveWindow( hwnd );
 +                    NtUserSetForegroundWindow( hwnd );
                  send_message( hwnd, WM_SYSCOMMAND, SC_RESTORE, 0 );

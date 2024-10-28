@@ -1,0 +1,36 @@
+From 108d555ad71a121603a44316382c545136edf5b8 Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <z.figura12@gmail.com>
+Date: Wed, 13 Jun 2018 22:25:40 -0500
+Subject: [PATCH 0464/2346] kernel32/tests: Mark some existing tests as failing
+ under esync.
+
+Wine-Staging: eventfd_synchronization
+---
+ dlls/kernel32/tests/sync.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/kernel32/tests/sync.c b/dlls/kernel32/tests/sync.c
+index 56a9d6e4859..f1ea2d671be 100644
+--- a/dlls/kernel32/tests/sync.c
++++ b/dlls/kernel32/tests/sync.c
+@@ -268,7 +268,8 @@ static void test_mutex(void)
+     SetLastError(0xdeadbeef);
+     hOpened = OpenMutexA(GENERIC_READ | GENERIC_WRITE, FALSE, "WineTestMutex");
+     ok(hOpened != NULL, "OpenMutex failed with error %ld\n", GetLastError());
+-    wait_ret = WaitForSingleObject(hOpened, INFINITE);
++    wait_ret = WaitForSingleObject(hOpened, 0);
++todo_wine_if(getenv("WINEESYNC"))   /* XFAIL: validation is not implemented */
+     ok(wait_ret == WAIT_FAILED, "WaitForSingleObject succeeded\n");
+     CloseHandle(hOpened);
+ 
+@@ -299,6 +300,7 @@ static void test_mutex(void)
+ 
+     SetLastError(0xdeadbeef);
+     ret = ReleaseMutex(hCreated);
++todo_wine_if(getenv("WINEESYNC"))   /* XFAIL: due to the above */
+     ok(!ret && (GetLastError() == ERROR_NOT_OWNER),
+         "ReleaseMutex should have failed with ERROR_NOT_OWNER instead of %ld\n", GetLastError());
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,42 @@
+From 1c91ef50127b26e184d453510262b08254de4ee8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 19 Oct 2024 10:43:41 +0200
+Subject: [PATCH] winex11: Call window_set_wm_state when unmapping embedded
+ windows.
+
+---
+ dlls/winex11.drv/window.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 58fc99275f4..46006874dfa 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2398,17 +2398,19 @@ void X11DRV_SystrayDockClear( HWND hwnd )
+ BOOL X11DRV_SystrayDockRemove( HWND hwnd )
+ {
+     struct x11drv_win_data *data;
+-    BOOL ret;
++    BOOL ret = FALSE;
+ 
+-    /* make sure we don't try to unmap it, it confuses some systray docks */
+     if ((data = get_win_data( hwnd )))
+     {
+-        if ((ret = data->embedded)) data->mapped = FALSE;
++        if ((ret = data->embedded))
++        {
++            window_set_wm_state( data, WithdrawnState );
++            data->mapped = FALSE;
++        }
+         release_win_data( data );
+-        return ret;
+     }
+ 
+-    return FALSE;
++    return ret;
+ }
+ 
+ 
+-- 
+GitLab
+

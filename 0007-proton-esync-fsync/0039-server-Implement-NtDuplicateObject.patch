@@ -1,0 +1,48 @@
+From 3d360c4c106f11e82520d6f307b1b780038a02c8 Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <zfigura@codeweavers.com>
+Date: Mon, 6 Jul 2020 17:03:05 -0500
+Subject: [PATCH 0460/2346] server: Implement NtDuplicateObject().
+
+Wine-Staging: eventfd_synchronization
+---
+ server/esync.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/server/esync.c b/server/esync.c
+index 3a334b3b330..c5587bef6cf 100644
+--- a/server/esync.c
++++ b/server/esync.c
+@@ -112,6 +112,7 @@ struct esync
+ };
+ 
+ static void esync_dump( struct object *obj, int verbose );
++static int esync_get_esync_fd( struct object *obj, enum esync_type *type );
+ static unsigned int esync_map_access( struct object *obj, unsigned int access );
+ static void esync_destroy( struct object *obj );
+ 
+@@ -123,7 +124,7 @@ const struct object_ops esync_ops =
+     no_add_queue,              /* add_queue */
+     NULL,                      /* remove_queue */
+     NULL,                      /* signaled */
+-    NULL,                      /* get_esync_fd */
++    esync_get_esync_fd,        /* get_esync_fd */
+     NULL,                      /* satisfied */
+     no_signal,                 /* signal */
+     no_get_fd,                 /* get_fd */
+@@ -147,6 +148,13 @@ static void esync_dump( struct object *obj, int verbose )
+     fprintf( stderr, "esync fd=%d\n", esync->fd );
+ }
+ 
++static int esync_get_esync_fd( struct object *obj, enum esync_type *type )
++{
++    struct esync *esync = (struct esync *)obj;
++    *type = esync->type;
++    return esync->fd;
++}
++
+ static unsigned int esync_map_access( struct object *obj, unsigned int access )
+ {
+     /* Sync objects have the same flags. */
+-- 
+2.47.0
+
