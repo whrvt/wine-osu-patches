@@ -77,6 +77,6 @@ index 11111111111..11111111111 100644
          last_query_display_time = key.LastWriteTime.QuadPart;
 +        last_update = tick_count;
 +    }
+ 
+     set_winstation_monitors();
      pthread_mutex_unlock( &display_lock );
-     release_display_device_init_mutex( mutex );
-     return ret;

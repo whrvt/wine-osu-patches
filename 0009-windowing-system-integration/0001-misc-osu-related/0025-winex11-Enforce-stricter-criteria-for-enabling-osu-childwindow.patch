@@ -84,7 +84,7 @@ index 361641eeed6..50be2a74f88 100644
 +
  BOOL needs_offscreen_rendering( HWND hwnd, BOOL known_child )
  {
-     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_DEFAULT )) return TRUE; /* needs DPI scaling */
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_RAW_DPI )) return TRUE; /* needs DPI scaling */
 -    if (!use_osu_child_hack() || (NtUserGetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED) || editor_visible( NtUserGetDesktopWindow() ))
 +    if (!osu_rendering_bypass( hwnd ))
      {
