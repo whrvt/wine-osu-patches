@@ -1,0 +1,32 @@
+From 29b2b9931b5359026bb367e8dbc4090f8046feaf Mon Sep 17 00:00:00 2001
+From: Sebastian Lackner <sebastian@fds-team.de>
+Date: Fri, 3 Apr 2015 03:58:53 +0200
+Subject: [PATCH 0700/1562] server: When creating new directories temporarily
+ give read-permissions until they are opened.
+
+Wine-Staging: server-File_Permissions
+---
+ server/fd.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/server/fd.c b/server/fd.c
+index d789895628b..07f44b94cff 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -1947,7 +1947,12 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
+     /* create the directory if needed */
+     if ((options & FILE_DIRECTORY_FILE) && (flags & O_CREAT))
+     {
+-        if (mkdir( name, *mode ) == -1)
++        if (mkdir( name, *mode | S_IRUSR ) != -1)
++        {
++            /* remove S_IRUSR later, after we have opened the directory */
++            do_chmod = !(*mode & S_IRUSR);
++        }
++        else
+         {
+             if (errno != EEXIST || (flags & O_EXCL))
+             {
+-- 
+2.45.2
+

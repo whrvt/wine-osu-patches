@@ -1,0 +1,42 @@
+From 15fe50402be3d8379befa4fd2ee63b6fd874a1cc Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <z.figura12@gmail.com>
+Date: Wed, 24 Apr 2019 23:21:25 -0500
+Subject: [PATCH 0481/2346] server: Create esync file descriptors for true file
+ objects and use them for directory change notifications.
+
+Wine-Staging: eventfd_synchronization
+---
+ server/change.c | 2 +-
+ server/fd.c     | 3 +++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/server/change.c b/server/change.c
+index 5f1cf9b880b..6bd6920fdb5 100644
+--- a/server/change.c
++++ b/server/change.c
+@@ -112,7 +112,7 @@ static const struct object_ops dir_ops =
+     add_queue,                /* add_queue */
+     remove_queue,             /* remove_queue */
+     default_fd_signaled,      /* signaled */
+-    NULL,                     /* get_esync_fd */
++    default_fd_get_esync_fd,  /* get_esync_fd */
+     no_satisfied,             /* satisfied */
+     no_signal,                /* signal */
+     dir_get_fd,               /* get_fd */
+diff --git a/server/fd.c b/server/fd.c
+index 75af39b134e..4149c9d4637 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -1699,6 +1699,9 @@ static struct fd *alloc_fd_object(void)
+     list_init( &fd->inode_entry );
+     list_init( &fd->locks );
+ 
++    if (do_esync())
++        fd->esync_fd = esync_create_fd( 1, 0 );
++
+     if ((fd->poll_index = add_poll_user( fd )) == -1)
+     {
+         release_object( fd );
+-- 
+2.47.0
+

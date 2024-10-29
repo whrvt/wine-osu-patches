@@ -1,0 +1,51 @@
+From e6f9195474ba834177cdedc1fd1bb04efd54bd8c Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Mon, 23 Sep 2024 16:53:41 +0800
+Subject: [PATCH] win32u: Try the next top-level window if hit-testing the
+ result window returns HTTRANSPARENT.
+
+Fix clicking Toad for Oracle treeview nodes doesn't function. The left button click is sent to a
+top-level TSafeHintWindow, which returns HTTRANSPARENT when handling WM_NCHITTEST. Tests show that
+in such cases, the mouse message should be sent to the next top-level window in the z-order.
+---
+ dlls/user32/tests/input.c | 8 ++++----
+ dlls/win32u/message.c     | 2 ++
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/user32/tests/input.c b/dlls/user32/tests/input.c
+index 9196e67c15b..677b2714fcc 100644
+--- a/dlls/user32/tests/input.c
++++ b/dlls/user32/tests/input.c
+@@ -4233,12 +4233,12 @@ static void test_SendInput_mouse_messages(void)
+ 
+     mouse_event( MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0 );
+     wait_messages( 5, FALSE );
+-    button_down_hwnd_todo[1].message.hwnd = hwnd;
+-    ok_seq( button_down_hwnd_todo );
++    button_down_hwnd[1].message.hwnd = hwnd;
++    ok_seq( button_down_hwnd );
+     mouse_event( MOUSEEVENTF_LEFTUP, 0, 0, 0, 0 );
+     wait_messages( 5, FALSE );
+-    button_up_hwnd_todo[1].message.hwnd = hwnd;
+-    ok_seq( button_up_hwnd_todo );
++    button_up_hwnd[1].message.hwnd = hwnd;
++    ok_seq( button_up_hwnd );
+ 
+     ok_ret( 1, DestroyWindow( other ) );
+     wait_messages( 0, FALSE );
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index a0cbfbce95c..3d0db361d78 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2444,6 +2444,8 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+                 is_current_thread_window( next ))
+                 msg->hwnd = window_from_point( next, msg->pt, &hittest );
+         }
++        if (!msg->hwnd) /* Try the next top-level window */
++            msg->hwnd = window_from_point( 0, msg->pt, &hittest );
+     }
+ 
+     if (!msg->hwnd || !is_current_thread_window( msg->hwnd ))
+-- 
+GitLab
+

@@ -1,16 +1,16 @@
 From 1b43eb67197bc1c461a150db58ff5a6ad48917ab Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
-Subject: [PATCH 1/5] winepulse: Rely on PulseAudio write callbacks instead of a
+Subject: [PATCH 1/6] winepulse: Rely on PulseAudio write callbacks instead of a
  timer loop.
 
 Reverting a patch from Andrew Eikum.
 ---
- dlls/winepulse.drv/pulse.c | 658 +++++++++++++++++++------------------
- 1 file changed, 340 insertions(+), 318 deletions(-)
+ dlls/winepulse.drv/pulse.c | 660 +++++++++++++++++++------------------
+ 1 file changed, 341 insertions(+), 319 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 4d87707c728..9d585abfc40 100644
+index 615c3a8fdc8..9c7509e1089 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -73,13 +73,10 @@ struct pulse_stream
@@ -991,7 +991,7 @@ index 4d87707c728..9d585abfc40 100644
          hr = E_OUTOFMEMORY;
          goto exit;
      }
-@@ -2533,10 +2557,8 @@ static NTSTATUS pulse_set_sample_rate(void *args)
+@@ -2533,17 +2557,15 @@ static NTSTATUS pulse_set_sample_rate(void *args)
          wait_pa_operation_complete(pa_stream_flush(stream->stream, pulse_op_cb, &success));
  
      stream->clock_lastpos = stream->clock_written = 0;
@@ -1004,6 +1004,14 @@ index 4d87707c728..9d585abfc40 100644
      stream->bufsize_frames = new_bufsize_frames;
      stream->ss = new_ss;
  
+     size = 0;
+     NtFreeVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer, &size, MEM_RELEASE);
+ 
+-    silence_buffer(new_ss.format, new_buffer, stream->real_bufsize_bytes);
++    silence_buffer(new_ss.format, new_buffer, stream->bufsize_bytes);
+     stream->local_buffer = new_buffer;
+ 
+ exit:
 @@ -2661,7 +2683,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      pulse_start,
      pulse_stop,
@@ -1023,5 +1031,5 @@ index 4d87707c728..9d585abfc40 100644
      pulse_release_render_buffer,
      pulse_wow64_get_capture_buffer,
 -- 
-2.46.0
+2.46.2
 

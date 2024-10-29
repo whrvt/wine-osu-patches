@@ -1,0 +1,173 @@
+From dcd0f106ec9a64ddc0eb3fb94003290987b25e8a Mon Sep 17 00:00:00 2001
+From: Zebediah Figura <zfigura@codeweavers.com>
+Date: Mon, 6 Jul 2020 16:11:23 -0500
+Subject: [PATCH 0448/2346] server, ntdll: Implement message waits.
+
+Wine-Staging: eventfd_synchronization
+---
+ dlls/ntdll/unix/esync.c | 51 +++++++++++++++++++++++++++++++++++++++--
+ server/protocol.def     |  5 ++++
+ server/queue.c          | 21 +++++++++++++++++
+ 3 files changed, 75 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
+index 2f402eb77cd..91ac73399e5 100644
+--- a/dlls/ntdll/unix/esync.c
++++ b/dlls/ntdll/unix/esync.c
+@@ -472,12 +472,13 @@ static void update_grabbed_object( struct esync *obj )
+ 
+ /* A value of STATUS_NOT_IMPLEMENTED returned from this function means that we
+  * need to delegate to server_select(). */
+-NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
++static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
+                              BOOLEAN alertable, const LARGE_INTEGER *timeout )
+ {
+     struct esync *objs[MAXIMUM_WAIT_OBJECTS];
+     struct pollfd fds[MAXIMUM_WAIT_OBJECTS];
+     int has_esync = 0, has_server = 0;
++    BOOL msgwait = FALSE;
+     LONGLONG timeleft;
+     LARGE_INTEGER now;
+     ULONGLONG end;
+@@ -505,6 +506,9 @@ NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_an
+             return ret;
+     }
+ 
++    if (objs[count - 1] && objs[count - 1]->type == ESYNC_QUEUE)
++        msgwait = TRUE;
++
+     if (has_esync && has_server)
+         FIXME("Can't wait on esync and server objects at the same time!\n");
+     else if (has_server)
+@@ -516,6 +520,9 @@ NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_an
+         for (i = 0; i < count; i++)
+             TRACE(" %p", handles[i]);
+ 
++        if (msgwait)
++            TRACE(" or driver events");
++
+         if (!timeout)
+             TRACE(", timeout = INFINITE.\n");
+         else
+@@ -555,7 +562,9 @@ NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_an
+                         int64_t value;
+                         ssize_t size;
+ 
+-                        if (obj->type == ESYNC_MANUAL_EVENT || obj->type == ESYNC_MANUAL_SERVER)
++                        if (obj->type == ESYNC_MANUAL_EVENT
++                                || obj->type == ESYNC_MANUAL_SERVER
++                                || obj->type == ESYNC_QUEUE)
+                         {
+                             /* Don't grab the object, just check if it's signaled. */
+                             if (fds[i].revents & POLLIN)
+@@ -600,6 +609,44 @@ NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_an
+     }
+ }
+ 
++/* We need to let the server know when we are doing a message wait, and when we
++ * are done with one, so that all of the code surrounding hung queues works.
++ * We also need this for WaitForInputIdle(). */
++static void server_set_msgwait( int in_msgwait )
++{
++    SERVER_START_REQ( esync_msgwait )
++    {
++        req->in_msgwait = in_msgwait;
++        wine_server_call( req );
++    }
++    SERVER_END_REQ;
++}
++
++/* This is a very thin wrapper around the proper implementation above. The
++ * purpose is to make sure the server knows when we are doing a message wait.
++ * This is separated into a wrapper function since there are at least a dozen
++ * exit paths from esync_wait_objects(). */
++NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
++                             BOOLEAN alertable, const LARGE_INTEGER *timeout )
++{
++    BOOL msgwait = FALSE;
++    struct esync *obj;
++    NTSTATUS ret;
++
++    if (count && !get_object( handles[count - 1], &obj ) && obj->type == ESYNC_QUEUE)
++    {
++        msgwait = TRUE;
++        server_set_msgwait( 1 );
++    }
++
++    ret = __esync_wait_objects( count, handles, wait_any, alertable, timeout );
++
++    if (msgwait)
++        server_set_msgwait( 0 );
++
++    return ret;
++}
++
+ void esync_init(void)
+ {
+     struct stat st;
+diff --git a/server/protocol.def b/server/protocol.def
+index 6e67af1636e..2d6581d5d6c 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -3970,3 +3970,8 @@ enum esync_type
+     int          type;
+     unsigned int shm_idx;
+ @END
++
++/* Notify the server that we are doing a message wait or done with one. */
++@REQ(esync_msgwait)
++    int          in_msgwait;    /* are we in a message wait? */
++@END
+diff --git a/server/queue.c b/server/queue.c
+index a0071d231cc..ce818042475 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -137,6 +137,7 @@ struct msg_queue
+     int                    keystate_lock;   /* owns an input keystate lock */
+     const queue_shm_t     *shared;          /* thread queue shared memory ptr */
+     int                    esync_fd;        /* esync file descriptor (signalled on message) */
++    int                    esync_in_msgwait; /* our thread is currently waiting on us */
+ };
+ 
+ struct hotkey
+@@ -340,6 +341,7 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
+         queue->keystate_lock   = 0;
+         queue->shared          = thread->queue_shared;
+         queue->esync_fd        = -1;
++        queue->esync_in_msgwait = 0;
+         list_init( &queue->send_result );
+         list_init( &queue->callback_result );
+         list_init( &queue->pending_timers );
+@@ -1219,6 +1221,10 @@ static int is_queue_hung( struct msg_queue *queue )
+         if (get_wait_queue_thread(entry)->queue == queue)
+             return 0;  /* thread is waiting on queue -> not hung */
+     }
++
++    if (do_esync() && queue->esync_in_msgwait)
++        return 0;   /* thread is waiting on queue in absentia -> not hung */
++
+     return 1;
+ }
+ 
+@@ -3949,3 +3955,18 @@ DECL_HANDLER(update_rawinput_devices)
+     process->rawinput_mouse = find_rawinput_device( process, 1, 2 );
+     process->rawinput_kbd = find_rawinput_device( process, 1, 6 );
+ }
++
++DECL_HANDLER(esync_msgwait)
++{
++    struct msg_queue *queue = get_current_queue();
++
++    if (!queue) return;
++    queue->esync_in_msgwait = req->in_msgwait;
++
++    if (current->process->idle_event && !(queue->wake_mask & QS_SMRESULT))
++        set_event( current->process->idle_event );
++
++    /* and start/stop waiting on the driver */
++    if (queue->fd)
++        set_fd_events( queue->fd, req->in_msgwait ? POLLIN : 0 );
++}
+-- 
+2.47.0
+

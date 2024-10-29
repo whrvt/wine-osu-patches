@@ -1,0 +1,13 @@
+diff --git a/include/winuser.h b/include/winuser.h
+index 7d7a2dc557d..7ad4559052b 100644
+--- a/include/winuser.h
++++ b/include/winuser.h
+@@ -2671,7 +2671,7 @@ typedef struct tagMINIMIZEDMETRICS {
+ #define PM_QS_SENDMESSAGE (QS_SENDMESSAGE << 16)
+ 
+ /* SetTimer() limits */
+-#define USER_TIMER_MINIMUM 0x0000000A
++#define USER_TIMER_MINIMUM 0x00000005
+ #define USER_TIMER_MAXIMUM 0x7FFFFFFF
+ 
+ /* SetCoalescableTimer() tolerances */

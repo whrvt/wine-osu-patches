@@ -1,0 +1,116 @@
+diff --git a/dlls/ntdll/time.c b/dlls/ntdll/time.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/time.c
++++ b/dlls/ntdll/time.c
+@@ -391,12 +391,12 @@ static UINT64 multiply_tsc(UINT64 a, UINT64 b)
+  */
+ BOOL WINAPI DECLSPEC_HOTPATCH RtlQueryPerformanceCounter( LARGE_INTEGER *counter )
+ {
+-    if (user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
++    if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
+     {
+         unsigned __int64 tsc;
+         unsigned int aux;
+ 
+-        if (user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
++        if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
+             tsc = __rdtscp(&aux);
+         else
+         {
+Check for old kernel without necessary struct members
+diff --git a/configure.ac b/configure.ac
+index 11111111111..11111111111 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2197,6 +2197,14 @@ AC_CACHE_CHECK([whether we can use re-entrant gethostbyname_r Linux style],
+                 [Define if Linux-style gethostbyname_r and gethostbyaddr_r are available])
+    fi
+ 
++dnl Check for perf_event_mmap_page.cap_user_time_short
++AC_CHECK_MEMBERS([struct perf_event_mmap_page.cap_user_time_short],,,
++[#include <linux/perf_event.h>])
++
++dnl Check for perf_event_attr.remove_on_exec
++AC_CHECK_MEMBERS([struct perf_event_attr.remove_on_exec],,,
++[#include <linux/perf_event.h>])
++
+ dnl Check for socket structure members
+ AC_CHECK_MEMBERS([struct sockaddr_un.sun_len],,,
+ [#include <sys/types.h>
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2067,7 +2067,9 @@ static NTSTATUS map_perf_event_mmap_page( struct perf_event_mmap_page **addr )
+     attr.exclude_kernel = 1;
+     attr.exclude_hv = 1;
+     attr.exclude_host = 1;
++#ifdef HAVE_STRUCT_PERF_EVENT_ATTR_REMOVE_ON_EXEC
+     attr.remove_on_exec = 1;
++#endif
+     fd = perf_event_open( &attr, 0, -1, -1, PERF_FLAG_FD_CLOEXEC );
+     if (fd == -1)
+     {
+@@ -2094,7 +2096,11 @@ static NTSTATUS get_time_shift_mult( struct perf_event_mmap_page *page, __u32 *t
+     {
+         while (((seq = page->lock) % 2)) YieldProcessor();
+         __asm__ __volatile__( "" : : : "memory" );
++#ifdef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
+         user_time_supported = page->cap_user_time && !page->cap_user_time_short;
++#else
++        user_time_supported = page->cap_user_time;
++#endif
+         if (user_time_supported)
+         {
+             *time_mult = page->time_mult;
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2139,6 +2139,18 @@ NTSTATUS unixcall_wine_get_tsc_calibration( void *args )
+     __u32 time_mult;
+     NTSTATUS s;
+ 
++#ifndef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++    /* allow disabling rdtscp if Wine is built with old Linux kernels (e.g. WineBuilder Ubuntu 20.04) */
++    {
++        const char *e = getenv("WINE_DISABLE_TSC");
++        if (e && *e != '\0' && *e != '0') 
++        {
++            user_shared_data->QpcBypassEnabled &= ~(SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED | SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP);
++            return STATUS_NOT_SUPPORTED;
++        }
++    }
++#endif
++
+     if (monotonic_time_raw( &ts ))
+         return STATUS_NOT_SUPPORTED;
+ 
+Only hardcode QPC/TSC support if Wine is compiled on a fully compliant kernel (i.e. not Linux 5.4 through WineBuilder)
+diff --git a/dlls/ntdll/time.c b/dlls/ntdll/time.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/time.c
++++ b/dlls/ntdll/time.c
+@@ -391,12 +391,20 @@ static UINT64 multiply_tsc(UINT64 a, UINT64 b)
+  */
+ BOOL WINAPI DECLSPEC_HOTPATCH RtlQueryPerformanceCounter( LARGE_INTEGER *counter )
+ {
+-    if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
++    if (
++#ifdef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++        1 ||
++#endif
++        user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED)
+     {
+         unsigned __int64 tsc;
+         unsigned int aux;
+ 
+-        if (1 || user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
++        if (
++#ifdef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++            1 ||
++#endif
++            user_shared_data->QpcBypassEnabled & SHARED_GLOBAL_FLAGS_QPC_BYPASS_USE_RDTSCP)
+             tsc = __rdtscp(&aux);
+         else
+         {

@@ -1,0 +1,83 @@
+From 276cd6097bc1f167b1037216f2fed07c52e7f8a8 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 16 Sep 2024 10:02:10 -0700
+Subject: [PATCH] comctl32/listview: Skip scrolling to the start of the list
+ for SB_INTERNAL scrolls if it's not necessary.
+
+Fixes osu! editor's timing panel scroll position jumping to the very top of the
+list view when first clicking on an item in the list, given that it is not
+opened at that position initially. This jumping doesn't happen if the user 
+manually scrolls to the same element and clicks on it. 
+
+For the vertical and horizontal scrolling types, visibility is determined by:
+ - Vertical scrolling:
+     In any case, just check if nFocusedItem < (INT)scrollInfo.nPage. 
+     If it is, then it's already visible, and there's no need to scroll.
+ - Horizontal scrolling: 
+     1. In report view (LV_VIEW_DETAILS), horizontal scrolling typically affects
+       column visibility rather than item visibility.
+     2. In list view (LV_VIEW_LIST), horizontal scrolling moves through items, 
+       so the same logic as vertical scrolling applies.
+     3. In icon and small icon views (LV_VIEW_ICON/SMALLICON), items can 
+       be arranged in a grid, which complicates the visibility determination.
+     The additional case logic is applied for the specific view types,
+     because the LV_VIEW_ICON/SMALLICON/DETAILS views can wrap to multiple rows.
+     Note that these cases (probably) aren't necessary for vertical scrolling,
+     because elements are arranged top-to-bottom and don't wrap.
+
+These all require tests...
+
+https://learn.microsoft.com/en-us/windows/win32/controls/list-view-controls-overview
+---
+ dlls/comctl32/listview.c | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/dlls/comctl32/listview.c b/dlls/comctl32/listview.c
+index c82473b6205..7baefe20d16 100644
+--- a/dlls/comctl32/listview.c
++++ b/dlls/comctl32/listview.c
+@@ -9813,6 +9813,12 @@ static LRESULT LISTVIEW_VScroll(LISTVIEW_INFO *infoPtr, INT nScrollCode,
+     switch (nScrollCode)
+     {
+     case SB_INTERNAL:
++        if (nScrollDiff == -scrollInfo.nPos)
++            /* don't scroll to start if the focused item is already visible */
++            if (infoPtr->nFocusedItem >= 0 && infoPtr->nFocusedItem < (INT)scrollInfo.nPage) {
++                TRACE("skipping unnecessary scroll to start\n");   
++                return 0;
++            }
+         break;
+ 
+     case SB_LINEUP:
+@@ -9918,6 +9924,28 @@ static LRESULT LISTVIEW_HScroll(LISTVIEW_INFO *infoPtr, INT nScrollCode,
+     switch (nScrollCode)
+     {
+     case SB_INTERNAL:
++        if (nScrollDiff == -scrollInfo.nPos) {
++            BOOL skip_scroll = FALSE;
++            switch (infoPtr->uView) {
++                case LV_VIEW_DETAILS:
++                    /* check if all columns are visible */
++                    skip_scroll = (infoPtr->nItemWidth <= infoPtr->rcList.right - infoPtr->rcList.left);
++                    break;
++                case LV_VIEW_LIST:
++                    /* same logic as vertical scrolling skip */
++                    skip_scroll = (infoPtr->nFocusedItem >= 0 && infoPtr->nFocusedItem < (INT)scrollInfo.nPage);
++                    break;
++                case LV_VIEW_ICON:
++                case LV_VIEW_SMALLICON:
++                    /* FIXME: untested, check if the leftmost visible item is the first item */
++                    skip_scroll = (infoPtr->nItemWidth > 0 && scrollInfo.nPos / infoPtr->nItemWidth == 0);
++                    break;
++            }
++            if (skip_scroll) {
++                TRACE("skipping unnecessary scroll to start\n");
++                return 0;
++            }
++        }
+         break;
+ 
+     case SB_LINELEFT:
+-- 
+2.46.1
+

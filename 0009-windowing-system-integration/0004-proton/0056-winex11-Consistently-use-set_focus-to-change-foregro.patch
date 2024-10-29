@@ -1,0 +1,36 @@
+From 219a3f436f831fa6ecc6ba13c609432b91cce522 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 23 Jan 2024 10:49:37 +0100
+Subject: [PATCH 1100/1516] winex11: Consistently use set_focus to change
+ foreground window.
+
+It does more than that and also waits for the window manager to release
+its grabs.
+
+CW-Bug-Id: #23288
+CW-Bug-Id: #23320
+---
+ dlls/winex11.drv/event.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index cec5712a..89a7506b 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -864,7 +864,12 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
+         if (!hwnd) hwnd = x11drv_thread_data()->last_focus;
+         if (hwnd && can_activate_window(hwnd)) set_focus( event->display, hwnd, CurrentTime );
+     }
+-    else NtUserSetForegroundWindow( hwnd );
++    else
++    {
++        wait_grab_pointer( event->display );
++        NtUserSetForegroundWindow( hwnd );
++    }
++
+     return TRUE;
+ }
+ 
+-- 
+2.44.0
+

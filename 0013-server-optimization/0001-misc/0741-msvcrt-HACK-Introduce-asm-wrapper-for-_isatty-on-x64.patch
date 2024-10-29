@@ -1,0 +1,55 @@
+From cf08808609a9010a489309ef0a00a92d4c54a400 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 1 Apr 2022 17:39:50 +0300
+Subject: [PATCH 0741/2307] msvcrt: HACK: Introduce asm wrapper for _isatty on
+ x64.
+
+CW-Bug-Id: #20419
+---
+ dlls/msvcrt/file.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/dlls/msvcrt/file.c b/dlls/msvcrt/file.c
+index 3c1d9572585..3de12d1087f 100644
+--- a/dlls/msvcrt/file.c
++++ b/dlls/msvcrt/file.c
+@@ -44,6 +44,7 @@
+ #include "mtdll.h"
+ #include "wine/asm.h"
+ #include "wine/debug.h"
++#include "wine/asm.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(msvcrt);
+ 
+@@ -818,12 +819,28 @@ static int msvcrt_flush_buffer(FILE* file)
+ /*********************************************************************
+  *		_isatty (MSVCRT.@)
+  */
++#ifdef __x86_64__
++int CDECL MSVCRT__isatty(int fd)
++{
++    TRACE(":fd (%d)\n",fd);
++
++    return get_ioinfo_nolock(fd)->wxflag & WX_TTY;
++}
++__ASM_GLOBAL_FUNC( _isatty,
++        "sub $0x30,%rsp\n\t"
++        "lea MSVCRT___pioinfo(%rip),%rdx\n\t"
++        "nop;nop;nop;nop;nop;nop;nop;nop;nop\n\t"
++        "add $0x30,%rsp\n\t"
++        "jmp " __ASM_NAME( "MSVCRT__isatty" ) )
++#else
+ int CDECL _isatty(int fd)
+ {
+     TRACE(":fd (%d)\n",fd);
+ 
+     return get_ioinfo_nolock(fd)->wxflag & WX_TTY;
+ }
++#endif
++
+ 
+ /* INTERNAL: Allocate stdio file buffer */
+ static BOOL msvcrt_alloc_buffer(FILE* file)
+-- 
+2.46.2
+

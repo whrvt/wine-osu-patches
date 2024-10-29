@@ -1,0 +1,141 @@
+From 5caf0f62c6a260108a211eaa1abafc1adbb132e9 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 7 Oct 2024 19:19:02 -0600
+Subject: [PATCH 2324/2346] ntdll: Handle user APCs explicitly in
+ NtRemoveIoCompletionEx().
+
+CW-Bug-Id: #24295
+---
+ dlls/ntdll/tests/file.c | 26 ++++++++++++++++++++++++++
+ dlls/ntdll/unix/sync.c  | 14 +++++++++++---
+ server/completion.c     |  6 ++++--
+ server/protocol.def     |  1 +
+ 4 files changed, 42 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/ntdll/tests/file.c b/dlls/ntdll/tests/file.c
+index 3a585cc155f..30d30869191 100644
+--- a/dlls/ntdll/tests/file.c
++++ b/dlls/ntdll/tests/file.c
+@@ -1009,6 +1009,32 @@ static void test_set_io_completion(void)
+     ok( res == STATUS_SUCCESS, "NtCreateIoCompletion failed: %#lx\n", res );
+     ok( h && h != INVALID_HANDLE_VALUE, "got invalid handle %p\n", h );
+ 
++    apc_count = 0;
++    QueueUserAPC( user_apc_proc, GetCurrentThread(), (ULONG_PTR)&apc_count );
++    res = pNtSetIoCompletion( h, 123, 456, 789, size );
++    ok( res == STATUS_SUCCESS, "NtSetIoCompletion failed: %#lx\n", res );
++    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
++    /* Before a thread is associated with completion port APC takes priority over pending completion. */
++    ok( res == STATUS_USER_APC, "NtRemoveIoCompletionEx failed: %#lx\n", res );
++    ok( count <= 1, "wrong count %lu\n", count );
++    ok( apc_count == 1, "wrong apc count %u\n", apc_count );
++
++    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
++    ok( res == STATUS_SUCCESS, "NtRemoveIoCompletion failed: %#lx\n", res );
++    ok( count == 1, "wrong count %lu\n", count );
++
++    apc_count = 0;
++    QueueUserAPC( user_apc_proc, GetCurrentThread(), (ULONG_PTR)&apc_count );
++    res = pNtSetIoCompletion( h, 123, 456, 789, size );
++    ok( res == STATUS_SUCCESS, "NtSetIoCompletion failed: %#lx\n", res );
++    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
++    /* After a thread is associated with completion port existing completion is returned if APC is pending. */
++    ok( res == STATUS_SUCCESS, "NtRemoveIoCompletionEx failed: %#lx\n", res );
++    ok( count == 1, "wrong count %lu\n", count );
++    ok( apc_count == 0, "wrong apc count %u\n", apc_count );
++    SleepEx( 0, TRUE);
++    ok( apc_count == 1, "wrong apc count %u\n", apc_count );
++
+     res = pNtRemoveIoCompletion( h, &key, &value, &iosb, &timeout );
+     ok( res == STATUS_TIMEOUT, "NtRemoveIoCompletion failed: %#lx\n", res );
+ 
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 8b170daa603..fd3faf61997 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2035,6 +2035,7 @@ NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE handle, ULONG_PTR *key, ULONG_PTR *
+     SERVER_START_REQ( remove_completion )
+     {
+         req->handle = wine_server_obj_handle( handle );
++        req->alertable = 0;
+         if (!(status = wine_server_call( req )))
+         {
+             *key            = reply->ckey;
+@@ -2083,6 +2084,7 @@ NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORM
+         SERVER_START_REQ( remove_completion )
+         {
+             req->handle = wine_server_obj_handle( handle );
++            req->alertable = alertable;
+             if (!(status = wine_server_call( req )))
+             {
+                 info[i].CompletionKey             = reply->ckey;
+@@ -2096,13 +2098,19 @@ NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORM
+         if (status != STATUS_SUCCESS) break;
+         ++i;
+     }
+-    if (i || status != STATUS_PENDING)
++    if (i || (status != STATUS_PENDING && status != STATUS_USER_APC))
+     {
+         if (i) status = STATUS_SUCCESS;
+         goto done;
+     }
+-    if (!timeout || timeout->QuadPart || alertable) status = NtWaitForSingleObject( wait_handle, alertable, timeout );
+-    else                                            status = STATUS_TIMEOUT;
++    if (status == STATUS_USER_APC)
++    {
++        status = NtDelayExecution( TRUE, NULL );
++        assert( status == STATUS_USER_APC );
++        goto done;
++    }
++    if (!timeout || timeout->QuadPart) status = NtWaitForSingleObject( wait_handle, alertable, timeout );
++    else                               status = STATUS_TIMEOUT;
+     if (status != WAIT_OBJECT_0) goto done;
+ 
+     SERVER_START_REQ( get_thread_completion )
+diff --git a/server/completion.c b/server/completion.c
+index 31e9373c725..5077935bec2 100644
+--- a/server/completion.c
++++ b/server/completion.c
+@@ -343,23 +343,25 @@ DECL_HANDLER(remove_completion)
+     struct completion* completion = get_completion_obj( current->process, req->handle, IO_COMPLETION_MODIFY_STATE );
+     struct list *entry;
+     struct comp_msg *msg;
++    BOOL alerted;
+ 
+     if (!completion) return;
+ 
+     entry = list_head( &completion->queue );
+     if (current->completion_wait && current->completion_wait->completion != completion)
+         cleanup_thread_completion( current );
++    alerted = req->alertable && !list_empty( &current->user_apc ) && !(entry && current->completion_wait);
+     if (!current->completion_wait && !(current->completion_wait = create_completion_wait( completion, current )))
+     {
+         release_object( completion );
+         return;
+     }
+-    if (!entry)
++    if (alerted || !entry)
+     {
+         list_remove( &current->completion_wait->wait_queue_entry );
+         list_add_head( &completion->wait_queue, &current->completion_wait->wait_queue_entry );
+         reply->wait_handle = current->completion_wait->handle;
+-        set_error( STATUS_PENDING );
++        set_error( alerted ? STATUS_USER_APC : STATUS_PENDING );
+     }
+     else
+     {
+diff --git a/server/protocol.def b/server/protocol.def
+index 5f4bb53041b..f52d2cf3b49 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -3843,6 +3843,7 @@ typedef union
+ /* get completion from completion port queue */
+ @REQ(remove_completion)
+     obj_handle_t handle;          /* port handle */
++    int          alertable;       /* completion wait is alertable */
+ @REPLY
+     apc_param_t   ckey;           /* completion key */
+     apc_param_t   cvalue;         /* completion value */
+-- 
+2.47.0
+

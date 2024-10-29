@@ -1,0 +1,40 @@
+From 297884226263ece447ec009223603f1d928bdb17 Mon Sep 17 00:00:00 2001
+From: Alexey Prokhin <alexey@prokhin.ru>
+Date: Thu, 23 Apr 2020 12:29:55 +0300
+Subject: [PATCH 2326/2346] kernelbase: Set the proper error code in
+ GetQueuedCompletionStatus{Ex} when the handle is closed.
+
+CW-Bug-Id: #24295
+---
+ dlls/kernelbase/sync.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/kernelbase/sync.c b/dlls/kernelbase/sync.c
+index 8c87d56aadd..2fffd3ead79 100644
+--- a/dlls/kernelbase/sync.c
++++ b/dlls/kernelbase/sync.c
+@@ -1201,7 +1201,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetQueuedCompletionStatus( HANDLE port, LPDWORD co
+         return FALSE;
+     }
+ 
+-    if (status == STATUS_TIMEOUT) SetLastError( WAIT_TIMEOUT );
++    if (status == STATUS_TIMEOUT)        SetLastError( WAIT_TIMEOUT );
++    else if (status == STATUS_ABANDONED) SetLastError( ERROR_ABANDONED_WAIT_0 );
+     else SetLastError( RtlNtStatusToDosError(status) );
+     return FALSE;
+ }
+@@ -1221,8 +1222,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetQueuedCompletionStatusEx( HANDLE port, OVERLAPP
+     ret = NtRemoveIoCompletionEx( port, (FILE_IO_COMPLETION_INFORMATION *)entries, count,
+                                   written, get_nt_timeout( &time, timeout ), alertable );
+     if (ret == STATUS_SUCCESS) return TRUE;
+-    else if (ret == STATUS_TIMEOUT) SetLastError( WAIT_TIMEOUT );
+-    else if (ret == STATUS_USER_APC) SetLastError( WAIT_IO_COMPLETION );
++    else if (ret == STATUS_TIMEOUT)   SetLastError( WAIT_TIMEOUT );
++    else if (ret == STATUS_USER_APC)  SetLastError( WAIT_IO_COMPLETION );
++    else if (ret == STATUS_ABANDONED) SetLastError( ERROR_ABANDONED_WAIT_0 );
+     else SetLastError( RtlNtStatusToDosError(ret) );
+     return FALSE;
+ }
+-- 
+2.47.0
+

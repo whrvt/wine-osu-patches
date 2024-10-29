@@ -1,0 +1,13 @@
+diff --git a/server/fd.c b/server/fd.c
+index 11111111111..11111111111 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -959,7 +959,7 @@ static void remove_poll_user( struct fd *fd, int user )
+ /* process pending timeouts and return the time until the next timeout, in milliseconds */
+ static int get_next_timeout(void)
+ {
+-    int ret = user_shared_data ? user_shared_data_timeout : -1;
++    int ret = -1;
+ 
+     if (!list_empty( &abs_timeout_list ) || !list_empty( &rel_timeout_list ))
+     {

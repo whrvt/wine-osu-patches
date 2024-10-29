@@ -1,0 +1,32 @@
+From 96eda2fd0e8a3b136a95e816f8630cead39599f8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 7 Mar 2022 16:53:09 +0100
+Subject: [PATCH 0268/1516] winex11.drv: Call SetForegroundWindow instead of
+ SetActiveWindow on restore.
+
+So that the window is both active and foreground before we send the
+SC_RESTORE command. Project Cars 3 expects that as it tries to reacquire
+DInput devices on SC_RESTORE.
+
+CW-Bug-Id: #19011
+CW-Bug-Id: #20227
+---
+ dlls/winex11.drv/event.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index c6729e89d42..e72aac8c8bd 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1334,7 +1334,7 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+                 TRACE( "restoring win %p/%lx\n", data->hwnd, data->whole_window );
+                 release_win_data( data );
+                 if ((old_style & (WS_MINIMIZE | WS_VISIBLE)) == (WS_MINIMIZE | WS_VISIBLE))
+-                    NtUserSetActiveWindow( hwnd );
++                    NtUserSetForegroundWindow( hwnd );
+                 send_message( hwnd, WM_SYSCOMMAND, SC_RESTORE, 0 );
+                 return;
+             }
+-- 
+2.44.0
+

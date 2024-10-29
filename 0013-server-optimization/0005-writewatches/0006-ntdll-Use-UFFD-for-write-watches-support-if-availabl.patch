@@ -1,0 +1,672 @@
+From 6affe14365919236df25699eac12f0a027c51a29 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 8 May 2020 14:32:09 +0300
+Subject: [PATCH 1158/1562] ntdll: Use UFFD for write watches support if
+ available.
+
+Requires Linux kernel 6.7+ to have effect.
+
+CW-Bug-Id: #23524
+---
+ dlls/kernel32/tests/virtual.c   | 162 ++++++++++++++++++++++++++++-
+ dlls/ntdll/unix/uffd_tmp_defs.h |  75 ++++++++++++++
+ dlls/ntdll/unix/virtual.c       | 176 ++++++++++++++++++++++++++++++--
+ dlls/ws2_32/tests/sock.c        |  16 ++-
+ 4 files changed, 410 insertions(+), 19 deletions(-)
+ create mode 100644 dlls/ntdll/unix/uffd_tmp_defs.h
+
+diff --git a/dlls/kernel32/tests/virtual.c b/dlls/kernel32/tests/virtual.c
+index c54fb16ba15..bc573644d97 100644
+--- a/dlls/kernel32/tests/virtual.c
++++ b/dlls/kernel32/tests/virtual.c
+@@ -1631,7 +1631,7 @@ static void test_write_watch(void)
+     MEMORY_BASIC_INFORMATION info;
+     HANDLE readpipe, writepipe, file;
+     OVERLAPPED overlapped, *overlapped2;
+-    void *results[64];
++    void *results[2048];
+     ULONG_PTR count;
+     ULONG i, pagesize;
+     BOOL success;
+@@ -1671,6 +1671,7 @@ static void test_write_watch(void)
+ 
+     SetLastError( 0xdeadbeef );
+     ret = pGetWriteWatch( 0, GetModuleHandleW(NULL), size, results, &count, &pagesize );
++    ok(ret, "failed.\n");
+     if (ret)
+     {
+         ok( ret == ~0u, "GetWriteWatch succeeded %lu\n", ret );
+@@ -1694,6 +1695,7 @@ static void test_write_watch(void)
+     ok( results[0] == base + pagesize, "wrong result %p\n", results[0] );
+ 
+     count = 64;
++    results[0] = (void *)0xdeadbeef;
+     ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
+     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
+     ok( count == 1, "wrong count %Iu\n", count );
+@@ -2103,6 +2105,16 @@ static void test_write_watch(void)
+ 
+     base = VirtualAlloc( 0, size, MEM_RESERVE | MEM_WRITE_WATCH, PAGE_NOACCESS );
+     ok( base != NULL, "VirtualAlloc failed %lu\n", GetLastError() );
++
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 0, "wrong count %Iu\n", count );
++
++    ret = pResetWriteWatch( base, size );
++    ok( !ret, "pResetWriteWatch failed %lu\n", GetLastError() );
++
++
+     base = VirtualAlloc( base, size, MEM_COMMIT, PAGE_NOACCESS );
+     ok( base != NULL, "VirtualAlloc failed %lu\n", GetLastError() );
+ 
+@@ -2122,20 +2134,160 @@ static void test_write_watch(void)
+     ok( old_prot == PAGE_READWRITE, "wrong old prot %lx\n", old_prot );
+ 
+     count = 64;
+-    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ret = pGetWriteWatch( /*0*/WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
+     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
+     ok( count == 1, "wrong count %Iu\n", count );
+     ok( results[0] == base + 5*pagesize, "wrong result %p\n", results[0] );
+ 
++    ret = pResetWriteWatch( base, size );
++    ret = pResetWriteWatch( base + 6*pagesize, size - 6 * pagesize );
++    ok( !ret, "pResetWriteWatch failed %lu\n", GetLastError() );
++
++    count = 64;
++    results[0] = (void *)0xdeadbeef;
++    ret = pGetWriteWatch( /*0*/WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 0, "wrong count %Iu\n", count );
++    ok( results[0] == (void *)0xdeadbeef, "wrong result %p\n", results[0] );
++
++    ret = VirtualFree( base + pagesize, pagesize, MEM_DECOMMIT );
++    ok( ret, "VirtualFree failed %lu\n", GetLastError() );
++
++    ret = VirtualProtect( base + 2*pagesize, pagesize, PAGE_READWRITE, &old_prot );
++    ok( ret, "VirtualProtect failed error %lu\n", GetLastError() );
++    ok( old_prot == PAGE_NOACCESS, "wrong old prot %lx\n", old_prot );
++
++    count = 64;
++    results[0] = (void *)0xdeadbeef;
++    ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 0, "wrong count %Iu\n", count );
++    ok( results[0] == (void *)0xdeadbeef, "wrong result %p\n", results[0] );
++
++    base[2*pagesize + 200] = 3;
++    count = 64;
++    results[0] = (void *)0xdeadbeef;
++    ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 1, "wrong count %Iu\n", count );
++    ok( results[0] == base + 2*pagesize, "wrong result %p\n", results[0] );
++
++    base = VirtualAlloc( base, size, MEM_COMMIT, PAGE_NOACCESS );
++    ok( !!base, "VirtualFree failed %lu\n", GetLastError() );
++
++    ret = VirtualProtect( base, 6*pagesize, PAGE_READWRITE, &old_prot );
++    ok( ret, "VirtualProtect failed error %lu\n", GetLastError() );
++    ok( old_prot == PAGE_NOACCESS, "wrong old prot %lx\n", old_prot );
++
++    base[3*pagesize + 200] = 3;
++    base[5*pagesize + 200] = 3;
++
+     ret = VirtualFree( base, size, MEM_DECOMMIT );
+     ok( ret, "VirtualFree failed %lu\n", GetLastError() );
+ 
+     count = 64;
+     ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
+     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
+-    ok( count == 1 || broken(count == 0), /* win98 */
+-        "wrong count %Iu\n", count );
+-    if (count) ok( results[0] == base + 5*pagesize, "wrong result %p\n", results[0] );
++    ok( !count, "wrong count %Iu\n", count );
++
++    base = VirtualAlloc( base, size, MEM_COMMIT, PAGE_READWRITE );
++    ok(!!base, "VirtualAlloc failed.\n");
++
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( !count, "wrong count %Iu\n", count );
++
++    /* Looks like VirtualProtect latches write watch state somewhere, so if pages are decommitted after,
++     * (which normally clears write watch state), a page from range which previously had protection change
++     * is still reported as dirty. */
++    base[3*pagesize + 200] = 3;
++    ret = VirtualProtect( base, 6*pagesize, PAGE_READWRITE, &old_prot );
++    ok( ret, "VirtualProtect failed error %lu\n", GetLastError() );
++    ok( old_prot == PAGE_READWRITE, "wrong old prot %lx\n", old_prot );
++
++    base[5*pagesize + 200] = 3;
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 2, "wrong c    ount %Iu\n", count );
++    ok( results[0] == base + 3*pagesize && results[1] == base + 5*pagesize, "wrong result %p\n", results[0] );
++
++    ret = VirtualFree( base, size, MEM_DECOMMIT );
++    ok( ret, "VirtualFree failed %lu\n", GetLastError() );
++
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    todo_wine ok( count == 1, "wrong count %Iu\n", count );
++    ok( results[0] == base + 3*pagesize, "wrong result %p\n", results[0] );
++
++    base = VirtualAlloc( base, size, MEM_COMMIT, PAGE_READWRITE );
++    ok(!!base, "VirtualAlloc failed.\n");
++
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    todo_wine ok( count == 1, "wrong count %Iu\n", count );
++    ok( results[0] == base + 3*pagesize, "wrong result %p\n", results[0] );
++
++    base[4*pagesize + 200] = 4;
++    base[2*pagesize + 200] = 4;
++    base[6*pagesize + 200] = 4;
++
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    todo_wine ok( count == 4, "wrong count %Iu\n", count );
++    ok( results[0] == base + 2*pagesize, "wrong result %p\n", results[0] );
++    todo_wine ok( results[1] == base + 3*pagesize, "wrong result %p\n", results[0] );
++    todo_wine ok( results[2] == base + 4*pagesize, "wrong result %p\n", results[0] );
++    todo_wine ok( results[3] == base + 6*pagesize, "wrong result %p\n", results[0] );
++
++    VirtualFree( base, 0, MEM_RELEASE );
++
++    /* Test longer range */
++    size = 2048 * pagesize;
++    base = VirtualAlloc( 0, size, MEM_RESERVE | MEM_COMMIT | MEM_WRITE_WATCH, PAGE_READWRITE );
++    ok( base != NULL, "VirtualAlloc failed %lu\n", GetLastError() );
++
++    count = 2048;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 0, "wrong count %Iu\n", count );
++
++    count = 2048;
++    for (i = 0; i < count; i += 2)
++        ++base[i * pagesize];
++
++    ret = VirtualProtect( base, size / 2, PAGE_READONLY, &old_prot );
++    ok( ret, "VirtualProtect failed error %lu\n", GetLastError() );
++
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 1024, "wrong count %Iu\n", count );
++
++    for (i = 0; i < count; ++i)
++    {
++        ok( results[i] == base + i * 2 * pagesize, "wrong result %p\n", results[i] );
++        if (results[i] != base + i * 2 * pagesize)
++            break;
++    }
++
++    ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 1024, "wrong count %Iu\n", count );
++
++    for (i = 0; i < count; ++i)
++    {
++        ok( results[i] == base + i * 2 * pagesize, "wrong result %p\n", results[i] );
++        if (results[i] != base + i * 2 * pagesize)
++            break;
++    }
++
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
++    ok( count == 0, "wrong count %Iu\n", count );
+ 
+     VirtualFree( base, 0, MEM_RELEASE );
+ }
+diff --git a/dlls/ntdll/unix/uffd_tmp_defs.h b/dlls/ntdll/unix/uffd_tmp_defs.h
+new file mode 100644
+index 00000000000..f79c34c6145
+--- /dev/null
++++ b/dlls/ntdll/unix/uffd_tmp_defs.h
+@@ -0,0 +1,75 @@
++#ifndef __UFFD_TMP_DEFS__
++#define __UFFD_TMP_DEFS__
++
++#ifdef __x86_64__
++#define __NR_userfaultfd 323
++#else
++#define __NR_userfaultfd 374
++#endif
++
++#ifndef UFFD_FEATURE_WP_ASYNC
++#define UFFD_FEATURE_WP_UNPOPULATED		(1<<13)
++#define UFFD_FEATURE_WP_ASYNC			(1<<15)
++#endif
++
++#ifndef PAGEMAP_SCAN
++/* Pagemap ioctl */
++#define PAGEMAP_SCAN	_IOWR('f', 16, struct pm_scan_arg)
++
++/* Bits are set in flags of the page_region and masks in pm_scan_args */
++#define PAGE_IS_WPALLOWED	(1 << 0)
++#define PAGE_IS_WRITTEN		(1 << 1)
++#define PAGE_IS_FILE		(1 << 2)
++#define PAGE_IS_PRESENT		(1 << 3)
++#define PAGE_IS_SWAPPED		(1 << 4)
++#define PAGE_IS_PFNZERO		(1 << 5)
++#define PAGE_IS_HUGE		(1 << 6)
++/*
++ * struct page_region - Page region with flags
++ * @start:	Start of the region
++ * @end:	End of the region (exclusive)
++ * @categories:	PAGE_IS_* category bitmask for the region
++ */
++struct page_region {
++	__u64 start;
++	__u64 end;
++	__u64 categories;
++};
++
++/* Flags for PAGEMAP_SCAN ioctl */
++#define PM_SCAN_WP_MATCHING	(1 << 0)	/* Write protect the pages matched. */
++#define PM_SCAN_CHECK_WPASYNC	(1 << 1)	/* Abort the scan when a non-WP-enabled page is found. */
++
++/*
++ * struct pm_scan_arg - Pagemap ioctl argument
++ * @size:		Size of the structure
++ * @flags:		Flags for the IOCTL
++ * @start:		Starting address of the region
++ * @end:		Ending address of the region
++ * @walk_end		Address where the scan stopped (written by kernel).
++ *			walk_end == end informs that the scan completed on entire range.
++ * @vec:		Address of page_region struct array for output
++ * @vec_len:		Length of the page_region struct array
++ * @max_pages:		Optional limit for number of returned pages (0 = disabled)
++ * @category_inverted:	PAGE_IS_* categories which values match if 0 instead of 1
++ * @category_mask:	Skip pages for which any category doesn't match
++ * @category_anyof_mask: Skip pages for which no category matches
++ * @return_mask:	PAGE_IS_* categories that are to be reported in `page_region`s returned
++ */
++struct pm_scan_arg {
++	__u64 size;
++	__u64 flags;
++	__u64 start;
++	__u64 end;
++	__u64 walk_end;
++	__u64 vec;
++	__u64 vec_len;
++	__u64 max_pages;
++	__u64 category_inverted;
++	__u64 category_mask;
++	__u64 category_anyof_mask;
++	__u64 return_mask;
++};
++#endif
++
++#endif
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 8354f95a288..55c05c15784 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -70,6 +70,10 @@
+ # include <mach/vm_map.h>
+ #endif
+ 
++#include <linux/userfaultfd.h>
++#include <sys/ioctl.h>
++#include "uffd_tmp_defs.h"
++
+ #include "ntstatus.h"
+ #define WIN32_NO_STATUS
+ #include "windef.h"
+@@ -214,6 +218,9 @@ static BYTE **pages_vprot;
+ static BYTE *pages_vprot;
+ #endif
+ 
++static int use_kernel_writewatch;
++static int uffd_fd, pagemap_fd;
++
+ static struct file_view *view_block_start, *view_block_end, *next_free_view;
+ #ifdef _WIN64
+ static const size_t view_block_size = 0x200000;
+@@ -270,6 +277,127 @@ void *anon_mmap_alloc( size_t size, int prot )
+     return mmap( NULL, size, prot, MAP_PRIVATE | MAP_ANON, -1, 0 );
+ }
+ 
++static void kernel_writewatch_init(void)
++{
++    struct uffdio_api uffdio_api;
++
++    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK );
++    if (uffd_fd == -1) return;
++
++    uffdio_api.api = UFFD_API;
++    uffdio_api.features = UFFD_FEATURE_WP_ASYNC | UFFD_FEATURE_WP_UNPOPULATED;
++    if (ioctl( uffd_fd, UFFDIO_API, &uffdio_api ) || uffdio_api.api != UFFD_API)
++    {
++        close( uffd_fd );
++        return;
++    }
++    pagemap_fd = open( "/proc/self/pagemap", O_CLOEXEC | O_RDONLY );
++    if (pagemap_fd == -1)
++    {
++        ERR("Error opening /proc/self/pagemap.\n");
++        close( uffd_fd );
++        return;
++    }
++    use_kernel_writewatch = 1;
++}
++
++static void kernel_writewatch_reset( void *start, SIZE_T len )
++{
++    struct pm_scan_arg arg = { 0 };
++
++    arg.size = sizeof(arg);
++    arg.start = (UINT_PTR)start;
++    arg.end = arg.start + len;
++    arg.flags = PM_SCAN_WP_MATCHING;
++    arg.category_mask = PAGE_IS_WRITTEN;
++    arg.return_mask = PAGE_IS_WRITTEN;
++    if (ioctl( pagemap_fd, PAGEMAP_SCAN, &arg ) < 0)
++        ERR( "ioctl(PAGEMAP_SCAN) failed, err %s.\n", strerror(errno) );
++}
++
++static void kernel_writewatch_register_range( struct file_view *view, void *base, size_t size )
++{
++    struct uffdio_register uffdio_register;
++    struct uffdio_writeprotect wp;
++
++    if (!(view->protect & VPROT_WRITEWATCH) || !use_kernel_writewatch) return;
++
++    madvise( base, size, MADV_NOHUGEPAGE );
++    uffdio_register.range.start = (UINT_PTR)base;
++    uffdio_register.range.len = size;
++    uffdio_register.mode = UFFDIO_REGISTER_MODE_WP;
++    if (ioctl( uffd_fd, UFFDIO_REGISTER, &uffdio_register ) == -1)
++    {
++        ERR( "ioctl( UFFDIO_REGISTER ) failed, %s.\n", strerror(errno) );
++        return;
++    }
++
++    if (!(uffdio_register.ioctls & UFFDIO_WRITEPROTECT))
++    {
++        ERR( "uffdio_register.ioctls %s.\n", wine_dbgstr_longlong(uffdio_register.ioctls) );
++        return;
++    }
++    wp.range.start = (UINT_PTR)base;
++    wp.range.len = size;
++    wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
++
++    if (ioctl(uffd_fd, UFFDIO_WRITEPROTECT, &wp) == -1)
++    {
++        perror("ioctl(UFFDIO_WRITEPROTECT)");
++        exit(-1);
++    }
++}
++
++static NTSTATUS kernel_get_write_watches( void *base, SIZE_T size, void **buffer, ULONG_PTR *count, BOOL reset )
++{
++    SIZE_T buffer_len = count ? *count : 0;
++    struct pm_scan_arg arg = { 0 };
++    char *addr = base, *next_addr;
++    struct page_region rgns[256];
++    int rgn_count, i;
++    size_t c_addr;
++
++    assert( !(size & page_mask) );
++
++    arg.size = sizeof(arg);
++    arg.vec = (UINT_PTR)rgns;
++    arg.vec_len = ARRAY_SIZE(rgns);
++    if (reset)
++        arg.flags |= PM_SCAN_WP_MATCHING;
++    arg.category_mask = PAGE_IS_WRITTEN;
++    arg.return_mask = PAGE_IS_WRITTEN;
++
++    *count = 0;
++    while (1)
++    {
++        arg.start = (UINT_PTR)addr;
++        arg.end = arg.start + size;
++        arg.max_pages = buffer_len;
++
++        if ((rgn_count = ioctl( pagemap_fd, PAGEMAP_SCAN, &arg )) < 0)
++        {
++            ERR( "ioctl( PAGEMAP_SCAN ) failed, error %s.\n", strerror(errno) );
++            return STATUS_INTERNAL_ERROR;
++        }
++        if (!rgn_count) break;
++
++        assert( rgn_count <= ARRAY_SIZE(rgns) );
++        for (i = 0; i < rgn_count; ++i)
++        {
++            assert( rgns[i].categories == PAGE_IS_WRITTEN );
++            assert( !buffer || buffer_len >= ((rgns[i].end - rgns[i].start) >> page_shift) );
++            for (c_addr = rgns[i].start; buffer_len && c_addr != rgns[i].end; c_addr += page_size, --buffer_len)
++                buffer[(*count)++] = (void *)c_addr;
++        }
++        if (!buffer_len || rgn_count < arg.vec_len) break;
++        next_addr = (void *)(UINT_PTR)arg.walk_end;
++        assert( size >= next_addr - addr );
++        if (!(size -= next_addr - addr)) break;
++        addr = next_addr;
++    }
++    return STATUS_SUCCESS;
++}
++
+ 
+ static void mmap_add_reserved_area( void *addr, SIZE_T size )
+ {
+@@ -1163,7 +1291,7 @@ static int get_unix_prot( BYTE vprot )
+         if (vprot & VPROT_WRITE) prot |= PROT_WRITE | PROT_READ;
+         if (vprot & VPROT_WRITECOPY) prot |= PROT_WRITE | PROT_READ;
+         if (vprot & VPROT_EXEC) prot |= PROT_EXEC | PROT_READ;
+-        if (vprot & VPROT_WRITEWATCH) prot &= ~PROT_WRITE;
++        if (vprot & VPROT_WRITEWATCH && !use_kernel_writewatch) prot &= ~PROT_WRITE;
+     }
+     if (!prot) prot = PROT_NONE;
+     return prot;
+@@ -1539,6 +1667,8 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
+         TRACE( "forcing exec permission on %p-%p\n", base, (char *)base + size - 1 );
+         mprotect( base, size, unix_prot | PROT_EXEC );
+     }
++
++    kernel_writewatch_register_range( view, view->base, view->size );
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -1656,7 +1786,7 @@ static void mprotect_range( void *base, size_t size, BYTE set, BYTE clear )
+  */
+ static BOOL set_vprot( struct file_view *view, void *base, size_t size, BYTE vprot )
+ {
+-    if (view->protect & VPROT_WRITEWATCH)
++    if (!use_kernel_writewatch && view->protect & VPROT_WRITEWATCH)
+     {
+         /* each page may need different protections depending on write watch flag */
+         set_page_vprot_bits( base, size, vprot & ~VPROT_WRITEWATCH, ~vprot & ~VPROT_WRITEWATCH );
+@@ -1734,8 +1864,12 @@ static void update_write_watches( void *base, size_t size, size_t accessed_size
+  */
+ static void reset_write_watches( void *base, SIZE_T size )
+ {
+-    set_page_vprot_bits( base, size, VPROT_WRITEWATCH, 0 );
+-    mprotect_range( base, size, 0, 0 );
++    if (use_kernel_writewatch) kernel_writewatch_reset( base, size );
++    else
++    {
++        set_page_vprot_bits( base, size, VPROT_WRITEWATCH, 0 );
++        mprotect_range( base, size, 0, 0 );
++    }
+ }
+ 
+ 
+@@ -2068,7 +2202,11 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
+ 
+         view->protect = vprot | VPROT_PLACEHOLDER;
+         set_vprot( view, base, size, vprot );
+-        if (vprot & VPROT_WRITEWATCH) reset_write_watches( base, size );
++        if (vprot & VPROT_WRITEWATCH)
++        {
++            kernel_writewatch_register_range( view, base, size );
++            reset_write_watches( base, size );
++        }
+         *view_ret = view;
+         return STATUS_SUCCESS;
+     }
+@@ -2248,6 +2386,7 @@ static NTSTATUS decommit_pages( struct file_view *view, size_t start, size_t siz
+     if (anon_mmap_fixed( (char *)view->base + start, size, PROT_NONE, 0 ) != MAP_FAILED)
+     {
+         set_page_vprot_bits( (char *)view->base + start, size, 0, VPROT_COMMITTED );
++        kernel_writewatch_register_range( view, (char *)view->base + start, size );
+         return STATUS_SUCCESS;
+     }
+     return STATUS_NO_MEMORY;
+@@ -3353,6 +3492,7 @@ void virtual_init(void)
+     size_t size;
+     int i;
+     pthread_mutexattr_t attr;
++    const char *env_var;
+ 
+     pthread_mutexattr_init( &attr );
+     pthread_mutexattr_settype( &attr, PTHREAD_MUTEX_RECURSIVE );
+@@ -3366,6 +3506,12 @@ void virtual_init(void)
+     host_addr_space_limit = address_space_limit;
+ #endif
+ 
++    if (!((env_var = getenv( "WINE_DISABLE_KERNEL_WRITEWATCH" )) && atoi( env_var )))
++        kernel_writewatch_init();
++
++    if (use_kernel_writewatch)
++        MESSAGE( "wine: using kernel write watches, use_kernel_writewatch %d.\n", use_kernel_writewatch );
++
+     if (preload_info && *preload_info)
+         for (i = 0; (*preload_info)[i].size; i++)
+             mmap_add_reserved_area( (*preload_info)[i].addr, (*preload_info)[i].size );
+@@ -4127,7 +4273,7 @@ NTSTATUS virtual_handle_fault( EXCEPTION_RECORD *rec, void *stack )
+         }
+         else ret = grow_thread_stack( page, &stack_info );
+     }
+-    else if (err & EXCEPTION_WRITE_FAULT)
++    else if (!use_kernel_writewatch && err & EXCEPTION_WRITE_FAULT)
+     {
+         if (vprot & VPROT_WRITEWATCH)
+         {
+@@ -4221,11 +4367,11 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
+     for (i = 0; i < size; i += page_size)
+     {
+         BYTE vprot = get_page_vprot( addr + i );
+-        if (vprot & VPROT_WRITEWATCH) *has_write_watch = TRUE;
++        if (!use_kernel_writewatch && vprot & VPROT_WRITEWATCH) *has_write_watch = TRUE;
+         if (!(get_unix_prot( vprot & ~VPROT_WRITEWATCH ) & PROT_WRITE))
+             return STATUS_INVALID_USER_BUFFER;
+     }
+-    if (*has_write_watch)
++    if (!use_kernel_writewatch && *has_write_watch)
+         mprotect_range( addr, size, 0, VPROT_WRITEWATCH );  /* temporarily enable write access */
+     return STATUS_SUCCESS;
+ }
+@@ -4267,7 +4413,7 @@ ssize_t virtual_locked_read( int fd, void *addr, size_t size )
+     int err = EFAULT;
+ 
+     ssize_t ret = read( fd, addr, size );
+-    if (ret != -1 || errno != EFAULT) return ret;
++    if (ret != -1 || use_kernel_writewatch || errno != EFAULT) return ret;
+ 
+     server_enter_uninterrupted_section( &virtual_mutex, &sigset );
+     if (!check_write_access( addr, size, &has_write_watch ))
+@@ -4292,7 +4438,7 @@ ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
+     int err = EFAULT;
+ 
+     ssize_t ret = pread( fd, addr, size, offset );
+-    if (ret != -1 || errno != EFAULT) return ret;
++    if (ret != -1 || use_kernel_writewatch || errno != EFAULT) return ret;
+ 
+     server_enter_uninterrupted_section( &virtual_mutex, &sigset );
+     if (!check_write_access( addr, size, &has_write_watch ))
+@@ -4318,7 +4464,7 @@ ssize_t virtual_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
+     int err = EFAULT;
+ 
+     ssize_t ret = recvmsg( fd, hdr, flags );
+-    if (ret != -1 || errno != EFAULT) return ret;
++    if (ret != -1 || use_kernel_writewatch || errno != EFAULT) return ret;
+ 
+     server_enter_uninterrupted_section( &virtual_mutex, &sigset );
+     for (i = 0; i < hdr->msg_iovlen; i++)
+@@ -6151,6 +6297,13 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
+         char *addr = base;
+         char *end = addr + size;
+ 
++        if (use_kernel_writewatch)
++        {
++            if (!(status = kernel_get_write_watches( base, size, addresses, count, flags & WRITE_WATCH_FLAG_RESET )))
++                *granularity = page_size;
++            goto done;
++        }
++
+         while (pos < *count && addr < end)
+         {
+             if (!(get_page_vprot( addr ) & VPROT_WRITEWATCH)) addresses[pos++] = addr;
+@@ -6162,6 +6315,7 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
+     }
+     else status = STATUS_INVALID_PARAMETER;
+ 
++done:
+     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
+     return status;
+ }
+diff --git a/dlls/ws2_32/tests/sock.c b/dlls/ws2_32/tests/sock.c
+index a6ac748754d..c61e91ba708 100644
+--- a/dlls/ws2_32/tests/sock.c
++++ b/dlls/ws2_32/tests/sock.c
+@@ -7972,6 +7972,7 @@ static void test_write_watch(void)
+     ok( count == 9 || !count /* Win 11 */, "wrong count %Iu\n", count );
+     ok( !base[0], "data set\n" );
+ 
++    base[0x1000] = 1;
+     send(src, "test message", sizeof("test message"), 0);
+ 
+     ret = GetOverlappedResult( (HANDLE)dest, &ov, &bytesReturned, TRUE );
+@@ -7980,10 +7981,19 @@ static void test_write_watch(void)
+     ok( !memcmp( base, "test ", 5 ), "wrong data %s\n", base );
+     ok( !memcmp( base + 0x4000, "message", 8 ), "wrong data %s\n", base + 0x4000 );
+ 
++    count = 64;
++    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
++    ok( !ret, " GetWriteWatch failed %lu\n", GetLastError() );
++    todo_wine_if( count == 3 ) ok( count == 1, "wrong count %Iu\n", count );
++    todo_wine_if( count == 3 ) ok( results[0] == base + 0x1000, "got page %Iu.\n", ((char *)results[0] - base) / 0x1000 );
++
++    base[0x2000] = 1;
+     count = 64;
+     ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
+     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
+-    ok( count == 0, "wrong count %Iu\n", count );
++    todo_wine_if( count == 4 ) ok( count == 2, "wrong count %Iu\n", count );
++    todo_wine_if( count == 4 ) ok( results[0] == base + 0x1000, "got page %Iu.\n", ((char *)results[0] - base) / 0x1000 );
++    todo_wine_if( count == 4 ) ok( results[1] == base + 0x2000, "got page %Iu.\n", ((char *)results[1] - base) / 0x1000 );
+ 
+     memset( base, 0, size );
+     count = 64;
+@@ -8014,7 +8024,7 @@ static void test_write_watch(void)
+     count = 64;
+     ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
+     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
+-    ok( count == 0, "wrong count %Iu\n", count );
++    todo_wine_if( count == 2 ) ok( count == 0, "wrong count %Iu\n", count );
+ 
+     memset( base, 0, size );
+     count = 64;
+@@ -8043,7 +8053,7 @@ static void test_write_watch(void)
+         count = 64;
+         ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
+         ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
+-        ok( count == 0, "wrong count %Iu\n", count );
++        todo_wine_if( count == 1 ) ok( count == 0, "wrong count %Iu\n", count );
+     }
+     WSACloseEvent( event );
+     closesocket( dest );
+-- 
+2.45.2
+

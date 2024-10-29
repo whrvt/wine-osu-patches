@@ -1,0 +1,48 @@
+From b234f51bf05a7aea0cf2eb596d69a6b1f62a873e Mon Sep 17 00:00:00 2001
+From: Yuxuan Shui <yshui@codeweavers.com>
+Date: Thu, 26 Oct 2023 15:17:03 +0100
+Subject: [PATCH] mfmediaengine: Be a bit more conservative with locks in
+ engine Shutdown.
+
+During engine shutdown we acquire engine lock first, then locks of its constituents (e.g. sample
+grabbers); whereas normally the order is the other way around (e.g. timer callback -> acquire sample
+grabber lock -> OnProcessSample callback -> engine lock). This is deadlock prone.
+
+With this commit, engine lock is released before we shutdown the inner media session.
+---
+ dlls/mfmediaengine/main.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/mfmediaengine/main.c b/dlls/mfmediaengine/main.c
+index 0d553a40a7e..583437ac952 100644
+--- a/dlls/mfmediaengine/main.c
++++ b/dlls/mfmediaengine/main.c
+@@ -2237,6 +2237,7 @@ static HRESULT WINAPI media_engine_Shutdown(IMFMediaEngineEx *iface)
+ {
+     struct media_engine *engine = impl_from_IMFMediaEngineEx(iface);
+     HRESULT hr = S_OK;
++    IMFMediaSession *session = NULL;
+ 
+     TRACE("%p.\n", iface);
+ 
+@@ -2247,10 +2248,16 @@ static HRESULT WINAPI media_engine_Shutdown(IMFMediaEngineEx *iface)
+     {
+         media_engine_set_flag(engine, FLAGS_ENGINE_SHUT_DOWN, TRUE);
+         media_engine_clear_presentation(engine);
+-        IMFMediaSession_Shutdown(engine->session);
++        session = engine->session;
++        IMFMediaSession_AddRef(session);
+     }
+     LeaveCriticalSection(&engine->cs);
+ 
++    if (session)
++    {
++        IMFMediaSession_Shutdown(session);
++        IMFMediaSession_Release(session);
++    }
+     return hr;
+ }
+ 
+-- 
+GitLab
+

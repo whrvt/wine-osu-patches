@@ -1,0 +1,28 @@
+see: https://git.musl-libc.org/cgit/musl/tree/configure?h=v1.2.4&id=f5f55d6589940fd2c2188d76686efe3a530e64e0#n352
+diff --git a/libs/musl/Makefile.in b/libs/musl/Makefile.in
+index 11111111111..11111111111 100644
+--- a/libs/musl/Makefile.in
++++ b/libs/musl/Makefile.in
+@@ -1,6 +1,6 @@
+ EXTLIB    = libmusl.a
+ EXTRAINCL = -I$(srcdir)/src/internal -I$(srcdir)/arch/generic
+-EXTRADEFS = -D_ACRTIMP= -D_NO_CRT_MATH_INLINE
++EXTRADEFS = -D_ACRTIMP= -D_NO_CRT_MATH_INLINE $(MUSL_EXTRA_FLAGS)
+ 
+ SOURCES = \
+ 	src/math/__cos.c \
+diff --git a/configure.ac b/configure.ac
+index 11111111111..11111111111 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -891,6 +891,10 @@ do
+             [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])], [AS_VAR_SET([wine_cv_crosscc],[yes])], [AS_VAR_SET([wine_cv_crosscc],[no])])])
+         AS_VAR_IF([wine_cv_crosscc], [no], [AS_VAR_SET([target],[])])
+         AS_VAR_POPDEF([wine_cv_crosscc])
++        case $wine_arch in
++          i386) AC_SUBST(MUSL_EXTRA_FLAGS,"-frounding-math -fexcess-precision=standard -ffloat-store") ;;
++          x86_64) AC_SUBST(MUSL_EXTRA_FLAGS,"-frounding-math -fexcess-precision=standard") ;;
++        esac
+     fi
+ 
+     if test -z "$target"

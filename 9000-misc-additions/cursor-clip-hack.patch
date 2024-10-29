@@ -5,9 +5,9 @@ index 11111111111..11111111111 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -988,5 +988,17 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     while ((*p++ = *src++));
      return (p - dst) * sizeof(WCHAR);
  }
- extern BOOL gl_disable_child_window_clipping;
 +extern BOOL cursor_clip_hack;
  
 +static inline BOOL use_cursor_clip_hack(void)
@@ -114,15 +114,14 @@ diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
 index 11111111111..11111111111 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
-@@ -2615,6 +2615,7 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
+@@ -2632,6 +2632,7 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
   */
  BOOL WINAPI NtUserClipCursor( const RECT *rect )
  {
 +    if (cursor_clip_hack) rect = NULL;
-     UINT dpi;
-     BOOL ret;
      RECT new_rect;
-
+     BOOL ret;
+ 
 ### WIP: do better than this for wayland ###
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
 index 11111111111..11111111111 100644
@@ -184,12 +183,26 @@ Date: Mon, 9 Sep 2024 18:02:55 -0700
 Subject: [PATCH] winex11: don't try XGrabPointer with cursor_clip_hack=2
 
 ---
+ dlls/winex11.drv/event.c       |  2 +-
  dlls/winex11.drv/mouse.c       |  2 +-
  dlls/winex11.drv/window.c      |  2 +-
  dlls/winex11.drv/x11drv.h      | 10 +++++-----
  dlls/winex11.drv/x11drv_main.c |  2 +-
- 4 files changed, 8 insertions(+), 8 deletions(-)
+ 5 files changed, 9 insertions(+), 9 deletions(-)
 
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 801f60b5093..52afdace5fe 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -266,7 +266,7 @@ static void wait_grab_pointer( Display *display )
+     NtUserGetClipCursor( &rect );
+     NtUserClipCursor( NULL );
+ 
+-    while (XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
++    while (cursor_clip_hack < 2 && XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
+                          None, None, CurrentTime ) != GrabSuccess)
+     {
+         LARGE_INTEGER timeout = {.QuadPart = -10 * (ULONGLONG)10000};
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
 index 7a2b70e084a..5791e443c29 100644
 --- a/dlls/winex11.drv/mouse.c
@@ -221,9 +234,9 @@ index 3382a65086c..00c54b19767 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -970,17 +970,17 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     while ((*p++ = *src++));
      return (p - dst) * sizeof(WCHAR);
  }
- extern BOOL gl_disable_child_window_clipping;
 -extern BOOL cursor_clip_hack;
 +extern int cursor_clip_hack;
  
@@ -258,4 +271,65 @@ index 17d1cf54efe..28f530892bc 100644
  int xrender_error_base = 0;
 -- 
 2.46.0
-
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 008e91708cb..cb2c7cccacd 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -41,6 +41,7 @@
+ #include "wine/gdi_driver.h"
+ #include "wine/list.h"
+ #include "wine/rbtree.h"
++#include "stdlib.h"
+ 
+ #include "unixlib.h"
+ 
+@@ -386,4 +387,14 @@ BOOL WAYLAND_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_re
+ UINT WAYLAND_VulkanInit(UINT version, void *vulkan_handle, const struct vulkan_driver_funcs **driver_funcs);
+ struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version);
+ 
++static inline BOOL use_cursor_clip_hack(void)
++{
++    static unsigned int enable_cached = -1;
++    if (enable_cached == -1)
++    {
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if ((getenv("OSU_HACKS_ENABLED") && !(e && *e != '\0' && *e != '0')) || (e && (atoi(e) > 0))) enable_cached = 1; else enable_cached = 0;
++    }
++    return enable_cached;
++}
+ #endif /* __WINE_WAYLANDDRV_H */
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index b94efbd8527..6c778f5566a 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -626,7 +626,7 @@ clear_cursor:
+ 
+ static void reapply_cursor_clipping(void)
+ {
+-    return;
++    if (use_cursor_clip_hack()) return;
+     RECT rect;
+     UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
+     if (NtUserGetClipCursor(&rect)) NtUserClipCursor(&rect);
+@@ -885,7 +885,7 @@ void WAYLAND_SetCursor(HWND hwnd, HCURSOR hcursor)
+  */
+ BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
+ {
+-    return TRUE;
++    if (use_cursor_clip_hack()) return TRUE;
+     struct wayland_pointer *pointer = &process_wayland.pointer;
+     struct wl_surface *wl_surface = NULL;
+     struct wayland_surface *surface = NULL;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index c229eb69c47..c5413ae24bb 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -200,7 +200,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
+ 
+ static void reapply_cursor_clipping(void)
+ {
+-    return;
++    if (use_cursor_clip_hack()) return;
+     RECT rect;
+     UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
+     if (NtUserGetClipCursor(&rect )) NtUserClipCursor(&rect);

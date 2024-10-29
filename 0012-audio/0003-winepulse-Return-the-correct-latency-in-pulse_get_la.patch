@@ -1,7 +1,7 @@
 From d6810f314acdbeb20f79f8522ba2b90aa3c5c7f6 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:16:34 -0700
-Subject: [PATCH 3/5] winepulse: Return the correct latency in
+Subject: [PATCH 3/6] winepulse: Return the correct latency in
  pulse_get_latency
 
 ---

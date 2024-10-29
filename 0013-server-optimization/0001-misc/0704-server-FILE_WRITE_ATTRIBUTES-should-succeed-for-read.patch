@@ -1,0 +1,41 @@
+From 072c122e04e6c70251253256e37d9c4ed6540942 Mon Sep 17 00:00:00 2001
+From: Sebastian Lackner <sebastian@fds-team.de>
+Date: Wed, 3 Jun 2015 05:43:31 +0200
+Subject: [PATCH 0704/1562] server: FILE_WRITE_ATTRIBUTES should succeed for
+ readonly files.
+
+Wine-Staging: server-File_Permissions
+---
+ dlls/ntdll/tests/file.c | 2 +-
+ server/fd.c             | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+# diff --git a/dlls/ntdll/tests/file.c b/dlls/ntdll/tests/file.c
+# index 04beeca4c2d..4b0d8f9fd37 100644
+# --- a/dlls/ntdll/tests/file.c
+# +++ b/dlls/ntdll/tests/file.c
+# @@ -4779,7 +4779,7 @@ static void test_readonly(void)
+ 
+#      status = pNtOpenFile(&handle, FILE_WRITE_ATTRIBUTES,  &attr, &io,
+#                           FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+# -    todo_wine ok(status == STATUS_SUCCESS, "got %#x\n", status);
+# +    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+#      CloseHandle(handle);
+ 
+#      status = pNtOpenFile(&handle, DELETE,  &attr, &io,
+diff --git a/server/fd.c b/server/fd.c
+index 07f44b94cff..d1ac7506a5f 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -1982,7 +1982,7 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
+         else if (errno == EACCES)
+         {
+             /* try to change permissions temporarily to open a file descriptor */
+-            if (!(access & (FILE_UNIX_WRITE_ACCESS | FILE_UNIX_READ_ACCESS | DELETE)) &&
++            if (!(access & ((FILE_UNIX_WRITE_ACCESS | FILE_UNIX_READ_ACCESS | DELETE) & ~FILE_WRITE_ATTRIBUTES)) &&
+                 !stat( name, &st ) && st.st_uid == getuid() &&
+                 !chmod( name, st.st_mode | S_IRUSR ))
+             {
+-- 
+2.45.2
+

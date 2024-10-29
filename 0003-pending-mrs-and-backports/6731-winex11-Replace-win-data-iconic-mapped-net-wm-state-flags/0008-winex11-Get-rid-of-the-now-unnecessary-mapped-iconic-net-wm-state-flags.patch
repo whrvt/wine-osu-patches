@@ -1,0 +1,182 @@
+From 0f5161d4b419ea31a88175fb2fdea9e0bcb1a5f5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 19 Oct 2024 10:25:45 +0200
+Subject: [PATCH] winex11: Get rid of the now unnecessary
+ mapped/iconic/net_wm_state flags.
+
+---
+ dlls/winex11.drv/event.c  |  8 ++------
+ dlls/winex11.drv/window.c | 34 ++++++++--------------------------
+ dlls/winex11.drv/x11drv.h |  3 ---
+ 3 files changed, 10 insertions(+), 35 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 11e93a3a100..ccbf4f43688 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1134,7 +1134,6 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
+ 
+     if ((old_style & WS_CAPTION) == WS_CAPTION || !data->is_fullscreen)
+     {
+-        data->net_wm_state = get_window_net_wm_state( event->display, data->whole_window );
+         if ((new_style & WS_MAXIMIZE))
+         {
+             if (!(old_style & WS_MAXIMIZE))
+@@ -1268,8 +1267,6 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+ 
+     if ((old_style & WS_MINIMIZE) && !(new_style & WS_MINIMIZE))  /* restore window */
+     {
+-        data->iconic = FALSE;
+-        data->net_wm_state = get_window_net_wm_state( event->display, data->whole_window );
+         if ((old_style & WS_CAPTION) == WS_CAPTION && (new_style & WS_MAXIMIZE))
+         {
+             if ((old_style & WS_MAXIMIZEBOX) && !(old_style & WS_DISABLED))
+@@ -1297,7 +1294,6 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event, BOOL updat
+     }
+     else if (!(old_style & WS_MINIMIZE) && (new_style & WS_MINIMIZE))
+     {
+-        data->iconic = TRUE;
+         if ((old_style & WS_MINIMIZEBOX) && !(old_style & WS_DISABLED))
+         {
+             TRACE( "minimizing win %p/%lx\n", data->hwnd, data->whole_window );
+@@ -1376,9 +1372,9 @@ void wait_for_withdrawn_state( HWND hwnd, BOOL set )
+         if (!(data = get_win_data( hwnd ))) break;
+         if (!data->managed || data->embedded || data->display != display) break;
+         if (!(window = data->whole_window)) break;
+-        if (!data->mapped == !set)
++        if ((data->pending_state.wm_state == WithdrawnState) == !set)
+         {
+-            TRACE( "window %p/%lx now %smapped\n", hwnd, window, data->mapped ? "" : "un" );
++            TRACE( "window %p/%lx now %smapped\n", hwnd, window, (data->pending_state.wm_state != WithdrawnState) ? "" : "un" );
+             break;
+         }
+         if ((data->wm_state == WithdrawnState) != !set)
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index dcba464daf8..8d7c5dd4b1c 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1155,13 +1155,13 @@ static void update_desktop_fullscreen( Display *display )
+ 
+ /* Update _NET_WM_FULLSCREEN_MONITORS when _NET_WM_STATE_FULLSCREEN is set to support fullscreen
+  * windows spanning multiple monitors */
+-static void update_net_wm_fullscreen_monitors( struct x11drv_win_data *data )
++static void update_net_wm_fullscreen_monitors( struct x11drv_win_data *data, UINT style )
+ {
+     long monitors[4];
+     XEvent xev;
+ 
+-    if (!(data->net_wm_state & (1 << NET_WM_STATE_FULLSCREEN)) || is_virtual_desktop()
+-        || NtUserGetWindowLongW( data->hwnd, GWL_STYLE ) & WS_MINIMIZE)
++    if (!(data->pending_state.net_wm_state & (1 << NET_WM_STATE_FULLSCREEN)) ||
++        is_virtual_desktop() || (style & WS_MINIMIZE))
+         return;
+ 
+     /* If the current display device handler cannot detect dynamic device changes, do not use
+@@ -1322,7 +1322,7 @@ static void update_net_wm_states( struct x11drv_win_data *data )
+ 
+     style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+     if (style & WS_MINIMIZE)
+-        new_state |= data->net_wm_state & ((1 << NET_WM_STATE_FULLSCREEN)|(1 << NET_WM_STATE_MAXIMIZED));
++        new_state |= data->pending_state.net_wm_state & ((1 << NET_WM_STATE_FULLSCREEN)|(1 << NET_WM_STATE_MAXIMIZED));
+     if (data->is_fullscreen)
+     {
+         if ((style & WS_MAXIMIZE) && (style & WS_CAPTION) == WS_CAPTION)
+@@ -1346,8 +1346,7 @@ static void update_net_wm_states( struct x11drv_win_data *data )
+     }
+ 
+     window_set_net_wm_state( data, new_state );
+-    data->net_wm_state = new_state;
+-    update_net_wm_fullscreen_monitors( data );
++    update_net_wm_fullscreen_monitors( data, style );
+ }
+ 
+ /***********************************************************************
+@@ -1460,9 +1459,7 @@ static void map_window( HWND hwnd, DWORD new_style )
+         window_set_wm_state( data, (new_style & WS_MINIMIZE) ? IconicState : NormalState );
+         XFlush( data->display );
+ 
+-        data->mapped = TRUE;
+-        data->iconic = (new_style & WS_MINIMIZE) != 0;
+-        update_net_wm_fullscreen_monitors( data );
++        update_net_wm_fullscreen_monitors( data, new_style );
+     }
+     release_win_data( data );
+ }
+@@ -1478,14 +1475,7 @@ static void unmap_window( HWND hwnd )
+     wait_for_withdrawn_state( hwnd, FALSE );
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+-
+-    if (data->pending_state.wm_state != WithdrawnState)
+-    {
+-        TRACE( "win %p/%lx\n", data->hwnd, data->whole_window );
+-        window_set_wm_state( data, WithdrawnState );
+-        data->mapped = FALSE;
+-        data->net_wm_state = 0;
+-    }
++    window_set_wm_state( data, WithdrawnState );
+     release_win_data( data );
+ }
+ 
+@@ -1594,7 +1584,6 @@ void make_window_embedded( struct x11drv_win_data *data )
+ {
+     /* the window cannot be mapped before being embedded */
+     window_set_wm_state( data, WithdrawnState );
+-    data->net_wm_state = 0;
+     data->embedded = TRUE;
+     data->managed = TRUE;
+     sync_window_style( data );
+@@ -2006,8 +1995,6 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
+     data->whole_window = data->client_window = 0;
+     data->whole_colormap = 0;
+     data->wm_state = WithdrawnState;
+-    data->net_wm_state = 0;
+-    data->mapped = FALSE;
+ 
+     memset( &data->pending_state, 0, sizeof(data->pending_state) );
+     memset( &data->current_state, 0, sizeof(data->current_state) );
+@@ -2402,11 +2389,7 @@ BOOL X11DRV_SystrayDockRemove( HWND hwnd )
+ 
+     if ((data = get_win_data( hwnd )))
+     {
+-        if ((ret = data->embedded))
+-        {
+-            window_set_wm_state( data, WithdrawnState );
+-            data->mapped = FALSE;
+-        }
++        if ((ret = data->embedded)) window_set_wm_state( data, WithdrawnState );
+         release_win_data( data );
+     }
+ 
+@@ -2877,7 +2860,6 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags, BOOL
+         else if ((swp_flags & SWP_STATECHANGED) && (old_style & WS_MINIMIZE) != (new_style & WS_MINIMIZE))
+         {
+             set_wm_hints( data );
+-            data->iconic = (new_style & WS_MINIMIZE) != 0;
+             window_set_wm_state( data, (new_style & WS_MINIMIZE) ? IconicState : NormalState );
+             update_net_wm_states( data );
+         }
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 86749b1211f..c440fb73aea 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -622,8 +622,6 @@ struct x11drv_win_data
+     struct host_window *parent; /* the host window parent, frame or embedder, NULL if root_window */
+     XIC         xic;            /* X input context */
+     UINT        managed : 1;    /* is window managed? */
+-    UINT        mapped : 1;     /* is window mapped? (in either normal or iconic state) */
+-    UINT        iconic : 1;     /* is window in iconic state? */
+     UINT        embedded : 1;   /* is window an XEMBED client? */
+     UINT        shaped : 1;     /* is window using a custom region shape? */
+     UINT        layered : 1;    /* is window layered and with valid attributes? */
+@@ -634,7 +632,6 @@ struct x11drv_win_data
+     UINT        is_fullscreen : 1; /* is the window visible rect fullscreen */
+     UINT        parent_invalid : 1; /* is the parent host window possibly invalid */
+     int         wm_state;       /* current value of the WM_STATE property */
+-    DWORD       net_wm_state;   /* bit mask of active x11drv_net_wm_state values */
+     Window      embedder;       /* window id of embedder */
+     Pixmap         icon_pixmap;
+     Pixmap         icon_mask;
+-- 
+GitLab
+

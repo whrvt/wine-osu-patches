@@ -13,10 +13,10 @@ diff --git a/configure b/configure
 index 11111111111..11111111111 100755
 --- a/configure
 +++ b/configure
-@@ -795,6 +795,7 @@ RANLIB
+@@ -795,6 +795,7 @@ FONTFORGE
+ PKG_CONFIG
+ LN_S
  STRIP
- ac_ct_AR
- AR
 +NASM
  BISON
  FLEX
@@ -86,9 +86,9 @@ index 11111111111..11111111111 100755
  FLEX = $FLEX
  BISON = $BISON
 +NASM = $NASM
- AR = $AR
- ac_ct_AR = $ac_ct_AR
  STRIP = $STRIP
+ LN_S = $LN_S
+ PKG_CONFIG = $PKG_CONFIG
 diff --git a/configure.ac b/configure.ac
 index 11111111111..11111111111 100644
 --- a/configure.ac
@@ -103,8 +103,8 @@ index 11111111111..11111111111 100644
 +  AC_MSG_ERROR([no suitable nasm found. Please install the 'nasm' or 'yasm' package.])
 +fi
 +
- AC_CHECK_TOOLS(AR,[ar gar],ar)
  AC_CHECK_TOOL(STRIP,strip,strip)
- AC_PROG_RANLIB
+ AC_PROG_LN_S
+ WINE_PATH_PKG_CONFIG
 
 

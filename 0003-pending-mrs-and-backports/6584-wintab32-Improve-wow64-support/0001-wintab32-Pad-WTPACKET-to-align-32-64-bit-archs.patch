@@ -1,0 +1,46 @@
+From 07a919f355918c1b30dac747887a508fc499ee66 Mon Sep 17 00:00:00 2001
+From: John Chadwick <john@jchw.io>
+Date: Sun, 29 Sep 2024 19:24:40 -0400
+Subject: [PATCH] wintab32: Pad WTPACKET to align 32/64-bit archs
+
+WTPACKET's structure is never directly exposed via the API; it's
+internal to Wine. The HCTX value is only used on the wintab32 side,
+not the driver side, so this is safe to do.
+
+This eliminates the need to have a wow64 thunk for tablet_get_packet.
+---
+ dlls/winex11.drv/wintab.c       | 3 +++
+ dlls/wintab32/wintab_internal.h | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/dlls/winex11.drv/wintab.c b/dlls/winex11.drv/wintab.c
+index 6f1437f14c6..5bcbf1666d3 100644
+--- a/dlls/winex11.drv/wintab.c
++++ b/dlls/winex11.drv/wintab.c
+@@ -237,6 +237,9 @@ typedef struct tagWTI_DEVICES_INFO
+ 
+ typedef struct tagWTPACKET {
+         HCTX pkContext;
++#ifndef _WIN64
++        DWORD dwPadding;
++#endif
+         UINT pkStatus;
+         LONG pkTime;
+         WTPKT pkChanged;
+diff --git a/dlls/wintab32/wintab_internal.h b/dlls/wintab32/wintab_internal.h
+index b0a2e8fd58f..7d06e59cb2f 100644
+--- a/dlls/wintab32/wintab_internal.h
++++ b/dlls/wintab32/wintab_internal.h
+@@ -118,6 +118,9 @@ typedef struct tagWTI_EXTENSIONS_INFO
+ 
+ typedef struct tagWTPACKET {
+         HCTX pkContext;
++#ifndef _WIN64
++        DWORD dwPadding;
++#endif
+         UINT pkStatus;
+         LONG pkTime;
+         WTPKT pkChanged;
+-- 
+GitLab
+

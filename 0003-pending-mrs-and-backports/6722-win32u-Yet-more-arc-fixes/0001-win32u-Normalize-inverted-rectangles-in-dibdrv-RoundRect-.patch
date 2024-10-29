@@ -1,0 +1,36 @@
+From df0921903cee6871c32d81b4ff3ea96b6913ee96 Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Tue, 22 Oct 2024 13:23:16 -0500
+Subject: [PATCH] win32u: Normalize inverted rectangles in dibdrv_RoundRect().
+
+---
+ dlls/win32u/dibdrv/graphics.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/dlls/win32u/dibdrv/graphics.c b/dlls/win32u/dibdrv/graphics.c
+index cc62d6a681b..e7648cb2596 100644
+--- a/dlls/win32u/dibdrv/graphics.c
++++ b/dlls/win32u/dibdrv/graphics.c
+@@ -1556,6 +1556,19 @@ BOOL dibdrv_RoundRect( PHYSDEV dev, INT left, INT top, INT right, INT bottom,
+         return FALSE;
+     }
+ 
++    if (right < left)
++    {
++        int tmp = left;
++        left = right;
++        right = tmp;
++    }
++    if (bottom < top)
++    {
++        int tmp = top;
++        top = bottom;
++        bottom = tmp;
++    }
++
+     SetRect( &rect, left, top, left + ellipse_width, top + ellipse_height );
+     /* Points are relative to the arc center.
+      * We just need to specify any point on the vector. */
+-- 
+GitLab
+

@@ -1,0 +1,107 @@
+From 50eeec7527520c88b53977c2fbf848d5ceb5aa27 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 7 Sep 2024 00:07:55 -0700
+Subject: [PATCH] win32u, gdi32: Semi-stub NtGdiGetDCDpiScaleValue
+
+---
+ dlls/gdi32/gdi32.spec   | 1 +
+ dlls/win32u/gdiobj.c    | 8 ++++++++
+ dlls/win32u/main.c      | 5 +++++
+ dlls/win32u/win32u.spec | 2 +-
+ dlls/wow64win/gdi.c     | 7 +++++++
+ include/ntgdi.h         | 1 +
+ 6 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/gdi32/gdi32.spec b/dlls/gdi32/gdi32.spec
+index 11a983447a5..ada43d65584 100644
+--- a/dlls/gdi32/gdi32.spec
++++ b/dlls/gdi32/gdi32.spec
+@@ -288,6 +288,7 @@
+ @ stdcall GetClipBox(long ptr) NtGdiGetAppClipBox
+ @ stdcall GetClipRgn(long long)
+ @ stdcall GetColorAdjustment(long ptr) NtGdiGetColorAdjustment
++@ stdcall GetDCDpiScaleValue(long) NtGdiGetDCDpiScaleValue
+ @ stdcall GetColorSpace(long)
+ @ stdcall GetCurrentObject(long long)
+ @ stdcall GetCurrentPositionEx(long ptr)
+diff --git a/dlls/win32u/gdiobj.c b/dlls/win32u/gdiobj.c
+index fec99243aa2..cab36bb5df9 100644
+--- a/dlls/win32u/gdiobj.c
++++ b/dlls/win32u/gdiobj.c
+@@ -1021,6 +1021,14 @@ BOOL WINAPI NtGdiGetColorAdjustment( HDC hdc, COLORADJUSTMENT *ca )
+     return FALSE;
+ }
+ 
++/*******************************************************************
++ *           NtGdiGetDCDpiScaleValue    (win32u.@)
++ */
++LONG WINAPI NtGdiGetDCDpiScaleValue( HDC hdc )
++{
++    return (LONG)NtGdiGetDeviceCaps(hdc, LOGPIXELSY); /* FIXME */
++}
++
+ /*******************************************************************
+  *           NtGdiSetColorAdjustment    (win32u.@)
+  */
+diff --git a/dlls/win32u/main.c b/dlls/win32u/main.c
+index e97240a29a1..2b420250c53 100644
+--- a/dlls/win32u/main.c
++++ b/dlls/win32u/main.c
+@@ -585,6 +585,11 @@ BOOL SYSCALL_API NtGdiGetColorAdjustment( HDC hdc, COLORADJUSTMENT *ca )
+     SYSCALL_FUNC( NtGdiGetColorAdjustment );
+ }
+ 
++LONG SYSCALL_API NtGdiGetDCDpiScaleValue( HDC hdc )
++{
++    SYSCALL_FUNC( NtGdiGetDCDpiScaleValue );
++}
++
+ BOOL SYSCALL_API NtGdiGetDCDword( HDC hdc, UINT method, DWORD *result )
+ {
+     SYSCALL_FUNC( NtGdiGetDCDword );
+diff --git a/dlls/win32u/win32u.spec b/dlls/win32u/win32u.spec
+index 572c0274c91..f2bd80ccbab 100644
+--- a/dlls/win32u/win32u.spec
++++ b/dlls/win32u/win32u.spec
+@@ -464,7 +464,7 @@
+ @ stdcall -syscall NtGdiGetColorAdjustment(long ptr)
+ @ stub NtGdiGetColorSpaceforBitmap
+ @ stub NtGdiGetCurrentDpiInfo
+-@ stub NtGdiGetDCDpiScaleValue
++@ stdcall -syscall NtGdiGetDCDpiScaleValue(long)
+ @ stdcall -syscall NtGdiGetDCDword(long long ptr)
+ @ stdcall -syscall NtGdiGetDCObject(long long)
+ @ stdcall -syscall NtGdiGetDCPoint(long long ptr)
+diff --git a/dlls/wow64win/gdi.c b/dlls/wow64win/gdi.c
+index bcd430be4c9..902cc6093f8 100644
+--- a/dlls/wow64win/gdi.c
++++ b/dlls/wow64win/gdi.c
+@@ -1799,6 +1799,13 @@ NTSTATUS WINAPI wow64_NtGdiGetColorAdjustment( UINT *args )
+     return NtGdiGetColorAdjustment( hdc, ca );
+ }
+ 
++NTSTATUS WINAPI wow64_NtGdiGetDCDpiScaleValue( UINT *args )
++{
++    HDC hdc = get_handle( &args );
++
++    return NtGdiGetDCDpiScaleValue( hdc );
++}
++
+ NTSTATUS WINAPI wow64_NtGdiGetDCDword( UINT *args )
+ {
+     HDC hdc = get_handle( &args );
+diff --git a/include/ntgdi.h b/include/ntgdi.h
+index fc4f7bbbe4f..487ddc76e90 100644
+--- a/include/ntgdi.h
++++ b/include/ntgdi.h
+@@ -340,6 +340,7 @@ W32KAPI BOOL     WINAPI NtGdiGetCharWidthW( HDC hdc, UINT first_char, UINT last_
+                                             ULONG flags, void *buffer );
+ W32KAPI BOOL     WINAPI NtGdiGetCharWidthInfo( HDC hdc, struct char_width_info *info );
+ W32KAPI BOOL     WINAPI NtGdiGetColorAdjustment( HDC hdc, COLORADJUSTMENT *ca );
++W32KAPI LONG     WINAPI NtGdiGetDCDpiScaleValue( HDC hdc );
+ W32KAPI BOOL     WINAPI NtGdiGetDCDword( HDC hdc, UINT method, DWORD *result );
+ W32KAPI HANDLE   WINAPI NtGdiGetDCObject( HDC hdc, UINT type );
+ W32KAPI BOOL     WINAPI NtGdiGetDCPoint( HDC hdc, UINT method, POINT *result );
+-- 
+2.46.0
+
