@@ -14,6 +14,10 @@ on:
   push:
     tags:
       - '*'
+    branches:
+      - master
+    paths-ignore:
+      - '**'
 
 env:
   AUR_PACKAGE: ${{ github.event.inputs.aur_package || 'wine-osu-spectator' }}
