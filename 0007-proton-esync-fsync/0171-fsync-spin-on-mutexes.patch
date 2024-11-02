@@ -1,0 +1,47 @@
+From 71999aa6c4eb268ea8418d25042dda54a8117958 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 31 Oct 2024 16:15:16 -0700
+Subject: [PATCH] fsync: spin on mutexes
+
+---
+ dlls/ntdll/unix/fsync.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
+index ec31f8376fc..0cfcae2e8e4 100644
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -1057,6 +1057,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                     {
+                         struct mutex *mutex = obj->shm;
+                         int tid;
++                        int spin = 0;
+ 
+                         if (mutex->tid == CURRENT_TID)
+                         {
+@@ -1069,7 +1070,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+ 
+                         if (!waited && !mutex->tid)
+                             try_yield_to_waiters(prev_pids[i]);
+-
++retry_acquire_mutex:
+                         if (!(tid = __sync_val_compare_and_swap( &mutex->tid, 0, CURRENT_TID )))
+                         {
+                             TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+@@ -1086,6 +1087,13 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                             return STATUS_ABANDONED_WAIT_0 + i;
+                         }
+ 
++                        /* Try spinning a bit before falling back to futex wait */
++                        if (++spin < 50)
++                        {
++                            YieldProcessor();
++                            goto retry_acquire_mutex;
++                        }
++
+                         futex_vector_set( &futexes[i], &mutex->tid, tid );
+                         break;
+                     }
+-- 
+2.47.0
+
