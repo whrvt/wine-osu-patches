@@ -210,7 +210,7 @@ jobs:
           uses: actions/download-artifact@v4
           with:
             path: artifacts
-            
+
         - name: Extract version from package name
           id: get_version
           run: |
@@ -228,7 +228,7 @@ jobs:
         - name: Create Release
           uses: softprops/action-gh-release@v2
           with:
-            name: Release ${{ env.AUR_PACKAGE }}-${{ steps.get_version.outputs.FULL_VERSION }}
+            name: ${{ env.AUR_PACKAGE }}-${{ steps.get_version.outputs.FULL_VERSION }}
             draft: false
             prerelease: false
             files: |
