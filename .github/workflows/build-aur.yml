@@ -23,7 +23,6 @@ env:
   AUR_PACKAGE: ${{ github.event.inputs.aur_package || 'wine-osu-spectator' }}
   PARU_CACHE: /home/builder/.cache/paru
   PACKAGE_CACHE: /home/builder/package_cache
-  CACHE_KEY: stable-v1
   _CCACHE_DIR: /home/builder/.cache/ccache
 
 jobs:
@@ -34,7 +33,7 @@ jobs:
       image: archlinux:base-devel
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Create build user and directories
       run: |
@@ -48,14 +47,14 @@ jobs:
 
     - name: Restore package cache
       id: cache-restore
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: |
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-${{ env.CACHE_KEY }}-${{ github.run_id }}
+        key: ${{ runner.os }}-${{ hashFiles('*pkg.tar.zst') }}
         restore-keys: |
-          ${{ runner.os }}-${{ env.CACHE_KEY }}-
+          ${{ runner.os }}
 
     # Adding chaotic-aur for more prebuilt dependencies
     - name: Set up system
@@ -77,7 +76,6 @@ jobs:
       run: pacman -Syu --noconfirm
 
     - name: Install cached packages
-      if: steps.cache-restore.outputs.cache-hit == 'true'
       run: |
         find ${{ env.PACKAGE_CACHE }} -name "*.pkg.tar.zst" -exec pacman -U --noconfirm {} +
 
@@ -111,19 +109,16 @@ jobs:
         echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}
         echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}-wow64
         echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}-wow64
-        echo "replace#global#pkgver=3.5#pkgver=3.6" > ~/.customizepkg/lib32-x265
+        echo "remove#depends#.*lib32-x265.*" > ~/.customizepkg/lib32-ffmpeg
+        echo "replace#build#enable-cuda#disable-cuda" >> ~/.customizepkg/lib32-ffmpeg
+        echo "replace#build#enable-libx265#disable-libx265" >> ~/.customizepkg/lib32-ffmpeg
         EOF
 
         echo -e "\n[bin]\nPreBuildCommand = customizepkg --modify" >> /etc/paru.conf
 
-    - name: Install llvm-mingw-w64-toolchain-msvcrt-bin and newer lib32-x265
+    - name: Install llvm-mingw-w64-toolchain-msvcrt-bin
       run: |
         sudo -u builder bash << EOF
-        if ! paru -Qq "lib32-x265>=3.6" 1>/dev/null; then
-          paru -S --noconfirm --nocheck lib32-x265
-        else
-          echo "lib32-x265>=3.6 already installed, skipping build"
-        fi
         if ! paru -Qiq llvm-mingw-w64-toolchain-msvcrt-bin 1>/dev/null; then
           paru -S --noconfirm llvm-mingw-w64-toolchain-msvcrt-bin
         else
@@ -178,12 +173,12 @@ jobs:
 
     - name: Save cache
       if: always()
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       with:
         path: |
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-${{ env.CACHE_KEY }}-${{ github.run_id }}
+        key: ${{ steps.cache-restore.outputs.cache-primary-key }}
 
   create-release:
       needs: build
