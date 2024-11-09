@@ -1,0 +1,204 @@
+From 469ed056f7fe7f24dd1d6991798716286d8de3e5 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 5 Nov 2024 08:19:04 -0800
+Subject: [PATCH] server: Use a dedicated thread for user_shared_data time
+ updates.
+
+Inspired by a patch by Torge Matthies.
+---
+ server/Makefile.in | +-
+ server/fd.c | 87 +++++++++++++++++++++++++++++++++++++++++++++--------
+ 2 files changed, 75 insertions(+), 14 deletions(-)
+
+diff --git a/server/Makefile.in b/server/Makefile.in
+index d6e422c7bc1..dbaa215a422 100644
+--- a/server/Makefile.in
++++ b/server/Makefile.in
+@@ -50,6 +50,6 @@ SOURCES = \
+ 	wineserver.man.in \
+ 	winstation.c
+ 
+-UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS)
++UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS) $(PTHREAD_LIBS)
+ 
+ unicode_EXTRADEFS = -DBINDIR="\"${bindir}\"" -DDATADIR="\"${datadir}\""
+diff --git a/server/fd.c b/server/fd.c
+index 80bf84b5ac0..8538c0e711f 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -29,6 +29,7 @@
+ #include <signal.h>
+ #include <stdarg.h>
+ #include <stdio.h>
++#include <pthread.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <stdint.h>
+@@ -344,6 +345,8 @@ static file_pos_t max_unix_offset = OFF_T_MAX;
+ /****************************************************************/
+ /* timeouts support */
+ 
++#define TICKS_PER_100US 1000
++
+ struct timeout_user
+ {
+     struct list           entry;      /* entry in sorted timeout list */
+@@ -359,7 +362,19 @@ timeout_t monotonic_time;
+ 
+ struct hypervisor_shared_data *hypervisor_shared_data = NULL;
+ struct _KUSER_SHARED_DATA *user_shared_data = NULL;
+-static const int user_shared_data_timeout = 16;
++
++static const int user_shared_data_timeout_ticks = TICKS_PER_100US; /* 0.1 ms */
++
++static inline void ticks_to_timespec(timeout_t ticks, struct timespec *ts)
++{
++    ts->tv_sec = ticks / TICKS_PER_SEC;
++    ts->tv_nsec = (ticks % TICKS_PER_SEC) * 100;
++}
++
++static inline timeout_t timespec_to_ticks(const struct timespec *ts)
++{
++    return (timeout_t)ts->tv_sec * TICKS_PER_SEC + ts->tv_nsec / 100;
++}
+ 
+ /* 128-bit multiply a by b and return the high 64 bits, same as __umulh */
+ static UINT64 multiply_tsc(UINT64 a, UINT64 b)
+@@ -391,8 +406,12 @@ static void atomic_store_long(volatile LONG *ptr, LONG value)
+ #endif
+ }
+ 
+-static void set_user_shared_data_time(void)
++static void set_user_shared_data_time(timeout_t current_time, timeout_t monotonic_time)
+ {
++    /* Adding a compensation offset for the USD update interval
++     * to try to workaround consumers reading stale values and being behind real QPC */
++    current_time += user_shared_data_timeout_ticks;
++    monotonic_time += user_shared_data_timeout_ticks;
+     timeout_t tick_count = monotonic_time / 10000;
+     static timeout_t last_timezone_update;
+     timeout_t timezone_bias;
+@@ -459,7 +478,7 @@ static void set_user_shared_data_time(void)
+         user_shared_data->QpcBias = qpc_bias;
+ }
+ 
+-void set_current_time(void)
++static void get_current_time(timeout_t *current_time, timeout_t *monotonic_time)
+ {
+     static const timeout_t ticks_1601_to_1970 = (timeout_t)86400 * (369 * 365 + 89) * TICKS_PER_SEC;
+ 
+@@ -469,22 +488,21 @@ void set_current_time(void)
+     timeout_t seconds = (timeout_t)ts.tv_sec * TICKS_PER_SEC;
+     timeout_t nanoseconds = (timeout_t)(ts.tv_nsec / 100);
+ 
+-    current_time = seconds + nanoseconds + ticks_1601_to_1970;
++    *current_time = seconds + nanoseconds + ticks_1601_to_1970;
+ #else
+     struct timeval now;
+     gettimeofday(&now, NULL);
+     timeout_t seconds = (timeout_t)now.tv_sec * TICKS_PER_SEC;
+     timeout_t microseconds = (timeout_t)now.tv_usec * 10;
+ 
+-    current_time = seconds + microseconds + ticks_1601_to_1970;
++    *current_time = seconds + microseconds + ticks_1601_to_1970;
+ #endif
+-    /* Somehow, the clock_gettime path revealed a memory ordering bug
+-     * that either didn't ever occur, or only rarely did, with the gettimeofday path
+-     */
+-    __atomic_signal_fence(__ATOMIC_SEQ_CST);
++    *monotonic_time = monotonic_counter();
++}
+ 
+-    monotonic_time = monotonic_counter();
+-    if (user_shared_data) set_user_shared_data_time();
++void set_current_time(void)
++{
++    get_current_time(&current_time, &monotonic_time);
+ }
+ 
+ /* add a timeout user */
+@@ -574,6 +592,7 @@ static int allocated_users;                 /* count of allocated entries in the
+ static struct fd **freelist;                /* list of free entries in the array */
+ 
+ static int get_next_timeout(void);
++static void *update_user_shared_data_time_thread(void *param);
+ 
+ static inline void fd_poll_event( struct fd *fd, int event )
+ {
+@@ -658,7 +677,6 @@ static inline void main_loop_epoll(void)
+         if (epoll_fd == -1) break;  /* an error occurred with epoll */
+ 
+         ret = epoll_wait( epoll_fd, events, ARRAY_SIZE( events ), timeout );
+-        set_current_time();
+ 
+         /* put the events into the pollfd array first, like poll does */
+         for (i = 0; i < ret; i++)
+@@ -956,7 +974,8 @@ static void remove_poll_user( struct fd *fd, int user )
+ /* process pending timeouts and return the time until the next timeout, in milliseconds */
+ static int get_next_timeout(void)
+ {
+-    int ret = user_shared_data ? user_shared_data_timeout : -1;
++    /* can't set lower than 1ms, but don't set infinite timeout to workaround misbehaving programs */
++    int ret = user_shared_data ? 1 : -1;
+ 
+     if (!list_empty( &abs_timeout_list ) || !list_empty( &rel_timeout_list ))
+     {
+@@ -1019,6 +1038,45 @@ static int get_next_timeout(void)
+     return ret;
+ }
+ 
++static void *update_user_shared_data_time_thread(void *param)
++{
++    struct timespec ts;
++    timeout_t next_update_time;
++
++    get_current_time(&current_time, &monotonic_time);
++    next_update_time = monotonic_time + user_shared_data_timeout_ticks;
++
++    while (active_users)
++    {
++        ticks_to_timespec(next_update_time, &ts);
++
++        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR);
++
++        get_current_time(&current_time, &monotonic_time);
++        set_user_shared_data_time(current_time, monotonic_time);
++
++        next_update_time += user_shared_data_timeout_ticks;
++
++        if (next_update_time <= monotonic_time)
++            next_update_time = monotonic_time + user_shared_data_timeout_ticks;
++    }
++    return NULL;
++}
++
++static void start_user_shared_data_time_thread(void)
++{
++    pthread_t pthread;
++    int policy;
++    struct sched_param param;
++    if (pthread_create( &pthread, NULL, update_user_shared_data_time_thread, NULL ))
++        fatal_error( "failed to create time update thread\n" );
++    if (!pthread_getschedparam( pthread_self(), &policy, &param ) && (policy || param.sched_priority))
++        if (pthread_setschedparam( pthread, policy | SCHED_RESET_ON_FORK, &param ))
++            pthread_setschedparam( pthread, policy, &param );
++    pthread_setname_np( pthread, "usd_time_thread" );
++    pthread_detach( pthread );
++}
++
+ /* server main poll() loop */
+ void main_loop(void)
+ {
+@@ -1027,6 +1085,9 @@ void main_loop(void)
+     set_current_time();
+     server_start_time = current_time;
+ 
++    set_user_shared_data_time(current_time, monotonic_time);
++    start_user_shared_data_time_thread();
++
+     main_loop_epoll();
+     /* fall through to normal poll loop */
+ 
+-- 
+2.47.0
+

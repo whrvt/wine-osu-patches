@@ -116,7 +116,7 @@ jobs:
 
         echo -e "\n[bin]\nPreBuildCommand = customizepkg --modify" >> /etc/paru.conf
 
-    - name: Build newer lib32-x265 manually for lib32-ffmpeg
+    - name: Install llvm-mingw-w64-toolchain-msvcrt-bin and newer lib32-x265
       run: |
         sudo -u builder bash << EOF
         if ! paru -Qq "lib32-x265>=3.6" 1>/dev/null; then
@@ -124,24 +124,10 @@ jobs:
         else
           echo "lib32-x265>=3.6 already installed, skipping build"
         fi
-        EOF
-
-    # Their git repo was down when I made this workflow...
-    - name: Build lib32-ffmpeg manually
-      run: |
-        rm -rf ${{ env.PARU_CACHE }}/clone/lib32-ffmpeg/pkg || true
-        sudo -u builder bash << EOF
-        if ! paru -Qiq lib32-ffmpeg 1>/dev/null; then
-          cd ${{ env.PARU_CACHE }}/clone
-          if [ ! -d "lib32-ffmpeg" ]; then
-            paru -G lib32-ffmpeg
-          fi
-          cd lib32-ffmpeg
-          sed -i 's|git+https://git.ffmpeg.org/ffmpeg.git?signed#tag=${_tag}|ffmpeg::git+https://github.com/FFmpeg/FFmpeg.git?signed#tag=${_tag}|' PKGBUILD
-          sed -i 's|enable-cuda|disable-cuda|' PKGBUILD
-          paru -B --install --noconfirm --nocheck --mflags "--skippgpcheck" .
+        if ! paru -Qiq llvm-mingw-w64-toolchain-msvcrt-bin 1>/dev/null; then
+          paru -S --noconfirm llvm-mingw-w64-toolchain-msvcrt-bin
         else
-          echo "lib32-ffmpeg already installed, skipping build"
+          echo "llvm-mingw-w64-toolchain-msvcrt-bin already installed, skipping build"
         fi
         EOF
 

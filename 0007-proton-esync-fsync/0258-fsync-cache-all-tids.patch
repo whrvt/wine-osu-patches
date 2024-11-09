@@ -1,0 +1,134 @@
+From 0c185e85be31d34ad83578491025c3c249bfdaf6 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 3 Nov 2024 20:52:24 -0800
+Subject: [PATCH 1/3] fsync: cache all tids
+
+---
+ dlls/ntdll/unix/fsync.c | 24 +++++++++++-------------
+ dlls/ntdll/unix/fsync.h |  6 ++++++
+ 2 files changed, 17 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
+index fff3207d6d9..020a20b1688 100644
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -671,7 +671,7 @@ NTSTATUS fsync_create_mutex( HANDLE *handle, ACCESS_MASK access,
+         attr ? debugstr_us(attr->ObjectName) : "<no name>", initial);
+ 
+     return create_fsync( FSYNC_MUTEX, handle, access, attr,
+-        initial ? GetCurrentThreadId() : 0, initial ? 1 : 0 );
++        initial ? get_cached_tid() : 0, initial ? 1 : 0 );
+ }
+ 
+ NTSTATUS fsync_open_mutex( HANDLE *handle, ACCESS_MASK access,
+@@ -693,7 +693,7 @@ NTSTATUS fsync_release_mutex( HANDLE handle, LONG *prev )
+     if ((ret = get_object( handle, &obj ))) return ret;
+     mutex = obj.shm;
+ 
+-    if (mutex->tid != GetCurrentThreadId()) return STATUS_MUTANT_NOT_OWNED;
++    if (mutex->tid != get_cached_tid()) return STATUS_MUTANT_NOT_OWNED;
+ 
+     if (prev) *prev = mutex->count;
+ 
+@@ -719,7 +719,7 @@ NTSTATUS fsync_query_mutex( HANDLE handle, void *info, ULONG *ret_len )
+     mutex = obj.shm;
+ 
+     out->CurrentCount = 1 - mutex->count;
+-    out->OwnedByCaller = (mutex->tid == GetCurrentThreadId());
++    out->OwnedByCaller = (mutex->tid == get_cached_tid());
+     out->AbandonedState = (mutex->tid == ~0);
+     if (ret_len) *ret_len = sizeof(*out);
+ 
+@@ -766,8 +766,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+ {
+     static const LARGE_INTEGER zero = {0};
+ 
+-    int current_tid = 0;
+-#define CURRENT_TID (current_tid ? current_tid : (current_tid = GetCurrentThreadId()))
++    int current_tid = get_cached_tid();
+ 
+     struct futex_waitv futexes[MAXIMUM_WAIT_OBJECTS + 1];
+     struct fsync objs[MAXIMUM_WAIT_OBJECTS];
+@@ -900,7 +899,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                         struct mutex *mutex = obj->shm;
+                         int tid;
+ 
+-                        if (mutex->tid == CURRENT_TID)
++                        if (mutex->tid == current_tid)
+                         {
+                             TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+                             mutex->count++;
+@@ -908,14 +907,14 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                             return i;
+                         }
+ 
+-                        if (!(tid = __sync_val_compare_and_swap( &mutex->tid, 0, CURRENT_TID )))
++                        if (!(tid = __sync_val_compare_and_swap( &mutex->tid, 0, current_tid )))
+                         {
+                             TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+                             mutex->count = 1;
+                             if (waited) simulate_sched_quantum();
+                             return i;
+                         }
+-                        else if (tid == ~0 && (tid = __sync_val_compare_and_swap( &mutex->tid, ~0, CURRENT_TID )) == ~0)
++                        else if (tid == ~0 && (tid = __sync_val_compare_and_swap( &mutex->tid, ~0, current_tid )) == ~0)
+                         {
+                             TRACE("Woken up by abandoned mutex %p [%d].\n", handles[i], i);
+                             mutex->count = 1;
+@@ -1049,7 +1048,7 @@ tryagain:
+                 {
+                     struct mutex *mutex = obj->shm;
+ 
+-                    if (mutex->tid == CURRENT_TID)
++                    if (mutex->tid == current_tid)
+                         continue;
+ 
+                     while ((current = __atomic_load_n( &mutex->tid, __ATOMIC_SEQ_CST )))
+@@ -1092,7 +1091,7 @@ tryagain:
+                     struct mutex *mutex = obj->shm;
+                     int tid = __atomic_load_n( &mutex->tid, __ATOMIC_SEQ_CST );
+ 
+-                    if (tid && tid != ~0 && tid != CURRENT_TID)
++                    if (tid && tid != ~0 && tid != current_tid)
+                         goto tryagain;
+                 }
+                 else if (obj->type)
+@@ -1115,11 +1114,11 @@ tryagain:
+                 {
+                     struct mutex *mutex = obj->shm;
+                     int tid = __atomic_load_n( &mutex->tid, __ATOMIC_SEQ_CST );
+-                    if (tid == CURRENT_TID)
++                    if (tid == current_tid)
+                         break;
+                     if (tid && tid != ~0)
+                         goto tooslow;
+-                    if (__sync_val_compare_and_swap( &mutex->tid, tid, CURRENT_TID ) != tid)
++                    if (__sync_val_compare_and_swap( &mutex->tid, tid, current_tid ) != tid)
+                         goto tooslow;
+                     if (tid == ~0)
+                         abandoned = TRUE;
+@@ -1225,7 +1224,6 @@ userapc:
+      * right thing to do seems to be to return STATUS_USER_APC anyway. */
+     if (ret == STATUS_TIMEOUT) ret = STATUS_USER_APC;
+     return ret;
+-#undef CURRENT_TID
+ }
+ 
+ /* Like esync, we need to let the server know when we are doing a message wait,
+diff --git a/dlls/ntdll/unix/fsync.h b/dlls/ntdll/unix/fsync.h
+index 763e7891ab8..a62ccdef2b8 100644
+--- a/dlls/ntdll/unix/fsync.h
++++ b/dlls/ntdll/unix/fsync.h
+@@ -47,3 +47,9 @@ extern NTSTATUS fsync_signal_and_wait( HANDLE signal, HANDLE wait,
+  * called from NtClose() doesn't race with get_fsync_idx(), add_to_list() sequence called
+  * from get_object(). */
+ extern pthread_mutex_t fd_cache_mutex;
++
++static inline int get_cached_tid(void)
++{
++    static __thread int cached_tid;
++    return cached_tid ? cached_tid : (cached_tid = GetCurrentThreadId());
++}
+-- 
+2.47.0
+

@@ -1,0 +1,52 @@
+From 1989173214fc188d3fee61ae9ca5daf7cf9ca681 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 4 Nov 2024 20:16:05 -0800
+Subject: [PATCH 1/2] Revert "server: Implement more FSCTLs on
+ \Device\NamedPipe and \Device\NamedPipe\."
+
+This reverts commit 962017beef4a0405e4fece0075e286e445da55da.
+---
+ dlls/ntdll/tests/pipe.c |  1 +
+ server/named_pipe.c     | 11 -----------
+ 2 files changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index df693d07cbd..6816d7d4e2d 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -2731,6 +2731,7 @@ static void subtest_empty_name_pipe_operations(HANDLE handle)
+             WaitForSingleObject(event, INFINITE);
+             status = io.Status;
+         }
++        todo_wine_if(ft->status != STATUS_NOT_SUPPORTED)
+         ok(status == ft->status || (ft->status_broken && broken(status == ft->status_broken)),
+            "NtFsControlFile(%s) on \\Device\\NamedPipe: expected %#lx, got %#lx\n",
+            ft->name, ft->status, status);
+diff --git a/server/named_pipe.c b/server/named_pipe.c
+index 28c82a690c5..63879e83671 100644
+--- a/server/named_pipe.c
++++ b/server/named_pipe.c
+@@ -1516,20 +1516,9 @@ static void named_pipe_device_ioctl( struct fd *fd, ioctl_code_t code, struct as
+     switch(code)
+     {
+     case FSCTL_PIPE_WAIT:
+-    case FSCTL_PIPE_LISTEN:
+-    case FSCTL_PIPE_IMPERSONATE:
+         set_error( STATUS_ILLEGAL_FUNCTION );
+         return;
+ 
+-    case FSCTL_PIPE_DISCONNECT:
+-    case FSCTL_PIPE_TRANSCEIVE:
+-        set_error( STATUS_PIPE_DISCONNECTED );
+-        return;
+-
+-    case FSCTL_PIPE_QUERY_CLIENT_PROCESS:
+-        set_error( STATUS_INVALID_PARAMETER );
+-        return;
+-
+     default:
+         default_fd_ioctl( fd, code, async );
+     }
+-- 
+2.47.0
+

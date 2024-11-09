@@ -1,0 +1,79 @@
+From 67ad4a36e1c38e8b432a4e286d676431c809f9aa Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 4 Nov 2024 03:33:59 -0800
+Subject: [PATCH] NtUserGetKeyboardState-Don'tTryThisAtHome
+
+---
+ dlls/win32u/input.c   | 39 +++++++++++++++++++++++++--------------
+ dlls/win32u/message.c |  2 +-
+ 2 files changed, 26 insertions(+), 15 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 63c31eace27..842ce4b053c 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -970,23 +970,34 @@ SHORT WINAPI NtUserGetKeyState( INT vkey )
+     return retval;
+ }
+ 
+-/**********************************************************************
+- *	     NtUserGetKeyboardState    (win32u.@)
+- */
+-BOOL WINAPI NtUserGetKeyboardState( BYTE *state )
+-{
+-    struct object_lock lock = OBJECT_LOCK_INIT;
+-    const input_shm_t *input_shm;
+-    NTSTATUS status;
+-    UINT i;
++#ifdef __AVX512F__
++#include <immintrin.h>
+ 
+-    TRACE("(%p)\n", state);
++static inline void mask_keystate_avx512( BYTE *state )
++{
++    const __m512i mask = _mm512_set1_epi8(0x81);
+ 
+-    while ((status = get_shared_input( GetCurrentThreadId(), &lock, &input_shm )) == STATUS_PENDING)
+-        memcpy( state, (const void *)input_shm->keystate, 256 );
+-    if (status) memset( state, 0, 256 );
++    _mm512_storeu_si512((__m512i*)(state),       _mm512_and_si512(_mm512_loadu_si512((__m512i*)(state)),       mask));
++    _mm512_storeu_si512((__m512i*)(state + 64),  _mm512_and_si512(_mm512_loadu_si512((__m512i*)(state + 64)),  mask));
++    _mm512_storeu_si512((__m512i*)(state + 128), _mm512_and_si512(_mm512_loadu_si512((__m512i*)(state + 128)), mask));
++    _mm512_storeu_si512((__m512i*)(state + 192), _mm512_and_si512(_mm512_loadu_si512((__m512i*)(state + 192)), mask));
++}
++#endif
+ 
+-    for (i = 0; i < 256; i++) state[i] &= 0x81;
++/**********************************************************************
++ *	     NtUserGetKeyboardState    (win32u.@)
++ *
++ * HACKHACK: always use global async keystate and penny pinch every cycle
++ *
++ */
++BOOL WINAPI NtUserGetKeyboardState( BYTE *state )
++{
++    get_async_keyboard_state( state );
++#ifdef __AVX512F__
++    mask_keystate_avx512( state );
++#else
++    for (int i = 0; i < 256; i++) state[i] &= 0x81;
++#endif
+     return TRUE;
+ }
+ 
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 625b853536e..0b74215c8bb 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -4459,7 +4459,7 @@ BOOL WINAPI NtUserTranslateMessage( const MSG *msg, UINT flags )
+ {
+     UINT message;
+     WCHAR wp[8];
+-    BYTE state[256];
++    BYTE state[256] __attribute__ ((aligned(64))); /* for optimal avx512 alignment */
+     INT len;
+ 
+     if (flags) FIXME( "unsupported flags %x\n", flags );
+-- 
+2.47.0
+

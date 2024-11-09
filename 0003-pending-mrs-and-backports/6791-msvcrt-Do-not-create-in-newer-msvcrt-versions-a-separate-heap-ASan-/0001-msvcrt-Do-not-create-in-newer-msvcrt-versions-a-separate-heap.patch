@@ -1,0 +1,174 @@
+From 97cbdb715d20f56593fce49ff8709c0529cfa481 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 4 Nov 2024 16:08:52 +0100
+Subject: [PATCH] msvcrt: Do not create in newer msvcrt versions a separate
+ heap.
+
+A llvm-mingw built winver.exe with ASan enabled shows below error
+when exiting the application.
+
+This seems to be caused by libc++ using register_onexit_function
+before ASan has all function hooks in place, therefore allocates
+memory with plain calloc function.
+
+On process exit ASan uses in asan_allocator.cpp/Deallocate the
+function HeapValidate, which fails if msvcrt does not use the heap
+returned by GetProcessHeap().
+---
+ dlls/msvcr100/tests/msvcr100.c | 8 ++++++++
+ dlls/msvcr110/tests/msvcr110.c | 8 ++++++++
+ dlls/msvcrt/heap.c             | 6 ++++++
+ dlls/msvcrt/tests/heap.c       | 8 ++++++++
+ dlls/ucrtbase/tests/misc.c     | 8 ++++++++
+ 5 files changed, 38 insertions(+)
+
+diff --git a/dlls/msvcr100/tests/msvcr100.c b/dlls/msvcr100/tests/msvcr100.c
+index 7bde5c7935d..09aa8dcdbb0 100644
+--- a/dlls/msvcr100/tests/msvcr100.c
++++ b/dlls/msvcr100/tests/msvcr100.c
+@@ -239,6 +239,7 @@ static size_t (__cdecl *p___strncnt)(const char*, size_t);
+ 
+ static int (__cdecl *p_strcmp)(const char *, const char *);
+ static int (__cdecl *p_strncmp)(const char *, const char *, size_t);
++static void* (__cdecl *p__get_heap_handle)(void);
+ 
+ /* make sure we use the correct errno */
+ #undef errno
+@@ -282,6 +283,7 @@ static BOOL init(void)
+ 
+     SET(p_strcmp, "strcmp");
+     SET(p_strncmp, "strncmp");
++    SET(p__get_heap_handle, "_get_heap_handle");
+ 
+     if(sizeof(void*) == 8) { /* 64-bit initialization */
+         SET(pSpinWait_ctor_yield, "??0?$_SpinWait@$00@details@Concurrency@@QEAA@P6AXXZ@Z");
+@@ -1152,6 +1154,11 @@ static void test_strcmp(void)
+     ok( ret == 0, "wrong ret %d\n", ret );
+ }
+ 
++static void test__get_heap_handle(void)
++{
++    ok(p__get_heap_handle() != GetProcessHeap(), "Expected _get_heap_handle() not to return GetProcessHeap()\n");
++}
++
+ START_TEST(msvcr100)
+ {
+     if (!init())
+@@ -1173,4 +1180,5 @@ START_TEST(msvcr100)
+     test_setlocale();
+     test___strncnt();
+     test_strcmp();
++    test__get_heap_handle();
+ }
+diff --git a/dlls/msvcr110/tests/msvcr110.c b/dlls/msvcr110/tests/msvcr110.c
+index 35ba370bb49..a3e5b8cbdb7 100644
+--- a/dlls/msvcr110/tests/msvcr110.c
++++ b/dlls/msvcr110/tests/msvcr110.c
+@@ -54,6 +54,7 @@ static _Context* (__cdecl *p__Context__CurrentContext)(_Context*);
+ 
+ static int (__cdecl *p_strcmp)(const char *, const char *);
+ static int (__cdecl *p_strncmp)(const char *, const char *, size_t);
++static void* (__cdecl *p__get_heap_handle)(void);
+ 
+ #define SETNOFAIL(x,y) x = (void*)GetProcAddress(module,y)
+ #define SET(x,y) do { SETNOFAIL(x,y); ok(x != NULL, "Export '%s' not found\n", y); } while(0)
+@@ -89,6 +90,7 @@ static BOOL init(void)
+ 
+     SET(p_strcmp, "strcmp");
+     SET(p_strncmp, "strncmp");
++    SET(p__get_heap_handle, "_get_heap_handle");
+ 
+     return TRUE;
+ }
+@@ -307,6 +309,11 @@ static void test_strcmp(void)
+     ok( ret == 0, "wrong ret %d\n", ret );
+ }
+ 
++static void test__get_heap_handle(void)
++{
++    ok(p__get_heap_handle() == GetProcessHeap(), "Expected _get_heap_handle() to return GetProcessHeap()\n");
++}
++
+ START_TEST(msvcr110)
+ {
+     if (!init()) return;
+@@ -315,4 +322,5 @@ START_TEST(msvcr110)
+     test___strncnt();
+     test_CurrentContext();
+     test_strcmp();
++    test__get_heap_handle();
+ }
+diff --git a/dlls/msvcrt/heap.c b/dlls/msvcrt/heap.c
+index bf06c37e2c5..70e4ecb815c 100644
+--- a/dlls/msvcrt/heap.c
++++ b/dlls/msvcrt/heap.c
+@@ -829,13 +829,19 @@ int CDECL wmemcpy_s(wchar_t *dest, size_t numberOfElements,
+ 
+ BOOL msvcrt_init_heap(void)
+ {
++#if _MSVCR_VER <= 100
+     heap = HeapCreate(0, 0, 0);
++#else
++    heap = GetProcessHeap();
++#endif
+     return heap != NULL;
+ }
+ 
+ void msvcrt_destroy_heap(void)
+ {
++#if _MSVCR_VER <= 100
+     HeapDestroy(heap);
++#endif
+     if(sb_heap)
+         HeapDestroy(sb_heap);
+ }
+diff --git a/dlls/msvcrt/tests/heap.c b/dlls/msvcrt/tests/heap.c
+index e6de728f2b7..ed4d501d1b5 100644
+--- a/dlls/msvcrt/tests/heap.c
++++ b/dlls/msvcrt/tests/heap.c
+@@ -523,10 +523,18 @@ static void test_calloc(void)
+     free(ptr);
+ }
+ 
++static void test__get_heap_handle(void)
++{
++    void* (__cdecl *p__get_heap_handle)(void);
++    p__get_heap_handle = (void *)GetProcAddress( GetModuleHandleA("msvcrt.dll"), "_get_heap_handle");
++    ok(p__get_heap_handle() != GetProcessHeap(), "Expected _get_heap_handle() not to return GetProcessHeap()\n");
++}
++
+ START_TEST(heap)
+ {
+     test_aligned();
+     test_sbheap();
+     test_malloc();
+     test_calloc();
++    test__get_heap_handle();
+ }
+diff --git a/dlls/ucrtbase/tests/misc.c b/dlls/ucrtbase/tests/misc.c
+index ff1ed20f2f8..24d23c2be69 100644
+--- a/dlls/ucrtbase/tests/misc.c
++++ b/dlls/ucrtbase/tests/misc.c
+@@ -1706,6 +1706,13 @@ static void test_gmtime64(void)
+             tm.tm_year, tm.tm_hour, tm.tm_min, tm.tm_sec);
+ }
+ 
++static void test__get_heap_handle(void)
++{
++    void* (__cdecl *p__get_heap_handle)(void);
++    p__get_heap_handle = (void *)GetProcAddress( GetModuleHandleA("ucrtbase.dll"), "_get_heap_handle");
++    ok(p__get_heap_handle() == GetProcessHeap(), "Expected _get_heap_handle() to return GetProcessHeap()\n");
++}
++
+ START_TEST(misc)
+ {
+     int arg_c;
+@@ -1752,4 +1759,5 @@ START_TEST(misc)
+     test_rewind_i386_abi();
+ #endif
+     test_gmtime64();
++    test__get_heap_handle();
+ }
+-- 
+GitLab
+

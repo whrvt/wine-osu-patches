@@ -1,0 +1,69 @@
+From 381dcb2145cf9d7ab7d7993eedd2bebdff8ca964 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 3 Nov 2024 21:01:53 -0800
+Subject: [PATCH 3/3] fsync: remove clock_gettime syscall from
+ get_wait_end_time
+
+---
+ dlls/ntdll/unix/fsync.c | 24 ++++++++++++++++--------
+ 1 file changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
+index 90ed801f11e..87bc12662ad 100644
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -54,6 +54,8 @@
+ #include "unix_private.h"
+ #include "fsync.h"
+ 
++#include <ddk/wdm.h>
++
+ WINE_DEFAULT_DEBUG_CHANNEL(fsync);
+ 
+ #include "pshpack4.h"
+@@ -87,7 +89,7 @@ static LONGLONG nt_time_from_ts( struct timespec *ts )
+     return ticks_from_time_t( ts->tv_sec ) + (ts->tv_nsec + 50) / 100;
+ }
+ 
+-static void get_wait_end_time( const LARGE_INTEGER **timeout, struct timespec64 *end, clockid_t *clock_id )
++static inline void get_wait_end_time( const LARGE_INTEGER **timeout, struct timespec64 *end, clockid_t *clock_id )
+ {
+     ULONGLONG nt_end;
+ 
+@@ -100,20 +102,26 @@ static void get_wait_end_time( const LARGE_INTEGER **timeout, struct timespec64
+ 
+     if ((*timeout)->QuadPart > 0)
+     {
+-        nt_end = (*timeout)->QuadPart;
++        nt_end = (*timeout)->QuadPart - (SECS_1601_TO_1970 * TICKSPERSEC);
+         *clock_id = CLOCK_REALTIME;
+     }
+     else
+     {
+-        struct timespec ts;
++        /* remove syscall, rely on fast USD updates (patch)
++         * copied from kernelbase/sync.c QueryInterruptTime */
++        ULONG high, low;
+ 
+-        clock_gettime( CLOCK_MONOTONIC, &ts );
+-        nt_end = nt_time_from_ts( &ts ) - (*timeout)->QuadPart;
++        do
++        {
++            high = user_shared_data->InterruptTime.High1Time;
++            low = user_shared_data->InterruptTime.LowPart;
++        }
++        while (high != user_shared_data->InterruptTime.High2Time);
++
++        nt_end = ((ULONGLONG)high << 32 | low) - (*timeout)->QuadPart;
+         *clock_id = CLOCK_MONOTONIC;
+     }
+-
+-    nt_end -= SECS_1601_TO_1970 * TICKSPERSEC;
+-    end->tv_sec = nt_end / (ULONGLONG)TICKSPERSEC;
++    end->tv_sec = nt_end / TICKSPERSEC;
+     end->tv_nsec = (nt_end % TICKSPERSEC) * 100;
+ }
+ 
+-- 
+2.47.0
+
