@@ -1,0 +1,206 @@
+From f60e01d8a68411c75ea275b9c9e96403ad3e277b Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 24 Oct 2024 11:19:21 -0700
+Subject: [PATCH 4/6] Revert "ntdll: Handle user APCs explicitly in
+ NtRemoveIoCompletionEx()."
+
+This reverts commit b6904756a4d922fcdfa4a2324654a8b4317db93b.
+---
+ dlls/ntdll/tests/file.c        | 47 +---------------------------------
+ dlls/ntdll/unix/sync.c         | 14 +++-------
+ include/wine/server_protocol.h |  4 +--
+ server/completion.c            |  7 -----
+ server/protocol.def            |  1 -
+ server/request.h               |  3 +--
+ server/trace.c                 |  1 -
+ 7 files changed, 6 insertions(+), 71 deletions(-)
+
+diff --git a/dlls/ntdll/tests/file.c b/dlls/ntdll/tests/file.c
+index e60d392346b..0adc0998ee2 100644
+--- a/dlls/ntdll/tests/file.c
++++ b/dlls/ntdll/tests/file.c
+@@ -958,59 +958,14 @@ static void test_set_io_completion(void)
+     NTSTATUS res;
+     ULONG count;
+     SIZE_T size = 3;
+-    HANDLE h, h2;
++    HANDLE h;
+ 
+     if (sizeof(size) > 4) size |= (ULONGLONG)0x12345678 << 32;
+ 
+-    res = pNtCreateIoCompletion( &h2, IO_COMPLETION_ALL_ACCESS, NULL, 0 );
+-    ok( res == STATUS_SUCCESS, "NtCreateIoCompletion failed: %#lx\n", res );
+-    ok( h2 && h2 != INVALID_HANDLE_VALUE, "got invalid handle %p\n", h2 );
+-    res = pNtSetIoCompletion( h2, 123, 456, 789, size );
+-    ok( res == STATUS_SUCCESS, "NtSetIoCompletion failed: %#lx\n", res );
+-    res = pNtRemoveIoCompletionEx( h2, info, 2, &count, &timeout, TRUE );
+-    ok( res == STATUS_SUCCESS, "NtRemoveIoCompletionEx failed: %#lx\n", res );
+-    ok( count == 1, "wrong count %lu\n", count );
+-
+     res = pNtCreateIoCompletion( &h, IO_COMPLETION_ALL_ACCESS, NULL, 0 );
+     ok( res == STATUS_SUCCESS, "NtCreateIoCompletion failed: %#lx\n", res );
+     ok( h && h != INVALID_HANDLE_VALUE, "got invalid handle %p\n", h );
+ 
+-    apc_count = 0;
+-    QueueUserAPC( user_apc_proc, GetCurrentThread(), (ULONG_PTR)&apc_count );
+-    res = pNtSetIoCompletion( h, 123, 456, 789, size );
+-    ok( res == STATUS_SUCCESS, "NtSetIoCompletion failed: %#lx\n", res );
+-    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
+-    /* APC goes first associated with completion port APC takes priority over pending completion.
+-     * Even if the thread is associated with some other completion port. */
+-    ok( res == STATUS_USER_APC, "NtRemoveIoCompletionEx unexpected status %#lx\n", res );
+-    ok( apc_count == 1, "wrong apc count %u\n", apc_count );
+-
+-    CloseHandle( h2 );
+-
+-    apc_count = 0;
+-    QueueUserAPC( user_apc_proc, GetCurrentThread(), (ULONG_PTR)&apc_count );
+-    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
+-    /* Previous call resulted in STATUS_USER_APC did not associate the thread with the port. */
+-    ok( res == STATUS_USER_APC, "NtRemoveIoCompletion unexpected status %#lx\n", res );
+-    ok( apc_count == 1, "wrong apc count %u\n", apc_count );
+-
+-    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
+-    /* Now the thread is associated. */
+-    ok( res == STATUS_SUCCESS, "NtRemoveIoCompletion failed: %#lx\n", res );
+-    ok( count == 1, "wrong count %lu\n", count );
+-
+-    apc_count = 0;
+-    QueueUserAPC( user_apc_proc, GetCurrentThread(), (ULONG_PTR)&apc_count );
+-    res = pNtSetIoCompletion( h, 123, 456, 789, size );
+-    ok( res == STATUS_SUCCESS, "NtSetIoCompletion failed: %#lx\n", res );
+-    res = pNtRemoveIoCompletionEx( h, info, 2, &count, &timeout, TRUE );
+-    /* After a thread is associated with completion port existing completion is returned if APC is pending. */
+-    ok( res == STATUS_SUCCESS, "NtRemoveIoCompletionEx failed: %#lx\n", res );
+-    ok( count == 1, "wrong count %lu\n", count );
+-    ok( apc_count == 0, "wrong apc count %u\n", apc_count );
+-    SleepEx( 0, TRUE);
+-    ok( apc_count == 1, "wrong apc count %u\n", apc_count );
+-
+     res = pNtRemoveIoCompletion( h, &key, &value, &iosb, &timeout );
+     ok( res == STATUS_TIMEOUT, "NtRemoveIoCompletion failed: %#lx\n", res );
+ 
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 80f82c18730..f5536e398b5 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2007,7 +2007,6 @@ NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE handle, ULONG_PTR *key, ULONG_PTR *
+     SERVER_START_REQ( remove_completion )
+     {
+         req->handle = wine_server_obj_handle( handle );
+-        req->alertable = 0;
+         if (!(status = wine_server_call( req )))
+         {
+             *key            = reply->ckey;
+@@ -2056,7 +2055,6 @@ NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORM
+         SERVER_START_REQ( remove_completion )
+         {
+             req->handle = wine_server_obj_handle( handle );
+-            req->alertable = alertable;
+             if (!(status = wine_server_call( req )))
+             {
+                 info[i].CompletionKey             = reply->ckey;
+@@ -2070,19 +2068,13 @@ NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORM
+         if (status != STATUS_SUCCESS) break;
+         ++i;
+     }
+-    if (i || (status != STATUS_PENDING && status != STATUS_USER_APC))
++    if (i || status != STATUS_PENDING)
+     {
+         if (i) status = STATUS_SUCCESS;
+         goto done;
+     }
+-    if (status == STATUS_USER_APC)
+-    {
+-        status = NtDelayExecution( TRUE, NULL );
+-        assert( status == STATUS_USER_APC );
+-        goto done;
+-    }
+-    if (!timeout || timeout->QuadPart) status = NtWaitForSingleObject( wait_handle, alertable, timeout );
+-    else                               status = STATUS_TIMEOUT;
++    if (!timeout || timeout->QuadPart || alertable) status = NtWaitForSingleObject( wait_handle, alertable, timeout );
++    else                                            status = STATUS_TIMEOUT;
+     if (status != WAIT_OBJECT_0) goto done;
+ 
+     SERVER_START_REQ( get_thread_completion )
+#diff --git a/include/wine/server_protocol.h b/include/wine/server_protocol.h
+#index f246490791e..3abb1279ba9 100644
+#--- a/include/wine/server_protocol.h
+#+++ b/include/wine/server_protocol.h
+#@@ -5402,8 +5402,6 @@ struct remove_completion_request
+# {
+#     struct request_header __header;
+#     obj_handle_t handle;
+#-    int          alertable;
+#-    char __pad_20[4];
+# };
+# struct remove_completion_reply
+# {
+#@@ -6733,7 +6731,7 @@ union generic_reply
+# 
+# /* ### protocol_version begin ### */
+# 
+#-#define SERVER_PROTOCOL_VERSION 846
+#+#define SERVER_PROTOCOL_VERSION 845
+# 
+# /* ### protocol_version end ### */
+# 
+diff --git a/server/completion.c b/server/completion.c
+index 108aff46818..f56162aa22d 100644
+--- a/server/completion.c
++++ b/server/completion.c
+@@ -341,13 +341,6 @@ DECL_HANDLER(remove_completion)
+     if (!completion) return;
+ 
+     entry = list_head( &completion->queue );
+-    if (req->alertable && !list_empty( &current->user_apc )
+-        && !(entry && current->completion_wait && current->completion_wait->completion == completion))
+-    {
+-        set_error( STATUS_USER_APC );
+-        release_object( completion );
+-        return;
+-    }
+     if (current->completion_wait)
+     {
+         list_remove( &current->completion_wait->wait_queue_entry );
+diff --git a/server/protocol.def b/server/protocol.def
+index ac22f9853e5..0ad102283d1 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -3793,7 +3793,6 @@ typedef union
+ /* get completion from completion port queue */
+ @REQ(remove_completion)
+     obj_handle_t handle;          /* port handle */
+-    int          alertable;       /* completion wait is alertable */
+ @REPLY
+     apc_param_t   ckey;           /* completion key */
+     apc_param_t   cvalue;         /* completion value */
+diff --git a/server/request.h b/server/request.h
+index 68fa71e39fb..8222fc73dc4 100644
+--- a/server/request.h
++++ b/server/request.h
+@@ -2237,8 +2237,7 @@ C_ASSERT( FIELD_OFFSET(struct add_completion_request, information) == 32 );
+ C_ASSERT( FIELD_OFFSET(struct add_completion_request, status) == 40 );
+ C_ASSERT( sizeof(struct add_completion_request) == 48 );
+ C_ASSERT( FIELD_OFFSET(struct remove_completion_request, handle) == 12 );
+-C_ASSERT( FIELD_OFFSET(struct remove_completion_request, alertable) == 16 );
+-C_ASSERT( sizeof(struct remove_completion_request) == 24 );
++C_ASSERT( sizeof(struct remove_completion_request) == 16 );
+ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, ckey) == 8 );
+ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, cvalue) == 16 );
+ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
+diff --git a/server/trace.c b/server/trace.c
+index 7142c37218a..a59cf6c5b5f 100644
+--- a/server/trace.c
++++ b/server/trace.c
+@@ -4519,7 +4519,6 @@ static void dump_add_completion_request( const struct add_completion_request *re
+ static void dump_remove_completion_request( const struct remove_completion_request *req )
+ {
+     fprintf( stderr, " handle=%04x", req->handle );
+-    fprintf( stderr, ", alertable=%d", req->alertable );
+ }
+ 
+ static void dump_remove_completion_reply( const struct remove_completion_reply *req )
+-- 
+2.47.0
+

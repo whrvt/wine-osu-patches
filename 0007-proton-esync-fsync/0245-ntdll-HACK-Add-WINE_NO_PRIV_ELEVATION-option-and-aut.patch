@@ -1,0 +1,72 @@
+From a864939a31a528eb39063dda9d843b73f2fb87ac Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 29 Jun 2022 14:09:43 -0500
+Subject: [PATCH 0734/2346] ntdll: HACK: Add WINE_NO_PRIV_ELEVATION option and
+ auto enable it for Aquarist - My First Job.
+
+CW-Bug-Id: #20846
+---
+ dlls/ntdll/unix/loader.c       | 5 +++++
+ dlls/ntdll/unix/security.c     | 3 +++
+ dlls/ntdll/unix/unix_private.h | 1 +
+ 3 files changed, 9 insertions(+)
+
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index 4745cabd917..af55b0398e2 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1982,6 +1982,7 @@ 
+ BOOL ac_odyssey;
+ BOOL fsync_simulate_sched_quantum;
+ BOOL alert_simulate_sched_quantum;
++BOOL no_priv_elevation;
+ 
+ static void hacks_init(void)
+ {
+@@ -2036,6 +2037,10 @@ static void hacks_init(void)
+         setenv( "WINESTEAMNOEXEC", "1", 0 );
+         break;
+     }
++    env_str = getenv("WINE_NO_PRIV_ELEVATION");
++    if (env_str)  no_priv_elevation = atoi(env_str);
++    else if (sgi) no_priv_elevation = !strcmp(sgi, "1584660");
++
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/ntdll/unix/security.c b/dlls/ntdll/unix/security.c
+index 3f66d959373..8226a4b14fc 100644
+--- a/dlls/ntdll/unix/security.c
++++ b/dlls/ntdll/unix/security.c
+@@ -519,6 +519,8 @@ NTSTATUS WINAPI NtQueryInformationToken( HANDLE token, TOKEN_INFORMATION_CLASS c
+             if (!status) *type = reply->elevation;
+         }
+         SERVER_END_REQ;
++        if (!status && no_priv_elevation)
++            *(TOKEN_ELEVATION_TYPE *)info = TokenElevationTypeLimited;
+         break;
+ 
+     case TokenElevation:
+@@ -529,6 +531,7 @@ NTSTATUS WINAPI NtQueryInformationToken( HANDLE token, TOKEN_INFORMATION_CLASS c
+             req->handle = wine_server_obj_handle( token );
+             status = wine_server_call( req );
+             if (!status) elevation->TokenIsElevated = (reply->elevation == TokenElevationTypeFull);
++            if (!status && no_priv_elevation) elevation->TokenIsElevated = 0;
+         }
+         SERVER_END_REQ;
+         break;
+diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+index a9b434e39fa..39d0b039982 100644
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -182,6 +182,7 @@ 
+ extern BOOL ac_odyssey;
+ extern BOOL fsync_simulate_sched_quantum;
+ extern BOOL alert_simulate_sched_quantum;
++extern BOOL no_priv_elevation;
+ 
+ extern void init_environment(void);
+ extern void init_startup_info(void);
+-- 
+2.47.0
+

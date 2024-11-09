@@ -1,0 +1,26 @@
+From 6181fe1f1f9ec90cd3f3b716ba3e417c8e0ed44f Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 1 Nov 2024 01:29:47 -0700
+Subject: [PATCH] combase: Perform a magic trick to allow osu! to work with
+ wine_get_version blocked.
+
+Blind luck.
+---
+ dlls/combase/roapi.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
+index 02d9e0b536e..116b17f9a7e 100644
+--- a/dlls/combase/roapi.c
++++ b/dlls/combase/roapi.c
+@@ -208,6 +208,7 @@ HRESULT WINAPI RoGetParameterizedTypeInstanceIID(UINT32 name_element_count, cons
+                                                  ROPARAMIIDHANDLE *hiid)
+ {
+     FIXME("stub: %d %p %p %p %p\n", name_element_count, name_elements, meta_data_locator, iid, hiid);
++    if (getenv("OSU_HACKS_ENABLED")) return S_OK;
+     if (iid) *iid = GUID_NULL;
+     if (hiid) *hiid = INVALID_HANDLE_VALUE;
+     return E_NOTIMPL;
+-- 
+2.47.0
+

@@ -48,7 +48,7 @@ index b258a25074c..7bf34756425 100644
      unsigned int         flags;            /* desktop flags */
      struct shared_cursor cursor;           /* global cursor information */
      unsigned char        keystate[256];    /* asynchronous key state */
-+    __int64              update_serial;
++    INT64                update_serial;
  } desktop_shm_t;
  
  typedef volatile struct
@@ -56,7 +56,7 @@ index b258a25074c..7bf34756425 100644
      int                  cursor_count;     /* cursor show count */
      unsigned char        keystate[256];    /* key state */
      int                  keystate_lock;    /* keystate is locked */
-+    __int64              sync_serial;
++    INT64                sync_serial;
  } input_shm_t;
  
  typedef volatile union

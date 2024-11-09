@@ -1,0 +1,441 @@
+From 5e7b0852b96d66257a7f7b4aef1626f6cb317746 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 24 Oct 2024 11:19:21 -0700
+Subject: [PATCH 5/6] Revert "ntdll: Assign completion to thread when wait for
+ completion is satisfied."
+
+This reverts commit dc7bdc3db6aa057f0255765e18fb6f852244db4c.
+---
+ dlls/ntdll/unix/sync.c         | 95 +++++++++++++---------------------
+ include/wine/server_protocol.h | 22 +-------
+ server/completion.c            | 62 ++++------------------
+ server/protocol.def            | 10 ----
+ server/request.h               |  8 ---
+ server/trace.c                 | 15 ------
+ 6 files changed, 47 insertions(+), 165 deletions(-)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index f5536e398b5..e4a659f93bb 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2004,37 +2004,25 @@ NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE handle, ULONG_PTR *key, ULONG_PTR *
+ 
+     TRACE( "(%p, %p, %p, %p, %p)\n", handle, key, value, io, timeout );
+ 
+-    SERVER_START_REQ( remove_completion )
+-    {
+-        req->handle = wine_server_obj_handle( handle );
+-        if (!(status = wine_server_call( req )))
+-        {
+-            *key            = reply->ckey;
+-            *value          = reply->cvalue;
+-            io->Information = reply->information;
+-            io->Status      = reply->status;
+-        }
+-        else wait_handle = wine_server_ptr_handle( reply->wait_handle );
+-    }
+-    SERVER_END_REQ;
+-    if (status != STATUS_PENDING) return status;
+-    if (!timeout || timeout->QuadPart) status = NtWaitForSingleObject( wait_handle, FALSE, timeout );
+-    else                               status = STATUS_TIMEOUT;
+-    if (status != WAIT_OBJECT_0) return status;
+-
+-    SERVER_START_REQ( get_thread_completion )
++    for (;;)
+     {
+-        if (!(status = wine_server_call( req )))
++        SERVER_START_REQ( remove_completion )
+         {
+-            *key            = reply->ckey;
+-            *value          = reply->cvalue;
+-            io->Information = reply->information;
+-            io->Status      = reply->status;
++            req->handle = wine_server_obj_handle( handle );
++            if (!(status = wine_server_call( req )))
++            {
++                *key            = reply->ckey;
++                *value          = reply->cvalue;
++                io->Information = reply->information;
++                io->Status      = reply->status;
++            }
++            else wait_handle = wine_server_ptr_handle( reply->wait_handle );
+         }
++        SERVER_END_REQ;
++        if (status != STATUS_PENDING) return status;
++        status = NtWaitForSingleObject( wait_handle, FALSE, timeout );
++        if (status != WAIT_OBJECT_0) return status;
+     }
+-    SERVER_END_REQ;
+-
+-    return status;
+ }
+ 
+ 
+@@ -2050,47 +2038,34 @@ NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORM
+ 
+     TRACE( "%p %p %u %p %p %u\n", handle, info, (int)count, written, timeout, alertable );
+ 
+-    while (i < count)
++    for (;;)
+     {
+-        SERVER_START_REQ( remove_completion )
++        while (i < count)
+         {
+-            req->handle = wine_server_obj_handle( handle );
+-            if (!(status = wine_server_call( req )))
++            SERVER_START_REQ( remove_completion )
+             {
+-                info[i].CompletionKey             = reply->ckey;
+-                info[i].CompletionValue           = reply->cvalue;
+-                info[i].IoStatusBlock.Information = reply->information;
+-                info[i].IoStatusBlock.Status      = reply->status;
++                req->handle = wine_server_obj_handle( handle );
++                if (!(status = wine_server_call( req )))
++                {
++                    info[i].CompletionKey             = reply->ckey;
++                    info[i].CompletionValue           = reply->cvalue;
++                    info[i].IoStatusBlock.Information = reply->information;
++                    info[i].IoStatusBlock.Status      = reply->status;
++                }
++                else wait_handle = wine_server_ptr_handle( reply->wait_handle );
+             }
+-            else wait_handle = wine_server_ptr_handle( reply->wait_handle );
++            SERVER_END_REQ;
++            if (status != STATUS_SUCCESS) break;
++            ++i;
+         }
+-        SERVER_END_REQ;
+-        if (status != STATUS_SUCCESS) break;
+-        ++i;
+-    }
+-    if (i || status != STATUS_PENDING)
+-    {
+-        if (i) status = STATUS_SUCCESS;
+-        goto done;
+-    }
+-    if (!timeout || timeout->QuadPart || alertable) status = NtWaitForSingleObject( wait_handle, alertable, timeout );
+-    else                                            status = STATUS_TIMEOUT;
+-    if (status != WAIT_OBJECT_0) goto done;
+-
+-    SERVER_START_REQ( get_thread_completion )
+-    {
+-        if (!(status = wine_server_call( req )))
++        if (i || status != STATUS_PENDING)
+         {
+-            info[i].CompletionKey             = reply->ckey;
+-            info[i].CompletionValue           = reply->cvalue;
+-            info[i].IoStatusBlock.Information = reply->information;
+-            info[i].IoStatusBlock.Status      = reply->status;
+-            ++i;
++            if (status == STATUS_PENDING) status = STATUS_SUCCESS;
++            break;
+         }
++        status = NtWaitForSingleObject( wait_handle, alertable, timeout );
++        if (status != WAIT_OBJECT_0) break;
+     }
+-    SERVER_END_REQ;
+-
+-done:
+     *written = i ? i : 1;
+     return status;
+ }
+#diff --git a/include/wine/server_protocol.h b/include/wine/server_protocol.h
+#index 3abb1279ba9..15e89227884 100644
+#--- a/include/wine/server_protocol.h
+#+++ b/include/wine/server_protocol.h
+#@@ -5415,23 +5415,6 @@ struct remove_completion_reply
+# 
+# 
+# 
+#-struct get_thread_completion_request
+#-{
+#-    struct request_header __header;
+#-    char __pad_12[4];
+#-};
+#-struct get_thread_completion_reply
+#-{
+#-    struct reply_header __header;
+#-    apc_param_t   ckey;
+#-    apc_param_t   cvalue;
+#-    apc_param_t   information;
+#-    unsigned int  status;
+#-    char __pad_36[4];
+#-};
+#-
+#-
+#-
+# struct query_completion_request
+# {
+#     struct request_header __header;
+#@@ -6107,7 +6090,6 @@ enum request
+#     REQ_open_completion,
+#     REQ_add_completion,
+#     REQ_remove_completion,
+#-    REQ_get_thread_completion,
+#     REQ_query_completion,
+#     REQ_set_completion_info,
+#     REQ_add_fd_completion,
+#@@ -6404,7 +6386,6 @@ union generic_request
+#     struct open_completion_request open_completion_request;
+#     struct add_completion_request add_completion_request;
+#     struct remove_completion_request remove_completion_request;
+#-    struct get_thread_completion_request get_thread_completion_request;
+#     struct query_completion_request query_completion_request;
+#     struct set_completion_info_request set_completion_info_request;
+#     struct add_fd_completion_request add_fd_completion_request;
+#@@ -6699,7 +6680,6 @@ union generic_reply
+#     struct open_completion_reply open_completion_reply;
+#     struct add_completion_reply add_completion_reply;
+#     struct remove_completion_reply remove_completion_reply;
+#-    struct get_thread_completion_reply get_thread_completion_reply;
+#     struct query_completion_reply query_completion_reply;
+#     struct set_completion_info_reply set_completion_info_reply;
+#     struct add_fd_completion_reply add_fd_completion_reply;
+#@@ -6731,7 +6711,7 @@ union generic_reply
+# 
+# /* ### protocol_version begin ### */
+# 
+#-#define SERVER_PROTOCOL_VERSION 845
+#+#define SERVER_PROTOCOL_VERSION 844
+# 
+# /* ### protocol_version end ### */
+# 
+diff --git a/server/completion.c b/server/completion.c
+index f56162aa22d..f00962a306d 100644
+--- a/server/completion.c
++++ b/server/completion.c
+@@ -21,6 +21,7 @@
+ 
+ /* FIXMEs:
+  *  - built-in wait queues used which means:
++ *    + threads are awaken FIFO and not LIFO as native does
+  *    + "max concurrent active threads" parameter not used
+  *    + completion handle is waitable, while native isn't
+  */
+@@ -55,22 +56,12 @@ struct type_descr completion_type =
+     },
+ };
+ 
+-struct comp_msg
+-{
+-    struct   list queue_entry;
+-    apc_param_t   ckey;
+-    apc_param_t   cvalue;
+-    apc_param_t   information;
+-    unsigned int  status;
+-};
+-
+ struct completion_wait
+ {
+     struct object      obj;
+     obj_handle_t       handle;
+     struct completion *completion;
+     struct thread     *thread;
+-    struct comp_msg   *msg;
+     struct list        wait_queue_entry;
+ };
+ 
+@@ -84,7 +75,6 @@ struct completion
+ 
+ static void completion_wait_dump( struct object*, int );
+ static int completion_wait_signaled( struct object *obj, struct wait_queue_entry *entry );
+-static void completion_wait_satisfied( struct object *obj, struct wait_queue_entry *entry );
+ static void completion_wait_destroy( struct object * );
+ 
+ static const struct object_ops completion_wait_ops =
+@@ -95,7 +85,7 @@ static const struct object_ops completion_wait_ops =
+     add_queue,                      /* add_queue */
+     remove_queue,                   /* remove_queue */
+     completion_wait_signaled,       /* signaled */
+-    completion_wait_satisfied,      /* satisfied */
++    no_satisfied,                   /* satisfied */
+     no_signal,                      /* signal */
+     no_get_fd,                      /* get_fd */
+     default_map_access,             /* map_access */
+@@ -113,9 +103,6 @@ static const struct object_ops completion_wait_ops =
+ 
+ static void completion_wait_destroy( struct object *obj )
+ {
+-    struct completion_wait *wait = (struct completion_wait *)obj;
+-
+-    free( wait->msg );
+ }
+ 
+ static void completion_wait_dump( struct object *obj, int verbose )
+@@ -134,22 +121,6 @@ static int completion_wait_signaled( struct object *obj, struct wait_queue_entry
+     return wait->completion->depth;
+ }
+ 
+-static void completion_wait_satisfied( struct object *obj, struct wait_queue_entry *entry )
+-{
+-    struct completion_wait *wait = (struct completion_wait *)obj;
+-    struct list *msg_entry;
+-    struct comp_msg *msg;
+-
+-    assert( obj->ops == &completion_wait_ops );
+-    msg_entry = list_head( &wait->completion->queue );
+-    assert( msg_entry );
+-    msg = LIST_ENTRY( msg_entry, struct comp_msg, queue_entry );
+-    --wait->completion->depth;
+-    list_remove( &msg->queue_entry );
+-    if (wait->msg) free( wait->msg );
+-    wait->msg = msg;
+-}
+-
+ static void completion_dump( struct object*, int );
+ static int completion_signaled( struct object *obj, struct wait_queue_entry *entry );
+ static void completion_destroy( struct object * );
+@@ -178,6 +149,15 @@ static const struct object_ops completion_ops =
+     completion_destroy         /* destroy */
+ };
+ 
++struct comp_msg
++{
++    struct   list queue_entry;
++    apc_param_t   ckey;
++    apc_param_t   cvalue;
++    apc_param_t   information;
++    unsigned int  status;
++};
++
+ static void completion_destroy( struct object *obj)
+ {
+     struct completion *completion = (struct completion *) obj;
+@@ -232,7 +212,6 @@ static struct completion_wait *create_completion_wait( struct thread *thread )
+     if (!(wait = alloc_object( &completion_wait_ops ))) return NULL;
+     wait->completion = NULL;
+     wait->thread = thread;
+-    wait->msg = NULL;
+     if (!(wait->handle = alloc_handle( current->process, wait, SYNCHRONIZE, 0 )))
+     {
+         release_object( &wait->obj );
+@@ -373,25 +352,6 @@ DECL_HANDLER(remove_completion)
+     release_object( completion );
+ }
+ 
+-/* get completion after successful waiting for it */
+-DECL_HANDLER(get_thread_completion)
+-{
+-    struct comp_msg *msg;
+-
+-    if (!current->completion_wait || !(msg = current->completion_wait->msg))
+-    {
+-        set_error( STATUS_INVALID_HANDLE );
+-        return;
+-    }
+-
+-    reply->ckey = msg->ckey;
+-    reply->cvalue = msg->cvalue;
+-    reply->status = msg->status;
+-    reply->information = msg->information;
+-    free( msg );
+-    current->completion_wait->msg = NULL;
+-}
+-
+ /* get queue depth for completion port */
+ DECL_HANDLER(query_completion)
+ {
+diff --git a/server/protocol.def b/server/protocol.def
+index 0ad102283d1..693a20e3437 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -3802,16 +3802,6 @@ typedef union
+ @END
+ 
+ 
+-/* get completion after successful wait */
+-@REQ(get_thread_completion)
+-@REPLY
+-    apc_param_t   ckey;           /* completion key */
+-    apc_param_t   cvalue;         /* completion value */
+-    apc_param_t   information;    /* IO_STATUS_BLOCK Information */
+-    unsigned int  status;         /* completion result */
+-@END
+-
+-
+ /* get completion queue depth */
+ @REQ(query_completion)
+     obj_handle_t  handle;         /* port handle */
+diff --git a/server/request.h b/server/request.h
+index 8222fc73dc4..b2679ceae9a 100644
+--- a/server/request.h
++++ b/server/request.h
+@@ -381,7 +381,6 @@ DECL_HANDLER(create_completion);
+ DECL_HANDLER(open_completion);
+ DECL_HANDLER(add_completion);
+ DECL_HANDLER(remove_completion);
+-DECL_HANDLER(get_thread_completion);
+ DECL_HANDLER(query_completion);
+ DECL_HANDLER(set_completion_info);
+ DECL_HANDLER(add_fd_completion);
+@@ -677,7 +676,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
+     (req_handler)req_open_completion,
+     (req_handler)req_add_completion,
+     (req_handler)req_remove_completion,
+-    (req_handler)req_get_thread_completion,
+     (req_handler)req_query_completion,
+     (req_handler)req_set_completion_info,
+     (req_handler)req_add_fd_completion,
+@@ -2244,12 +2242,6 @@ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
+ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, status) == 32 );
+ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, wait_handle) == 36 );
+ C_ASSERT( sizeof(struct remove_completion_reply) == 40 );
+-C_ASSERT( sizeof(struct get_thread_completion_request) == 16 );
+-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, ckey) == 8 );
+-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, cvalue) == 16 );
+-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, information) == 24 );
+-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, status) == 32 );
+-C_ASSERT( sizeof(struct get_thread_completion_reply) == 40 );
+ C_ASSERT( FIELD_OFFSET(struct query_completion_request, handle) == 12 );
+ C_ASSERT( sizeof(struct query_completion_request) == 16 );
+ C_ASSERT( FIELD_OFFSET(struct query_completion_reply, depth) == 8 );
+diff --git a/server/trace.c b/server/trace.c
+index a59cf6c5b5f..66ff3000c65 100644
+--- a/server/trace.c
++++ b/server/trace.c
+@@ -4530,18 +4530,6 @@ static void dump_remove_completion_reply( const struct remove_completion_reply *
+     fprintf( stderr, ", wait_handle=%04x", req->wait_handle );
+ }
+ 
+-static void dump_get_thread_completion_request( const struct get_thread_completion_request *req )
+-{
+-}
+-
+-static void dump_get_thread_completion_reply( const struct get_thread_completion_reply *req )
+-{
+-    dump_uint64( " ckey=", &req->ckey );
+-    dump_uint64( ", cvalue=", &req->cvalue );
+-    dump_uint64( ", information=", &req->information );
+-    fprintf( stderr, ", status=%08x", req->status );
+-}
+-
+ static void dump_query_completion_request( const struct query_completion_request *req )
+ {
+     fprintf( stderr, " handle=%04x", req->handle );
+@@ -5047,7 +5035,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
+     (dump_func)dump_open_completion_request,
+     (dump_func)dump_add_completion_request,
+     (dump_func)dump_remove_completion_request,
+-    (dump_func)dump_get_thread_completion_request,
+     (dump_func)dump_query_completion_request,
+     (dump_func)dump_set_completion_info_request,
+     (dump_func)dump_add_fd_completion_request,
+@@ -5340,7 +5327,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
+     (dump_func)dump_open_completion_reply,
+     NULL,
+     (dump_func)dump_remove_completion_reply,
+-    (dump_func)dump_get_thread_completion_reply,
+     (dump_func)dump_query_completion_reply,
+     NULL,
+     NULL,
+@@ -5633,7 +5619,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
+     "open_completion",
+     "add_completion",
+     "remove_completion",
+-    "get_thread_completion",
+     "query_completion",
+     "set_completion_info",
+     "add_fd_completion",
+-- 
+2.47.0
+

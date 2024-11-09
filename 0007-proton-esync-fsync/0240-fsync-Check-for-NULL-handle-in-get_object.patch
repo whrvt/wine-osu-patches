@@ -1,0 +1,26 @@
+From 4ce5048522221c7b56016d2ba6c884bbdd3b2cdf Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 3 Jul 2023 13:30:33 -0600
+Subject: [PATCH 0583/2346] fsync: Check for NULL handle in get_object().
+
+CW-Bug-Id: #22395
+---
+ dlls/ntdll/unix/fsync.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
+index 5a7c9018518..43e80b97989 100644
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -316,6 +316,8 @@ static NTSTATUS get_object( HANDLE handle, struct fsync *obj )
+     unsigned int shm_idx = 0;
+     enum fsync_type type;
+ 
++    if (!handle) return STATUS_INVALID_HANDLE;
++
+     if (get_cached_object( handle, obj )) return STATUS_SUCCESS;
+ 
+     if ((INT_PTR)handle < 0)
+-- 
+2.47.0
+
