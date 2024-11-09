@@ -107,8 +107,10 @@ jobs:
         mkdir -p ~/.customizepkg
         echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}
         echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}
+        echo "replace#global#sha512sums+=.*#sha512sums+=('SKIP')" >> ~/.customizepkg/${AUR_PACKAGE}
         echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}-wow64
         echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}-wow64
+        echo "replace#global#sha512sums+=.*#sha512sums+=('SKIP')" >> ~/.customizepkg/${AUR_PACKAGE}-wow64
         echo "remove#depends#.*lib32-x265.*" > ~/.customizepkg/lib32-ffmpeg
         echo "replace#build#enable-cuda#disable-cuda" >> ~/.customizepkg/lib32-ffmpeg
         echo "replace#build#enable-libx265#disable-libx265" >> ~/.customizepkg/lib32-ffmpeg
