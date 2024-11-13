@@ -1,0 +1,116 @@
+From 80f9807d6ed9eba1d446d0e9c433d3bc104ff0a9 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Tue, 12 Nov 2024 00:16:25 +1000
+Subject: [PATCH] winegstreamer: Lock the media source critical section while
+ using the event queue.
+
+---
+ dlls/winegstreamer/media_source.c | 66 ++++++++++++++++++++++++++++---
+ 1 file changed, 60 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
+index 030d0c1b9a2..74b86d1f7c5 100644
+--- a/dlls/winegstreamer/media_source.c
++++ b/dlls/winegstreamer/media_source.c
+@@ -1376,38 +1376,92 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
+ static HRESULT WINAPI media_source_GetEvent(IMFMediaSource *iface, DWORD flags, IMFMediaEvent **event)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(iface);
++    IMFMediaEventQueue *event_queue = NULL;
++    HRESULT hr = S_OK;
+ 
+     TRACE("%p, %#lx, %p.\n", iface, flags, event);
+ 
+-    return IMFMediaEventQueue_GetEvent(source->event_queue, flags, event);
++    EnterCriticalSection(&source->cs);
++
++    /* GetEvent() is blocking, so we safely get an event queue
++     * pointer and then unlock the CS */
++    if (source->state == SOURCE_SHUTDOWN)
++        hr = MF_E_SHUTDOWN;
++    else
++    {
++        event_queue = source->event_queue;
++        IMFMediaEventQueue_AddRef(event_queue);
++    }
++
++    LeaveCriticalSection(&source->cs);
++
++    if (SUCCEEDED(hr))
++    {
++        hr = IMFMediaEventQueue_GetEvent(event_queue, flags, event);
++        IMFMediaEventQueue_Release(event_queue);
++    }
++
++    return hr;
+ }
+ 
+ static HRESULT WINAPI media_source_BeginGetEvent(IMFMediaSource *iface, IMFAsyncCallback *callback, IUnknown *state)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(iface);
++    HRESULT hr;
+ 
+     TRACE("%p, %p, %p.\n", iface, callback, state);
+ 
+-    return IMFMediaEventQueue_BeginGetEvent(source->event_queue, callback, state);
++    /* In the event-handling methods we lock the source CS to
++     * ensure the queue isn't shut down before we use it */
++    EnterCriticalSection(&source->cs);
++
++    if (source->state == SOURCE_SHUTDOWN)
++        hr = MF_E_SHUTDOWN;
++    else
++        hr = IMFMediaEventQueue_BeginGetEvent(source->event_queue, callback, state);
++
++    LeaveCriticalSection(&source->cs);
++
++    return hr;
+ }
+ 
+ static HRESULT WINAPI media_source_EndGetEvent(IMFMediaSource *iface, IMFAsyncResult *result, IMFMediaEvent **event)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(iface);
++    HRESULT hr;
+ 
+     TRACE("%p, %p, %p.\n", iface, result, event);
+ 
+-    return IMFMediaEventQueue_EndGetEvent(source->event_queue, result, event);
++    EnterCriticalSection(&source->cs);
++
++    if (source->state == SOURCE_SHUTDOWN)
++        hr = MF_E_SHUTDOWN;
++    else
++        hr = IMFMediaEventQueue_EndGetEvent(source->event_queue, result, event);
++
++    LeaveCriticalSection(&source->cs);
++
++    return hr;
+ }
+ 
+ static HRESULT WINAPI media_source_QueueEvent(IMFMediaSource *iface, MediaEventType event_type, REFGUID ext_type,
+-        HRESULT hr, const PROPVARIANT *value)
++        HRESULT status, const PROPVARIANT *value)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(iface);
++    HRESULT hr;
+ 
+-    TRACE("%p, %lu, %s, %#lx, %p.\n", iface, event_type, debugstr_guid(ext_type), hr, value);
++    TRACE("%p, %lu, %s, %#lx, %p.\n", iface, event_type, debugstr_guid(ext_type), status, value);
++
++    EnterCriticalSection(&source->cs);
+ 
+-    return IMFMediaEventQueue_QueueEventParamVar(source->event_queue, event_type, ext_type, hr, value);
++    if (source->state == SOURCE_SHUTDOWN)
++        hr = MF_E_SHUTDOWN;
++    else
++        hr = IMFMediaEventQueue_QueueEventParamVar(source->event_queue, event_type, ext_type, status, value);
++
++    LeaveCriticalSection(&source->cs);
++
++    return hr;
+ }
+ 
+ static HRESULT WINAPI media_source_GetCharacteristics(IMFMediaSource *iface, DWORD *characteristics)
+-- 
+GitLab
+

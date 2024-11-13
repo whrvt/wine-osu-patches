@@ -1,0 +1,61 @@
+From a598a24982b51fc7106aca22d6683775069bdfab Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Sat, 9 Nov 2024 12:20:45 +1000
+Subject: [PATCH] mfplat/tests: Test video stream release after media source
+ release.
+
+---
+ dlls/mfplat/tests/mfplat.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 6535890b6c7..4774e18db0e 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -1631,7 +1631,6 @@ static void test_source_resolver(void)
+ 
+     get_event((IMFMediaEventGenerator *)mediasource, MEEndOfPresentation, NULL);
+ 
+-    IMFMediaStream_Release(video_stream);
+     IMFMediaTypeHandler_Release(handler);
+     IMFPresentationDescriptor_Release(descriptor);
+ 
+@@ -1641,6 +1640,7 @@ static void test_source_resolver(void)
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+ 
+     /* During shutdown, circular references such as source <-> stream should be released. */
++    todo_wine
+     EXPECT_REF(mediasource, 3);
+ 
+     ok(bytestream_closed, "Missing IMFByteStream::Close call\n");
+@@ -1650,11 +1650,14 @@ static void test_source_resolver(void)
+ 
+     IMFRateSupport_Release(rate_support);
+ 
++    todo_wine
+     EXPECT_REF(mediasource, 2);
+ 
+     IMFGetService_Release(get_service);
+ 
++    /* Holding a reference to the video stream does not prevent release of the media source. */
+     refcount = IMFMediaSource_Release(mediasource);
++    todo_wine
+     ok(!refcount, "Unexpected refcount %ld\n", refcount);
+ 
+     IMFByteStream_Release(stream);
+@@ -1689,6 +1692,12 @@ static void test_source_resolver(void)
+ 
+     IMFSourceResolver_Release(resolver);
+ 
++    hr = IMFMediaStream_GetMediaSource(video_stream, &mediasource);
++    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
++
++    refcount = IMFMediaStream_Release(video_stream);
++    ok(!refcount, "Unexpected refcount %ld\n", refcount);
++
+     hr = MFShutdown();
+     ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
+ 
+-- 
+GitLab
+

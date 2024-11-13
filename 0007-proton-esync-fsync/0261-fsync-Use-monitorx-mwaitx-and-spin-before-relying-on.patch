@@ -1,108 +1,136 @@
-From 2d36d872817b83ef237f5a3561d8504db0d5a0ca Mon Sep 17 00:00:00 2001
+From 478b891109bfee55921d9af0ff75706f277096b5 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
-Date: Fri, 8 Nov 2024 17:14:10 -0800
-Subject: [PATCH] fsync: Use monitorx+mwaitx and spin before relying on
- futex_waitv.
+Date: Mon, 11 Nov 2024 18:27:50 -0800
+Subject: [PATCH v2] fsync: Use monitorx+mwaitx and spin before relying on
+ futex_waitv in wait-all.
 
-Inspired by a patch by Torge Matthies.
+Taking inspiration from a patch by Torge Matthies.
+
+v2: Fix mutex reacquire to use atomic operations, general reorganization.
 ---
- dlls/ntdll/unix/fsync.c | 85 ++++++++++++++++++++++++++++++++++++++++-
- dlls/ntdll/unix/fsync.h | 62 ++++++++++++++++++++++++++++++
- 2 files changed, 146 insertions(+), 1 deletion(-)
+ dlls/ntdll/unix/fsync.c | 94 ++++++++++++++++++++++++++++++++++++++---
+ dlls/ntdll/unix/fsync.h | 62 +++++++++++++++++++++++++++
+ 2 files changed, 151 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
-index 169ceab10ad..ec5df6cbb3c 100644
+index 169ceab10ad..eb74b658b0c 100644
 --- a/dlls/ntdll/unix/fsync.c
 +++ b/dlls/ntdll/unix/fsync.c
-@@ -773,6 +773,52 @@ static NTSTATUS do_single_wait( int *addr, int val, const struct timespec64 *end
+@@ -773,6 +773,72 @@ static NTSTATUS do_single_wait( int *addr, int val, const struct timespec64 *end
          return STATUS_PENDING;
  }
  
-+/* Fast path attempt to detect a value change using monitorx/mwaitx and spinning
-+ * Returns STATUS_SUCCESS if the value changed, STATUS_UNSUCCESSFUL if it did not
-+ * observed_val: If non-NULL, receives the last observed value */
-+static inline NTSTATUS try_wait_value( volatile int *addr, int expected_val, int *observed_val,
-+    const unsigned int mon_timeout, const unsigned int max_spin )
-+{
-+    unsigned int spin = 0;
-+    unsigned int spin_i = 0;
-+    int val;
++#define MUTEX_MON_TIMEOUT     1000
++#define MUTEX_BASE_SPIN       2
++#define AUTO_MON_TIMEOUT      1000
++#define AUTO_BASE_SPIN        3
++#define MANUAL_MON_TIMEOUT    2000
++#define MANUAL_BASE_SPIN      4
 +
-+    /* Check again before doing any waiting/spinning */
++/* Fast path attempt to detect a value change using monitorx/mwaitx and spinning.
++ * Returns STATUS_SUCCESS if the value changed, STATUS_UNSUCCESSFUL otherwise.
++ *
++ * Parameters:
++ *   addr         - Memory address to monitor
++ *   expected_val - Value we're waiting to change
++ *   observed_val - If non-NULL, receives the last observed value
++ *   mon_timeout  - Max cycles to wait in mwaitx
++ *   base_spin    - # of spin iterations (mwaitx being unavailable will add 2 to base_spin)
++ */
++static inline NTSTATUS try_wait_value( volatile int *addr, int expected_val, int *observed_val,
++    const unsigned int mon_timeout, const unsigned int base_spin )
++{
++    static const unsigned int MIN_SPIN_ITERS = 4;
++    static const unsigned int SPIN_SHIFT = 4;
++    unsigned int spin_i, spin_o;
++    const unsigned int max_spin = mwaitx_supported() ? base_spin : base_spin + 2;
++    int val;
++    NTSTATUS status = STATUS_UNSUCCESSFUL;
++
++    /* Fast path - check current value before waiting */
 +    val = __atomic_load_n( addr, __ATOMIC_SEQ_CST );
-+    if (val != expected_val)
-+    {
-+        if (observed_val) *observed_val = val;
-+        return STATUS_SUCCESS;
++    if (val != expected_val) {
++        status = STATUS_SUCCESS;
++        goto done;
 +    }
 +
++    /* Try hardware wait if available */
 +    if (mwaitx_supported())
 +    {
 +        val = monitor_wait( addr, expected_val, mon_timeout );
-+        if (val != expected_val)
-+        {
-+            if (observed_val) *observed_val = val;
-+            return STATUS_SUCCESS;
++        if (val != expected_val) {
++            status = STATUS_SUCCESS;
++            goto done;
 +        }
 +    }
 +
-+    /* Fall through to spinning with exponential backoff */
-+    while (spin++ < max_spin)
-+    {
++    /* Try spinning with exponential backoff */
++    do {
 +        val = __atomic_load_n( addr, __ATOMIC_SEQ_CST );
-+        if (val != expected_val)
-+        {
-+            if (observed_val) *observed_val = val;
-+            return STATUS_SUCCESS;
++        if (val != expected_val) {
++            status = STATUS_SUCCESS;
++            goto done;
 +        }
 +
-+        for (spin_i = 0; spin_i < (spin > 4 ? (1U << (spin - 4)) : 4); spin_i++)
++        /* backoff iterations: min(MIN_SPIN_ITERS, 2^(spin-SHIFT)) */
++        spin_i = (spin_o <= SPIN_SHIFT) ? MIN_SPIN_ITERS
++                                        : (1U << (spin_o - SPIN_SHIFT));
++        do {
 +            YieldProcessor();
-+    }
++        } while (--spin_i);
++    } while (++spin_o < max_spin);
 +
-+    if (observed_val) *observed_val = val;
-+    return STATUS_UNSUCCESSFUL;
++done:
++    if (observed_val)
++        *observed_val = val;
++    return status;
 +}
 +
  static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
      BOOLEAN wait_any, BOOLEAN alertable, const LARGE_INTEGER *timeout )
  {
-@@ -929,6 +975,29 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+@@ -908,27 +974,31 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                     {
+                         struct mutex *mutex = obj->shm;
+                         int tid;
+-
++                        unsigned int try = 0;
++reacquire_mutex:
+                         if (mutex->tid == current_tid)
+                         {
+-                            TRACE("Woken up by handle %p [%d].\n", handles[i], i);
++                            TRACE("Woken up by handle %p [%d] try_wait %u.\n", handles[i], i, try);
+                             mutex->count++;
+                             return i;
+                         }
+ 
+                         if (!(tid = __sync_val_compare_and_swap( &mutex->tid, 0, current_tid )))
+                         {
+-                            TRACE("Woken up by handle %p [%d].\n", handles[i], i);
++                            TRACE("Woken up by handle %p [%d] try_wait %u.\n", handles[i], i, try);
+                             mutex->count = 1;
+                             return i;
+                         }
+                         else if (tid == ~0 && (tid = __sync_val_compare_and_swap( &mutex->tid, ~0, current_tid )) == ~0)
+                         {
+-                            TRACE("Woken up by abandoned mutex %p [%d].\n", handles[i], i);
++                            TRACE("Woken up by abandoned mutex %p [%d] try_wait %u.\n", handles[i], i, try);
+                             mutex->count = 1;
                              return STATUS_ABANDONED_WAIT_0 + i;
                          }
  
-+                        if (try_wait_value( &mutex->tid, tid, &tid, 500, 2 ) == STATUS_SUCCESS)
-+                        {
-+                            if (tid == current_tid)
-+                            {
-+                                TRACE("Woken up by handle %p [%d].\n", handles[i], i);
-+                                mutex->count++;
-+                                return i;
-+                            }
-+                            if (tid == 0)
-+                            {
-+                                TRACE("Woken up by handle %p [%d].\n", handles[i], i);
-+                                mutex->tid = current_tid;
-+                                mutex->count = 1;
-+                                return i;
-+                            }
-+                            if (tid == ~0)
-+                            {
-+                                TRACE("Woken up by abandoned mutex %p [%d].\n", handles[i], i);
-+                                mutex->tid = current_tid;
-+                                mutex->count = 1;
-+                                return STATUS_ABANDONED_WAIT_0 + i;
-+                            }
-+                        }
++                        if (!try++ && try_wait_value( &mutex->tid, tid, &tid, MUTEX_MON_TIMEOUT, MUTEX_BASE_SPIN ) == STATUS_SUCCESS)
++                            goto reacquire_mutex;
++
                          futex_vector_set( &futexes[i], &mutex->tid, tid );
                          break;
                      }
-@@ -942,6 +1011,13 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+@@ -942,6 +1012,13 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
                              TRACE("Woken up by handle %p [%d].\n", handles[i], i);
                              return i;
                          }
 +                        int signaled;
-+                        if (try_wait_value( &event->signaled, 0, &signaled, 500, 2 ) == STATUS_SUCCESS && 
++                        if (try_wait_value( &event->signaled, 0, &signaled, AUTO_MON_TIMEOUT, AUTO_BASE_SPIN ) == STATUS_SUCCESS &&
 +                            signaled && __sync_val_compare_and_swap( &event->signaled, 1, 0 ))
 +                        {
 +                            TRACE("Woken up by handle %p [%d].\n", handles[i], i);
@@ -111,7 +139,7 @@ index 169ceab10ad..ec5df6cbb3c 100644
                          futex_vector_set( &futexes[i], &event->signaled, 0 );
                          break;
                      }
-@@ -950,8 +1026,15 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+@@ -950,8 +1027,15 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
                      case FSYNC_QUEUE:
                      {
                          struct event *event = obj->shm;
@@ -124,7 +152,7 @@ index 169ceab10ad..ec5df6cbb3c 100644
 +                        }
  
 -                        if (__atomic_load_n( &event->signaled, __ATOMIC_SEQ_CST ))
-+                        if (try_wait_value( &event->signaled, 0, &signaled, 1500, 5 ) == STATUS_SUCCESS && signaled)
++                        if (try_wait_value( &event->signaled, 0, &signaled, MANUAL_MON_TIMEOUT, MANUAL_BASE_SPIN ) == STATUS_SUCCESS && signaled)
                          {
                              TRACE("Woken up by handle %p [%d].\n", handles[i], i);
                              return i;

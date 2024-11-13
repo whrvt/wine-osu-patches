@@ -1,0 +1,124 @@
+From bfa83480970ff96bb4e4c6290f1b45745ff5d757 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 13 Mar 2024 18:44:31 -0600
+Subject: [PATCH 1209/2346] ntdll: Wait for thread suspension in
+ NtSuspendThread().
+
+CW-Bug-Id: #23552
+---
+ dlls/ntdll/unix/thread.c | 26 ++++++++++++++++++++++----
+ server/protocol.def      |  6 ++++--
+ server/thread.c          | 28 ++++++++++++++++++++++++----
+ 3 files changed, 50 insertions(+), 10 deletions(-)
+
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index 64cad6e7c0e..c69d3de3e15 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -1611,22 +1611,40 @@ NTSTATUS WINAPI NtOpenThread( HANDLE *handle, ACCESS_MASK access,
+ /******************************************************************************
+  *              NtSuspendThread   (NTDLL.@)
+  */
+-NTSTATUS WINAPI NtSuspendThread( HANDLE handle, ULONG *count )
++NTSTATUS WINAPI NtSuspendThread( HANDLE handle, ULONG *ret_count )
+ {
+     BOOL self = FALSE;
+-    unsigned int ret;
++    unsigned int ret, count = 0;
++    HANDLE wait_handle = NULL;
+ 
+     SERVER_START_REQ( suspend_thread )
+     {
+         req->handle = wine_server_obj_handle( handle );
+-        if (!(ret = wine_server_call( req )))
++        if (!(ret = wine_server_call( req )) || ret == STATUS_PENDING)
+         {
+             self = reply->count & 0x80000000;
+-            if (count) *count = reply->count & 0x7fffffff;
++            count = reply->count & 0x7fffffff;;
++            wait_handle = wine_server_ptr_handle( reply->wait_handle );
+         }
+     }
+     SERVER_END_REQ;
++
+     if (self) usleep( 0 );
++
++    if (ret == STATUS_PENDING && wait_handle)
++    {
++        NtWaitForSingleObject( wait_handle, FALSE, NULL );
++
++        SERVER_START_REQ( suspend_thread )
++        {
++            req->handle = wine_server_obj_handle( handle );
++            req->waited_handle = wine_server_obj_handle( wait_handle );
++            ret = wine_server_call( req );
++        }
++        SERVER_END_REQ;
++    }
++
++    if (!ret && ret_count) *ret_count = count;
+     return ret;
+ }
+ 
+diff --git a/server/protocol.def b/server/protocol.def
+index ee75ae5e566..d6926784fe5 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1183,9 +1183,11 @@ typedef volatile struct input_shared_memory input_shm_t;
+ 
+ /* Suspend a thread */
+ @REQ(suspend_thread)
+-    obj_handle_t handle;       /* thread handle */
++    obj_handle_t handle;        /* thread handle */
++    obj_handle_t waited_handle; /* handle waited on */
+ @REPLY
+-    int          count;        /* new suspend count */
++    int          count;         /* new suspend count */
++    obj_handle_t wait_handle;   /* handle to wait on */
+ @END
+ 
+ 
+diff --git a/server/thread.c b/server/thread.c
+index a6039b35d9d..e54e83c178a 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -1815,12 +1815,32 @@ DECL_HANDLER(suspend_thread)
+ {
+     struct thread *thread;
+ 
+-    if ((thread = get_thread_from_handle( req->handle, THREAD_SUSPEND_RESUME )))
++    if (req->waited_handle)
+     {
+-        if (thread->state == TERMINATED) set_error( STATUS_ACCESS_DENIED );
+-        else reply->count = suspend_thread( thread );
+-        release_object( thread );
++        struct context *context;
++
++        if (!(context = (struct context *)get_handle_obj( current->process, req->waited_handle,
++                                                          0, &context_ops )))
++            return;
++        close_handle( current->process, req->waited_handle ); /* avoid extra server call */
++        set_error( context->status );
++        release_object( context );
++        return;
+     }
++
++    if (!(thread = get_thread_from_handle( req->handle, THREAD_SUSPEND_RESUME ))) return;
++
++    if (thread->state != RUNNING) set_error( STATUS_ACCESS_DENIED );
++    else
++    {
++        reply->count = suspend_thread( thread );
++        if (!get_error() && thread != current && thread->context && thread->context->status == STATUS_PENDING)
++        {
++            set_error( STATUS_PENDING );
++            reply->wait_handle = alloc_handle( current->process, thread->context, SYNCHRONIZE, 0 );
++        }
++    }
++    release_object( thread );
+ }
+ 
+ /* resume a thread */
+-- 
+2.47.0
+

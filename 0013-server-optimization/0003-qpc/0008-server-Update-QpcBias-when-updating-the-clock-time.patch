@@ -25,9 +25,9 @@ index 11111111111..11111111111 100644
      timeout_t timezone_bias;
      struct tm *tm;
      time_t now;
-+    unsigned __int64 tsc, qpc_bias, qpc_freq = user_shared_data->QpcFrequency;
-+    unsigned int aux, qpc_shift = user_shared_data->QpcShift;
-+    unsigned int qpc_bypass = user_shared_data->QpcBypassEnabled;
++    UINT64 tsc, qpc_bias, qpc_freq = user_shared_data->QpcFrequency;
++    UINT aux, qpc_shift = user_shared_data->QpcShift;
++    UINT qpc_bypass = user_shared_data->QpcBypassEnabled;
 +
 +    if (!(qpc_bypass & SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED))
 +        tsc = 0;

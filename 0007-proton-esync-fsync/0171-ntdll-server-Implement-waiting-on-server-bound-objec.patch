@@ -144,6 +144,19 @@ index bbd104f3e16..2ff98cb64cb 100644
  extern unsigned int fsync_alloc_shm( int low, int high );
 +extern void fsync_wake_up( struct object *obj );
 +extern void fsync_clear( struct object *obj );
+diff --git a/server/named_pipe.c b/server/named_pipe.c
+index 68fa8953cca..1535c5188ec 100644
+--- a/server/named_pipe.c
++++ b/server/named_pipe.c
+@@ -344,6 +344,7 @@ static const struct object_ops named_pipe_dir_ops =
+     remove_queue,                            /* remove_queue */
+     default_fd_signaled,                     /* signaled */
+     NULL,                                    /* get_esync_fd */
++    NULL,                                    /* get_fsync_idx */
+     no_satisfied,                            /* satisfied */
+     no_signal,                               /* signal */
+     named_pipe_dir_get_fd,                   /* get_fd */
+diff --git a/server/thread.c b/server/thread.c
 diff --git a/server/thread.c b/server/thread.c
 index ce90d8cfe74..6c46fc492cf 100644
 --- a/server/thread.c

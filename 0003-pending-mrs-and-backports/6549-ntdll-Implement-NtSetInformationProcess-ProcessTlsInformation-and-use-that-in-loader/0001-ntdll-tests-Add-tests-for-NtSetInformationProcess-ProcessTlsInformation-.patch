@@ -1,4 +1,4 @@
-From 15b196ca5869c5734b26882f47d333d7b8bbc5f8 Mon Sep 17 00:00:00 2001
+From 09d95bb505ff8ea4b893fc9364b9ea8b7ee9cd23 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Mon, 23 Sep 2024 21:09:39 -0600
 Subject: [PATCH] ntdll/tests: Add tests for NtSetInformationProcess(
@@ -10,10 +10,10 @@ Subject: [PATCH] ntdll/tests: Add tests for NtSetInformationProcess(
  2 files changed, 309 insertions(+)
 
 diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
-index b2a373ce1b3..d379ad5c152 100644
+index 7741293d815..12b785dbc22 100644
 --- a/dlls/ntdll/tests/info.c
 +++ b/dlls/ntdll/tests/info.c
-@@ -4080,6 +4080,279 @@ static void test_processor_idle_cycle_time(void)
+@@ -4087,6 +4087,279 @@ static void test_processor_idle_cycle_time(void)
      ok( size == cpu_count * sizeof(*buffer), "got %#lx.\n", size );
  }
  
@@ -293,17 +293,17 @@ index b2a373ce1b3..d379ad5c152 100644
  START_TEST(info)
  {
      char **argv;
-@@ -4160,4 +4433,5 @@ START_TEST(info)
+@@ -4167,4 +4440,5 @@ START_TEST(info)
      test_process_token(argc, argv);
      test_process_id();
      test_processor_idle_cycle_time();
 +    test_set_process_tls_info();
  }
 diff --git a/include/winternl.h b/include/winternl.h
-index 4f24a921bb1..0f3abe1ccfb 100644
+index bc3ef12bc0d..d3496157783 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
-@@ -2653,6 +2653,41 @@ typedef struct _PROCESS_CYCLE_TIME_INFORMATION {
+@@ -2668,6 +2668,41 @@ typedef struct _PROCESS_CYCLE_TIME_INFORMATION {
      ULONGLONG   CurrentCycleCount;
  } PROCESS_CYCLE_TIME_INFORMATION, *PPROCESS_CYCLE_TIME_INFORMATION;
  

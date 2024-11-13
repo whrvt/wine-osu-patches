@@ -1,0 +1,203 @@
+From 1ee98ca6572403b687156ab1cad9f39524e2b5f6 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Sat, 9 Nov 2024 13:19:54 +1000
+Subject: [PATCH] winegstreamer: Do not create MF stream objects until the
+ media source is started.
+
+Streams hold a reference to the source, but this reference should not be
+taken until Start() is called because freeing the media source depends
+on release in Shutdown() of the stream's reference to the source. We
+could create the streams in media_source_create() and take source refs
+for them in Start(), but that's potentially confusing and fragile.
+---
+ dlls/mfplat/tests/mfplat.c        |  6 +---
+ dlls/winegstreamer/media_source.c | 58 ++++++++++++++++++++++---------
+ 2 files changed, 43 insertions(+), 21 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 4774e18db0e..c128f0d22c6 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -1322,11 +1322,9 @@ static void test_source_resolver(void)
+     ok(obj_type == MF_OBJECT_MEDIASOURCE, "got %d\n", obj_type);
+ 
+     /* Test that no extra refs to mediasource are held if Start() was not called */
+-    todo_wine
+     EXPECT_REF(mediasource, 1);
+ 
+     refcount = IMFMediaSource_Release(mediasource);
+-    todo_wine
+     ok(!refcount, "Unexpected refcount %ld\n", refcount);
+     IMFByteStream_Release(stream);
+ 
+@@ -1413,7 +1411,6 @@ static void test_source_resolver(void)
+     ok(mediasource != NULL, "got %p\n", mediasource);
+     ok(obj_type == MF_OBJECT_MEDIASOURCE, "got %d\n", obj_type);
+ 
+-    todo_wine
+     EXPECT_REF(mediasource, 1);
+ 
+     check_interface(mediasource, &IID_IMFGetService, TRUE);
+@@ -1422,13 +1419,11 @@ static void test_source_resolver(void)
+     hr = IMFMediaSource_QueryInterface(mediasource, &IID_IMFGetService, (void**)&get_service);
+     ok(hr == S_OK, "Failed to get service interface, hr %#lx.\n", hr);
+ 
+-    todo_wine
+     EXPECT_REF(mediasource, 2);
+ 
+     hr = IMFGetService_GetService(get_service, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateSupport, (void**)&rate_support);
+     ok(hr == S_OK, "Failed to get rate support interface, hr %#lx.\n", hr);
+ 
+-    todo_wine
+     EXPECT_REF(mediasource, 3);
+ 
+     hr = IMFRateSupport_GetFastestRate(rate_support, MFRATE_FORWARD, FALSE, &rate);
+@@ -1521,6 +1516,7 @@ static void test_source_resolver(void)
+ 
+     /* The stream holds a reference. It is unclear which object holds the fifth
+      * reference in Windows, but it's released after MENewStream is retrieved. */
++    todo_wine
+     EXPECT_REF(mediasource, 5);
+ 
+     video_stream = NULL;
+diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
+index 030d0c1b9a2..ea0f2597c3b 100644
+--- a/dlls/winegstreamer/media_source.c
++++ b/dlls/winegstreamer/media_source.c
+@@ -187,6 +187,7 @@ struct media_source
+     UINT64 duration;
+ 
+     IMFStreamDescriptor **descriptors;
++    wg_parser_stream_t *wg_streams;
+     struct media_stream **streams;
+     ULONG stream_count;
+ 
+@@ -582,6 +583,9 @@ static HRESULT media_stream_start(struct media_stream *stream, BOOL active, BOOL
+             &GUID_NULL, S_OK, position);
+ }
+ 
++static HRESULT media_stream_create(IMFMediaSource *source, IMFStreamDescriptor *descriptor,
++        wg_parser_stream_t wg_stream, struct media_stream **out);
++
+ static HRESULT media_source_start(struct media_source *source, IMFPresentationDescriptor *descriptor,
+         GUID *format, PROPVARIANT *position)
+ {
+@@ -596,6 +600,26 @@ static HRESULT media_source_start(struct media_source *source, IMFPresentationDe
+     if (source->state == SOURCE_SHUTDOWN)
+         return MF_E_SHUTDOWN;
+ 
++    /* if starting for the first time, create the streams */
++    if (source->stream_count && !source->streams[0])
++    {
++        assert(source->state == SOURCE_STOPPED);
++
++        for (i = 0; i < source->stream_count; ++i)
++        {
++            wg_parser_stream_t wg_stream = source->wg_streams[i];
++            struct media_stream *stream;
++
++            if (FAILED(hr = media_stream_create(&source->IMFMediaSource_iface,
++                    source->descriptors[i], wg_stream, &stream)))
++                return hr;
++
++            source->streams[i] = stream;
++        }
++        free(source->wg_streams);
++        source->wg_streams = NULL;
++    }
++
+     /* seek to beginning on stop->play */
+     if (source->state == SOURCE_STOPPED && position->vt == VT_EMPTY)
+     {
+@@ -1569,10 +1593,14 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+     {
+         struct media_stream *stream = source->streams[source->stream_count];
+         IMFStreamDescriptor_Release(source->descriptors[source->stream_count]);
+-        IMFMediaEventQueue_Shutdown(stream->event_queue);
+-        IMFMediaStream_Release(&stream->IMFMediaStream_iface);
++        if (stream)
++        {
++            IMFMediaEventQueue_Shutdown(stream->event_queue);
++            IMFMediaStream_Release(&stream->IMFMediaStream_iface);
++        }
+     }
+     free(source->descriptors);
++    free(source->wg_streams);
+     free(source->streams);
+ 
+     LeaveCriticalSection(&source->cs);
+@@ -1606,13 +1634,12 @@ static void media_source_init_descriptors(struct media_source *source)
+ 
+     for (i = 0; i < source->stream_count; i++)
+     {
+-        struct media_stream *stream = source->streams[i];
+-        IMFStreamDescriptor *descriptor = stream->descriptor;
++        IMFStreamDescriptor *descriptor = source->descriptors[i];
+ 
+-        if (FAILED(hr = stream_descriptor_set_tag(descriptor, stream->wg_stream,
++        if (FAILED(hr = stream_descriptor_set_tag(descriptor, source->wg_streams[i],
+                 &MF_SD_LANGUAGE, WG_PARSER_TAG_LANGUAGE)))
+             WARN("Failed to set stream descriptor language, hr %#lx\n", hr);
+-        if (FAILED(hr = stream_descriptor_set_tag(descriptor, stream->wg_stream,
++        if (FAILED(hr = stream_descriptor_set_tag(descriptor, source->wg_streams[i],
+                 &MF_SD_STREAM_NAME, WG_PARSER_TAG_NAME)))
+             WARN("Failed to set stream descriptor name, hr %#lx\n", hr);
+     }
+@@ -1665,6 +1692,7 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
+     stream_count = wg_parser_get_stream_count(parser);
+ 
+     if (!(object->descriptors = calloc(stream_count, sizeof(*object->descriptors)))
++            || !(object->wg_streams = calloc(stream_count, sizeof(*object->wg_streams)))
+             || !(object->streams = calloc(stream_count, sizeof(*object->streams))))
+     {
+         hr = E_OUTOFMEMORY;
+@@ -1673,24 +1701,23 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
+ 
+     for (i = 0; i < stream_count; ++i)
+     {
++        /* It is valid to create and release a MF source without ever calling Start() and
++         * Shutdown(). Each MF stream holds a reference to the source, and that ref should
++         * be released in Shutdown(), so streams are not created here.
++         * The wg streams are needed now to get the format and duration. Their buffer is
++         * freed in Start(). */
+         wg_parser_stream_t wg_stream = wg_parser_get_stream(object->wg_parser, i);
+         IMFStreamDescriptor *descriptor;
+-        struct media_stream *stream;
+         struct wg_format format;
+ 
+         wg_parser_stream_get_current_format(wg_stream, &format);
+         if (FAILED(hr = stream_descriptor_create(i, &format, &descriptor)))
+             goto fail;
+-        if (FAILED(hr = media_stream_create(&object->IMFMediaSource_iface, descriptor, wg_stream, &stream)))
+-        {
+-            IMFStreamDescriptor_Release(descriptor);
+-            goto fail;
+-        }
+ 
+         object->duration = max(object->duration, wg_parser_stream_get_duration(wg_stream));
+         IMFStreamDescriptor_AddRef(descriptor);
+         object->descriptors[i] = descriptor;
+-        object->streams[i] = stream;
++        object->wg_streams[i] = wg_stream;
+         object->stream_count++;
+     }
+ 
+@@ -1704,13 +1731,12 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
+ fail:
+     WARN("Failed to construct MFMediaSource, hr %#lx.\n", hr);
+ 
+-    while (object->streams && object->stream_count--)
++    while (object->descriptors && object->stream_count--)
+     {
+-        struct media_stream *stream = object->streams[object->stream_count];
+         IMFStreamDescriptor_Release(object->descriptors[object->stream_count]);
+-        IMFMediaStream_Release(&stream->IMFMediaStream_iface);
+     }
+     free(object->descriptors);
++    free(object->wg_streams);
+     free(object->streams);
+ 
+     if (stream_count != UINT_MAX)
+-- 
+GitLab
+

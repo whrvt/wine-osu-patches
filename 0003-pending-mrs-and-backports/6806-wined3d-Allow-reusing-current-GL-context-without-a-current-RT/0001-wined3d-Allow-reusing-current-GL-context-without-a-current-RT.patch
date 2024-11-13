@@ -1,0 +1,26 @@
+From ff79da8f72e0b153a54e0337bf60a4877f9af76a Mon Sep 17 00:00:00 2001
+From: Matteo Bruni <matteo.mystral@gmail.com>
+Date: Mon, 8 Jan 2024 12:24:18 +0100
+Subject: [PATCH] wined3d: Allow reusing current GL context without a current
+ RT.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57411
+---
+ dlls/wined3d/context_gl.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/dlls/wined3d/context_gl.c b/dlls/wined3d/context_gl.c
+index 6b606617f3d..93282529123 100644
+--- a/dlls/wined3d/context_gl.c
++++ b/dlls/wined3d/context_gl.c
+@@ -4355,7 +4355,6 @@ struct wined3d_context *wined3d_context_gl_acquire(const struct wined3d_device *
+     if (!texture)
+     {
+         if (current_context
+-                && current_context->c.current_rt.texture
+                 && current_context->c.device == device)
+         {
+             texture = current_context->c.current_rt.texture;
+-- 
+GitLab
+

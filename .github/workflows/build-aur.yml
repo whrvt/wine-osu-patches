@@ -24,6 +24,8 @@ env:
   PARU_CACHE: /home/builder/.cache/paru
   PACKAGE_CACHE: /home/builder/package_cache
   _CCACHE_DIR: /home/builder/.cache/ccache
+  PUBKEY: 0B47490955565BD2
+  GNUPGHOME: /home/builder/.gnupg
 
 jobs:
   build:
@@ -45,6 +47,12 @@ jobs:
       run: |
         pacman -Syu --noconfirm git nodejs npm
 
+    - name: Import GPG Key
+      uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5
+      with:
+        gpg_private_key: ${{ secrets.GPG_PRIV }}
+        passphrase: ${{ secrets.GPG_PASS }}
+
     - name: Restore package cache
       id: cache-restore
       uses: actions/cache/restore@v4
@@ -52,13 +60,14 @@ jobs:
         path: |
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-${{ hashFiles('*pkg.tar.zst') }}
+        key: ${{ runner.os }}-${{ hashFiles('**pkg.tar.zst') }}
         restore-keys: |
           ${{ runner.os }}
 
     # Adding chaotic-aur for more prebuilt dependencies
     - name: Set up system
       run: |
+        chown -R builder:builder ${{ env.GNUPGHOME }}
         pacman-key --init
         pacman-key --populate archlinux
         echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
@@ -145,6 +154,9 @@ jobs:
         mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}/*.pkg.tar.xz /tmp/artifact/${AUR_PACKAGE}/
         mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64/*.pkg.tar.xz /tmp/artifact/${AUR_PACKAGE}-wow64/
 
+        echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --detach-sign --no-armor /tmp/artifact/${AUR_PACKAGE}/*.pkg.tar.xz
+        echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --detach-sign --no-armor /tmp/artifact/${AUR_PACKAGE}-wow64/*.pkg.tar.xz
+
         rm -rf ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}
         rm -rf ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64
         EOF
@@ -215,7 +227,7 @@ jobs:
             draft: false
             prerelease: false
             files: |
-              artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.xz
-              artifacts/${{ env.AUR_PACKAGE }}-wow64/*.pkg.tar.xz
+              artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.xz*
+              artifacts/${{ env.AUR_PACKAGE }}-wow64/*.pkg.tar.xz*
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

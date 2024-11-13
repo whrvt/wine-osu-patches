@@ -1,0 +1,147 @@
+From 59e0ef1ed7267f794afe12adb8ef669abb1d224b Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Mon, 11 Nov 2024 14:55:31 +1000
+Subject: [PATCH] winegstreamer: Release stream references to the media source
+ in Shutdown().
+
+Streams can persist after the media source is destroyed. In that case,
+they cannot access the source object and it should be released and set
+to null. Windows behaviour is to release references to the source in
+Shutdown().
+---
+ dlls/mfplat/tests/mfplat.c        |  3 ---
+ dlls/winegstreamer/media_source.c | 41 ++++++++++++++++++++++++++++---
+ 2 files changed, 37 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index c128f0d22c6..dabc4b1f1bc 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -1636,7 +1636,6 @@ static void test_source_resolver(void)
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+ 
+     /* During shutdown, circular references such as source <-> stream should be released. */
+-    todo_wine
+     EXPECT_REF(mediasource, 3);
+ 
+     ok(bytestream_closed, "Missing IMFByteStream::Close call\n");
+@@ -1646,14 +1645,12 @@ static void test_source_resolver(void)
+ 
+     IMFRateSupport_Release(rate_support);
+ 
+-    todo_wine
+     EXPECT_REF(mediasource, 2);
+ 
+     IMFGetService_Release(get_service);
+ 
+     /* Holding a reference to the video stream does not prevent release of the media source. */
+     refcount = IMFMediaSource_Release(mediasource);
+-    todo_wine
+     ok(!refcount, "Unexpected refcount %ld\n", refcount);
+ 
+     IMFByteStream_Release(stream);
+diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
+index ea0f2597c3b..4aa8312c1b6 100644
+--- a/dlls/winegstreamer/media_source.c
++++ b/dlls/winegstreamer/media_source.c
+@@ -543,6 +543,8 @@ static void flush_token_queue(struct media_stream *stream, BOOL send)
+             IUnknown *op;
+             HRESULT hr;
+ 
++            assert(stream->media_source);
++
+             if (SUCCEEDED(hr = source_create_async_op(SOURCE_ASYNC_REQUEST_SAMPLE, &op)))
+             {
+                 struct source_async_command *command = impl_from_async_command_IUnknown(op);
+@@ -986,7 +988,11 @@ static ULONG WINAPI media_stream_Release(IMFMediaStream *iface)
+ 
+     if (!ref)
+     {
+-        IMFMediaSource_Release(stream->media_source);
++        if (stream->media_source)
++        {
++            IMFMediaSource_Release(stream->media_source);
++            stream->media_source = NULL;
++        }
+         IMFStreamDescriptor_Release(stream->descriptor);
+         IMFMediaEventQueue_Release(stream->event_queue);
+         flush_token_queue(stream, FALSE);
+@@ -1036,13 +1042,24 @@ static HRESULT WINAPI media_stream_QueueEvent(IMFMediaStream *iface, MediaEventT
+ static HRESULT WINAPI media_stream_GetMediaSource(IMFMediaStream *iface, IMFMediaSource **out)
+ {
+     struct media_stream *stream = impl_from_IMFMediaStream(iface);
+-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
++    IMFMediaSource *source_iface = stream->media_source;
++    struct media_source *source;
+     HRESULT hr = S_OK;
+ 
+     TRACE("%p, %p.\n", iface, out);
+ 
++    if (!source_iface)
++        return MF_E_SHUTDOWN;
++
++    source = impl_from_IMFMediaSource(source_iface);
++
+     EnterCriticalSection(&source->cs);
+ 
++    /* A shutdown state can occur here if shutdown was in progress in another
++     * thread when we got the source pointer above. The source object must
++     * still exist and we cannot reasonably handle a case where the source has
++     * been destroyed at this point in a get/request method without introducing
++     * a critical section into the stream object. */
+     if (source->state == SOURCE_SHUTDOWN)
+         hr = MF_E_SHUTDOWN;
+     else
+@@ -1059,11 +1076,17 @@ static HRESULT WINAPI media_stream_GetMediaSource(IMFMediaStream *iface, IMFMedi
+ static HRESULT WINAPI media_stream_GetStreamDescriptor(IMFMediaStream* iface, IMFStreamDescriptor **descriptor)
+ {
+     struct media_stream *stream = impl_from_IMFMediaStream(iface);
+-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
++    IMFMediaSource *source_iface = stream->media_source;
++    struct media_source *source;
+     HRESULT hr = S_OK;
+ 
+     TRACE("%p, %p.\n", iface, descriptor);
+ 
++    if (!source_iface)
++        return MF_E_SHUTDOWN;
++
++    source = impl_from_IMFMediaSource(source_iface);
++
+     EnterCriticalSection(&source->cs);
+ 
+     if (source->state == SOURCE_SHUTDOWN)
+@@ -1082,12 +1105,18 @@ static HRESULT WINAPI media_stream_GetStreamDescriptor(IMFMediaStream* iface, IM
+ static HRESULT WINAPI media_stream_RequestSample(IMFMediaStream *iface, IUnknown *token)
+ {
+     struct media_stream *stream = impl_from_IMFMediaStream(iface);
+-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
++    IMFMediaSource *source_iface = stream->media_source;
++    struct media_source *source;
+     IUnknown *op;
+     HRESULT hr;
+ 
+     TRACE("%p, %p.\n", iface, token);
+ 
++    if (!source_iface)
++        return MF_E_SHUTDOWN;
++
++    source = impl_from_IMFMediaSource(source_iface);
++
+     EnterCriticalSection(&source->cs);
+ 
+     if (source->state == SOURCE_SHUTDOWN)
+@@ -1596,6 +1625,10 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+         if (stream)
+         {
+             IMFMediaEventQueue_Shutdown(stream->event_queue);
++            /* Media Foundation documentation says circular references such as
++             * those between the source and its streams should be released here. */
++            IMFMediaSource_Release(stream->media_source);
++            stream->media_source = NULL;
+             IMFMediaStream_Release(&stream->IMFMediaStream_iface);
+         }
+     }
+-- 
+GitLab
+

@@ -19,8 +19,9 @@ Wine-Staging: eventfd_synchronization
  dlls/ntdll/unix/esync.c | 84 ++++++++++++++++++++++++++++++++++++++---
  server/esync.c          | 16 ++++++++
  server/esync.h          |  1 +
+ server/named_pipe.c     |  1 +
  server/thread.c         |  4 ++
- 4 files changed, 99 insertions(+), 6 deletions(-)
+ 5 files changed, 100 insertions(+), 6 deletions(-)
 
 diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
 index 0d15defdd9c..e783517f644 100644
@@ -199,6 +200,18 @@ index 8522d8a69ae..1241e6d9f1a 100644
  void esync_init(void);
  int esync_create_fd( int initval, int flags );
 +void esync_wake_up( struct object *obj );
+diff --git a/server/named_pipe.c b/server/named_pipe.c
+index 68fa8953cca..1535c5188ec 100644
+--- a/server/named_pipe.c
++++ b/server/named_pipe.c
+@@ -344,6 +344,7 @@ static const struct object_ops named_pipe_dir_ops =
+     add_queue,                               /* add_queue */
+     remove_queue,                            /* remove_queue */
+     default_fd_signaled,                     /* signaled */
++    NULL,                                    /* get_esync_fd */
+     no_satisfied,                            /* satisfied */
+     no_signal,                               /* signal */
+     named_pipe_dir_get_fd,                   /* get_fd */
 diff --git a/server/thread.c b/server/thread.c
 index f579ffddad8..e744b98feaa 100644
 --- a/server/thread.c
