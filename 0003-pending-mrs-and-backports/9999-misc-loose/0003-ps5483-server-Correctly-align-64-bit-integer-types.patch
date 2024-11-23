@@ -332,3 +332,17 @@ index 6148f072919..ea3a4978305 100755
 -- 
 GitLab
 
+fixup for 75e2ec479beff86c52bebdab6d5e8b78c8f6ca8d
+diff --git a/tools/make_requests b/tools/make_requests
+index 11111111111..11111111111 100755
+--- a/tools/make_requests
++++ b/tools/make_requests
+@@ -34,7 +34,7 @@ my %formats =
+     "atom_t"        => [  4,   4,  "%04x" ],
+     "process_id_t"  => [  4,   4,  "%04x" ],
+     "thread_id_t"   => [  4,   4,  "%04x" ],
+-    "unsigned __int64" => [ 8, 8,  "&uint64" ],
++    "UINT64" => [ 8, 8,  "&uint64" ],
+     "timeout_t"     => [  8,   8 ],
+     "abstime_t"     => [  8,   8 ],
+     "rectangle_t"   => [  16,  4 ],

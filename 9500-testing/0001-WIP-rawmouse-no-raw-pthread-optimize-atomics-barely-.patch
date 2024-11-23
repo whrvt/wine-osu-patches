@@ -1,0 +1,607 @@
+From 41152ee7743e2a9ab88425e9ff02003e0f6bb544 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 22 Nov 2024 20:37:03 -0800
+Subject: [PATCH] WIP: rawmouse: no raw pthread, optimize atomics (barely
+ tested), autograb
+
+based on work by Aeodyn
+---
+ dlls/win32u/cursoricon.c               |   2 +
+ dlls/win32u/input.c                    |   3 +
+ dlls/win32u/message.c                  |  36 ++-
+ dlls/win32u/ntuser_private.h           |  34 +++
+ dlls/win32u/rawinput.c                 | 327 +++++++++++++++++++++++++
+ dlls/winewayland.drv/wayland_pointer.c |  10 +-
+ dlls/winewayland.drv/waylanddrv.h      |   1 +
+ dlls/winex11.drv/mouse.c               |   8 +-
+ 8 files changed, 412 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/win32u/cursoricon.c b/dlls/win32u/cursoricon.c
+index c77b9d67e2d..57e528d4a1d 100644
+--- a/dlls/win32u/cursoricon.c
++++ b/dlls/win32u/cursoricon.c
+@@ -98,6 +98,8 @@ INT WINAPI NtUserShowCursor( BOOL show )
+     }
+     SERVER_END_REQ;
+ 
++    rawmouse_grab(!show);
++
+     TRACE("%d, count=%d\n", show, count );
+     return count;
+ }
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 400dee04968..8ceda70ffe5 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -1848,6 +1848,9 @@ static HWND set_focus_window( HWND hwnd )
+     }
+     SERVER_END_REQ;
+     if (!ret) return 0;
++
++    rawmouse_grab(hwnd == rawmouse_get_target());
++
+     if (previous == hwnd) return previous;
+ 
+     if (previous)
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 698586375e9..2f61a58975e 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2770,6 +2770,34 @@ int peek_message( MSG *msg, const struct peek_message_filter *filter, BOOL waite
+         thread_info->client_info.msg_source = prev_source;
+         wake_mask = filter->mask & (QS_SENDMESSAGE | QS_SMRESULT);
+ 
++        if ((signal_bits & QS_RAWINPUT) && rawmouse_msg(msg, hwnd, flags & PM_REMOVE)) {
++            thread_info->last_getmsg_time = NtGetTickCount();
++            thread_info->client_info.message_time = NtGetTickCount();
++            if (buffer != buffer_init) free( buffer );
++            return 1;
++        }
++
++        if (rawmouse.btn_event && rawmouse.btn_head != rawmouse.btn_tail) {
++            unsigned char tail = rawmouse.btn_tail;
++            msg->message = rawmouse.button_queue[tail].message;
++            msg->wParam = rawmouse.button_queue[tail].wparam;
++            msg->lParam = rawmouse.button_queue[tail].lparam;
++            msg->hwnd = rawmouse_get_target();
++            msg->time = NtGetTickCount();
++
++            if (flags & PM_REMOVE) {
++                __atomic_store_n(&rawmouse.btn_tail, (tail + 1) & 63, __ATOMIC_SEQ_CST);
++                if (rawmouse.btn_head == ((tail + 1) & 63))
++                    NtClearEvent(rawmouse.btn_event);
++            }
++
++            thread_info->last_getmsg_time = msg->time;
++            thread_info->client_info.message_time = msg->time;
++            if (buffer != buffer_init) free( buffer );
++            return 1;
++        }
++
++
+         if ((!waited && (NtGetTickCount() - thread_info->last_getmsg_time < 3000)) && /* avoid hung queue */
+             check_queue_bits( wake_mask, filter->mask, wake_mask | signal_bits, filter->mask | clear_bits,
+                               &wake_bits, &changed_bits ))
+@@ -3301,7 +3329,7 @@ BOOL WINAPI NtUserPeekMessage( MSG *msg_out, HWND hwnd, UINT first, UINT last, U
+ BOOL WINAPI NtUserGetMessage( MSG *msg, HWND hwnd, UINT first, UINT last )
+ {
+     struct peek_message_filter filter = {.hwnd = hwnd, .first = first, .last = last};
+-    HANDLE server_queue = get_server_queue_handle();
++    HANDLE handles[] = {get_server_queue_handle(), rawmouse.event};
+     unsigned int mask = QS_POSTMESSAGE | QS_SENDMESSAGE;  /* Always selected */
+     int ret;
+ 
+@@ -3316,14 +3344,18 @@ BOOL WINAPI NtUserGetMessage( MSG *msg, HWND hwnd, UINT first, UINT last )
+         if ((first <= WM_TIMER) && (last >= WM_TIMER)) mask |= QS_TIMER;
+         if ((first <= WM_SYSTIMER) && (last >= WM_SYSTIMER)) mask |= QS_TIMER;
+         if ((first <= WM_PAINT) && (last >= WM_PAINT)) mask |= QS_PAINT;
++        if ((first <= WM_INPUT) && (last >= WM_INPUT)) mask |= QS_RAWINPUT;
+     }
+     else mask = QS_ALLINPUT;
+ 
++    if (rawmouse.event && (mask & QS_RAWINPUT) && rawmouse_msg(msg, hwnd, TRUE))
++        return 1;
++
+     filter.mask = mask;
+     filter.flags = PM_REMOVE | (mask << 16);
+     while (!(ret = peek_message( msg, &filter, TRUE )))
+     {
+-        wait_objects( 1, &server_queue, INFINITE, mask & (QS_SENDMESSAGE | QS_SMRESULT), mask, 0 );
++        wait_objects( (rawmouse.event && (mask & QS_RAWINPUT)) && (!hwnd || hwnd == rawmouse_get_target()) ? 2 : 1, handles, INFINITE, mask & (QS_SENDMESSAGE | QS_SMRESULT), mask, 0 );
+     }
+     if (ret < 0) return -1;
+ 
+diff --git a/dlls/win32u/ntuser_private.h b/dlls/win32u/ntuser_private.h
+index 1f599bb00ea..c3c1395050d 100644
+--- a/dlls/win32u/ntuser_private.h
++++ b/dlls/win32u/ntuser_private.h
+@@ -246,4 +246,38 @@ WND *get_win_ptr( HWND hwnd );
+ BOOL is_child( HWND parent, HWND child );
+ BOOL is_window( HWND hwnd );
+ 
++struct button_message {
++    DWORD message;
++    WPARAM wparam;
++    LPARAM lparam;
++};
++
++struct _rawmouse {
++    BOOL enabled;
++    BOOL grab;
++    int fd;
++    HANDLE thread;
++    HANDLE event;
++    HWND target;
++    RAWMOUSE data[256];
++    union {
++        short headtail;
++        struct { unsigned char tail, head; };
++    };
++    unsigned char msg_pend;
++    struct button_message button_queue[64];
++    unsigned char btn_head, btn_tail;
++    HANDLE btn_event;
++};
++
++typedef struct {
++    RAWINPUTHEADER header;
++    RAWMOUSE data;
++} RAWINPUTM;
++
++extern struct _rawmouse rawmouse;
++
++HWND rawmouse_get_target(void);
++void rawmouse_grab(BOOL grab);
++
+ #endif /* __WINE_NTUSER_PRIVATE_H */
+diff --git a/dlls/win32u/rawinput.c b/dlls/win32u/rawinput.c
+index a1dfcd463c6..cdb962979d4 100644
+--- a/dlls/win32u/rawinput.c
++++ b/dlls/win32u/rawinput.c
+@@ -25,6 +25,11 @@
+ 
+ #include <stdbool.h>
+ #include <pthread.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <errno.h>
++#include <sys/resource.h>
++#include <linux/input.h>
+ 
+ #include "win32u_private.h"
+ #include "ntuser_private.h"
+@@ -67,6 +72,292 @@ static unsigned int registered_device_count;
+ static struct list devices = LIST_INIT( devices );
+ static pthread_mutex_t rawinput_mutex = PTHREAD_MUTEX_INITIALIZER;
+ 
++struct _rawmouse rawmouse = {.fd = -1, .target = (HWND)(-1)};
++
++static void queue_button_message(DWORD message, WPARAM wparam, LPARAM lparam) {
++    unsigned char next = (rawmouse.btn_head + 1) & 63;
++    unsigned char tail = __atomic_load_n(&rawmouse.btn_tail, __ATOMIC_RELAXED);
++    
++    if (next != tail) {
++        rawmouse.button_queue[rawmouse.btn_head].message = message;
++        rawmouse.button_queue[rawmouse.btn_head].wparam = wparam;
++        rawmouse.button_queue[rawmouse.btn_head].lparam = lparam;
++
++        __atomic_store_n(&rawmouse.btn_head, next, __ATOMIC_RELEASE);
++        NtSetEvent(rawmouse.btn_event, NULL);
++    }
++}
++
++static inline unsigned char rawmouse_count(void) {
++    unsigned short ht = __atomic_load_n(&rawmouse.headtail, __ATOMIC_RELAXED);
++    return (ht >> 8) - (ht & 0xFF);
++}
++
++static unsigned char rawmouse_inc(void) {
++    unsigned char r, t = 0;
++    if (rawmouse_count() == 255) 
++        r = __atomic_load_n(&rawmouse.head, __ATOMIC_RELAXED);
++    else
++        r = __atomic_add_fetch(&rawmouse.head, 1, __ATOMIC_RELAXED);
++
++    if (__atomic_compare_exchange_n(&rawmouse.msg_pend, &t, 1, false, 
++                                  __ATOMIC_RELEASE, __ATOMIC_RELAXED) && rawmouse.event)
++        NtSetEvent(rawmouse.event, NULL);
++    else if (t < 255) {
++        if (!__atomic_add_fetch(&rawmouse.msg_pend, 1, __ATOMIC_RELAXED))
++            __atomic_fetch_sub(&rawmouse.msg_pend, 1, __ATOMIC_RELAXED);
++    }
++    return r;
++}
++
++static unsigned char rawmouse_dec(unsigned char *tail) {
++    unsigned char r = rawmouse_count();
++    switch (r) {
++    case 0:
++        return 0;
++    case 1:
++        __atomic_store_n(&rawmouse.msg_pend, 0, __ATOMIC_RELAXED);
++        NtClearEvent(rawmouse.event);
++    }
++
++    *tail = __atomic_fetch_add(&rawmouse.tail, 1, __ATOMIC_RELAXED);
++    return r;
++}
++
++static unsigned char rawmouse_check(unsigned char remove) {
++    if (remove) {
++        unsigned char t = 1;
++        if (__atomic_compare_exchange_n(&rawmouse.msg_pend, &t, 0, false, 
++                                      __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
++            NtClearEvent(rawmouse.event);
++            return 1;
++        }
++        return t ? __atomic_fetch_sub(&rawmouse.msg_pend, 1, __ATOMIC_RELAXED) : 0;
++    }
++
++    return __atomic_load_n(&rawmouse.msg_pend, __ATOMIC_RELAXED);
++}
++
++static void rawmouse_clear(void) {
++    __atomic_clear(&rawmouse.msg_pend, __ATOMIC_RELEASE);
++    if (rawmouse.event)
++        NtClearEvent(rawmouse.event);
++    __atomic_store_n(&rawmouse.headtail, 0, __ATOMIC_RELAXED);
++    memset(rawmouse.data, 0, sizeof(rawmouse.data));
++    return;
++}
++
++HWND rawmouse_get_target(void) {
++   return __atomic_load_n(&rawmouse.target, __ATOMIC_SEQ_CST);
++}
++
++void rawmouse_grab(BOOL grab) {
++    if (!rawmouse.enabled || !rawmouse.grab || rawmouse.fd == -1) return;
++    ioctl(rawmouse.fd, EVIOCGRAB, grab);
++}
++
++static NTSTATUS WINAPI rawmouse_reader_thread(void) 
++{
++    RAWMOUSE* out;
++    int bytes;
++    struct input_event in;
++    struct input_absinfo absinfo_x, absinfo_y;
++    int priority = THREAD_PRIORITY_TIME_CRITICAL;
++
++    absinfo_x.minimum = 0;
++    absinfo_x.maximum = 65535;
++    absinfo_y.minimum = 0;
++    absinfo_y.maximum = 65535;
++
++    NtSetInformationThread(GetCurrentThread(), ThreadBasePriority,
++                          &priority, sizeof(priority));
++
++    setpriority(PRIO_PROCESS, getpid(), -12);
++
++    ioctl(rawmouse.fd, EVIOCGABS(ABS_X), &absinfo_x);
++    ioctl(rawmouse.fd, EVIOCGABS(ABS_Y), &absinfo_y);
++
++    out = rawmouse.data;
++
++    while (1) {
++        bytes = read(rawmouse.fd, &in, sizeof(in));
++        if (rawmouse_get_target() == (HWND)(-1))
++            continue;
++
++        if (bytes < 0) {
++            ERR("Failed to read from rawmouse device: %d\n", errno);
++            continue;
++        }
++
++        switch (in.type) {
++        case EV_REL:
++            switch (in.code) {
++            case REL_X:
++                __atomic_fetch_add(&out->lLastX, (int)in.value, __ATOMIC_RELAXED);
++                break;
++            case REL_Y:
++                __atomic_fetch_add(&out->lLastY, (int)in.value, __ATOMIC_RELAXED);
++                break;
++            case REL_WHEEL:
++                __atomic_fetch_or(&out->usButtonFlags, RI_MOUSE_WHEEL, __ATOMIC_RELAXED);
++                __atomic_fetch_add(&out->usButtonData, (int)in.value, __ATOMIC_RELAXED);
++                break;
++            }
++            break;
++        case EV_ABS:
++            switch (in.code) {
++            case ABS_X:
++                absinfo_x.value = in.value;
++                break;
++            case ABS_Y:
++                absinfo_y.value = in.value;
++                break;
++            }
++            __atomic_store_n(&out->lLastX, (int)((absinfo_x.value - absinfo_x.minimum) * 65535./(absinfo_x.maximum - absinfo_x.minimum)), __ATOMIC_RELAXED);
++            __atomic_store_n(&out->lLastY, (int)((absinfo_y.value - absinfo_y.minimum) * 65535./(absinfo_y.maximum - absinfo_y.minimum)), __ATOMIC_RELAXED);
++            __atomic_fetch_or(&out->usFlags, MOUSE_MOVE_ABSOLUTE | MOUSE_VIRTUAL_DESKTOP, __ATOMIC_RELAXED);
++            break;
++        case EV_KEY:
++            switch (in.code) {
++            case BTN_LEFT:
++            case BTN_TOUCH:
++            case BTN_STYLUS:
++                __atomic_fetch_or(&out->usButtonFlags, in.value ? RI_MOUSE_LEFT_BUTTON_DOWN : RI_MOUSE_LEFT_BUTTON_UP, __ATOMIC_RELAXED);
++                queue_button_message(in.value ? WM_LBUTTONDOWN : WM_LBUTTONUP, 0, MAKELPARAM(0, 0));
++                break;
++            case BTN_RIGHT:
++            case BTN_STYLUS2:
++                __atomic_fetch_or(&out->usButtonFlags, in.value ? RI_MOUSE_RIGHT_BUTTON_DOWN : RI_MOUSE_RIGHT_BUTTON_UP, __ATOMIC_RELAXED);
++                queue_button_message(in.value ? WM_RBUTTONDOWN : WM_RBUTTONUP, 0, MAKELPARAM(0, 0));
++                break;
++            case BTN_MIDDLE:
++                __atomic_fetch_or(&out->usButtonFlags, in.value ? RI_MOUSE_MIDDLE_BUTTON_DOWN : RI_MOUSE_MIDDLE_BUTTON_UP, __ATOMIC_RELAXED);
++                break;
++            case BTN_SIDE:
++                __atomic_fetch_or(&out->usButtonFlags, in.value ? RI_MOUSE_BUTTON_4_DOWN : RI_MOUSE_BUTTON_4_UP, __ATOMIC_RELAXED);
++                break;
++            case BTN_EXTRA:
++                __atomic_fetch_or(&out->usButtonFlags, in.value ? RI_MOUSE_BUTTON_5_DOWN : RI_MOUSE_BUTTON_5_UP, __ATOMIC_RELAXED);
++                break;
++            }
++            break;
++        case EV_SYN:
++            out = rawmouse.data + rawmouse_inc();
++            break;
++        }
++    }
++    return 0;
++}
++
++static bool create_rawmouse_thread(void)
++{
++    NTSTATUS status;
++
++    status = NtCreateEvent(&rawmouse.event, EVENT_ALL_ACCESS, NULL, NotificationEvent, FALSE);
++    if (!NT_SUCCESS(status)) return false;
++
++    status = NtCreateEvent(&rawmouse.btn_event, EVENT_ALL_ACCESS, NULL, NotificationEvent, FALSE);
++    if (!NT_SUCCESS(status)) return false;
++
++    status = NtCreateThreadEx(&rawmouse.thread,
++                             THREAD_ALL_ACCESS,
++                             NULL,
++                             NtCurrentProcess(),
++                             rawmouse_reader_thread,
++                             NULL,
++                             0, 0, 0, 0, NULL);
++
++    if (!NT_SUCCESS(status))
++    {
++        ERR("Failed to create rawmouse thread\n");
++        NtClose(rawmouse.event);
++        NtClose(rawmouse.btn_event);
++        rawmouse.event = NULL;
++        rawmouse.btn_event = NULL;
++        return false;
++    }
++    return true;
++}
++
++bool rawmouse_register(HWND target) {
++    char* env = getenv("RAWMOUSE");
++    if (!(rawmouse.enabled = env && *env))
++        return false;
++
++    char* grabenv = getenv("RAWMOUSE_GRAB");
++    rawmouse.grab = !(grabenv && *grabenv == '0');
++
++    if (rawmouse.fd == -1) {
++        rawmouse.fd = open(env, O_RDONLY);
++        if (rawmouse.fd == -1) {
++            ERR("rawmouse_register: failed opening %s, error=%d\n", env, errno);
++            rawmouse.enabled = false;
++            return false;
++        }
++        TRACE("rawmouse_register: opened %s, fd=%d\n", env, rawmouse.fd);
++    }
++
++    if (!rawmouse.event && !rawmouse.btn_event)
++    {
++        if (!create_rawmouse_thread())
++        {
++            ERR("rawmouse_register: failed to create thread\n");
++            rawmouse.enabled = false;
++            return false;
++        }
++    }
++
++    rawmouse_clear();
++    __atomic_store_n(&rawmouse.target, target, __ATOMIC_SEQ_CST);
++    rawmouse_grab(TRUE);
++    rawmouse.btn_head = rawmouse.btn_tail = 0;
++
++    return true;
++}
++
++void rawmouse_unregister(void) {
++    __atomic_store_n(&rawmouse.target, (HWND)(-1), __ATOMIC_SEQ_CST);
++    rawmouse_clear();
++    rawmouse_grab(FALSE);
++    return;
++}
++
++unsigned int rawmouse_fetch(RAWMOUSE *buffer) {
++    unsigned char t;
++    unsigned char c = rawmouse_dec(&t);
++    if (!c) return 0;
++    memset(buffer, 0, sizeof(RAWMOUSE));
++    do {
++        buffer->usFlags |= __atomic_exchange_n(&rawmouse.data[t].usFlags, 0, __ATOMIC_RELAXED);
++        buffer->lLastX += __atomic_exchange_n(&rawmouse.data[t].lLastX, 0, __ATOMIC_RELAXED);
++        buffer->lLastY += __atomic_exchange_n(&rawmouse.data[t].lLastY, 0, __ATOMIC_RELAXED);
++        buffer->ulButtons |= __atomic_exchange_n(&rawmouse.data[t].ulButtons, 0, __ATOMIC_RELAXED);
++    } while (c > (unsigned short)__atomic_load_n(&rawmouse.msg_pend, __ATOMIC_RELAXED) + 1 && (c = rawmouse_dec(&t)));
++
++    return sizeof(RAWINPUTM);
++}
++
++unsigned char rawmouse_msg(MSG *msg, HWND hwnd, unsigned char remove) {
++    HWND target;
++
++    if (!rawmouse.thread)
++        return 0;
++
++    target = rawmouse_get_target();
++
++    if (hwnd && hwnd != target)
++        return 0;
++
++    if (!rawmouse_check(remove))
++        return 0;
++
++    msg->hwnd = target;
++    msg->message = WM_INPUT;
++    msg->lParam = (LPARAM)0;
++    return 1;
++}
++
++
+ static struct device *add_device( HKEY key, DWORD type )
+ {
+     static const WCHAR symbolic_linkW[] = {'S','y','m','b','o','l','i','c','L','i','n','k',0};
+@@ -479,6 +770,21 @@ UINT WINAPI NtUserGetRawInputBuffer( RAWINPUT *data, UINT *data_size, UINT heade
+     /* with old WOW64 mode we didn't go through the WOW64 thunks, patch the header size here */
+     if (NtCurrentTeb()->WowTebOffset) header_size = sizeof(RAWINPUTHEADER64);
+ 
++    if (count = rawmouse_count()) {
++        if (data == NULL) {
++            *data_size = sizeof(RAWINPUTM);
++            return 0;
++        }
++
++        RAWINPUTM *datam = data;
++        if (count * sizeof(RAWINPUTM) > *data_size) {
++            count = *data_size / sizeof(RAWINPUTM);
++        }
++        for (int i = 0; i < count; ++i)
++            rawmouse_fetch(&datam[i].data);
++        return count;
++    }
++
+     thread_info = get_user_thread_info();
+     SERVER_START_REQ( get_rawinput_buffer )
+     {
+@@ -507,6 +813,18 @@ UINT WINAPI NtUserGetRawInputData( HRAWINPUT handle, UINT command, void *data, U
+     TRACE( "handle %p, command %#x, data %p, data_size %p, header_size %u.\n",
+            handle, command, data, data_size, header_size );
+ 
++    if (!handle) {
++        const RAWINPUTHEADER header = {.dwType = RIM_TYPEMOUSE, .dwSize = sizeof(RAWINPUTM), .hDevice = WINE_MOUSE_HANDLE, .wParam = 0};
++        if (command == RID_HEADER && rawmouse_count()) {
++            rawinput->header = header;
++            return sizeof(RAWINPUTHEADER);
++        }
++        if (rawmouse_fetch(&rawinput->data.mouse)) {
++            rawinput->header = header;
++            return sizeof(RAWINPUTM);
++        } else return -1;
++    }
++
+     if (!(msg_data = thread_info->rawinput) || msg_data->hw_id != (UINT_PTR)handle)
+     {
+         RtlSetLastWin32Error( ERROR_INVALID_HANDLE );
+@@ -724,6 +1042,15 @@ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT d
+ 
+     rawinput_update_device_list( TRUE );
+ 
++    for (i = 0; i < device_count; ++i) {
++        if ((devices+i)->usUsagePage == 1 && (devices+i)->usUsage == 2) {
++            if ((devices+i)->dwFlags & RIDEV_REMOVE)
++                rawmouse_unregister();
++            else
++                rawmouse_register((devices+i)->hwndTarget);
++        }
++    }
++
+     registered_devices = new_registered_devices;
+     for (i = 0; i < device_count; ++i) register_rawinput_device( devices + i );
+ 
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index 6c778f5566a..acf0b77e890 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -98,7 +98,7 @@ static void pointer_handle_motion(void *data, struct wl_pointer *wl_pointer,
+     struct wayland_pointer *pointer = &process_wayland.pointer;
+ 
+     /* Ignore absolute motion events if in relative mode. */
+-    if (pointer->zwp_relative_pointer_v1) return;
++    if (pointer->disable || pointer->zwp_relative_pointer_v1) return;
+ 
+     pointer_handle_motion_internal(sx, sy);
+ }
+@@ -157,7 +157,7 @@ static void pointer_handle_button(void *data, struct wl_pointer *wl_pointer,
+     INPUT input = {0};
+     HWND hwnd;
+ 
+-    if (!(hwnd = wayland_pointer_get_focused_hwnd())) return;
++    if (pointer->disable || !(hwnd = wayland_pointer_get_focused_hwnd())) return;
+ 
+     input.type = INPUT_MOUSE;
+ 
+@@ -216,7 +216,7 @@ static void pointer_handle_axis_discrete(void *data, struct wl_pointer *wl_point
+     INPUT input = {0};
+     HWND hwnd;
+ 
+-    if (!(hwnd = wayland_pointer_get_focused_hwnd())) return;
++    if (process_wayland.pointer.disable || !(hwnd = wayland_pointer_get_focused_hwnd())) return;
+ 
+     input.type = INPUT_MOUSE;
+ 
+@@ -846,8 +846,8 @@ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+     needs_relative = !pointer->cursor.wl_surface &&
+                      pointer->constraint_hwnd &&
+                      pointer->constraint_hwnd == pointer->focused_hwnd;
+-
+-    if (needs_relative && !pointer->zwp_relative_pointer_v1)
++    pointer->disable = needs_relative && getenv("RAWMOUSE") && *getenv("RAWMOUSE");
++    if (!pointer->disable && needs_relative && !pointer->zwp_relative_pointer_v1)
+     {
+         pointer->zwp_relative_pointer_v1 =
+             zwp_relative_pointer_manager_v1_get_relative_pointer(
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 05083abc3fa..e6eb50b681a 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -110,6 +110,7 @@ struct wayland_pointer
+     uint32_t button_serial;
+     struct wayland_cursor cursor;
+     pthread_mutex_t mutex;
++    BOOL disable;
+ };
+ 
+ struct wayland_seat
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index f2201b8eeb2..332585fdb30 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -366,6 +366,10 @@ void x11drv_xinput2_enable( Display *display, Window window )
+     struct x11drv_thread_data *thread_data = x11drv_thread_data();
+     XIEventMask mask;
+     unsigned char mask_bits[XIMaskLen(XI_LASTEVENT)];
++    const char *rawmouse = getenv("RAWMOUSE");
++    const char *rawmouse_grab = getenv("RAWMOUSE_GRAB");
++    BOOL rawmouse_active = (rawmouse && *rawmouse != '\0' && *rawmouse != '0');
++    BOOL raw_grabbed = rawmouse_active && !(rawmouse_grab && *rawmouse_grab == '0');
+ 
+     if (!xinput2_available) return;
+ 
+@@ -377,10 +381,10 @@ void x11drv_xinput2_enable( Display *display, Window window )
+     if (window == DefaultRootWindow( display ))
+     {
+         XISetMask( mask_bits, XI_DeviceChanged );
+-        XISetMask( mask_bits, XI_RawMotion );
++        if (!rawmouse_active || raw_grabbed) XISetMask( mask_bits, XI_RawMotion );
+         if (!thread_data->xinput2_rawinput)
+             XISetMask( mask_bits, XI_ButtonPress );
+-        else
++        else if(!rawmouse_active || raw_grabbed)
+         {
+             XISetMask( mask_bits, XI_RawButtonPress );
+             XISetMask( mask_bits, XI_RawButtonRelease );
+-- 
+2.47.0
+

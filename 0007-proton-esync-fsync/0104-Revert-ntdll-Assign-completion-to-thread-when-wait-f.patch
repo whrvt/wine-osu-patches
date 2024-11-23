@@ -356,86 +356,86 @@ index 0ad102283d1..693a20e3437 100644
  /* get completion queue depth */
  @REQ(query_completion)
      obj_handle_t  handle;         /* port handle */
-diff --git a/server/request.h b/server/request.h
-index 8222fc73dc4..b2679ceae9a 100644
---- a/server/request.h
-+++ b/server/request.h
-@@ -381,7 +381,6 @@ DECL_HANDLER(create_completion);
- DECL_HANDLER(open_completion);
- DECL_HANDLER(add_completion);
- DECL_HANDLER(remove_completion);
--DECL_HANDLER(get_thread_completion);
- DECL_HANDLER(query_completion);
- DECL_HANDLER(set_completion_info);
- DECL_HANDLER(add_fd_completion);
-@@ -677,7 +676,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
-     (req_handler)req_open_completion,
-     (req_handler)req_add_completion,
-     (req_handler)req_remove_completion,
--    (req_handler)req_get_thread_completion,
-     (req_handler)req_query_completion,
-     (req_handler)req_set_completion_info,
-     (req_handler)req_add_fd_completion,
-@@ -2244,12 +2242,6 @@ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, status) == 32 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, wait_handle) == 36 );
- C_ASSERT( sizeof(struct remove_completion_reply) == 40 );
--C_ASSERT( sizeof(struct get_thread_completion_request) == 16 );
--C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, ckey) == 8 );
--C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, cvalue) == 16 );
--C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, information) == 24 );
--C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, status) == 32 );
--C_ASSERT( sizeof(struct get_thread_completion_reply) == 40 );
- C_ASSERT( FIELD_OFFSET(struct query_completion_request, handle) == 12 );
- C_ASSERT( sizeof(struct query_completion_request) == 16 );
- C_ASSERT( FIELD_OFFSET(struct query_completion_reply, depth) == 8 );
-diff --git a/server/trace.c b/server/trace.c
-index a59cf6c5b5f..66ff3000c65 100644
---- a/server/trace.c
-+++ b/server/trace.c
-@@ -4530,18 +4530,6 @@ static void dump_remove_completion_reply( const struct remove_completion_reply *
-     fprintf( stderr, ", wait_handle=%04x", req->wait_handle );
- }
- 
--static void dump_get_thread_completion_request( const struct get_thread_completion_request *req )
--{
--}
--
--static void dump_get_thread_completion_reply( const struct get_thread_completion_reply *req )
--{
--    dump_uint64( " ckey=", &req->ckey );
--    dump_uint64( ", cvalue=", &req->cvalue );
--    dump_uint64( ", information=", &req->information );
--    fprintf( stderr, ", status=%08x", req->status );
--}
--
- static void dump_query_completion_request( const struct query_completion_request *req )
- {
-     fprintf( stderr, " handle=%04x", req->handle );
-@@ -5047,7 +5035,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
-     (dump_func)dump_open_completion_request,
-     (dump_func)dump_add_completion_request,
-     (dump_func)dump_remove_completion_request,
--    (dump_func)dump_get_thread_completion_request,
-     (dump_func)dump_query_completion_request,
-     (dump_func)dump_set_completion_info_request,
-     (dump_func)dump_add_fd_completion_request,
-@@ -5340,7 +5327,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
-     (dump_func)dump_open_completion_reply,
-     NULL,
-     (dump_func)dump_remove_completion_reply,
--    (dump_func)dump_get_thread_completion_reply,
-     (dump_func)dump_query_completion_reply,
-     NULL,
-     NULL,
-@@ -5633,7 +5619,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
-     "open_completion",
-     "add_completion",
-     "remove_completion",
--    "get_thread_completion",
-     "query_completion",
-     "set_completion_info",
-     "add_fd_completion",
+#diff --git a/server/request.h b/server/request.h
+#index 8222fc73dc4..b2679ceae9a 100644
+#--- a/server/request.h
+#+++ b/server/request.h
+#@@ -381,7 +381,6 @@ DECL_HANDLER(create_completion);
+# DECL_HANDLER(open_completion);
+# DECL_HANDLER(add_completion);
+# DECL_HANDLER(remove_completion);
+#-DECL_HANDLER(get_thread_completion);
+# DECL_HANDLER(query_completion);
+# DECL_HANDLER(set_completion_info);
+# DECL_HANDLER(add_fd_completion);
+#@@ -677,7 +676,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
+#     (req_handler)req_open_completion,
+#     (req_handler)req_add_completion,
+#     (req_handler)req_remove_completion,
+#-    (req_handler)req_get_thread_completion,
+#     (req_handler)req_query_completion,
+#     (req_handler)req_set_completion_info,
+#     (req_handler)req_add_fd_completion,
+#@@ -2244,12 +2242,6 @@ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, status) == 32 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, wait_handle) == 36 );
+# C_ASSERT( sizeof(struct remove_completion_reply) == 40 );
+#-C_ASSERT( sizeof(struct get_thread_completion_request) == 16 );
+#-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, ckey) == 8 );
+#-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, cvalue) == 16 );
+#-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, information) == 24 );
+#-C_ASSERT( FIELD_OFFSET(struct get_thread_completion_reply, status) == 32 );
+#-C_ASSERT( sizeof(struct get_thread_completion_reply) == 40 );
+# C_ASSERT( FIELD_OFFSET(struct query_completion_request, handle) == 12 );
+# C_ASSERT( sizeof(struct query_completion_request) == 16 );
+# C_ASSERT( FIELD_OFFSET(struct query_completion_reply, depth) == 8 );
+#diff --git a/server/trace.c b/server/trace.c
+#index a59cf6c5b5f..66ff3000c65 100644
+#--- a/server/trace.c
+#+++ b/server/trace.c
+#@@ -4530,18 +4530,6 @@ static void dump_remove_completion_reply( const struct remove_completion_reply *
+#     fprintf( stderr, ", wait_handle=%04x", req->wait_handle );
+# }
+# 
+#-static void dump_get_thread_completion_request( const struct get_thread_completion_request *req )
+#-{
+#-}
+#-
+#-static void dump_get_thread_completion_reply( const struct get_thread_completion_reply *req )
+#-{
+#-    dump_uint64( " ckey=", &req->ckey );
+#-    dump_uint64( ", cvalue=", &req->cvalue );
+#-    dump_uint64( ", information=", &req->information );
+#-    fprintf( stderr, ", status=%08x", req->status );
+#-}
+#-
+# static void dump_query_completion_request( const struct query_completion_request *req )
+# {
+#     fprintf( stderr, " handle=%04x", req->handle );
+#@@ -5047,7 +5035,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
+#     (dump_func)dump_open_completion_request,
+#     (dump_func)dump_add_completion_request,
+#     (dump_func)dump_remove_completion_request,
+#-    (dump_func)dump_get_thread_completion_request,
+#     (dump_func)dump_query_completion_request,
+#     (dump_func)dump_set_completion_info_request,
+#     (dump_func)dump_add_fd_completion_request,
+#@@ -5340,7 +5327,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
+#     (dump_func)dump_open_completion_reply,
+#     NULL,
+#     (dump_func)dump_remove_completion_reply,
+#-    (dump_func)dump_get_thread_completion_reply,
+#     (dump_func)dump_query_completion_reply,
+#     NULL,
+#     NULL,
+#@@ -5633,7 +5619,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
+#     "open_completion",
+#     "add_completion",
+#     "remove_completion",
+#-    "get_thread_completion",
+#     "query_completion",
+#     "set_completion_info",
+#     "add_fd_completion",
 -- 
 2.47.0
 

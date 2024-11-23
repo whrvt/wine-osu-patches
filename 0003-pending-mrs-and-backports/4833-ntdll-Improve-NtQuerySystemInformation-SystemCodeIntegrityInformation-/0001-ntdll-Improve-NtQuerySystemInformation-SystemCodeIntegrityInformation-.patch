@@ -1,0 +1,44 @@
+From efaf2bd6090200d3fa7ea313c70d7d7a4fa584fd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?D=C4=81vis=20Mos=C4=81ns?= <davispuh@gmail.com>
+Date: Mon, 11 Dec 2023 04:59:59 +0200
+Subject: [PATCH] ntdll: Improve
+ NtQuerySystemInformation(SystemCodeIntegrityInformation)
+
+This makes it match more closely how it works on Windows.
+---
+ dlls/ntdll/unix/system.c | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
+index 879a5893758..c5b7cf07d95 100644
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -3216,11 +3216,21 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+         FIXME("SystemCodeIntegrityInformation, size %u, info %p, stub!\n", (int)size, info);
+ 
+         len = sizeof(SYSTEM_CODEINTEGRITY_INFORMATION);
+-
+-        if (size >= len)
+-            integrity_info->CodeIntegrityOptions = CODEINTEGRITY_OPTION_ENABLED;
+-        else
++        if (size > 0)
++        {
++            if (!info) ret = STATUS_ACCESS_VIOLATION;
++            else if (size >= len && integrity_info->Length == len)
++            {
++                /* proper implementation is probably reading this from registry, see https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity */
++                integrity_info->CodeIntegrityOptions = CODEINTEGRITY_OPTION_ENABLED | CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED;
++            } else
++            {
++                ret = STATUS_INFO_LENGTH_MISMATCH;
++            }
++        } else
++        {
+             ret = STATUS_INFO_LENGTH_MISMATCH;
++        }
+         break;
+     }
+ 
+-- 
+GitLab
+

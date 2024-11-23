@@ -175,32 +175,32 @@ index ac22f9853e5..0ad102283d1 100644
  @REPLY
      apc_param_t   ckey;           /* completion key */
      apc_param_t   cvalue;         /* completion value */
-diff --git a/server/request.h b/server/request.h
-index 68fa71e39fb..8222fc73dc4 100644
---- a/server/request.h
-+++ b/server/request.h
-@@ -2237,8 +2237,7 @@ C_ASSERT( FIELD_OFFSET(struct add_completion_request, information) == 32 );
- C_ASSERT( FIELD_OFFSET(struct add_completion_request, status) == 40 );
- C_ASSERT( sizeof(struct add_completion_request) == 48 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_request, handle) == 12 );
--C_ASSERT( FIELD_OFFSET(struct remove_completion_request, alertable) == 16 );
--C_ASSERT( sizeof(struct remove_completion_request) == 24 );
-+C_ASSERT( sizeof(struct remove_completion_request) == 16 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, ckey) == 8 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, cvalue) == 16 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
-diff --git a/server/trace.c b/server/trace.c
-index 7142c37218a..a59cf6c5b5f 100644
---- a/server/trace.c
-+++ b/server/trace.c
-@@ -4519,7 +4519,6 @@ static void dump_add_completion_request( const struct add_completion_request *re
- static void dump_remove_completion_request( const struct remove_completion_request *req )
- {
-     fprintf( stderr, " handle=%04x", req->handle );
--    fprintf( stderr, ", alertable=%d", req->alertable );
- }
- 
- static void dump_remove_completion_reply( const struct remove_completion_reply *req )
+#diff --git a/server/request.h b/server/request.h
+#index 68fa71e39fb..8222fc73dc4 100644
+#--- a/server/request.h
+#+++ b/server/request.h
+#@@ -2237,8 +2237,7 @@ C_ASSERT( FIELD_OFFSET(struct add_completion_request, information) == 32 );
+# C_ASSERT( FIELD_OFFSET(struct add_completion_request, status) == 40 );
+# C_ASSERT( sizeof(struct add_completion_request) == 48 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_request, handle) == 12 );
+#-C_ASSERT( FIELD_OFFSET(struct remove_completion_request, alertable) == 16 );
+#-C_ASSERT( sizeof(struct remove_completion_request) == 24 );
+#+C_ASSERT( sizeof(struct remove_completion_request) == 16 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, ckey) == 8 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, cvalue) == 16 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
+#diff --git a/server/trace.c b/server/trace.c
+#index 7142c37218a..a59cf6c5b5f 100644
+#--- a/server/trace.c
+#+++ b/server/trace.c
+#@@ -4519,7 +4519,6 @@ static void dump_add_completion_request( const struct add_completion_request *re
+# static void dump_remove_completion_request( const struct remove_completion_request *req )
+# {
+#     fprintf( stderr, " handle=%04x", req->handle );
+#-    fprintf( stderr, ", alertable=%d", req->alertable );
+# }
+# 
+# static void dump_remove_completion_reply( const struct remove_completion_reply *req )
 -- 
 2.47.0
 

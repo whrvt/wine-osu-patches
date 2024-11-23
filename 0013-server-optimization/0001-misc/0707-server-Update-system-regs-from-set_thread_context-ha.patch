@@ -15,8 +15,8 @@ index 6745b257a7a..8e0d9816996 100644
 +++ b/server/thread.c
 @@ -1923,9 +1923,7 @@ DECL_HANDLER(select)
          {
-             apc_call_t *data;
-             data_size_t size = sizeof(*data) + (ctx->regs[CTX_WOW].flags ? 2 : 1) * sizeof(context_t);
+             union apc_call *data;
+             data_size_t size = sizeof(*data) + (ctx->regs[CTX_WOW].flags ? 2 : 1) * sizeof(struct context_data);
 -            unsigned int flags = system_flags & ctx->regs[CTX_NATIVE].flags;
  
 -            if (flags) set_thread_context( current, &ctx->regs[CTX_NATIVE], flags );

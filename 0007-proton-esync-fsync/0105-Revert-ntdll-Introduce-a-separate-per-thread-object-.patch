@@ -306,18 +306,18 @@ index 693a20e3437..a4f25e805f8 100644
  @END
  
  
-diff --git a/server/request.h b/server/request.h
-index b2679ceae9a..9e1bdf403ea 100644
---- a/server/request.h
-+++ b/server/request.h
-@@ -2240,7 +2240,6 @@ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, ckey) == 8 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, cvalue) == 16 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
- C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, status) == 32 );
--C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, wait_handle) == 36 );
- C_ASSERT( sizeof(struct remove_completion_reply) == 40 );
- C_ASSERT( FIELD_OFFSET(struct query_completion_request, handle) == 12 );
- C_ASSERT( sizeof(struct query_completion_request) == 16 );
+#diff --git a/server/request.h b/server/request.h
+#index b2679ceae9a..9e1bdf403ea 100644
+#--- a/server/request.h
+#+++ b/server/request.h
+#@@ -2240,7 +2240,6 @@ C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, ckey) == 8 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, cvalue) == 16 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, information) == 24 );
+# C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, status) == 32 );
+#-C_ASSERT( FIELD_OFFSET(struct remove_completion_reply, wait_handle) == 36 );
+# C_ASSERT( sizeof(struct remove_completion_reply) == 40 );
+# C_ASSERT( FIELD_OFFSET(struct query_completion_request, handle) == 12 );
+# C_ASSERT( sizeof(struct query_completion_request) == 16 );
 diff --git a/server/thread.c b/server/thread.c
 index f3880eebedb..6542e1584ab 100644
 --- a/server/thread.c
@@ -358,18 +358,18 @@ index 3448f332b0b..766ed78a72f 100644
      struct timeout_user   *exit_poll;     /* poll if the thread/process has exited already */
  };
  
-diff --git a/server/trace.c b/server/trace.c
-index 66ff3000c65..a108043ea8d 100644
---- a/server/trace.c
-+++ b/server/trace.c
-@@ -4527,7 +4527,6 @@ static void dump_remove_completion_reply( const struct remove_completion_reply *
-     dump_uint64( ", cvalue=", &req->cvalue );
-     dump_uint64( ", information=", &req->information );
-     fprintf( stderr, ", status=%08x", req->status );
--    fprintf( stderr, ", wait_handle=%04x", req->wait_handle );
- }
- 
- static void dump_query_completion_request( const struct query_completion_request *req )
+#diff --git a/server/trace.c b/server/trace.c
+#index 66ff3000c65..a108043ea8d 100644
+#--- a/server/trace.c
+#+++ b/server/trace.c
+#@@ -4527,7 +4527,6 @@ static void dump_remove_completion_reply( const struct remove_completion_reply *
+#     dump_uint64( ", cvalue=", &req->cvalue );
+#     dump_uint64( ", information=", &req->information );
+#     fprintf( stderr, ", status=%08x", req->status );
+#-    fprintf( stderr, ", wait_handle=%04x", req->wait_handle );
+# }
+# 
+# static void dump_query_completion_request( const struct query_completion_request *req )
 -- 
 2.47.0
 

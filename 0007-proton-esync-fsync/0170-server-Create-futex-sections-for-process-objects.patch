@@ -123,13 +123,13 @@ index 1db0d52cb34..38303e04193 100644
      no_signal,                   /* signal */
      no_get_fd,                   /* get_fd */
 @@ -692,6 +694,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
-     process->rawinput_kbd    = NULL;
      memset( &process->image_info, 0, sizeof(process->image_info) );
+     list_init( &process->rawinput_entry );
      process->esync_fd        = -1;
 +    process->fsync_idx       = 0;
-     list_init( &process->rawinput_entry );
      list_init( &process->kernel_object );
      list_init( &process->thread_list );
+     list_init( &process->locks );
 @@ -748,6 +751,9 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
      if (!token_assign_label( process->token, &high_label_sid ))
          goto error;

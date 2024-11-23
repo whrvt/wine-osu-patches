@@ -20,13 +20,13 @@ index fd3faf61997..b2db0247b76 100644
  
 +NTSTATUS wait_internal_server( HANDLE handle, BOOLEAN alertable, const LARGE_INTEGER *timeout )
 +{
-+    select_op_t select_op;
++    union select_op select_op;
 +    UINT flags = SELECT_INTERRUPTIBLE;
 +
 +    if (alertable) flags |= SELECT_ALERTABLE;
 +    select_op.wait.op = SELECT_WAIT;
 +    select_op.wait.handles[0] = wine_server_obj_handle( handle );
-+    return server_wait( &select_op, offsetof( select_op_t, wait.handles[1] ), flags, timeout );
++    return server_wait( &select_op, offsetof( union select_op, wait.handles[1] ), flags, timeout );
 +}
  
  /******************************************************************
@@ -58,8 +58,8 @@ index 82fc9d2bc02..9dc8ea627e0 100644
  extern unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT flags,
                                   const LARGE_INTEGER *timeout );
 +extern NTSTATUS wait_internal_server( HANDLE handle, BOOLEAN alertable, const LARGE_INTEGER *timeout );
- extern unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call,
-                                               apc_result_t *result );
+ extern unsigned int server_queue_process_apc( HANDLE process, const union apc_call *call,
+                                               union apc_result *result );
  extern int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
 @@ -455,7 +456,7 @@ static inline async_data_t server_async( HANDLE handle, struct async_fileio *use
  

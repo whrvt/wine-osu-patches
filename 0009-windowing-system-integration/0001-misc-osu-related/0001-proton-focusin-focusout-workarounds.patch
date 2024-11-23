@@ -1,9 +1,9 @@
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 3e9e0254c91..b273afa758a 100644
+index b08518220d9..4f155ecf29c 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
-@@ -775,6 +775,17 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
-     if (is_virtual_desktop() && hwnd == NtUserGetDesktopWindow()) retry_grab_clipping_window();
+@@ -894,6 +894,17 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
+     if (is_virtual_desktop() && hwnd == NtUserGetDesktopWindow()) reapply_cursor_clipping();
      if (hwnd == NtUserGetDesktopWindow()) return FALSE;
  
 +    /* Focus was just restored but it can be right after super was
@@ -20,7 +20,7 @@ index 3e9e0254c91..b273afa758a 100644
      x11drv_thread_data()->keymapnotify_hwnd = hwnd;
  
      /* when keyboard grab is released, re-apply the cursor clipping rect */
-@@ -805,8 +816,30 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
+@@ -924,8 +935,30 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
   */
  static void focus_out( Display *display , HWND hwnd )
   {
@@ -51,13 +51,17 @@ index 3e9e0254c91..b273afa758a 100644
      x11drv_thread_data()->last_focus = hwnd;
      xim_set_focus( hwnd, FALSE );
  
-@@ -840,9 +873,21 @@ static void focus_out( Display *display , HWND hwnd )
- static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
+@@ -962,6 +995,7 @@ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
  {
+     HWND foreground = NtUserGetForegroundWindow();
      XFocusChangeEvent *event = &xev->xfocus;
 +    struct x11drv_win_data *data;
  
-     TRACE( "win %p xwin %lx detail=%s mode=%s\n", hwnd, event->window, focus_details[event->detail], focus_modes[event->mode] );
+     if (event->detail == NotifyPointer)
+     {
+@@ -976,6 +1010,17 @@ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
+     }
+     if (!hwnd) return FALSE;
  
 +    if ((data = get_win_data( hwnd )))
 +    {
@@ -70,9 +74,9 @@ index 3e9e0254c91..b273afa758a 100644
 +        release_win_data( data );
 +    }
 +
-     if (event->detail == NotifyPointer)
+     if (window_has_pending_wm_state( hwnd, NormalState )) /* ignore FocusOut only if the window is being shown */
      {
-         if (!hwnd && event->window == x11drv_thread_data()->clip_window)
+         WARN( "Ignoring window %p/%lx FocusOut serial %lu, detail %s, mode %s, foreground %p during WM_STATE change\n",
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
 index f975986a9d9..63f2861c101 100644
 --- a/dlls/winex11.drv/window.c
