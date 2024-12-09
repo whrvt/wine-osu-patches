@@ -1,0 +1,31 @@
+From b3a647851a473e7408c3afdac7507ceb2998bbc9 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 10 Jul 2024 16:53:49 -0600
+Subject: [PATCH] server: Skip inaccessible threads in (get_next_thread).
+
+---
+ server/thread.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/server/thread.c b/server/thread.c
+index b3ce5d9ac95..b83bd9231f4 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -2026,8 +2026,12 @@ DECL_HANDLER(get_next_thread)
+         if (thread->process == process)
+         {
+             reply->handle = alloc_handle( current->process, thread, req->access, req->attributes );
+-            release_object( process );
+-            return;
++            if (get_error() != STATUS_ACCESS_DENIED)
++            {
++                release_object( process );
++                return;
++            }
++            clear_error();
+         }
+         ptr = req->flags ? list_prev( &thread_list, &thread->entry )
+                          : list_next( &thread_list, &thread->entry );
+-- 
+GitLab
+

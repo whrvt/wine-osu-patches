@@ -1,0 +1,27 @@
+From b4f3bbfe08ce92cc78b21543a149e8f876c7235e Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 5 Dec 2024 17:50:13 -0800
+Subject: [PATCH] server: Disable debug features if NDEBUG is defined.
+
+Co-authored-by: Torge Matthies <openglfreak@googlemail.com>
+---
+ server/object.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/server/object.h b/server/object.h
+index 20d242f3079..c27407e8375 100644
+--- a/server/object.h
++++ b/server/object.h
+@@ -26,7 +26,9 @@
+ #include "wine/server_protocol.h"
+ #include "wine/list.h"
+ 
++#ifndef NDEBUG
+ #define DEBUG_OBJECTS
++#endif
+ 
+ /* kernel objects */
+ 
+-- 
+2.47.1
+

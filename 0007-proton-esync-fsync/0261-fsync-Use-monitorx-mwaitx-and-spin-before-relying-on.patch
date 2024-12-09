@@ -55,16 +55,16 @@ index 169ceab10ad..40b10b0d8d2 100644
 +        }                                                        \
 +    } while (0)
 +
-+/* Time to wait in mwaitx, tuned based on a synchronization benchmark
-+ * that probably captures 0 real-world scenarios. */
++/* Time to wait in mwaitx, values
++ * probably capture 0 real-world scenarios. */
 +#define MUTEX_MON_TIMEOUT   1000
 +#define AUTO_MON_TIMEOUT    1000
-+#define MANUAL_MON_TIMEOUT  2000
++#define MANUAL_MON_TIMEOUT  1000
 +#define SEM_MON_TIMEOUT     1000
 +
 +/* Conservative spin config */
-+#define SPIN_MAX_RETRIES    4   /* Maximum retries before switching to pure yields */
-+#define SPIN_MAX_YIELDS     12  /* Maximum number of pure yields before giving up */
++#define SPIN_MAX_RETRIES    3   /* Maximum retries before switching to pure yields */
++#define SPIN_MAX_YIELDS     9  /* Maximum number of pure yields before giving up */
 +
 +/* Fast path attempt to detect a value change using monitorx/mwaitx instructions + spinning
 + * Returns STATUS_SUCCESS if the value changed, STATUS_UNSUCCESSFUL otherwise.

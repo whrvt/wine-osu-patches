@@ -1,0 +1,194 @@
+From 08d3fc4d1f2b81e96dfc0de176926990a451705a Mon Sep 17 00:00:00 2001
+From: Eugene McArdle <eugene@tensorworks.com.au>
+Date: Fri, 29 Nov 2024 10:32:31 +1000
+Subject: [PATCH] ntdll: Test updated NtQueryDirectoryFile behaviour if scan is
+ reset with a new mask
+
+---
+ dlls/ntdll/tests/directory.c | 164 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 164 insertions(+)
+
+diff --git a/dlls/ntdll/tests/directory.c b/dlls/ntdll/tests/directory.c
+index 52ff9936560..27027d41d9d 100644
+--- a/dlls/ntdll/tests/directory.c
++++ b/dlls/ntdll/tests/directory.c
+@@ -964,6 +964,169 @@ done:
+     pRtlFreeUnicodeString(&ntdirname);
+ }
+ 
++static void set_up_mask_test(const char *testdir)
++{
++    BOOL ret;
++    char buf[MAX_PATH + 5];
++    HANDLE h;
++
++    ret = CreateDirectoryA(testdir, NULL);
++    ok( ret, "couldn't create dir '%s', error %ld\n", testdir, GetLastError() );
++
++    sprintf(buf, "%s\\%s", testdir, "a-file.h");
++    h = CreateFileA(buf, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
++                    FILE_ATTRIBUTE_NORMAL, 0);
++    ok( h != INVALID_HANDLE_VALUE, "failed to create temp file '%s'\n", buf );
++    CloseHandle(h);
++
++    sprintf(buf, "%s\\%s", testdir, "another-file.h");
++    h = CreateFileA(buf, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
++                    FILE_ATTRIBUTE_NORMAL, 0);
++    ok( h != INVALID_HANDLE_VALUE, "failed to create temp file '%s'\n", buf );
++    CloseHandle(h);
++}
++
++static void tear_down_mask_test(const char *testdir)
++{
++    int ret;
++    char buf[MAX_PATH];
++
++    sprintf(buf, "%s\\%s", testdir, "a-file.h");
++    ret = DeleteFileA(buf);
++    ok( ret || (GetLastError() == ERROR_FILE_NOT_FOUND) || (GetLastError() == ERROR_PATH_NOT_FOUND),
++       "Failed to rm %s, error %ld\n", buf, GetLastError() );
++
++    sprintf(buf, "%s\\%s", testdir, "another-file.h");
++    ret = DeleteFileA(buf);
++    ok( ret || (GetLastError() == ERROR_FILE_NOT_FOUND) || (GetLastError() == ERROR_PATH_NOT_FOUND),
++       "Failed to rm %s, error %ld\n", buf, GetLastError() );
++
++    RemoveDirectoryA(testdir);
++}
++
++
++/* Performs a query with NtQueryDirectoryFile() */
++static BOOL test_NtQueryDirectoryFile_mask(HANDLE handle, BOOL restart_scan, UNICODE_STRING mask,
++                                           BOOL expect_success, BOOL validate_only)
++{
++    NTSTATUS status;
++    IO_STATUS_BLOCK io;
++    UINT data_size = sizeof(FILE_DIRECTORY_INFORMATION) + (MAX_PATH * sizeof(wchar_t));
++    BYTE data[8192];
++    FILE_DIRECTORY_INFORMATION *dir_info;
++    WCHAR *name;
++    ULONG name_len;
++    ULONG mask_len = mask.Length / sizeof(WCHAR);
++
++    /* Perform the query */
++    status = pNtQueryDirectoryFile( handle, NULL, NULL, NULL, &io, data, data_size,
++                                    FileDirectoryInformation, TRUE, &mask, restart_scan );
++    if (expect_success)
++    {
++        if (validate_only && status != STATUS_SUCCESS) return FALSE;
++
++        ok( status == STATUS_SUCCESS, "could not find file mask: '%s', restart: %d, error %ld\n",
++            wine_dbgstr_wn(mask.Buffer, mask_len), restart_scan, GetLastError() );
++        /* Print the query parameters and the result */
++        if (status == 0) {
++            dir_info = (FILE_DIRECTORY_INFORMATION *)data;
++            name = dir_info->FileName;
++            name_len = dir_info->FileNameLength / sizeof(WCHAR);
++            
++            ok( name_len == mask_len, "unexpected filename length %lu, expected %lu\n", name_len, mask_len );
++            ok( !memcmp(name, mask.Buffer, mask_len), "unexpected filename %s, expected %s\n",
++                wine_dbgstr_wn(name, name_len), wine_dbgstr_wn(mask.Buffer, mask_len) );
++        }
++    }
++    else
++    {
++        if (validate_only && status == STATUS_SUCCESS) return FALSE;
++        /* Print the query parameters and the result */
++        if (status == 0) {
++            dir_info = (FILE_DIRECTORY_INFORMATION *)data;
++            name = dir_info->FileName;
++            name_len = dir_info->FileNameLength / sizeof(WCHAR);
++
++            ok ( status != STATUS_SUCCESS, "unexpectedly found file. mask: '%s', found %s\n",
++                wine_dbgstr_wn(mask.Buffer, mask_len), wine_dbgstr_wn(name, name_len) );
++        }
++    }
++    return TRUE;
++}
++
++static void test_NtQueryDirectoryFile_change_mask(void)
++{
++    NTSTATUS status;
++    HANDLE dirh;
++    char testdir[MAX_PATH];
++    OBJECT_ATTRIBUTES attr;
++    IO_STATUS_BLOCK io;
++    UNICODE_STRING ntdirname;
++    WCHAR testdir_w[MAX_PATH];
++
++    UNICODE_STRING atestfile;
++    UNICODE_STRING anothertestfile;
++    UNICODE_STRING notatestfile;
++
++    BOOL run_updated_tests = TRUE;
++
++    pRtlInitUnicodeString(&atestfile, L"a-file.h");
++    pRtlInitUnicodeString(&anothertestfile, L"another-file.h");
++    pRtlInitUnicodeString(&notatestfile, L"not-a-file.h");
++
++    /* Clean up from prior aborted run, if any, then set up test files */
++    ok( GetTempPathA(MAX_PATH, testdir), "couldn't get temp dir\n" );
++    strcat(testdir, "mask.tmp");
++    tear_down_mask_test(testdir);
++    set_up_mask_test(testdir);
++
++    pRtlMultiByteToUnicodeN(testdir_w, sizeof(testdir_w), NULL, testdir, strlen(testdir) + 1);
++    if (!pRtlDosPathNameToNtPathName_U(testdir_w, &ntdirname, NULL, NULL))
++    {
++        ok( 0, "RtlDosPathNametoNtPathName_U failed\n" );
++        goto done;
++    }
++    InitializeObjectAttributes(&attr, &ntdirname, OBJ_CASE_INSENSITIVE, 0, NULL);
++
++	/* Open a handle for our test directory */
++	status = pNtOpenFile(&dirh, SYNCHRONIZE | FILE_LIST_DIRECTORY, &attr, &io, FILE_SHARE_READ,
++                         FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT | FILE_DIRECTORY_FILE);
++    ok( status == STATUS_SUCCESS, "failed to open dir '%s', ret 0x%lx, error %ld\n", testdir, status, GetLastError() );
++    if (status != STATUS_SUCCESS)
++    {
++       skip("can't test if we can't open the directory\n");
++       goto done;
++    }
++
++    /* Verify that updated windows 8 and higher behaviour is supported */
++    if (!winetest_platform_is_wine && !test_NtQueryDirectoryFile_mask(dirh, TRUE, atestfile, TRUE, TRUE))
++        run_updated_tests = FALSE;
++    if (!winetest_platform_is_wine && !test_NtQueryDirectoryFile_mask(dirh, TRUE, notatestfile, FALSE, TRUE))
++        run_updated_tests = FALSE;
++
++    if (!run_updated_tests)
++    {
++        skip("Win8+ NtQueryDirectoryMask behaviour not supported");
++        goto done;
++    }
++
++    /* Run tests - all searches for `notatestfile` are expected to fail */
++    test_NtQueryDirectoryFile_mask(dirh, TRUE, atestfile, TRUE, FALSE);
++    test_NtQueryDirectoryFile_mask(dirh, TRUE, anothertestfile, TRUE, FALSE);
++    test_NtQueryDirectoryFile_mask(dirh, TRUE, notatestfile, FALSE, FALSE);
++    
++    test_NtQueryDirectoryFile_mask(dirh, TRUE, atestfile, TRUE, FALSE);
++    test_NtQueryDirectoryFile_mask(dirh, FALSE, notatestfile, FALSE, FALSE);
++
++    test_NtQueryDirectoryFile_mask(dirh, TRUE, atestfile, TRUE, FALSE);
++    /* Since we are not resetting the scan, and are using an incompatible mask, this should also fail */
++    test_NtQueryDirectoryFile_mask(dirh, FALSE, anothertestfile, FALSE, FALSE);
++
++    /* Cleanup */
++done:
++    tear_down_mask_test(testdir);
++}
++
+ static NTSTATUS get_file_id( FILE_INTERNAL_INFORMATION *info, const WCHAR *root, const WCHAR *name )
+ {
+     OBJECT_ATTRIBUTES attr;
+@@ -1157,5 +1320,6 @@ START_TEST(directory)
+     test_directory_sort( sysdir );
+     test_NtQueryDirectoryFile();
+     test_NtQueryDirectoryFile_case();
++    test_NtQueryDirectoryFile_change_mask();
+     test_redirection();
+ }
+-- 
+GitLab
+

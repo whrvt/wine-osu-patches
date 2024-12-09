@@ -72,9 +72,9 @@ index 80bf84b5ac0..8538c0e711f 100644
 +static void set_user_shared_data_time(timeout_t current_time, timeout_t monotonic_time)
  {
 +    /* Adding a compensation offset for the USD update interval
-+     * to try to workaround consumers reading stale values and being behind real QPC */
-+    current_time += user_shared_data_timeout_ticks;
-+    monotonic_time += user_shared_data_timeout_ticks;
++     * to try to workaround consumers reading stale values and being behind real QPC (maybe not) */
++    // current_time += user_shared_data_timeout_ticks;
++    // monotonic_time += user_shared_data_timeout_ticks;
      timeout_t tick_count = monotonic_time / 10000;
      static timeout_t last_timezone_update;
      timeout_t timezone_bias;

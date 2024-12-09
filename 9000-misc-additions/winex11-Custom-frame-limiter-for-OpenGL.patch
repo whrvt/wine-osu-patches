@@ -9,29 +9,28 @@ Subject: [PATCH] winex11: Custom frame limiter for OpenGL
  dlls/winex11.drv/x11drv_main.c | 26 +++++++++++++++
  3 files changed, 89 insertions(+)
 
-Added in the use-clock_nanosleep-for-delay patch
-# diff --git a/configure.ac b/configure.ac
-# index d539ee50bda..7585324602c 100644
-# --- a/configure.ac
-# +++ b/configure.ac
-# @@ -2170,6 +2170,17 @@ case $host_os in
-#      ;;
-#  esac
+diff --git a/configure.ac b/configure.ac
+index d539ee50bda..7585324602c 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2170,6 +2170,17 @@ case $host_os in
+     ;;
+ esac
  
-# +dnl Check for clock_nanosleep which may be in -lrt
-# +case $host_os in
-# +    darwin*|macosx*) ;;
-# +    *) ac_save_LIBS=$LIBS
-# +        AC_SEARCH_LIBS(clock_nanosleep, rt,
-# +            [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define to 1 if you have the `clock_nanosleep' function.])
-# +                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
-# +    LIBS=$ac_save_LIBS
-# +    ;;
-# +esac
-# +
-#  AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
-#                  AC_LINK_IFELSE([AC_LANG_PROGRAM(
-#  [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
++dnl Check for clock_nanosleep which may be in -lrt
++case $host_os in
++    darwin*|macosx*) ;;
++    *) ac_save_LIBS=$LIBS
++        AC_SEARCH_LIBS(clock_nanosleep, rt,
++            [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define to 1 if you have the `clock_nanosleep' function.])
++                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
++    LIBS=$ac_save_LIBS
++    ;;
++esac
++
+ AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
+                 AC_LINK_IFELSE([AC_LANG_PROGRAM(
+ [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
 diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
 index 008a92dad98..f46b03ca2e4 100644
 --- a/dlls/winex11.drv/opengl.c

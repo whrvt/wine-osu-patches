@@ -1,0 +1,34 @@
+From 04fa081590598bc1a1766deee18330c715acf1d2 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 6 Dec 2024 14:57:21 -0600
+Subject: [PATCH] httpapi: Don't open files with zero access.
+
+---
+ dlls/httpapi/httpapi_main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/httpapi/httpapi_main.c b/dlls/httpapi/httpapi_main.c
+index d1c2667be2e..28d67c98333 100644
+--- a/dlls/httpapi/httpapi_main.c
++++ b/dlls/httpapi/httpapi_main.c
+@@ -195,7 +195,7 @@ ULONG WINAPI HttpCreateHttpHandle(HANDLE *handle, ULONG reserved)
+         return ERROR_INVALID_PARAMETER;
+ 
+     attr.ObjectName = &string;
+-    return RtlNtStatusToDosError(NtCreateFile(handle, 0, &attr, &iosb, NULL,
++    return RtlNtStatusToDosError(NtCreateFile(handle, SYNCHRONIZE, &attr, &iosb, NULL,
+             FILE_ATTRIBUTE_NORMAL, 0, FILE_OPEN, FILE_NON_DIRECTORY_FILE, NULL, 0));
+ }
+ 
+@@ -843,7 +843,7 @@ ULONG WINAPI HttpCreateRequestQueue(HTTPAPI_VERSION version, const WCHAR *name,
+     if (sa && sa->bInheritHandle)
+         attr.Attributes |= OBJ_INHERIT;
+     attr.SecurityDescriptor = sa ? sa->lpSecurityDescriptor : NULL;
+-    return RtlNtStatusToDosError(NtCreateFile(handle, 0, &attr, &iosb, NULL,
++    return RtlNtStatusToDosError(NtCreateFile(handle, SYNCHRONIZE, &attr, &iosb, NULL,
+             FILE_ATTRIBUTE_NORMAL, 0, FILE_OPEN, FILE_NON_DIRECTORY_FILE, NULL, 0));
+ }
+ 
+-- 
+GitLab
+

@@ -1,0 +1,30 @@
+From bb8e6206f560fdcb227d563a2338b34b0dad56a0 Mon Sep 17 00:00:00 2001
+From: chenjiangyi <chenjiangyi@uniontech.com>
+Date: Thu, 28 Nov 2024 11:06:24 +0800
+Subject: [PATCH] win32u: Use LCD-optimezed rendering mode for text drawing.
+
+Log:
+
+Signed-off-by: chenjiangyi <chenjiangyi@uniontech.com>
+Change-Id: If35310eb8df08f39e04066b59c6b907d89c7dd9b
+---
+ dlls/win32u/freetype.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/win32u/freetype.c b/dlls/win32u/freetype.c
+index d1e46a681ea..fc24c008610 100644
+--- a/dlls/win32u/freetype.c
++++ b/dlls/win32u/freetype.c
+@@ -1499,6 +1499,9 @@ static UINT parse_aa_pattern( FcPattern *pattern )
+     if (pFcPatternGetBool( pattern, FC_ANTIALIAS, 0, &antialias ) == FcResultMatch)
+         aa_flags = antialias ? GGO_GRAY4_BITMAP : GGO_BITMAP;
+ 
++    if (is_subpixel_rendering_enabled())
++        aa_flags = WINE_GGO_HRGB_BITMAP;
++
+     if (pFcPatternGetInteger( pattern, FC_RGBA, 0, &rgba ) == FcResultMatch)
+     {
+         switch (rgba)
+-- 
+GitLab
+

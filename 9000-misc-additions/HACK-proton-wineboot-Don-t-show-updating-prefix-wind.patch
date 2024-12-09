@@ -1,0 +1,71 @@
+From 4e5d2e3aae85eabeee6921e5d889608ae2881ef6 Mon Sep 17 00:00:00 2001
+From: Andrew Eikum <aeikum@codeweavers.com>
+Date: Mon, 22 Jan 2018 14:35:51 -0600
+Subject: [PATCH 0030/2346] HACK: proton: wineboot: Don't show "updating
+ prefix" window.
+
+---
+ programs/wineboot/wineboot.c | 33 ---------------------------------
+ 1 file changed, 33 deletions(-)
+
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index c16446cf289..2a8f2edb141 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -1425,37 +1425,6 @@ static BOOL start_services_process(void)
+     return TRUE;
+ }
+ 
+-static INT_PTR CALLBACK wait_dlgproc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
+-{
+-    switch (msg)
+-    {
+-    case WM_INITDIALOG:
+-        {
+-            DWORD len;
+-            WCHAR *buffer, text[1024];
+-            const WCHAR *name = (WCHAR *)lp;
+-            HICON icon = LoadImageW( 0, (LPCWSTR)IDI_WINLOGO, IMAGE_ICON, 48, 48, LR_SHARED );
+-            SendDlgItemMessageW( hwnd, IDC_WAITICON, STM_SETICON, (WPARAM)icon, 0 );
+-            SendDlgItemMessageW( hwnd, IDC_WAITTEXT, WM_GETTEXT, 1024, (LPARAM)text );
+-            len = lstrlenW(text) + lstrlenW(name) + 1;
+-            buffer = malloc( len * sizeof(WCHAR) );
+-            swprintf( buffer, len, text, name );
+-            SendDlgItemMessageW( hwnd, IDC_WAITTEXT, WM_SETTEXT, 0, (LPARAM)buffer );
+-            free( buffer );
+-        }
+-        break;
+-    }
+-    return 0;
+-}
+-
+-static HWND show_wait_window(void)
+-{
+-    HWND hwnd = CreateDialogParamW( GetModuleHandleW(0), MAKEINTRESOURCEW(IDD_WAITDLG), 0,
+-                                    wait_dlgproc, (LPARAM)prettyprint_configdir() );
+-    ShowWindow( hwnd, SW_SHOWNORMAL );
+-    return hwnd;
+-}
+-
+ static HANDLE start_rundll32( const WCHAR *inf_path, const WCHAR *install, WORD machine )
+ {
+     WCHAR app[MAX_PATH + ARRAY_SIZE(L"\\rundll32.exe" )];
+@@ -1606,7 +1575,6 @@ static void update_wineprefix( BOOL force )
+ 
+         if ((process = start_rundll32( inf_path, L"PreInstall", IMAGE_FILE_MACHINE_TARGET_HOST )))
+         {
+-            HWND hwnd = show_wait_window();
+             for (;;)
+             {
+                 if (process)
+@@ -1627,7 +1595,6 @@ static void update_wineprefix( BOOL force )
+                     process = start_rundll32( inf_path, L"Wow64Install", machines[count].Machine );
+                 count++;
+             }
+-            DestroyWindow( hwnd );
+         }
+         install_root_pnp_devices();
+         update_user_profile();
+-- 
+2.47.0
+

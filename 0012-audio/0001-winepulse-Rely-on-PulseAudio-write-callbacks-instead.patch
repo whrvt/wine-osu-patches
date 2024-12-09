@@ -508,6 +508,16 @@ index 615c3a8fdc8..9c7509e1089 100644
 -    pa_usec_t last_time;
 -    UINT32 adv_bytes;
 -    int success;
+-
+-    pulse_lock();
+-    delay.QuadPart = -stream->mmdev_period_usec * 10;
+-    pa_stream_get_time(stream->stream, &last_time);
+-    pulse_unlock();
+-
+-    while (!stream->please_quit)
+-    {
+-        pa_usec_t now, adv_usec = 0;
+-        int err;
 +    while (bytes >= stream->capture_period) {
 +        size_t src_len, copy, rem = stream->capture_period;
 +        while (rem) {
@@ -518,25 +528,15 @@ index 615c3a8fdc8..9c7509e1089 100644
 +            src_len -= stream->peek_ofs;
 +            assert(src_len <= bytes);
  
--    pulse_lock();
--    delay.QuadPart = -stream->mmdev_period_usec * 10;
--    pa_stream_get_time(stream->stream, &last_time);
--    pulse_unlock();
+-        NtDelayExecution(FALSE, &delay);
 +            copy = rem;
 +            if (copy > src_len)
 +                copy = src_len;
  
--    while (!stream->please_quit)
--    {
--        pa_usec_t now, adv_usec = 0;
--        int err;
+-        pulse_lock();
 +            src_len -= copy;
 +            rem -= copy;
  
--        NtDelayExecution(FALSE, &delay);
--
--        pulse_lock();
--
 -        delay.QuadPart = -stream->mmdev_period_usec * 10;
 -
 -        wait_pa_operation_complete(pa_stream_update_timing_info(stream->stream, pulse_op_cb, &success));
@@ -882,12 +882,13 @@ index 615c3a8fdc8..9c7509e1089 100644
 +    else
 +    {
 +        enum write_buffer_flags wr_flags = 0;
-+
-+        if (params->flags & AUDCLNT_BUFFERFLAGS_SILENT) wr_flags |= WINEPULSE_WRITE_SILENT;
-+        if (!stream->locked_ptr) wr_flags |= WINEPULSE_WRITE_NOFREE;
  
 -    /* push as much data as we can to pulseaudio too */
 -    pulse_write(stream);
++        if (params->flags & AUDCLNT_BUFFERFLAGS_SILENT) wr_flags |= WINEPULSE_WRITE_SILENT;
++        if (!stream->locked_ptr) wr_flags |= WINEPULSE_WRITE_NOFREE;
+ 
+-    TRACE("Released %u, held %lu\n", params->written_frames, stream->held_bytes / pa_frame_size(&stream->ss));
 +        write_buffer(stream, stream->locked_ptr ? stream->locked_ptr : stream->tmp_buffer, written_bytes, wr_flags);
 +        stream->pad += written_bytes;
 +    }
@@ -895,8 +896,7 @@ index 615c3a8fdc8..9c7509e1089 100644
 +        int success;
 +        wait_pa_operation_complete(pa_stream_trigger(stream->stream, pulse_op_cb, &success));
 +    }
- 
--    TRACE("Released %u, held %lu\n", params->written_frames, stream->held_bytes / pa_frame_size(&stream->ss));
++
 +    stream->locked = 0;
 +    stream->locked_ptr = NULL;
 +    TRACE("Released %u, pad %zu\n", params->written_frames, stream->pad / pa_frame_size(&stream->ss));
@@ -971,48 +971,23 @@ index 615c3a8fdc8..9c7509e1089 100644
  
      if (stream->share == AUDCLNT_SHAREMODE_EXCLUSIVE || params->device)
          *params->pos /= pa_frame_size(&stream->ss);
-@@ -2510,11 +2530,15 @@ static NTSTATUS pulse_set_sample_rate(void *args)
- 
-     new_ss = stream->ss;
-     new_ss.rate = params->rate;
--    new_bufsize_frames = ceil((stream->duration / 10000000.) * new_ss.rate);
--    size = new_bufsize_frames * 2 * pa_frame_size(&stream->ss);
- 
--    if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&new_buffer,
--                                zero_bits, &size, MEM_COMMIT, PAGE_READWRITE)) {
-+    if (stream->duration < 20000000)
-+        new_bufsize_frames = ceil((stream->duration / 10000000.) * new_ss.rate);
-+    else
-+        new_bufsize_frames = 2 * new_ss.rate;
-+    size = stream->bufsize_bytes = new_bufsize_frames * pa_frame_size(&stream->ss);
-+
-+    if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&new_buffer, zero_bits, &size, MEM_COMMIT, PAGE_READWRITE))
-+    {
-         hr = E_OUTOFMEMORY;
-         goto exit;
-     }
-@@ -2533,17 +2557,15 @@ static NTSTATUS pulse_set_sample_rate(void *args)
+@@ -2521,12 +2541,11 @@ static NTSTATUS pulse_set_sample_rate(void *args)
          wait_pa_operation_complete(pa_stream_flush(stream->stream, pulse_op_cb, &success));
  
      stream->clock_lastpos = stream->clock_written = 0;
 -    stream->pa_offs_bytes = stream->lcl_offs_bytes = 0;
 -    stream->held_bytes = stream->pa_held_bytes = 0;
 -    stream->period_bytes = pa_frame_size(&new_ss) * muldiv(stream->mmdev_period_usec, new_ss.rate, 1000000);
--    stream->real_bufsize_bytes = size;
 +    stream->wri_offs_bytes = stream->lcl_offs_bytes = stream->held_bytes = 0;
 +    stream->period_bytes = pa_frame_size(&new_ss) * muldiv(stream->def_period / 10, new_ss.rate, 1000000);
-     stream->bufsize_frames = new_bufsize_frames;
      stream->ss = new_ss;
  
-     size = 0;
-     NtFreeVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer, &size, MEM_RELEASE);
- 
--    silence_buffer(new_ss.format, new_buffer, stream->real_bufsize_bytes);
-+    silence_buffer(new_ss.format, new_buffer, stream->bufsize_bytes);
-     stream->local_buffer = new_buffer;
+-    silence_buffer(new_ss.format, stream->local_buffer, stream->real_bufsize_bytes);
++    silence_buffer(new_ss.format, stream->local_buffer, stream->bufsize_bytes);
  
  exit:
-@@ -2661,7 +2683,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     pulse_unlock();
+@@ -2643,7 +2662,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      pulse_start,
      pulse_stop,
      pulse_reset,
@@ -1021,7 +996,7 @@ index 615c3a8fdc8..9c7509e1089 100644
      pulse_get_render_buffer,
      pulse_release_render_buffer,
      pulse_get_capture_buffer,
-@@ -3159,7 +3181,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+@@ -3141,7 +3160,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
      pulse_start,
      pulse_stop,
      pulse_reset,

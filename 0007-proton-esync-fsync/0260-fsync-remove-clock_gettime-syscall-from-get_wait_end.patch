@@ -60,7 +60,7 @@ index 90ed801f11e..87bc12662ad 100644
 -
 -    nt_end -= SECS_1601_TO_1970 * TICKSPERSEC;
 -    end->tv_sec = nt_end / (ULONGLONG)TICKSPERSEC;
-+    end->tv_sec = nt_end / TICKSPERSEC;
++    end->tv_sec = nt_end / (ULONGLONG)TICKSPERSEC;
      end->tv_nsec = (nt_end % TICKSPERSEC) * 100;
  }
  

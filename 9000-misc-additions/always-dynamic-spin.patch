@@ -1,0 +1,15 @@
+diff --git a/dlls/ntdll/sync.c b/dlls/ntdll/sync.c
+index 7847d37ffbf..8d97c8593dd 100644
+--- a/dlls/ntdll/sync.c
++++ b/dlls/ntdll/sync.c
+@@ -227,9 +227,7 @@ NTSTATUS WINAPI RtlInitializeCriticalSectionAndSpinCount( RTL_CRITICAL_SECTION *
+  */
+ NTSTATUS WINAPI RtlInitializeCriticalSectionEx( RTL_CRITICAL_SECTION *crit, ULONG spincount, ULONG flags )
+ {
+-    if (NtCurrentTeb()->Peb->OSMajorVersion > 6 ||
+-            (NtCurrentTeb()->Peb->OSMajorVersion == 6 && NtCurrentTeb()->Peb->OSMinorVersion >= 2))
+-        flags |= RTL_CRITICAL_SECTION_FLAG_DYNAMIC_SPIN;
++    flags |= RTL_CRITICAL_SECTION_FLAG_DYNAMIC_SPIN;
+ 
+     if (flags & RTL_CRITICAL_SECTION_FLAG_STATIC_INIT)
+         FIXME("(%p,%lu,0x%08lx) semi-stub\n", crit, spincount, flags);

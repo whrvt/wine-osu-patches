@@ -17,7 +17,7 @@ index 74d445a9e0a..fcaef1f4c87 100644
  static XContext host_window_context = 0;
  
  /* time of last user event and window where it's stored */
-+static BOOL is_netwm_supported( Display *display, Atom atom );
++static BOOL is_netwm_supported( Atom atom );
  static Time last_user_time;
  static Window user_time_window;
 +static BOOL user_time_supported = TRUE;
@@ -34,8 +34,8 @@ index 74d445a9e0a..fcaef1f4c87 100644
 -        XChangeProperty( display, window, x11drv_atom(_NET_WM_USER_TIME_WINDOW),
 -                         XA_WINDOW, 32, PropModeReplace, (unsigned char *)&user_time_window, 1 );
 +    if (user_time_supported &&
-+        is_netwm_supported(display, x11drv_atom(_NET_WM_USER_TIME_WINDOW)) &&
-+        is_netwm_supported(display, x11drv_atom(_NET_WM_USER_TIME)))
++        is_netwm_supported( x11drv_atom(_NET_WM_USER_TIME_WINDOW) ) &&
++        is_netwm_supported( x11drv_atom(_NET_WM_USER_TIME) ))
 +    {
 +        update_user_time( 0 );  /* make sure that the user time window exists */
 +        if (user_time_window)
