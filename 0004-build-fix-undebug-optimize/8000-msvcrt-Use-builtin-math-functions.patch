@@ -1,0 +1,103 @@
+From 3d448bd6d697734492ed6e34eabde82355a691a9 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 10 Dec 2024 12:17:46 -0800
+Subject: [PATCH] msvcrt: Use builtin math functions.
+
+---
+ include/msvcrt/math.h | 46 ++++++++++++++++---------------------------
+ 1 file changed, 17 insertions(+), 29 deletions(-)
+
+diff --git a/include/msvcrt/math.h b/include/msvcrt/math.h
+index 4f9840b3a02..0eb068d59fe 100644
+--- a/include/msvcrt/math.h
++++ b/include/msvcrt/math.h
+@@ -280,6 +280,15 @@ static const union {
+ #define FP_SUBNORMAL -2
+ #define FP_ZERO       0
+ 
++#define fpclassify(x) __builtin_fpclassify (FP_NAN, FP_INFINITE,	      \
++     FP_NORMAL, FP_SUBNORMAL, FP_ZERO, x)
++#define signbit(x)  __builtin_signbit(x)
++#define isinf(x)    __builtin_isinf(x)
++#define isnan(x)    __builtin_isnan(x)
++#define isnormal(x) __builtin_isnormal(x)
++#define signbit(x)  __builtin_signbit(x)
++#define isfinite(x) __builtin_isfinite(x)
++
+ #define _C2 1
+ #define FP_ILOGB0 (-0x7fffffff - _C2)
+ #define FP_ILOGBNAN 0x7fffffff
+@@ -306,62 +315,41 @@ _ACRTIMP short __cdecl _fdclass(float);
+ _ACRTIMP int   __cdecl _dsign(double);
+ _ACRTIMP int   __cdecl _fdsign(float);
+ 
+-#define fpclassify(x) (sizeof(x) == sizeof(float) ? _fdclass(x) : _dclass(x))
+-#define signbit(x)    (sizeof(x) == sizeof(float) ? _fdsign(x) : _dsign(x))
+-#define isinf(x)      (fpclassify(x) == FP_INFINITE)
+-#define isnan(x)      (fpclassify(x) == FP_NAN)
+-#define isnormal(x)   (fpclassify(x) == FP_NORMAL)
+-#define isfinite(x)   (fpclassify(x) <= 0)
+-
+ #else
+ 
+ static inline int __isnanf(float x)
+ {
+-    union { float x; unsigned int i; } u = { x };
+-    return (u.i & 0x7fffffff) > 0x7f800000;
++    return isnan(x);
+ }
+ static inline int __isnan(double x)
+ {
+-    union { double x; unsigned __int64 i; } u = { x };
+-    return (u.i & ~0ull >> 1) > 0x7ffull << 52;
++    return isnan(x);
+ }
+ static inline int __isinff(float x)
+ {
+-    union { float x; unsigned int i; } u = { x };
+-    return (u.i & 0x7fffffff) == 0x7f800000;
++    return isinf(x);
+ }
+ static inline int __isinf(double x)
+ {
+-    union { double x; unsigned __int64 i; } u = { x };
+-    return (u.i & ~0ull >> 1) == 0x7ffull << 52;
++    return isinf(x);
+ }
+ static inline int __isnormalf(float x)
+ {
+-    union { float x; unsigned int i; } u = { x };
+-    return ((u.i + 0x00800000) & 0x7fffffff) >= 0x01000000;
++    return isnormal(x);
+ }
+ static inline int __isnormal(double x)
+ {
+-    union { double x; unsigned __int64 i; } u = { x };
+-    return ((u.i + (1ull << 52)) & ~0ull >> 1) >= 1ull << 53;
++    return isnormal(x);
+ }
+ static inline int __signbitf(float x)
+ {
+-    union { float x; unsigned int i; } u = { x };
+-    return (int)(u.i >> 31);
++    return signbit(x);
+ }
+ static inline int __signbit(double x)
+ {
+-    union { double x; unsigned __int64 i; } u = { x };
+-    return (int)(u.i >> 63);
++    return signbit(x);
+ }
+ 
+-#define isinf(x)    (sizeof(x) == sizeof(float) ? __isinff(x) : __isinf(x))
+-#define isnan(x)    (sizeof(x) == sizeof(float) ? __isnanf(x) : __isnan(x))
+-#define isnormal(x) (sizeof(x) == sizeof(float) ? __isnormalf(x) : __isnormal(x))
+-#define signbit(x)  (sizeof(x) == sizeof(float) ? __signbitf(x) : __signbit(x))
+-#define isfinite(x) (!isinf(x) && !isnan(x))
+-
+ #endif
+ 
+ #ifdef _UCRT
+-- 
+2.47.1
+

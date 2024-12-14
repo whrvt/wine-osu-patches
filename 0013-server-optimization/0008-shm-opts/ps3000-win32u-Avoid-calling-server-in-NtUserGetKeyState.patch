@@ -45,9 +45,9 @@ index b258a25074c..7bf34756425 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
 @@ -914,6 +914,7 @@ typedef volatile struct
-     unsigned int         flags;            /* desktop flags */
      struct shared_cursor cursor;           /* global cursor information */
      unsigned char        keystate[256];    /* asynchronous key state */
+     UINT64               monitor_serial;   /* winstation monitor update counter */
 +    INT64                update_serial;
  } desktop_shm_t;
  
@@ -101,9 +101,9 @@ index 75324f8b3a7..fcc15f5fb82 100644
 --- a/server/winstation.c
 +++ b/server/winstation.c
 @@ -319,6 +319,7 @@ static struct desktop *create_desktop( const struct unicode_str *name, unsigned
-                 shared->cursor.clip.right = 0;
                  shared->cursor.clip.bottom = 0;
                  memset( (void *)shared->keystate, 0, sizeof(shared->keystate) );
+                 shared->monitor_serial = winstation->monitor_serial;
 +                shared->update_serial = 1;
              }
              SHARED_WRITE_END;

@@ -1,0 +1,38 @@
+From a97f099b192d4ae49987e9b87808c9ccd5cfefad Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 13 Dec 2024 19:30:20 +0100
+Subject: [PATCH] winex11: Check HDC clipping region according to window style.
+
+---
+ dlls/winex11.drv/init.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index ddb8101a2f7..b8184e59bb1 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -198,7 +198,7 @@ static BOOL needs_client_window_clipping( HWND hwnd )
+ {
+     struct x11drv_win_data *data;
+     RECT rect, client;
+-    UINT ret = 0;
++    UINT ret = 0, clip_flags = 0, style;
+     HRGN region;
+     HDC hdc;
+ 
+@@ -207,7 +207,11 @@ static BOOL needs_client_window_clipping( HWND hwnd )
+     release_win_data( data );
+     OffsetRect( &client, -client.left, -client.top );
+ 
+-    if (!(hdc = NtUserGetDCEx( hwnd, 0, DCX_CACHE | DCX_CLIPCHILDREN ))) return FALSE;
++    style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
++    if (style & WS_CLIPCHILDREN) clip_flags |= DCX_CLIPCHILDREN;
++    if (style & WS_CLIPSIBLINGS) clip_flags |= DCX_CLIPSIBLINGS;
++
++    if (!(hdc = NtUserGetDCEx( hwnd, 0, DCX_CACHE | clip_flags ))) return FALSE;
+     if ((region = NtGdiCreateRectRgn( 0, 0, 0, 0 )))
+     {
+         ret = NtGdiGetRandomRgn( hdc, region, SYSRGN | NTGDI_RGN_MONITOR_DPI );
+-- 
+GitLab
+

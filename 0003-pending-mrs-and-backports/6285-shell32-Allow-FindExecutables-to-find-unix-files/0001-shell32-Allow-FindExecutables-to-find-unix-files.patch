@@ -1,0 +1,42 @@
+From 2b4faa78340a546e709e881a2b291997a2b0df83 Mon Sep 17 00:00:00 2001
+From: Alistair Leslie-Hughes <leslie_alistair@hotmail.com>
+Date: Thu, 15 Aug 2024 10:33:02 +1000
+Subject: [PATCH] shell32: Allow FindExecutables to find unix files.
+
+---
+ dlls/shell32/shlexec.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/shell32/shlexec.c b/dlls/shell32/shlexec.c
+index 828c7168a34..607aca3a450 100644
+--- a/dlls/shell32/shlexec.c
++++ b/dlls/shell32/shlexec.c
+@@ -677,7 +677,15 @@ static UINT SHELL_FindExecutable(LPCWSTR lpPath, LPCWSTR lpFile, LPCWSTR lpVerb,
+             /* The file was found in lpPath or one of the directories in the system-wide search path */
+         }
+         else
+-            xlpFile[0] = '\0';
++        {
++            /* Checking for an unix application */
++            if( (xlpFile[0] == '/') || PathFindOnPathW(xlpFile, search_paths))
++            {
++                lstrcpyW(lpResult, xlpFile);
++            }
++            else
++                xlpFile[0] = '\0';
++        }
+     }
+ 
+     attribs = GetFileAttributesW(lpFile);
+@@ -1939,6 +1947,8 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
+ 
+ end:
+     TRACE("retval %Iu\n", retval);
++    if (retval == SE_ERR_NOASSOC)
++        SetLastError(ERROR_FILE_NOT_FOUND);
+ 
+     free(wszApplicationName);
+     if (wszParameters != parametersBuffer)
+-- 
+GitLab
+

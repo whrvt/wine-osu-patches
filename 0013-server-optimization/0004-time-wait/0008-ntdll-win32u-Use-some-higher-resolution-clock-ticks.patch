@@ -1,0 +1,113 @@
+From aff19ed0d63afdb35cf070a41a02057fc1c432ef Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 12 Dec 2024 03:26:33 -0800
+Subject: [PATCH] ntdll, win32u: Use some higher resolution clock
+ ticks.
+
+---
+ dlls/ntdll/ntdll.spec       | 1 +
+ dlls/ntdll/time.c           | 8 ++++++++
+ dlls/ntdll/unix/sync.c      | 7 +++++++
+ dlls/win32u/message.c       | 6 +++-----------
+ include/winternl.h          | 1 +
+ 5 files changed, 23 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/ntdll/ntdll.spec b/dlls/ntdll/ntdll.spec
+index dafeb2d2e0b..95d70830bb6 100644
+--- a/dlls/ntdll/ntdll.spec
++++ b/dlls/ntdll/ntdll.spec
+@@ -1768,3 +1768,4 @@
+ 
+ # Time
+ @ cdecl __wine_get_tsc_calibration(ptr ptr)
++@ stdcall __wine_get_hires_tick_count()
+diff --git a/dlls/ntdll/time.c b/dlls/ntdll/time.c
+index 951687ca5e5..e0b4eb5bbb6 100644
+--- a/dlls/ntdll/time.c
++++ b/dlls/ntdll/time.c
+@@ -459,6 +459,14 @@ ULONG WINAPI DECLSPEC_HOTPATCH NtGetTickCount(void)
+     return user_shared_data->TickCount.LowPart;
+ }
+ 
++/******************************************************************************
++ * __wine_get_hires_tick_count   (NTDLL.@)
++ */
++DWORD WINAPI __wine_get_hires_tick_count(void)
++{
++    return user_shared_data->InterruptTime.LowPart / 1000;
++}
++
+ /***********************************************************************
+  *      RtlQueryTimeZoneInformation [NTDLL.@]
+  *
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 4c39decfe13..489b8babd28 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -1961,6 +1961,13 @@ ULONG WINAPI NtGetTickCount(void)
+     return user_shared_data->TickCount.LowPart;
+ }
+ 
++/******************************************************************************
++ *              __wine_get_hires_tick_count (NTDLL.@)
++ */
++DWORD WINAPI __wine_get_hires_tick_count(void)
++{
++    return user_shared_data->InterruptTime.LowPart / 1000;
++}
+ 
+ /******************************************************************************
+  *              RtlGetSystemTimePrecise (NTDLL.@)
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 8aae1d0da71..d26b717bcca 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -3059,22 +3059,14 @@ static HANDLE get_server_queue_handle(void)
+     return ret;
+ }
+ 
+-/* monotonic timer tick for throttling driver event checks */
+-static inline LONGLONG get_driver_check_time(void)
+-{
+-    LARGE_INTEGER counter, freq;
+-    NtQueryPerformanceCounter( &counter, &freq );
+-    return counter.QuadPart * 8000 / freq.QuadPart; /* 8kHz */
+-}
+-
+ /* check for driver events if we detect that the app is not properly consuming messages */
+ static inline void check_for_driver_events(void)
+ {
+-    if (get_user_thread_info()->last_driver_time != get_driver_check_time())
++    if (get_user_thread_info()->last_driver_time != __wine_get_hires_tick_count())
+     {
+         flush_window_surfaces( FALSE );
+         user_driver->pProcessEvents( QS_ALLINPUT );
+-        get_user_thread_info()->last_driver_time = get_driver_check_time();
++        get_user_thread_info()->last_driver_time = __wine_get_hires_tick_count();
+     }
+ }
+ 
+@@ -3116,7 +3108,7 @@ static DWORD wait_message( DWORD count, const HANDLE *handles, DWORD timeout, DW
+     }
+ 
+     if (ret == WAIT_TIMEOUT && !count && !timeout) NtYieldExecution();
+-    if (ret == count - 1) get_user_thread_info()->last_driver_time = get_driver_check_time();
++    if (ret == count - 1) get_user_thread_info()->last_driver_time = __wine_get_hires_tick_count();
+ 
+     KeUserDispatchCallback( &params.dispatch, sizeof(params), &ret_ptr, &ret_len );
+ 
+diff --git a/include/winternl.h b/include/winternl.h
+index 1ae37134ade..aed99fa677b 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -5372,6 +5372,7 @@ static inline PLIST_ENTRY RemoveTailList(PLIST_ENTRY le)
+ 
+ NTSYSAPI NTSTATUS WINAPI __wine_unix_spawnvp( char * const argv[], int wait );
+ NTSYSAPI NTSTATUS __cdecl __wine_get_tsc_calibration( ULONGLONG *frequency, LONGLONG *offset );
++NTSYSAPI DWORD WINAPI __wine_get_hires_tick_count(void);
+ 
+ /* The thread information for 16-bit threads */
+ /* NtCurrentTeb()->SubSystemTib points to this */
+-- 
+2.47.1
+

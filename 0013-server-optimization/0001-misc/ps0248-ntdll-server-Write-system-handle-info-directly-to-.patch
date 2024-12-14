@@ -158,7 +158,7 @@ index 11111111111..11111111111 100644
 +    unsigned char       object_type;
 +    unsigned char       handle_flags;
 +    unsigned short      handle_value;
-+    unsigned __int64    object_pointer;
++    UINT64              object_pointer;
 +    unsigned int        access_mask;
 +};
 +
@@ -176,9 +176,9 @@ index 11111111111..11111111111 100644
 +
 +struct system_handle_entry_ex_64
 +{
-+    unsigned __int64    object;
-+    unsigned __int64    unique_process_id;
-+    unsigned __int64    handle_value;
++    UINT64              object;
++    UINT64              unique_process_id;
++    UINT64              handle_value;
 +    unsigned int        granted_access;
 +    unsigned short      creator_back_trace_index;
 +    unsigned short      object_type_index;

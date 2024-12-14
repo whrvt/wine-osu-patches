@@ -1,0 +1,61 @@
+From b962e1fd1f8a4eb3a599940b3ae50034fcf31953 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 10 Dec 2024 01:12:10 -0800
+Subject: [PATCH] Revert "ntdll: Report the space completely outside of
+ reserved areas as allocated on i386."
+
+This reverts commit 233f6f288c8a6aa5aae127660ab00f392fe2cf67.
+
+The commit breaks osu! when WINE_BLOCK_GET_VERSION=0, because it fixes the bug
+that the game tries to work around when it knows it's running under wine.
+---
+ dlls/ntdll/unix/virtual.c | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 7330519bbb5..e2c3eb7c339 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -5603,7 +5603,6 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
+          * so that the app doesn't believe it's fully available */
+         {
+             struct reserved_area *area;
+-            BOOL in_reserved = FALSE;
+ 
+             LIST_FOR_EACH_ENTRY( area, &reserved_areas, struct reserved_area, entry )
+             {
+@@ -5618,7 +5617,6 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
+                 if (area_start <= base || area_start <= (char *)address_space_start)
+                 {
+                     if (area_end < alloc_end) info->RegionSize = area_end - base;
+-                    in_reserved = TRUE;
+                     break;
+                 }
+                 /* report the remaining part of the 64K after the view as free */
+@@ -5629,22 +5627,18 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
+                     if (base < next)
+                     {
+                         info->RegionSize = min( next, alloc_end ) - base;
+-                        in_reserved = TRUE;
+                         break;
+                     }
+                     else alloc_base = base;
+                 }
+                 /* pretend it's allocated */
+                 if (area_start < alloc_end) info->RegionSize = area_start - base;
+-                break;
+-            }
+-            if (!in_reserved)
+-            {
+                 info->State             = MEM_RESERVE;
+                 info->Protect           = PAGE_NOACCESS;
+                 info->AllocationBase    = alloc_base;
+                 info->AllocationProtect = PAGE_NOACCESS;
+                 info->Type              = MEM_PRIVATE;
++                break;
+             }
+         }
+ #endif
+-- 
+2.47.1
+
