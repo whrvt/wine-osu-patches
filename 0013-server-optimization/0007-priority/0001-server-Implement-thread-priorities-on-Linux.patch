@@ -82,9 +82,9 @@ diff --git a/server/thread.c b/server/thread.c
 index 11111111111..11111111111 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -37,6 +37,12 @@
- #define _WITH_CPU_SET_T
- #include <sched.h>
+@@ -43,6 +43,12 @@
+ #ifdef HAVE_SYS_SYSCALL_H
+ #include <sys/syscall.h>
  #endif
 +#ifdef HAVE_SYS_TIME_H
 +#include <sys/time.h>
@@ -95,7 +95,7 @@ index 11111111111..11111111111 100644
  
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
-@@ -257,6 +263,7 @@ static inline void init_thread_structure( struct thread *thread )
+@@ -273,6 +279,7 @@ static inline void init_thread_structure( struct thread *thread )
      thread->state           = RUNNING;
      thread->exit_code       = 0;
      thread->priority        = 0;
@@ -103,7 +103,7 @@ index 11111111111..11111111111 100644
      thread->suspend         = 0;
      thread->dbg_hidden      = 0;
      thread->desktop_users   = 0;
-@@ -677,31 +684,151 @@ affinity_t get_thread_affinity( struct thread *thread )
+@@ -839,9 +846,145 @@ affinity_t get_thread_affinity( struct thread *thread )
      return mask;
  }
  
@@ -187,6 +187,7 @@ index 11111111111..11111111111 100644
 +}
 +#endif
 +
++
  #define THREAD_PRIORITY_REALTIME_HIGHEST 6
  #define THREAD_PRIORITY_REALTIME_LOWEST -7
  
@@ -244,9 +245,11 @@ index 11111111111..11111111111 100644
 +    return 0; /* ignore errors for now */
 +}
 +
- /* set all information about a thread */
- static void set_thread_info( struct thread *thread,
-                              const struct set_thread_info_request *req )
++
+ #define MAX_THREAD_NAME_LENGTH 16
+ #define MAX_RETRIES 5
+ #define RETRY_DELAY_US 1000
+@@ -921,22 +1064,8 @@ static void set_thread_info( struct thread *thread,
  {
      if (req->mask & SET_THREAD_INFO_PRIORITY)
      {
@@ -271,7 +274,7 @@ index 11111111111..11111111111 100644
      }
      if (req->mask & SET_THREAD_INFO_AFFINITY)
      {
-@@ -1584,6 +1711,7 @@ DECL_HANDLER(init_thread)
+@@ -1862,6 +1991,7 @@ DECL_HANDLER(init_thread)
  
      init_thread_context( current );
      generate_debug_event( current, DbgCreateThreadStateChange, &req->entry );

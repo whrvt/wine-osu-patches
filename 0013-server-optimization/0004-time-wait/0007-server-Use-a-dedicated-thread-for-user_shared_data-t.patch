@@ -10,18 +10,18 @@ Inspired by a patch by Torge Matthies.
  server/fd.c | 87 +++++++++++++++++++++++++++++++++++++++++++++--------
  2 files changed, 75 insertions(+), 14 deletions(-)
 
-diff --git a/server/Makefile.in b/server/Makefile.in
-index d6e422c7bc1..dbaa215a422 100644
---- a/server/Makefile.in
-+++ b/server/Makefile.in
-@@ -50,6 +50,6 @@ SOURCES = \
- 	wineserver.man.in \
- 	winstation.c
+# diff --git a/server/Makefile.in b/server/Makefile.in
+# index d6e422c7bc1..dbaa215a422 100644
+# --- a/server/Makefile.in
+# +++ b/server/Makefile.in
+# @@ -50,6 +50,6 @@ SOURCES = \
+#  	wineserver.man.in \
+#  	winstation.c
  
--UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS)
-+UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS) $(PTHREAD_LIBS)
+# -UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS)
+# +UNIX_LIBS = $(LDEXECFLAGS) $(RT_LIBS) $(INOTIFY_LIBS) $(PROCSTAT_LIBS) $(PTHREAD_LIBS)
  
- unicode_EXTRADEFS = -DBINDIR="\"${bindir}\"" -DDATADIR="\"${datadir}\""
+#  unicode_EXTRADEFS = -DBINDIR="\"${bindir}\"" -DDATADIR="\"${datadir}\""
 diff --git a/server/fd.c b/server/fd.c
 index 80bf84b5ac0..8538c0e711f 100644
 --- a/server/fd.c
@@ -126,9 +126,9 @@ index 80bf84b5ac0..8538c0e711f 100644
  static inline void fd_poll_event( struct fd *fd, int event )
  {
 @@ -658,7 +677,6 @@ static inline void main_loop_epoll(void)
-         if (epoll_fd == -1) break;  /* an error occurred with epoll */
- 
+         pthread_mutex_unlock( &global_lock );
          ret = epoll_wait( epoll_fd, events, ARRAY_SIZE( events ), timeout );
+         pthread_mutex_lock( &global_lock );
 -        set_current_time();
  
          /* put the events into the pollfd array first, like poll does */

@@ -1,0 +1,32 @@
+From dd9c36d3af5b9734b72eda478568b401ab21a459 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 14 Dec 2024 00:46:21 -0800
+Subject: [PATCH] winedmo: Add envvar option to enable/disable.
+
+---
+ dlls/mfsrcsnk/media_source.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/dlls/mfsrcsnk/media_source.c b/dlls/mfsrcsnk/media_source.c
+index ac5f013d9cd..98556c93ad7 100644
+--- a/dlls/mfsrcsnk/media_source.c
++++ b/dlls/mfsrcsnk/media_source.c
+@@ -1893,6 +1893,15 @@ static BOOL use_gst_byte_stream_handler(void)
+ {
+     BOOL result;
+     DWORD size = sizeof(result);
++    WCHAR buffer[2];
++
++    if (GetEnvironmentVariableW( L"WINEDMO", buffer, ARRAY_SIZE(buffer) ))
++    {
++        if (!wcscmp( buffer, L"0" ))
++            return TRUE;
++        else
++            return FALSE;
++    }
+ 
+     /* @@ Wine registry key: HKCU\Software\Wine\MediaFoundation */
+     if (!RegGetValueW( HKEY_CURRENT_USER, L"Software\\Wine\\MediaFoundation", L"DisableGstByteStreamHandler",
+-- 
+2.47.1
+

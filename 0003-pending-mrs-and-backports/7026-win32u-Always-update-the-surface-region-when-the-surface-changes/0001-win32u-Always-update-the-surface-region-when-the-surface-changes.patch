@@ -1,0 +1,40 @@
+From d5f8bedec11d7d72e8312bc1302aad943f0bd054 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 16 Dec 2024 11:19:14 +0100
+Subject: [PATCH] win32u: Always update the surface region when the surface
+ changes.
+
+Instead of reapplying the old shape, which not only includes the window
+shape but also the old clipping and visible areas that can change
+independently.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57551
+---
+ dlls/win32u/window.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 4855555d926..d8974501adb 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2066,7 +2066,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+     old_surface = win->surface;
+     if (old_surface != new_surface)
+     {
+-        if (old_surface && new_surface) window_surface_set_shape( new_surface, old_surface->shape_region );
++        needs_update = TRUE; /* force refreshing the window surface shape */
+         swp_flags |= SWP_FRAMECHANGED;  /* force refreshing non-client area */
+     }
+ 
+@@ -2112,7 +2112,7 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+             win->rects        = *new_rects;
+             if ((win->surface = new_surface)) window_surface_add_ref( win->surface );
+             surface_win       = wine_server_ptr_handle( reply->surface_win );
+-            needs_update      = reply->needs_update;
++            if (!needs_update) needs_update = reply->needs_update;
+             if (get_window_long( win->parent, GWL_EXSTYLE ) & WS_EX_LAYOUTRTL)
+             {
+                 RECT client = {0};
+-- 
+GitLab
+
