@@ -1,0 +1,26 @@
+From c0a9e5a830d878468c8a6450588c732d4d6b6b90 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Fri, 2 Sep 2022 22:06:44 +0200
+Subject: [PATCH] ntdll: Make server_select a memory barrier.
+
+---
+ dlls/ntdll/unix/server.c  | 3 +++
+ 1 files changed, 3 insertions(+)
+
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index 51a83f472e1..362c7793cbc 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -602,6 +602,9 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
+     sigset_t old_set;
+     int signaled;
+     data_size_t reply_size;
++    /* ensure writes so far are visible to other threads */
++    MemoryBarrier();
++
+     struct
+     {
+         union apc_call call;
+-- 
+GitLab
+

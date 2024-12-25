@@ -1,0 +1,124 @@
+From dad79450fa0c0ba467c769c20629113833700604 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Thu, 12 Dec 2024 01:31:49 +0100
+Subject: [PATCH 54/86] d2d1: Avoid buffer overflow by increasing buffer size.
+
+0470:err:d2d:d2d_fp_fast_expansion_sum_zeroelim a_idx=3 a_len=4
+=================================================================
+==1068==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ecef8a7b6d0 at pc 0x6ffff818b751 bp 0x7ecef8a7b050 sp 0x7ecef8a7b098
+READ of size 4 at 0x7ecef8a7b6d0 thread T16
+0474:fixme:d3d:state_linepattern_w Setting line patterns is not supported in OpenGL core contexts.
+049c:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff818b750 in d2d_fp_fast_expansion_sum_zeroelim /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:317:26
+    #1 0x6ffff819ddf3 in d2d_cdt_incircle_refine2 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1064:9
+    #2 0x6ffff819c7c2 in d2d_cdt_incircle /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1283:9
+    #3 0x6ffff8199812 in d2d_cdt_merge /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1447:24
+    #4 0x6ffff8199812 in d2d_cdt_triangulate /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1546:10
+    #5 0x6ffff8198e30 in d2d_cdt_triangulate /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1543:10
+    #6 0x6ffff8198df7 in d2d_cdt_triangulate /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1541:10
+    #7 0x6ffff8198df7 in d2d_cdt_triangulate /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1541:10
+    #8 0x6ffff8198df7 in d2d_cdt_triangulate /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1541:10
+    #9 0x6ffff8193f64 in d2d_path_geometry_triangulate /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:2347:10
+    #10 0x6ffff8193f64 in d2d_geometry_sink_Close /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:3244:9
+    #11 0x000140025c84 in ID2D1GeometrySink_Close /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\d2d1.h:2784:12
+    #12 0x000140025c84 in test_path_geometry /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/tests/d2d1.c:3907:10
+    #13 0x0001400fa063 in thread_func /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/tests/d2d1.c:439:13
+    #14 0x6ffff890b15d in asan_thread_start(void*) /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_win.cpp:147:14
+    #15 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #16 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ecef8a7b6d0 is located in stack of thread T16 at offset 1296 in frame
+    #0 0x6ffff819d85f in d2d_cdt_incircle_refine2 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:1047
+
+  This frame has 15 object(s):
+    [32, 288) 'temp64' (line 1049)
+    [352, 544) 'temp48' (line 1049)
+    [608, 736) 'temp32a' (line 1049)
+    [768, 896) 'temp32b' (line 1049)
+    [928, 992) 'temp16a' (line 1049)
+    [1024, 1088) 'temp16b' (line 1049)
+    [1120, 1152) 'temp8' (line 1049)
+    [1184, 1216) 'bct' (line 1050)
+    [1248, 1264) 'bctt' (line 1050)
+    [1280, 1296) 'temp4a' (line 1050) <== Memory access at offset 1296 overflows this variable
+    [1312, 1328) 'temp4b' (line 1050)
+    [1344, 1408) 'axt_bct' (line 1082)
+    [1440, 1472) 'axt_bctt' (line 1082)
+    [1504, 1568) 'ayt_bct' (line 1124)
+    [1600, 1632) 'ayt_bctt' (line 1124)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+Thread T16 created by T0 here:
+    #0 0x6ffff890b076 in CreateThread /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_win.cpp:158:3
+    #1 0x000140006389 in run_queued_tests /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/tests/d2d1.c:467:22
+    #2 0x000140006389 in func_d2d1 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/tests/d2d1.c:15540:5
+    #3 0x0001400fbb13 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #4 0x0001400fb55b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #5 0x0001400fd4ef in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #6 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #7 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d2d1/geometry.c:317:26 in d2d_fp_fast_expansion_sum_zeroelim
+Shadow bytes around the buggy address:
+  0x7ecef8a7b400: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ecef8a7b480: 00 00 00 00 f2 f2 f2 f2 00 00 00 00 00 00 00 00
+  0x7ecef8a7b500: 00 00 00 00 00 00 00 00 f2 f2 f2 f2 00 00 00 00
+  0x7ecef8a7b580: 00 00 00 00 f2 f2 f2 f2 00 00 00 00 00 00 00 00
+  0x7ecef8a7b600: f2 f2 f2 f2 00 00 00 00 f2 f2 f2 f2 00 00 00 00
+=>0x7ecef8a7b680: f2 f2 f2 f2 00 00 f2 f2 00 00[f2]f2 00 00 f2 f2
+  0x7ecef8a7b700: f8 f8 f8 f8 f8 f8 f8 f8 f2 f2 f2 f2 f8 f8 f8 f8
+  0x7ecef8a7b780: f2 f2 f2 f2 f8 f8 f8 f8 f8 f8 f8 f8 f2 f2 f2 f2
+  0x7ecef8a7b800: f8 f8 f8 f8 f3 f3 f3 f3 00 00 00 00 00 00 00 00
+  0x7ecef8a7b880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ecef8a7b900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1068==ABORTING
+049c:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:41397: dlls/d2d1/tests/x86_64-windows/d2d1.ok] Fehler 1
+---
+ dlls/d2d1/geometry.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/d2d1/geometry.c b/dlls/d2d1/geometry.c
+index 3da3ad2e65b..7e71065b192 100644
+--- a/dlls/d2d1/geometry.c
++++ b/dlls/d2d1/geometry.c
+@@ -1046,7 +1046,7 @@ static void d2d_cdt_incircle_refine2(struct d2d_fp_fin *fin, const struct d2d_fp
+ {
+     size_t temp64_len, temp48_len, temp32a_len, temp32b_len, temp16a_len, temp16b_len, temp8_len;
+     float temp64[64], temp48[48], temp32a[32], temp32b[32], temp16a[16], temp16b[16], temp8[8];
+-    float bct[8], bctt[4], temp4a[4], temp4b[4], temp2a[2], temp2b[2];
++    float bct[8], bctt[4], temp4a[5], temp4b[5], temp2a[2], temp2b[2];
+     size_t bct_len, bctt_len;
+     float *swap;
+ 
+@@ -1171,7 +1171,7 @@ static BOOL d2d_cdt_incircle(const struct d2d_cdt *cdt, size_t a, size_t b, size
+ 
+     size_t axt_det_bc_len, ayt_det_bc_len, bxt_det_ca_len, byt_det_ca_len, cxt_det_ab_len, cyt_det_ab_len;
+     float axt_det_bc[8], ayt_det_bc[8], bxt_det_ca[8], byt_det_ca[8], cxt_det_ab[8], cyt_det_ab[8];
+-    float fin1[1152], fin2[1152], temp64[64], sub_det_a[32], sub_det_b[32], sub_det_c[32];
++    float fin1[1152], fin2[1152], temp64[64], sub_det_a[33], sub_det_b[32], sub_det_c[32];
+     float det_bc[4], det_ca[4], det_ab[4], daz[4], dbz[4], dcz[4], temp2a[2], temp2b[2];
+     size_t temp64_len, sub_det_a_len, sub_det_b_len, sub_det_c_len;
+     float dbxdcy, dbydcx, dcxday, dcydax, daxdby, daydbx;
+-- 
+2.47.1
+

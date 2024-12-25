@@ -1,0 +1,96 @@
+From fd1ccdc108c24eed3ad58ea159a16297f6128111 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Wed, 4 Dec 2024 22:58:46 +0100
+Subject: [PATCH 34/86] kernel32/tests: locale: lstrlenW - wcsnlen /
+ wine_dbgstr_w - wine_dbgstr_wn.
+
+kernel32_test.exe locale
+
+ASAN_OPTIONS='verbosity=0:windows_hook_rtl_allocators=1' WINEDLLOVERRIDES="$F=n;*.dll=n" WINEDEBUG= wine64 z:/home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj/dlls/kernel32/tests/x86_64-windows/kernel32_test.exe locale
+...
+=================================================================
+==1772==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1d1b40 at pc 0x0001402c22a7 bp 0x7ffffe1d17e0 sp 0x7ffffe1d1828
+READ of size 2 at 0x7ffffe1d1b40 thread T0
+0700:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x0001402c22a6 in lstrlenW /home/bernhard/data/entwicklung/2024/wine\wine/include/winbase.h:2920:12
+    #1 0x0001402c22a6 in test_NormalizeString /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:7401:54
+    #2 0x000140295848 in func_locale /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:8725:3
+    #3 0x0001404d7f01 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #4 0x0001404d7f01 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #5 0x0001404d9eef in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #6 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #7 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1d1b40 is located in stack of thread T0 at offset 608 in frame
+    #0 0x0001402bbe3f in test_NormalizeString /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:7212
+
+  This frame has 10 object(s):
+    [32, 40) 'end.i2278' (line 7198)
+    [64, 72) 'end.i' (line 7198)
+    [96, 608) 'dst' (line 7358) <== Memory access at offset 608 overflows this variable
+    [672, 673) 'ret' (line 7359)
+    [688, 692) 'dstlen' (line 7361)
+    [704, 1728) 'buffer' (line 7620)
+    [1856, 1862) 'str745' (line 7621)
+    [1888, 1952) 'srcW' (line 7621)
+    [1984, 2048) 'dstW' (line 7621)
+    [2080, 2336) 'resW' (line 7621)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/winbase.h:2920:12 in lstrlenW
+Shadow bytes around the buggy address:
+  0x7ffffe1d1880: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1 f1
+  0x7ffffe1d1900: f8 f2 f2 f2 f8 f2 f2 f2 00 00 00 00 00 00 00 00
+  0x7ffffe1d1980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1d1a00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1d1a80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1d1b00: 00 00 00 00 00 00 00 00[f2]f2 f2 f2 f2 f2 f2 f2
+  0x7ffffe1d1b80: 01 f2 04 f2 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1d1c00: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1d1c80: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1d1d00: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1d1d80: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1772==ABORTING
+---
+ dlls/kernel32/tests/locale.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/kernel32/tests/locale.c b/dlls/kernel32/tests/locale.c
+index 2911513a90e..b95e2788ce9 100644
+--- a/dlls/kernel32/tests/locale.c
++++ b/dlls/kernel32/tests/locale.c
+@@ -7398,10 +7398,10 @@ static void test_NormalizeString(void)
+             memset(dst, 0xcc, sizeof(dst));
+             dstlen = pNormalizeString( norm_forms[i], ptest->str, lstrlenW(ptest->str), dst, dstlen );
+             ok(dstlen == lstrlenW( ptest->expected[i] ), "%s:%d: Copied length differed: was %d, should be %d\n",
+-               wine_dbgstr_w(ptest->str), i, dstlen, lstrlenW( dst ));
++               wine_dbgstr_w(ptest->str), i, dstlen, (int)wcsnlen( dst, ARRAY_SIZE(dst) ));
+             str_cmp = wcsncmp( ptest->expected[i], dst, dstlen );
+             ok( str_cmp == 0, "%s:%d: string incorrect got %s expect %s\n", wine_dbgstr_w(ptest->str), i,
+-                wine_dbgstr_w(dst), wine_dbgstr_w(ptest->expected[i]) );
++                wine_dbgstr_wn(dst, ARRAY_SIZE(dst)), wine_dbgstr_wn(ptest->expected[i], ARRAY_SIZE(&ptest->expected[i])) );
+ 
+             if (pRtlNormalizeString)
+             {
+-- 
+2.47.1
+

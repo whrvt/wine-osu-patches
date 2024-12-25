@@ -1,0 +1,33 @@
+From 8031239529c1e56c46184eb3a430b1c61cdee01a Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 21 Dec 2024 14:46:49 -0800
+Subject: [PATCH] ntdll: TEST: try NtFPWB in contended
+ NtWaitForAlertByThreadId
+
+---
+ dlls/ntdll/unix/sync.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 67e13bfa6fc..e0962e5af69 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -3104,6 +3104,7 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
+                 end = get_absolute_timeout( timeout );
+         }
+ 
++        NtFlushProcessWriteBuffers();
+         while (!InterlockedExchange( futex, 0 ))
+         {
+             if (timeout)
+@@ -3119,6 +3120,7 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
+                 ret = futex_wait( futex, 0, NULL );
+ 
+             if (ret == -1 && errno == ETIMEDOUT) return STATUS_TIMEOUT;
++            NtFlushProcessWriteBuffers();
+         }
+         return STATUS_ALERTED;
+     }
+-- 
+2.47.1
+

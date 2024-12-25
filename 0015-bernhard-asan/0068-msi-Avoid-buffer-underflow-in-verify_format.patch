@@ -1,0 +1,96 @@
+From b387c9a00fbbd3e9343be486c525c80d149c0b37 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 21:13:05 +0100
+Subject: [PATCH 68/86] msi: Avoid buffer underflow in verify_format.
+
+=================================================================
+==612==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f7b2c3e528e at pc 0x6ffff7efba7f bp 0x7ffffe1ff460 sp 0x7ffffe1ff4a8
+READ of size 2 at 0x7f7b2c3e528e thread T0
+0178:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff7efba7e in verify_format /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:743:56
+    #1 0x6ffff7efba7e in deformat_string_internal /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:783:10
+    #2 0x6ffff7efb607 in MSI_FormatRecordW /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:871:5
+    #3 0x6ffff7efee90 in MsiFormatRecordA /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:996:9
+    #4 0x000140117b64 in test_formatrecord /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/tests/format.c:257:9
+    #5 0x000140114919 in func_format /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/tests/format.c:2340:5
+    #6 0x0001403c8c07 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #7 0x0001403c8c07 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #8 0x0001403cab5f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #9 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #10 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f7b2c3e528e is located 2 bytes before 8-byte region [0x7f7b2c3e5290,0x7f7b2c3e5298)
+allocated by thread T0 here:
+    #0 0x6ffff88fa2c1 in malloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:80:3
+    #1 0x6ffff978a929 in _wcsdup /home/bernhard/data/entwicklung/2024/wine/wine/dlls/msvcrt\wcs.c:83:11
+    #2 0x6ffff7efb8fb in wcsdup /home/bernhard/data/entwicklung/2024/wine\wine/include/msvcrt/string.h:90:60
+    #3 0x6ffff7efb8fb in deformat_string_internal /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:774:13
+    #4 0x6ffff7efb607 in MSI_FormatRecordW /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:871:5
+    #5 0x6ffff7efee90 in MsiFormatRecordA /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:996:9
+    #6 0x000140117b64 in test_formatrecord /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/tests/format.c:257:9
+    #7 0x000140114919 in func_format /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/tests/format.c:2340:5
+    #8 0x0001403c8c07 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #9 0x0001403c8c07 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #10 0x0001403cab5f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #11 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #12 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msi/format.c:743:56 in verify_format
+Shadow bytes around the buggy address:
+  0x7f7b2c3e5000: fa fa fd fd fa fa fd fd fa fa fd fa fa fa fd fa
+  0x7f7b2c3e5080: fa fa fd fa fa fa fd fa fa fa fd fd fa fa fd fd
+  0x7f7b2c3e5100: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x7f7b2c3e5180: fa fa fd fa fa fa fd fd fa fa fd fd fa fa fd fa
+  0x7f7b2c3e5200: fa fa 00 fa fa fa 00 fa fa fa fd fa fa fa 00 fa
+=>0x7f7b2c3e5280: fa[fa]00 fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f7b2c3e5300: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f7b2c3e5380: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f7b2c3e5400: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f7b2c3e5480: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f7b2c3e5500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==612==ABORTING
+0178:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:243661: dlls/msi/tests/x86_64-windows/format.ok] Fehler 1
+---
+ dlls/msi/format.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/msi/format.c b/dlls/msi/format.c
+index 5301752a41a..e63118ea006 100644
+--- a/dlls/msi/format.c
++++ b/dlls/msi/format.c
+@@ -736,10 +736,11 @@ static UINT replace_stack(struct format *format, struct stack *stack, struct sta
+ static BOOL verify_format(LPWSTR data)
+ {
+     int count = 0;
++    LPWSTR start = data;
+ 
+     while (*data)
+     {
+-        if (*data == '[' && *(data - 1) != '\\')
++        if (*data == '[' && ((data - 1) < start || *(data - 1) != '\\'))
+             count++;
+         else if (*data == ']')
+             count--;
+-- 
+2.47.1
+

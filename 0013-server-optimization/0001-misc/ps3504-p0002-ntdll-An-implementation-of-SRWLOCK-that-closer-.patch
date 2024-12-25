@@ -474,7 +474,7 @@ index fa64917029a..281d7943d03 100644
 + * Returns TRUE if the lock is acquired, FALSE otherwise.
   */
 -void WINAPI RtlAcquireSRWLockShared( RTL_SRWLOCK *lock )
-+#ifdef __GNUC__
++#if defined (__GNUC__) || defined(__clang__)
 +__attribute__((force_align_arg_pointer))
 +#endif
 +static BOOLEAN srwlock_wait(RTL_SRWLOCK *lock, DWORD waiter_state,

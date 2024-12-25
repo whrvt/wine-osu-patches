@@ -1,0 +1,88 @@
+From 39a8d5a692688e7f3f712f7227931f3bab384aeb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 22:45:47 +0100
+Subject: [PATCH 28/86] include: Terminate buffer in wine_dbg_vsprintf.
+
+/home/bernhard/data/entwicklung/2024/wine/wine/tools/runtest -q -P wine -T . -M oleaut32.dll -p dlls/oleaut32/tests/x86_64-windows/oleaut32_test.exe vartest && touch dlls/oleaut32/tests/x86_64-windows/vartest.ok
+=================================================================
+==1688==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1fe748 at pc 0x6ffff88f06e9 bp 0x7ffffe1fdd70 sp 0x7ffffe1fddb8
+READ of size 201 at 0x7ffffe1fe748 thread T0
+050c:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff88f06e8 in strlen /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:425:5
+    #1 0x6ffff82eca6d in __wine_dbg_strdup /home/bernhard/data/entwicklung/2024/wine/wine/dlls/ntdll\thread.c:128:16
+    #2 0x000140207700 in wine_dbg_vsprintf /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:138:12
+    #3 0x000140207700 in wine_dbg_sprintf /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:148:11
+    #4 0x000140207293 in wine_dbgstr_variant /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h
+    #5 0x000140208cda in test_var_call2 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/oleaut32/tests/vartest.c:543:53
+    #6 0x00014018396d in test_VarSub /home/bernhard/data/entwicklung/2024/wine\wine/dlls/oleaut32/tests/vartest.c:3332:5
+    #7 0x00014018396d in func_vartest /home/bernhard/data/entwicklung/2024/wine\wine/dlls/oleaut32/tests/vartest.c:9767:3
+    #8 0x0001402a1e63 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #9 0x0001402a1e63 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #10 0x0001402a3d8f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #11 0x6ffff80e4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #12 0x6ffff82bfa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1fe748 is located in stack of thread T0 at offset 232 in frame
+    #0 0x0001402075cf in wine_dbg_sprintf /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:143
+
+  This frame has 2 object(s):
+    [32, 232) 'buffer.i' (line 135)
+    [304, 312) 'args' (line 145) <== Memory access at offset 232 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine/wine/dlls/ntdll\thread.c:128:16 in __wine_dbg_strdup
+Shadow bytes around the buggy address:
+  0x7ffffe1fe480: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe600: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1 f1
+  0x7ffffe1fe680: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1fe700: 00 00 00 00 00 00 00 00 00[f2]f2 f2 f2 f2 f2 f2
+  0x7ffffe1fe780: f2 f2 00 f3 f3 f3 f3 f3 00 00 00 00 00 00 00 00
+  0x7ffffe1fe800: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe880: 00 00 00 00 f1 f1 f1 f1 00 00 00 f2 f2 f2 f2 f2
+  0x7ffffe1fe900: 00 00 00 f2 f2 f2 f2 f2 00 00 00 f3 f3 f3 f3 f3
+  0x7ffffe1fe980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1688==ABORTING
+050c:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:312775: dlls/oleaut32/tests/x86_64-windows/vartest.ok] Fehler 1
+---
+ include/wine/debug.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/include/wine/debug.h b/include/wine/debug.h
+index 3e0912de801..fd1345fbd33 100644
+--- a/include/wine/debug.h
++++ b/include/wine/debug.h
+@@ -134,7 +134,8 @@ static inline const char * __wine_dbg_cdecl wine_dbg_vsprintf( const char *forma
+ {
+     char buffer[200];
+ 
+-    vsnprintf( buffer, sizeof(buffer), format, args );
++    vsnprintf( buffer, sizeof(buffer) - 1, format, args );
++    buffer[sizeof(buffer) - 1] = '\0';
+     return __wine_dbg_strdup( buffer );
+ }
+ 
+-- 
+2.47.1
+

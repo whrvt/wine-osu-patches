@@ -1,0 +1,89 @@
+From 6d1efe634e008f8ea98fae2992445a91549d8d38 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Tue, 10 Dec 2024 00:06:28 +0100
+Subject: [PATCH 73/86] spoolss: Access memory with right typed pointer.
+
+(Or is the pointer size right?)
+
+=================================================================
+==1124==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1ffb60 at pc 0x6ffff67c4d01 bp 0x7ffffe1ffa10 sp 0x7ffffe1ffa58
+WRITE of size 8 at 0x7ffffe1ffb60 thread T0
+0470:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff67c4d00 in BuildOtherNamesFromMachineName /home/bernhard/data/entwicklung/2024/wine\wine/dlls/spoolss/spoolss_main.c:99:20
+    #1 0x000140001447 in test_BuildOtherNamesFromMachineName /home/bernhard/data/entwicklung/2024/wine\wine/dlls/spoolss/tests/spoolss.c:131:11
+    #2 0x000140001447 in func_spoolss /home/bernhard/data/entwicklung/2024/wine\wine/dlls/spoolss/tests/spoolss.c:218:5
+    #3 0x000140004d63 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #4 0x0001400047ab in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #5 0x00014000552f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #6 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #7 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1ffb60 is located in stack of thread T0 at offset 64 in frame
+    #0 0x00014000100f in func_spoolss /home/bernhard/data/entwicklung/2024/wine\wine/dlls/spoolss/tests/spoolss.c:208
+
+  This frame has 2 object(s):
+    [32, 40) 'buffers.i' (line 123)
+    [64, 68) 'numentries.i' (line 124) <== Memory access at offset 64 partially overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/spoolss/spoolss_main.c:99:20 in BuildOtherNamesFromMachineName
+Shadow bytes around the buggy address:
+  0x7ffffe1ff880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ff900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ff980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ffa00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ffa80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1ffb00: 00 00 00 00 f1 f1 f1 f1 00 f2 f2 f2[04]f3 f3 f3
+  0x7ffffe1ffb80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ffc00: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 f8 f8 f8 f8
+  0x7ffffe1ffc80: f8 f8 f8 f8 f3 f3 f3 f3 00 00 00 00 00 00 00 00
+  0x7ffffe1ffd00: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 00 00 00 00
+  0x7ffffe1ffd80: 00 00 00 00 00 00 00 00 00 00 00 00 f2 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1124==ABORTING
+0470:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:366858: dlls/spoolss/tests/x86_64-windows/spoolss.ok] Fehler 1
+---
+ dlls/spoolss/spoolss_main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/spoolss/spoolss_main.c b/dlls/spoolss/spoolss_main.c
+index 355bf72b822..bc85dee2a9f 100644
+--- a/dlls/spoolss/spoolss_main.c
++++ b/dlls/spoolss/spoolss_main.c
+@@ -91,12 +91,12 @@ LPWSTR WINAPI AllocSplStr(LPCWSTR pwstr)
+ /******************************************************************
+  *   BuildOtherNamesFromMachineName   [SPOOLSS.@]
+  */
+-BOOL WINAPI BuildOtherNamesFromMachineName(LPVOID * ptr1, LPVOID * ptr2)
++BOOL WINAPI BuildOtherNamesFromMachineName(LPVOID * ptr1, DWORD * ptr2)
+ {
+     FIXME("(%p, %p) stub\n", ptr1, ptr2);
+ 
+     *ptr1 = NULL;
+-    *ptr2 = NULL;
++    *ptr2 = 0;
+     return FALSE;
+ }
+ 
+-- 
+2.47.1
+

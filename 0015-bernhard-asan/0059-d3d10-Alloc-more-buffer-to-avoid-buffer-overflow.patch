@@ -1,0 +1,100 @@
+From 2065c15bf17799efea7c983da7c1912db58baf5f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 8 Dec 2024 14:04:39 +0100
+Subject: [PATCH 59/86] d3d10: Alloc more buffer to avoid buffer-overflow.
+
+effect.c:10018: Test failed: :10018
+0560:fixme:d3d:wined3d_guess_card No card selector available for card vendor 0000 (using GL_RENDERER "llvmpipe (LLVM 15.0.6, 256 bits)").
+0560:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+0560:err:d3d10:parse_fx10_buffer l->u.buffer.local_buffer=00007F8D82F86840 l->data_size=0x90
+effect.c:7968: Test failed: blend_factor=00007FFFFE1FFB50 :7968
+0560:err:d3d10:d3d10_effect_preshader_eval dst + v->offset=00007F7782F80B90, v->v->buffer->u.buffer.local_buffer + v->v->buffer_offset=00007F8D82F868C4, v->length * sizeof(*dst)=0x10
+0560:err:d3d10:d3d10_effect_preshader_eval v->v->buffer->u.buffer.local_buffer=00007F8D82F86840, v->v->buffer_offset=0x84, v->length=0x4, sizeof(*dst)=0x4
+0560:err:d3d10:d3d10_effect_preshader_eval v->v->buffer->data_size=0x90
+=================================================================
+==1372==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f8d82f868d0 at pc 0x6ffff88f8bfb bp 0x7ffffe1fec30 sp 0x7ffffe1fec78
+READ of size 16 at 0x7f8d82f868d0 thread T0
+0560:fixme:dbghelp:elf_search_auxv can't find symbol in module
+0560:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F72CA140B80,symt:0000000000000000) in ctx(00007F72F8664A20,L"libclang_rt.asan_dynamic-x86_64")
+0560:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r13/341 -> rbx/329)
+0560:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r13/341 -> rbx/329)
+0560:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r13/341 -> rbx/329)
+0560:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F72D8120B80,symt:0000000000000000) in ctx(00007F73181711B0,L"d3d10")
+0560:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F72D8050B80,symt:0000000000000000) in ctx(00007F73185D0F10,L"d3d10_test")
+    #0 0x6ffff88f8bfa in __asan_memcpy+0x3aa (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x180048bfa)
+    #1 0x6ffff84f23f8 in d3d10_effect_preshader_eval Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:946
+    #2 0x6ffff84f140a in d3d10_effect_update_dependent_props Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:1391
+    #3 0x6ffff8508cfe in d3d10_effect_pass_Apply Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:5487
+    #4 0x000140008362 in func_effect+0x2032 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3d10\tests\x86_64-windows\d3d10_test.exe+0x140008362)
+    #5 0x000140049a3c in main+0x50c (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3d10\tests\x86_64-windows\d3d10_test.exe+0x140049a3c)
+    #6 0x00014004a77f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #7 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #8 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f8d82f868d0 is located 0 bytes after 144-byte region [0x7f8d82f86840,0x7f8d82f868d0)
+allocated by thread T0 here:
+    #0 0x6ffff88fa3d6 in calloc+0x86 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a3d6)
+    #1 0x6ffff84db063 in parse_fx10_buffer Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:3895
+    #2 0x6ffff84d77e7 in d3d10_effect_parse Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:4341
+    #3 0x6ffff84da310 in d3d10_create_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:10124
+    #4 0x6ffff84da0d7 in D3D10CreateEffectFromMemory Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:10155
+    #5 0x00014000665c in func_effect+0x32c (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3d10\tests\x86_64-windows\d3d10_test.exe+0x14000665c)
+    #6 0x000140049a3c in main+0x50c (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3d10\tests\x86_64-windows\d3d10_test.exe+0x140049a3c)
+    #7 0x00014004a77f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #9 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d10\effect.c:946 in d3d10_effect_preshader_eval
+Shadow bytes around the buggy address:
+  0x7f8d82f86600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f8d82f86680: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f8d82f86700: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f8d82f86780: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f8d82f86800: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x7f8d82f86880: 00 00 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa
+  0x7f8d82f86900: fa fa fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7f8d82f86980: fd fd fd fd fa fa fa fa fa fa fa fa 00 00 00 00
+  0x7f8d82f86a00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 fa fa
+  0x7f8d82f86a80: fa fa fa fa fa fa fd fd fd fd fd fd fd fd fd fd
+  0x7f8d82f86b00: fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1372==ABORTING
+make: *** [Makefile:42668: dlls/d3d10/tests/x86_64-windows/effect.ok] Fehler 1
+---
+ dlls/d3d10/effect.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/d3d10/effect.c b/dlls/d3d10/effect.c
+index 02e71e4dcee..acaff7984a3 100644
+--- a/dlls/d3d10/effect.c
++++ b/dlls/d3d10/effect.c
+@@ -3889,7 +3889,7 @@ static HRESULT parse_fx10_buffer(const char *data, size_t data_size, const char
+         return E_OUTOFMEMORY;
+     }
+ 
+-    if (local && !(l->u.buffer.local_buffer = calloc(1, l->data_size)))
++    if (local && !(l->u.buffer.local_buffer = calloc(1, l->data_size + 4)))
+     {
+         ERR("Failed to allocate local constant buffer memory.\n");
+         return E_OUTOFMEMORY;
+-- 
+2.47.1
+

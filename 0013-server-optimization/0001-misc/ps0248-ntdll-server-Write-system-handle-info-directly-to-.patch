@@ -263,7 +263,7 @@ index 11111111111..11111111111 100644
      struct handle_table *table = process->handles;
      struct handle_entry *entry;
 -    struct handle_info *handle;
-     unsigned int i;
+     int i;
  
      if (!table)
 @@ -855,20 +979,21 @@ static int enum_handles( struct process *process, void *user )

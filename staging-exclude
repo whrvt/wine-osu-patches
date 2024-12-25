@@ -1,1 +1,1 @@
--W eventfd_synchronization -W wined3d-unset-flip-gdi
+-W eventfd_synchronization

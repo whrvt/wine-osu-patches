@@ -1,0 +1,34 @@
+From 1550256217df46166321ded756f3043655dbd639 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 24 Dec 2024 12:58:40 +0100
+Subject: [PATCH] winex11: Improve GetWindowStateUpdates traces.
+
+---
+ dlls/winex11.drv/window.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index bf415f19cb9..1d43c4edbdb 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1622,8 +1622,6 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd,
+ {
+     struct x11drv_win_data *data;
+ 
+-    TRACE( "hwnd %p, state_cmd %p, config_cmd %p, rect %p\n", hwnd, state_cmd, config_cmd, rect );
+-
+     if (!(data = get_win_data( hwnd ))) return FALSE;
+ 
+     *state_cmd = window_update_client_state( data );
+@@ -1632,7 +1630,7 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd,
+ 
+     release_win_data( data );
+ 
+-    TRACE( "returning state_cmd %#x, config_cmd %#x, rect %s\n", *state_cmd, *config_cmd, wine_dbgstr_rect(rect) );
++    TRACE( "hwnd %p, returning state_cmd %#x, config_cmd %#x, rect %s\n", hwnd, *state_cmd, *config_cmd, wine_dbgstr_rect(rect) );
+     return *state_cmd || *config_cmd;
+ }
+ 
+-- 
+GitLab
+

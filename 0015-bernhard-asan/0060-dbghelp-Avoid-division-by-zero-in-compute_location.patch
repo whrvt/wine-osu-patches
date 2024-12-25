@@ -1,0 +1,31 @@
+From 18ca7761a113991d0ae2fd56f6089b7faa9db4d3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 21 Oct 2024 11:10:46 +0200
+Subject: [PATCH 60/86] dbghelp: Avoid division by zero in compute_location.
+
+This showed up when ASAN tried to show the call stack with
+a x86_64 Wine built by llvm-mingw.
+---
+ dlls/dbghelp/dwarf.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/dbghelp/dwarf.c b/dlls/dbghelp/dwarf.c
+index 84e861890d5..76d6e183a69 100644
+--- a/dlls/dbghelp/dwarf.c
++++ b/dlls/dbghelp/dwarf.c
+@@ -896,8 +896,10 @@ compute_location(const struct module *module, const dwarf2_cuhead_t* head,
+         case DW_OP_shl:         stack[stk-1] <<= stack[stk]; stk--; break;
+         case DW_OP_shr:         stack[stk-1] >>= stack[stk]; stk--; break;
+         case DW_OP_plus_uconst: stack[stk] += dwarf2_leb128_as_unsigned(ctx); break;
+-        case DW_OP_shra:        stack[stk-1] = stack[stk-1] / (1 << stack[stk]); stk--; break;
+-        case DW_OP_div:         stack[stk-1] = stack[stk-1] / stack[stk]; stk--; break;
++        case DW_OP_shra:        if (!stack[stk]) return loc_err_internal;
++                                stack[stk-1] = stack[stk-1] / (1 << stack[stk]); stk--; break;
++        case DW_OP_div:         if (!stack[stk]) return loc_err_internal;
++                                stack[stk-1] = stack[stk-1] / stack[stk]; stk--; break;
+         case DW_OP_mod:         stack[stk-1] = stack[stk-1] % stack[stk]; stk--; break;
+         case DW_OP_ge:          stack[stk-1] = (stack[stk-1] >= stack[stk]); stk--; break;
+         case DW_OP_gt:          stack[stk-1] = (stack[stk-1] >  stack[stk]); stk--; break;
+-- 
+2.47.1
+

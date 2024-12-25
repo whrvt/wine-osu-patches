@@ -1,0 +1,101 @@
+From 5891e547af1b512235edbe738543f6054e8c6823 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 20:25:17 +0100
+Subject: [PATCH 66/86] mfplat/tests: Do not access buffer beyond allocation.
+
+=================================================================
+==896==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7e96f3284374 at pc 0x0001400ae98f bp 0x7ffffe1fc0a0 sp 0x7ffffe1fc0e8
+READ of size 1 at 0x7e96f3284374 thread T0
+04b0:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x0001400ae98e in test_MFCreate2DMediaBuffer /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:7057:99
+    #1 0x00014003247f in func_mfplat /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:13258:5
+    #2 0x0001401439b3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #3 0x0001401433fb in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #4 0x0001401453af in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #5 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #6 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7e96f3284374 is located 0 bytes after 20-byte region [0x7e96f3284360,0x7e96f3284374)
+allocated by thread T0 here:
+    #0 0x6ffff88fa2c1 in malloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:80:3
+    #1 0x6ffff7b17698 in init_am_media_type_audio_format /home/bernhard/data/entwicklung/2024/wine/wine/dlls/mfplat\mediatype.c:4078:16
+    #2 0x6ffff7b17698 in MFInitAMMediaTypeFromMFMediaType /home/bernhard/data/entwicklung/2024/wine/wine/dlls/mfplat\mediatype.c:4356:14
+    #3 0x0001400a932b in IMFMediaBuffer_Lock /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\mfobjects.h:824:12
+    #4 0x0001400a932b in test_MFCreate2DMediaBuffer /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:7040:14
+    #5 0x00014003247f in func_mfplat /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:13258:5
+    #6 0x0001401439b3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #7 0x0001401433fb in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #8 0x0001401453af in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #9 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #10 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:7057:99 in test_MFCreate2DMediaBuffer
+Shadow bytes around the buggy address:
+  0x7e96f3284080: fa fa fd fd fd fa fa fa 00 00 00 00 fa fa fd fd
+  0x7e96f3284100: fd fa fa fa fd fd fd fa fa fa fd fd fd fa fa fa
+  0x7e96f3284180: fd fd fd fa fa fa fd fd fd fa fa fa fd fd fd fd
+  0x7e96f3284200: fa fa fd fd fd fd fa fa fd fd fd fd fa fa fd fd
+  0x7e96f3284280: fd fd fa fa fd fd fd fd fa fa fd fd fd fd fa fa
+=>0x7e96f3284300: fd fd fd fd fa fa fd fd fd fa fa fa 00 00[04]fa
+  0x7e96f3284380: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e96f3284400: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e96f3284480: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e96f3284500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e96f3284580: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==896==ABORTING
+04b0:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:213822: dlls/mfplat/tests/x86_64-windows/mfplat.ok] Fehler 1
+---
+ dlls/mfplat/tests/mfplat.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 752be9ea260..7c3c5715c17 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -7054,7 +7054,10 @@ static void test_MFCreate2DMediaBuffer(void)
+             if (data[j] != (j & 0x7f))
+                 break;
+         }
+-        ok(j == ptr->contiguous_length, "Unexpected byte %02x instead of %02x at position %u.\n", data[j], j & 0x7f, j);
++        if (j < ptr->contiguous_length)
++            ok(j == ptr->contiguous_length, "Unexpected byte %02x instead of %02x at position %u.\n", data[j], j & 0x7f, j);
++        else
++            ok(j == ptr->contiguous_length, "Unexpected byte at position %u.\n", j);
+ 
+         memset(data, 0xff, length2);
+ 
+@@ -7081,7 +7084,10 @@ static void test_MFCreate2DMediaBuffer(void)
+             if (data[j] != (j & 0x7f))
+                 break;
+         }
+-        ok(j == ptr->contiguous_length, "Unexpected byte %02x instead of %02x at position %u.\n", data[j], j & 0x7f, j);
++        if (j < ptr->contiguous_length)
++            ok(j == ptr->contiguous_length, "Unexpected byte %02x instead of %02x at position %u.\n", data[j], j & 0x7f, j);
++        else
++            ok(j == ptr->contiguous_length, "Unexpected byte at position %u.\n", j);
+ 
+         hr = IMFMediaBuffer_Unlock(buffer);
+         ok(hr == S_OK, "Failed to unlock buffer, hr %#lx.\n", hr);
+-- 
+2.47.1
+

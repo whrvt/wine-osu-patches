@@ -1,0 +1,89 @@
+From 1cf4864c496c7edbedd3dada684af956c3d28058 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 8 Dec 2024 14:54:39 +0100
+Subject: [PATCH 57/86] d3dx9_36/tests: Start iteration with 1 to avoid buffer
+ underflow.
+
+029c:fixme:d3dx:d3dx9_effect_compiler_init ID3DXEffectCompiler implementation is only a stub.
+=================================================================
+==664==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1fd38c at pc 0x00014006ace1 bp 0x7ffffe1fd200 sp 0x7ffffe1fd248
+READ of size 4 at 0x7ffffe1fd38c thread T0
+029c:fixme:dbghelp:elf_search_auxv can't find symbol in module
+029c:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r15/343 -> rbx/329)
+029c:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007EDE3C520B80,symt:0000000000000000) in ctx(00007EDE80471590,L"d3dx9_36_test")
+    #0 0x00014006ace0 in test_effect_parameter_value Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c
+    #1 0x00014003dd81 in func_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:8904
+    #2 0x000140223327 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x140223327)
+    #3 0x00014022527f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #4 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #5 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1fd38c is located in stack of thread T0 at offset 268 in frame
+    #0 0x00014005e66f in test_effect_parameter_value Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:1953
+
+  This frame has 9 object(s):
+    [32, 56) 'edesc' (line 1962)
+    [96, 104) 'effect' (line 1963)
+    [128, 184) 'pdesc' (line 1981)
+    [224, 228) 'bvalue' (line 1982)
+    [240, 244) 'ivalue' (line 1983)
+    [256, 260) 'fvalue' (line 1984)
+    [272, 464) 'input_value' (line 1985) <== Memory access at offset 268 underflows this variable
+    [528, 720) 'expected_value' (line 1986)
+    [784, 808) 'matrix_pointer_array' (line 1988)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c in test_effect_parameter_value
+Shadow bytes around the buggy address:
+  0x7ffffe1fd100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd280: f1 f1 f1 f1 00 00 00 f2 f2 f2 f2 f2 00 f2 f2 f2
+  0x7ffffe1fd300: 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 04 f2 04 f2
+=>0x7ffffe1fd380: 04[f2]00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd400: 00 00 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 f2
+  0x7ffffe1fd480: f2 f2 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd500: 00 00 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 f2
+  0x7ffffe1fd580: f2 f2 00 00 00 f3 f3 f3 f3 f3 f3 f3 00 00 00 00
+  0x7ffffe1fd600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==664==ABORTING
+make: *** [Makefile:105962: dlls/d3dx9_36/tests/x86_64-windows/effect.ok] Fehler 1
+---
+ dlls/d3dx9_36/tests/effect.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/d3dx9_36/tests/effect.c b/dlls/d3dx9_36/tests/effect.c
+index be0a181885d..c55019f0f7a 100644
+--- a/dlls/d3dx9_36/tests/effect.c
++++ b/dlls/d3dx9_36/tests/effect.c
+@@ -2258,7 +2258,7 @@ static void test_effect_parameter_value(IDirect3DDevice9 *device)
+ 
+             /* SetIntArray */
+             *input_value = 123456;
+-            for (l = 0; l < res[k].bytes / sizeof(*input_value); ++l)
++            for (l = 1; l < res[k].bytes / sizeof(*input_value); ++l)
+             {
+                 *(input_value + l) = *(input_value + l - 1) + 23;
+             }
+-- 
+2.47.1
+

@@ -1,0 +1,98 @@
+From 11997d5a92c154789ea0f82b36d061fb0ff1fa57 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Tue, 10 Dec 2024 00:12:57 +0100
+Subject: [PATCH 74/86] uiautomationcore: Avoid double-free.
+
+=================================================================
+==692==ERROR: AddressSanitizer: attempting double-free on 0x7f1e587f85f0 in thread T0:
+04a8:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff8e8a1a1 in free /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:71:3
+    #1 0x6ffff8465c3b in uia_event_Release /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1062:9
+    #2 0x6ffff845f44c in IWineUiaEvent_Release /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\dlls/uiautomationcore\uia_classes.h:256:12
+    #3 0x6ffff845f44c in UiaRemoveEvent /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1730:5
+    #4 0x6ffff8459c90 in uia_event_handler_destroy /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:1392:9
+    #5 0x6ffff8459c90 in uia_event_handler_map_entry_destroy /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:1404:9
+    #6 0x6ffff8459afc in uia_event_handlers_remove_handlers /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:1429:9
+    #7 0x6ffff8459afc in uia_remove_com_event_handler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:3840:5
+    #8 0x6ffff844a738 in uia_iface_RemoveAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:3861:10
+    #9 0x000140053426 in IUIAutomation_RemoveAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\uiautomationclient.h:18546:12
+    #10 0x000140053426 in test_IUIAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:15125:10
+    #11 0x000140053426 in test_CUIAutomation_event_handlers /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:16202:5
+    #12 0x000140053426 in test_CUIAutomation /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:16357:5
+    #13 0x00014000f641 in func_uiautomation /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:18683:5
+    #14 0x0001400f87b3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #15 0x0001400f81fb in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #16 0x0001400fa12f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #17 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #18 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f1e587f85f0 is located 0 bytes inside of 32-byte region [0x7f1e587f85f0,0x7f1e587f8610)
+freed by thread T0 here:
+    #0 0x6ffff8e8a1a1 in free /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:71:3
+    #1 0x6ffff8465ff1 in uia_event_advise_events /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1107:9
+    #2 0x6ffff845f3a2 in IWineUiaEvent_advise_events /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\dlls/uiautomationcore\uia_classes.h:260:12
+    #3 0x6ffff845f3a2 in uia_event_advise /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1567:10
+    #4 0x6ffff845f3a2 in UiaRemoveEvent /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1719:10
+    #5 0x6ffff8459c90 in uia_event_handler_destroy /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:1392:9
+    #6 0x6ffff8459c90 in uia_event_handler_map_entry_destroy /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:1404:9
+    #7 0x6ffff8459afc in uia_event_handlers_remove_handlers /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:1429:9
+    #8 0x6ffff8459afc in uia_remove_com_event_handler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:3840:5
+    #9 0x6ffff844a738 in uia_iface_RemoveAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:3861:10
+    #10 0x000140053426 in IUIAutomation_RemoveAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\uiautomationclient.h:18546:12
+    #11 0x000140053426 in test_IUIAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:15125:10
+    #12 0x000140053426 in test_CUIAutomation_event_handlers /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:16202:5
+    #13 0x000140053426 in test_CUIAutomation /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:16357:5
+    #14 0x00014000f641 in func_uiautomation /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:18683:5
+    #15 0x0001400f87b3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #16 0x0001400f81fb in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #17 0x0001400fa12f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #18 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #19 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+previously allocated by thread T0 here:
+    #0 0x6ffff8e8a2c1 in malloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:80:3
+    #1 0x6ffff8e8a5f8 in _recalloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:131:21
+    #2 0x6ffff845d46d in uia_array_reserve /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_private.h:204:20
+    #3 0x6ffff845d46d in uia_event_add_event_adviser /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1275:10
+    #4 0x6ffff845d46d in uia_event_add_provider_event_adviser /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1420:10
+    #5 0x6ffff8442640 in uia_provider_attach_event /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_client.c:1920:18
+    #6 0x6ffff8434b12 in IWineUiaProvider_attach_event /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\dlls/uiautomationcore\uia_classes.h:430:12
+    #7 0x6ffff8434b12 in attach_event_to_node_provider /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_client.c:375:10
+    #8 0x6ffff8434b12 in attach_event_to_uia_node /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_client.c:1345:14
+    #9 0x6ffff845e505 in uia_add_clientside_event /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1647:10
+    #10 0x6ffff8457b8e in uia_add_com_event_handler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:3784:10
+    #11 0x6ffff844a517 in uia_iface_AddAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_com_client.c:3823:10
+    #12 0x000140053254 in IUIAutomation_AddAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\uiautomationclient.h:18543:12
+    #13 0x000140053254 in test_IUIAutomationEventHandler /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:15119:10
+    #14 0x000140053254 in test_CUIAutomation_event_handlers /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:16202:5
+    #15 0x000140053254 in test_CUIAutomation /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:16357:5
+    #16 0x00014000f641 in func_uiautomation /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/tests/uiautomation.c:18683:5
+    #17 0x0001400f87b3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #18 0x0001400f81fb in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #19 0x0001400fa12f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #20 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #21 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: double-free /home/bernhard/data/entwicklung/2024/wine\wine/dlls/uiautomationcore/uia_event.c:1062:9 in uia_event_Release
+==692==ABORTING
+04a8:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:377475: dlls/uiautomationcore/tests/x86_64-windows/uiautomation.ok] Fehler 1
+---
+ dlls/uiautomationcore/uia_event.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/uiautomationcore/uia_event.c b/dlls/uiautomationcore/uia_event.c
+index 0106be09999..b36ed813e95 100644
+--- a/dlls/uiautomationcore/uia_event.c
++++ b/dlls/uiautomationcore/uia_event.c
+@@ -1105,6 +1105,7 @@ static HRESULT WINAPI uia_event_advise_events(IWineUiaEvent *iface, BOOL advise_
+         for (i = 0; i < event->event_advisers_count; i++)
+             IWineUiaEventAdviser_Release(event->event_advisers[i]);
+         free(event->event_advisers);
++        event->event_advisers = NULL;
+         event->event_advisers_count = event->event_advisers_arr_size = 0;
+     }
+ 
+-- 
+2.47.1
+

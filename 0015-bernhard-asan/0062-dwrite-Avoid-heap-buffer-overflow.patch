@@ -1,0 +1,109 @@
+From 872014f2a491a272219cc8edfc49b7a7ee6e1ef3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 16 Dec 2024 20:26:38 +0100
+Subject: [PATCH 62/86] dwrite: Avoid heap-buffer-overflow.
+
+/home/bernhard/data/entwicklung/2024/wine/wine/tools/runtest -q -P wine -T . -M dwrite.dll -p dlls/dwrite/tests/x86_64-windows/dwrite_test.exe layout && touch dlls/dwrite/tests/x86_64-windows/layout.ok
+=================================================================
+==1896==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7efe432f1c52 at pc 0x6ffff849c9eb bp 0x7ffffe1fc180 sp 0x7ffffe1fc1c8
+READ of size 2 at 0x7efe432f1c52 thread T0
+051c:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff849c9ea in get_cluster_length /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/analyzer.c:1858:32
+    #1 0x6ffff849c9ea in dwritetextanalyzer1_ApplyCharacterSpacing /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/analyzer.c:1917:31
+    #2 0x6ffff850a8af in IDWriteTextAnalyzer2_ApplyCharacterSpacing /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite_2.h:1925:12
+    #3 0x6ffff850a8af in layout_shape_apply_character_spacing /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1073:9
+    #4 0x6ffff850a8af in layout_shape_get_positions /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1118:14
+    #5 0x6ffff850a8af in layout_shape_run /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1135:14
+    #6 0x6ffff850a8af in layout_compute_runs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1221:13
+    #7 0x6ffff850a8af in layout_compute /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1267:10
+    #8 0x6ffff8502cf7 in layout_compute_effective_runs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:2147:10
+    #9 0x6ffff84fbdae in layout_update_metrics /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:3706:12
+    #10 0x6ffff84fbdae in dwritetextlayout_GetMetrics /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:3716:10
+    #11 0x6ffff84eb8bd in IDWriteTextLayout_GetMetrics /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite.h:4360:12
+    #12 0x6ffff84eb8bd in dwritetrimmingsign_GetMetrics /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/format.c:824:10
+    #13 0x0001400b2bfa in IDWriteInlineObject_GetMetrics /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite.h:2822:12
+    #14 0x0001400b2bfa in test_CreateEllipsisTrimmingSign /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/tests/layout.c:1747:10
+    #15 0x0001400b2bfa in func_layout /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/tests/layout.c:7084:5
+    #16 0x00014013a4bc in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #17 0x00014013a4bc in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #18 0x00014013c36f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #19 0x6ffffbdc4808 in BaseThreadInitThunk /usr/src/packages/BUILD\dlls/kernel32\thread.c:61:5
+    #20 0x6ffffaeffa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7efe432f1c52 is located 0 bytes after 2-byte region [0x7efe432f1c50,0x7efe432f1c52)
+allocated by thread T0 here:
+    #0 0x6ffff91fa276 in calloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:91:3
+    #1 0x6ffff850a545 in layout_shape_apply_character_spacing /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1036:24
+    #2 0x6ffff850a545 in layout_shape_get_positions /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1118:14
+    #3 0x6ffff850a545 in layout_shape_run /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1135:14
+    #4 0x6ffff850a545 in layout_compute_runs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1221:13
+    #5 0x6ffff850a545 in layout_compute /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1267:10
+    #6 0x6ffff8502cf7 in layout_compute_effective_runs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:2147:10
+    #7 0x6ffff84fbdae in layout_update_metrics /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:3706:12
+    #8 0x6ffff84fbdae in dwritetextlayout_GetMetrics /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:3716:10
+    #9 0x6ffff84eb8bd in IDWriteTextLayout_GetMetrics /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite.h:4360:12
+    #10 0x6ffff84eb8bd in dwritetrimmingsign_GetMetrics /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/format.c:824:10
+    #11 0x0001400b2bfa in IDWriteInlineObject_GetMetrics /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite.h:2822:12
+    #12 0x0001400b2bfa in test_CreateEllipsisTrimmingSign /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/tests/layout.c:1747:10
+    #13 0x0001400b2bfa in func_layout /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/tests/layout.c:7084:5
+    #14 0x00014013a4bc in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #15 0x00014013a4bc in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #16 0x00014013c36f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #17 0x6ffffbdc4808 in BaseThreadInitThunk /usr/src/packages/BUILD\dlls/kernel32\thread.c:61:5
+    #18 0x6ffffaeffa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/analyzer.c:1858:32 in get_cluster_length
+Shadow bytes around the buggy address:
+  0x7efe432f1980: fa fa 00 fa fa fa 00 fa fa fa 00 fa fa fa 00 fa
+  0x7efe432f1a00: fa fa 00 fa fa fa 00 fa fa fa 00 fa fa fa 00 fa
+  0x7efe432f1a80: fa fa 00 fa fa fa 00 fa fa fa 00 fa fa fa 00 fa
+  0x7efe432f1b00: fa fa 00 fa fa fa 00 fa fa fa 00 fa fa fa 00 fa
+  0x7efe432f1b80: fa fa 00 fa fa fa 00 fa fa fa 02 fa fa fa 02 fa
+=>0x7efe432f1c00: fa fa 04 fa fa fa 00 fa fa fa[02]fa fa fa fa fa
+  0x7efe432f1c80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7efe432f1d00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7efe432f1d80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7efe432f1e00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7efe432f1e80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1896==ABORTING
+make: *** [Makefile:162532: dlls/dwrite/tests/x86_64-windows/layout.ok] Fehler 1
+051c:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+---
+ dlls/dwrite/analyzer.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/dwrite/analyzer.c b/dlls/dwrite/analyzer.c
+index 0fab5b7142e..a26bcf522b7 100644
+--- a/dlls/dwrite/analyzer.c
++++ b/dlls/dwrite/analyzer.c
+@@ -1855,7 +1855,7 @@ static inline UINT32 get_cluster_length(UINT16 const *clustermap, UINT32 start,
+     UINT16 g = clustermap[start];
+     UINT32 length = 1;
+ 
+-    while (start < text_len && clustermap[++start] == g)
++    while ((start + 1) < text_len && clustermap[++start] == g)
+         length++;
+     return length;
+ }
+-- 
+2.47.1
+

@@ -1,0 +1,107 @@
+From 15f818237a2735f64e6e66208e6d5ca74c158ad6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 20:44:40 +0100
+Subject: [PATCH 67/86] mfplat/tests: Fix release calls.
+
+=================================================================
+==1368==ERROR: AddressSanitizer: heap-use-after-free on address 0x7ea4a0fe23c8 at pc 0x0001400b8f53 bp 0x7ffffe1fc0c0 sp 0x7ffffe1fc108
+READ of size 8 at 0x7ea4a0fe23c8 thread T0
+0668:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x0001400b8f52 in IMF2DBuffer_Release /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\mfobjects.h:1460:18
+    #1 0x0001400b8f52 in test_MFCreateMediaBufferFromMediaType /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:7577:5
+    #2 0x000140032484 in func_mfplat /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:13265:5
+    #3 0x000140143913 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #4 0x00014014335b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #5 0x00014014530f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #6 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #7 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7ea4a0fe23c8 is located 8 bytes inside of 296-byte region [0x7ea4a0fe23c0,0x7ea4a0fe24e8)
+freed by thread T0 here:
+    #0 0x6ffff88fa1a1 in free /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:71:3
+    #1 0x6ffff7b15f71 in memory_buffer_Release /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/buffer.c:177:9
+    #2 0x0001400b5d65 in IMFMediaBuffer_Release /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\mfobjects.h:820:12
+    #3 0x0001400b5d65 in test_MFCreateMediaBufferFromMediaType /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:7561:5
+    #4 0x000140032484 in func_mfplat /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:13265:5
+    #5 0x000140143913 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #6 0x00014014335b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #7 0x00014014530f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #9 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+previously allocated by thread T0 here:
+    #0 0x6ffff88fa3d6 in calloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:91:3
+    #1 0x6ffff7b12e7d in create_2d_buffer /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/buffer.c:1461:20
+    #2 0x6ffff7b150dc in MFCreateMediaBufferFromMediaType /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/buffer.c:1749:17
+    #3 0x0001400b549b in test_MFCreateMediaBufferFromMediaType /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:7543:10
+    #4 0x000140032484 in func_mfplat /home/bernhard/data/entwicklung/2024/wine\wine/dlls/mfplat/tests/mfplat.c:13265:5
+    #5 0x000140143913 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #6 0x00014014335b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #7 0x00014014530f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #9 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\mfobjects.h:1460:18 in IMF2DBuffer_Release
+Shadow bytes around the buggy address:
+  0x7ea4a0fe2100: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ea4a0fe2180: fd fd fd fd fd fd fd fd fd fd fd fd fd fa fa fa
+  0x7ea4a0fe2200: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x7ea4a0fe2280: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ea4a0fe2300: fd fd fd fd fd fd fd fd fd fd fd fd fd fa fa fa
+=>0x7ea4a0fe2380: fa fa fa fa fa fa fa fa fd[fd]fd fd fd fd fd fd
+  0x7ea4a0fe2400: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ea4a0fe2480: fd fd fd fd fd fd fd fd fd fd fd fd fd fa fa fa
+  0x7ea4a0fe2500: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x7ea4a0fe2580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ea4a0fe2600: 00 00 00 00 00 00 00 00 00 00 00 00 00 fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1368==ABORTING
+make: *** [Makefile:213822: dlls/mfplat/tests/x86_64-windows/mfplat.ok] Fehler 1
+0668:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+---
+ dlls/mfplat/tests/mfplat.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 7c3c5715c17..2cd74ba8d91 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -7574,7 +7574,7 @@ static void test_MFCreateMediaBufferFromMediaType(void)
+     ok(scanline0 == data, "Unexpected scanline0.\n");
+     hr = IMF2DBuffer2_Unlock2D(buffer_2d2);
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+-    IMF2DBuffer_Release(buffer_2d);
++    IMF2DBuffer2_Release(buffer_2d2);
+ 
+     IMFMediaBuffer_Release(buffer);
+ 
+@@ -7591,7 +7591,7 @@ static void test_MFCreateMediaBufferFromMediaType(void)
+     ok(scanline0 == data - pitch * 7, "Unexpected scanline0.\n");
+     hr = IMF2DBuffer2_Unlock2D(buffer_2d2);
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+-    IMF2DBuffer_Release(buffer_2d);
++    IMF2DBuffer2_Release(buffer_2d2);
+ 
+     IMFMediaBuffer_Release(buffer);
+ 
+-- 
+2.47.1
+

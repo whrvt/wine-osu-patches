@@ -1,0 +1,236 @@
+From 61a1c68ef4b37c9f7f9b39d4fceb35dcbd5bd4b1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 15:55:58 +0100
+Subject: [PATCH 35/86] kernel32/tests: actctx: wine_dbgstr_w - wine_dbgstr_wn.
+
+=================================================================
+==1356==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1f9a00 at pc 0x000140020e71 bp 0x7ffffe1f9580 sp 0x7ffffe1f95c8
+READ of size 2 at 0x7ffffe1f9a00 thread T0
+0790:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x000140020e70 in wine_dbgstr_wn /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30
+    #1 0x00014000b78f in wine_dbgstr_w /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:305:12
+    #2 0x00014000b78f in test_settings /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/actctx.c:3432:42
+    #3 0x00014000b78f in func_actctx /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/actctx.c:4436:5
+    #4 0x0001404d7f21 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #5 0x0001404d7f21 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #6 0x0001404d9f0f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #7 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #8 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1f9a00 is located in stack of thread T0 at offset 192 in frame
+    #0 0x00014000100f in func_actctx /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/actctx.c:4399
+
+  This frame has 69 object(s):
+    [32, 192) 'buffer.i377' (line 3396) <== Memory access at offset 192 overflows this variable
+    [256, 264) 'size.i378' (line 3397)
+    [288, 356) 'buffer.i' (line 3278)
+    [400, 408) 'size.i' (line 3279)
+    [432, 692) 'cmdline.i' (line 2697)
+    [768, 1028) 'path.i289' (line 2698)
+    [1104, 1112) 'argv.i' (line 2699)
+    [1136, 1160) 'pi.i' (line 2700)
+    [1200, 1304) 'si.i' (line 2701)
+    [1344, 1352) 'now.i' (line 2703)
+    [1376, 1392) 'basicinfo.i' (line 3102)
+    [1408, 1416) 'cookie.i259' (line 3103)
+    [1440, 1448) 'current.i' (line 3104)
+    [1472, 1480) 'cookie.i' (line 2666)
+    [1504, 2024) 'tmp_path.i.i' (line 646)
+    [2160, 2164) 'size.i.i' (line 647)
+    [2176, 2696) 'tmp_manifest_pathname.i' (line 3065)
+    [2832, 2888) 'actctx.i185' (line 3067)
+    [2928, 3188) 'path.i736.i' (line 2774)
+    [3264, 3524) 'path.i732.i' (line 2774)
+    [3600, 3860) 'path.i646.i' (line 2774)
+    [3936, 4196) 'path.i642.i' (line 2774)
+    [4272, 4532) 'path.i.i143' (line 2774)
+    [4608, 4868) 'path.i144' (line 2814)
+    [4944, 5204) 'dir.i' (line 2814)
+    [5280, 5540) 'dll.i' (line 2814)
+    [5616, 5876) 'source.i' (line 2814)
+    [5952, 6472) 'pathW.i' (line 2815)
+    [6608, 7128) 'dirW.i' (line 2815)
+    [7264, 7784) 'sourceW.i' (line 2815)
+    [7920, 7976) 'actctx.i145' (line 2816)
+    [8016, 8072) 'ctxW.i' (line 2817)
+    [8112, 8168) 'actctx.i.i' (line 1125)
+    [8208, 8728) 'path.i.i' (line 1127)
+    [8864, 8920) 'actctx.i' (line 1145)
+    [8960, 9480) 'path.i' (line 1147)
+    [9616, 10640) 'manifest_exe.i.i' (line 4186)
+    [10768, 11792) 'manifest_dll.i.i' (line 4186)
+    [11920, 12090) 'locale_name.i.i' (line 4187)
+    [12160, 12170) 'langs_arr.i.i' (line 4188)
+    [12192, 12336) 'specs.i.i' (line 4217)
+    [12400, 12920) 'pathbuf.i' (line 4349)
+    [13056, 13112) 'ctx.i52' (line 4351)
+    [13152, 13208) 'ctx.i' (line 4330)
+    [13248, 13520) 'path_manifest.i.i' (line 3792)
+    [13584, 13844) 'path_tmp.i131.i' (line 3793)
+    [13920, 14180) 'path_msvcp.i.i' (line 3795)
+    [14256, 14516) 'path_msvcr.i.i' (line 3795)
+    [14592, 14648) 'context.i.i' (line 3796)
+    [14688, 14696) 'cookie.i132.i' (line 3797)
+    [14720, 15888) 'dll.i106.i' (line 3753)
+    [16016, 16287) 'path_dll_local.i107.i' (line 3754)
+    [16352, 16612) 'path_tmp.i.i' (line 3755)
+    [16688, 17856) 'dll.i29.i' (line 3712)
+    [17984, 18255) 'path_dll_local.i30.i' (line 3713)
+    [18320, 18580) 'path_application.i31.i' (line 3714)
+    [18656, 18916) 'path1.i32.i' (line 3716)
+    [18992, 19252) 'path2.i33.i' (line 3716)
+    [19328, 20496) 'dll.i.i' (line 3672)
+    [20624, 20895) 'path_dll_local.i.i' (line 3673)
+    [20960, 21220) 'path_application.i.i' (line 3674)
+    [21296, 21556) 'path1.i5.i' (line 3676)
+    [21632, 21892) 'path2.i6.i' (line 3676)
+    [21968, 23136) 'dll_1.i.i' (line 3644)
+    [23264, 24432) 'dll_2.i.i' (line 3645)
+    [24560, 24820) 'path1.i.i' (line 3646)
+    [24896, 25156) 'path2.i.i' (line 3646)
+    [25232, 25240) 'handle.i' (line 2557)
+    [25264, 25272) 'argv' (line 4401)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30 in wine_dbgstr_wn
+Shadow bytes around the buggy address:
+  0x7ffffe1f9780: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f9800: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f9880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f9900: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 00 00 00 00
+  0x7ffffe1f9980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1f9a00:[f2]f2 f2 f2 f2 f2 f2 f2 00 f2 f2 f2 f8 f8 f8 f8
+  0x7ffffe1f9a80: f8 f8 f8 f8 f8 f2 f2 f2 f2 f2 f8 f2 f2 f2 f8 f8
+  0x7ffffe1f9b00: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1f9b80: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f2
+  0x7ffffe1f9c00: f2 f2 f2 f2 f2 f2 f2 f2 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1f9c80: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1356==ABORTING
+0790:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:200848: dlls/kernel32/tests/x86_64-windows/actctx.ok] Fehler 1
+---
+ dlls/kernel32/tests/actctx.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/dlls/kernel32/tests/actctx.c b/dlls/kernel32/tests/actctx.c
+index b6f43b12f1a..a51c3c8db8b 100644
+--- a/dlls/kernel32/tests/actctx.c
++++ b/dlls/kernel32/tests/actctx.c
+@@ -3421,7 +3421,7 @@ static void test_settings(void)
+     memset( buffer, 0xcc, sizeof(buffer) );
+     ret = pQueryActCtxSettingsW( 0, handle, NULL, dpiAwareW, buffer, 80, &size );
+     ok( ret, "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+-    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_w(buffer) );
++    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     ok( size == lstrlenW( buffer ) + 1, "wrong len %Iu\n", size );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+@@ -3429,20 +3429,20 @@ static void test_settings(void)
+     ret = pQueryActCtxSettingsW( 0, handle, NULL, dummyW, buffer, 80, &size );
+     ok( !ret, "QueryActCtxSettingsW succeeded\n" );
+     ok( GetLastError() == ERROR_SXS_KEY_NOT_FOUND, "wrong error %lu\n", GetLastError() );
+-    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_w(buffer) );
++    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+     memset( buffer, 0xcc, sizeof(buffer) );
+     ret = pQueryActCtxSettingsW( 0, handle, namespace2005W, dpiAwareW, buffer, 80, &size );
+     ok( ret, "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+-    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_w(buffer) );
++    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     ok( size == ARRAY_SIZE(trueW), "wrong len %Iu\n", size );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+     memset( buffer, 0xcc, sizeof(buffer) );
+     ret = pQueryActCtxSettingsW( 0, handle, namespace2005W, dpiAwareW, buffer, lstrlenW(trueW) + 1, &size );
+     ok( ret, "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+-    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_w(buffer) );
++    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     ok( size == ARRAY_SIZE(trueW), "wrong len %Iu\n", size );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+@@ -3451,21 +3451,21 @@ static void test_settings(void)
+     ok( !ret, "QueryActCtxSettingsW succeeded\n" );
+     ok( GetLastError() == ERROR_SXS_KEY_NOT_FOUND || broken( GetLastError() == ERROR_INVALID_PARAMETER ),
+         "wrong error %lu\n", GetLastError() );
+-    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_w(buffer) );
++    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+     memset( buffer, 0xcc, sizeof(buffer) );
+     ret = pQueryActCtxSettingsW( 0, handle, NULL, dpiAwarenessW, buffer, lstrlenW(trueW) + 1, &size );
+     ok( !ret, "QueryActCtxSettingsW succeeded\n" );
+     ok( GetLastError() == ERROR_SXS_KEY_NOT_FOUND, "wrong error %lu\n", GetLastError() );
+-    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_w(buffer) );
++    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+     memset( buffer, 0xcc, sizeof(buffer) );
+     ret = pQueryActCtxSettingsW( 0, handle, namespace2005W, dpiAwarenessW, buffer, lstrlenW(trueW) + 1, &size );
+     ok( !ret, "QueryActCtxSettingsW succeeded\n" );
+     ok( GetLastError() == ERROR_SXS_KEY_NOT_FOUND, "wrong error %lu\n", GetLastError() );
+-    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_w(buffer) );
++    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+     memset( buffer, 0xcc, sizeof(buffer) );
+@@ -3474,16 +3474,16 @@ static void test_settings(void)
+         "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+     if (ret)
+     {
+-        ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_w(buffer) );
++        ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+         ok( size == ARRAY_SIZE(trueW), "wrong len %Iu\n", size );
+     }
+-    else ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_w(buffer) );
++    else ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+     memset( buffer, 0xcc, sizeof(buffer) );
+     ret = pQueryActCtxSettingsW( 0, handle, NULL, dpiAwareW, buffer, lstrlenW(trueW), &size );
+     ok( ret, "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+-    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_w(buffer) );
++    ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     ok( size == ARRAY_SIZE(trueW), "wrong len %Iu\n", size );
+     SetLastError( 0xdeadbeef );
+     size = 0xdead;
+@@ -3491,7 +3491,7 @@ static void test_settings(void)
+     ret = pQueryActCtxSettingsW( 0, handle, NULL, dpiAwareW, buffer, lstrlenW(trueW) - 1, &size );
+     ok( !ret, "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+     ok( GetLastError() == ERROR_INSUFFICIENT_BUFFER, "wrong error %lu\n", GetLastError() );
+-    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_w(buffer) );
++    ok( buffer[0] == 0xcccc, "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+     ok( size == ARRAY_SIZE(trueW), "wrong len %Iu\n", size );
+     ReleaseActCtx(handle);
+ 
+@@ -3507,7 +3507,7 @@ static void test_settings(void)
+         memset( buffer, 0xcc, sizeof(buffer) );
+         ret = pQueryActCtxSettingsW( 0, handle, NULL, dpiAwareW, buffer, 80, &size );
+         ok( ret, "QueryActCtxSettingsW failed err %lu\n", GetLastError() );
+-        ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_w(buffer) );
++        ok( !lstrcmpW( buffer, trueW ), "got %s\n", wine_dbgstr_wn(buffer, ARRAY_SIZE(buffer)) );
+         ok( size == lstrlenW( buffer ) + 1, "wrong len %Iu\n", size );
+         ReleaseActCtx(handle);
+     }
+-- 
+2.47.1
+

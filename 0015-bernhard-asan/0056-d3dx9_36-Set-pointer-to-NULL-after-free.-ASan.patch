@@ -1,0 +1,71 @@
+From 386b56245b2de1648dc4b7445d53f367bf831a30 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 8 Dec 2024 22:32:30 +0100
+Subject: [PATCH 56/86] d3dx9_36: Set pointer to NULL after free. (ASan)
+
+0364:err:d3dx:d3dx9_effect_init_from_binary :6536
+=================================================================
+==864==ERROR: AddressSanitizer: attempting to call malloc_usable_size() for pointer which is not owned: 0x7f2443aad420
+0364:fixme:dbghelp:elf_search_auxv can't find symbol in module
+0364:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F1D8AA80B80,symt:0000000000000000) in ctx(00007F1DD4084A20,L"libclang_rt.asan_dynamic-x86_64")
+0364:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r13/341 -> r14/342)
+0364:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F1D948C0B80,symt:0000000000000000) in ctx(00007F1DD4341D20,L"d3dx9_36")
+0364:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r15/343 -> rbx/329)
+0364:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F1D949B0B80,symt:0000000000000000) in ctx(00007F1DD47B1590,L"d3dx9_36_test")
+    #0 0x6ffff88fa0f2  (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a0f2)
+    #1 0x6ffff8271408 in d3dx9_effect_init_from_binary Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c
+    #2 0x6ffff826a2ee in D3DXCreateEffectEx Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6717
+    #3 0x6ffff826ab2f in D3DXCreateEffect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6740
+    #4 0x00014008c3fd in test_effect_shared_parameters Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:6802
+    #5 0x0001400494f9 in func_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:8917
+    #6 0x0001402233a7 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1402233a7)
+    #7 0x0001402252ff in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #9 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f2443aad420 is located 0 bytes inside of 32-byte region [0x7f2443aad420,0x7f2443aad440)
+freed by thread T0 here:
+    #0 0x6ffff88fa1a1 in free+0x81 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a1a1)
+    #1 0x6ffff82694c4 in free_top_level_parameter Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c
+    #2 0x6ffff8274324 in d3dx_effect_Release Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c
+    #3 0x00014008c3b0 in test_effect_shared_parameters Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:6800
+    #4 0x0001400494f9 in func_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:8917
+    #5 0x0001402233a7 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1402233a7)
+    #6 0x0001402252ff in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #7 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #8 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+previously allocated by thread T0 here:
+    #0 0x6ffff88fa3d6 in calloc+0x86 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a3d6)
+    #1 0x6ffff8271408 in d3dx9_effect_init_from_binary Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c
+    #2 0x6ffff826a2ee in D3DXCreateEffectEx Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6717
+    #3 0x6ffff826ab2f in D3DXCreateEffect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6740
+    #4 0x00014008be15 in test_effect_shared_parameters Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:6788
+    #5 0x0001400494f9 in func_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:8917
+    #6 0x0001402233a7 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1402233a7)
+    #7 0x0001402252ff in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #9 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: bad-malloc_usable_size Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c in d3dx9_effect_init_from_binary
+==864==ABORTING
+make: *** [Makefile:105962: dlls/d3dx9_36/tests/x86_64-windows/effect.ok] Fehler 1
+---
+ dlls/d3dx9_36/effect.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/d3dx9_36/effect.c b/dlls/d3dx9_36/effect.c
+index 628d8ebc3eb..8110a932db9 100644
+--- a/dlls/d3dx9_36/effect.c
++++ b/dlls/d3dx9_36/effect.c
+@@ -1944,6 +1944,7 @@ static void d3dx_pool_release_shared_parameter(struct d3dx_top_level_parameter *
+     {
+         free(param->shared_data->parameters);
+         /* Zeroing table size is required as the entry in pool parameters table can be reused. */
++        param->shared_data->parameters = NULL;
+         param->shared_data->size = 0;
+         param->shared_data = NULL;
+     }
+-- 
+2.47.1
+

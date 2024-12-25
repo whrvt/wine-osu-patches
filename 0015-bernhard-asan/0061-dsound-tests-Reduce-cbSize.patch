@@ -1,0 +1,119 @@
+From 5509a0c6eab8be6fcce49a86d21723694a8bba63 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 14:54:23 +0100
+Subject: [PATCH 61/86] dsound/tests: Reduce cbSize.
+
+=================================================================
+==44==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1febb8 at pc 0x6ffff8e88bfb bp 0x7ffffe1fdf50 sp 0x7ffffe1fdf98
+READ of size 58 at 0x7ffffe1febb8 thread T0
+01f4:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff8e88bfa in __asan_memcpy /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #1 0x6ffff8a4dba3 in DSOUND_CopyFormat /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/primary.c:422:9
+    #2 0x6ffff8a21421 in secondarybuffer_create /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/buffer.c:1066:14
+    #3 0x6ffff8a36a27 in DirectSoundDevice_CreateSoundBuffer /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/dsound.c:554:16
+    #4 0x6ffff8a36a27 in IDirectSound8Impl_CreateSoundBuffer /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/dsound.c:792:12
+    #5 0x0001400624e9 in test_secondary8 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/tests/dsound8.c:828:16
+    #6 0x0001400624e9 in dsenum_callback /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/tests/dsound8.c:931:9
+    #7 0x6ffff8a3ce5b in a_to_w_callback /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/dsound_main.c:304:12
+    #8 0x6ffff8a3dc53 in enumerate_mmdevices /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/dsound_main.c:482:18
+    #9 0x6ffff8a3cbc4 in DirectSoundEnumerateW /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/dsound_main.c:551:10
+    #10 0x6ffff8a3cbc4 in DirectSoundEnumerateA /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/dsound_main.c:334:12
+    #11 0x00014004dfba in dsound8_tests /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/tests/dsound8.c:940:10
+    #12 0x00014004dfba in func_dsound8 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/tests/dsound8.c:1942:5
+    #13 0x00014007ba30 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #14 0x00014007ba30 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #15 0x00014007d8ff in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #16 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #17 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1febb8 is located in stack of thread T0 at offset 504 in frame
+    #0 0x00014005d1af in dsenum_callback /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/tests/dsound8.c:918
+
+  This frame has 31 object(s):
+    [32, 40) 'dso.i149' (line 685)
+    [64, 72) 'primary.i150' (line 686)
+    [96, 104) 'secondary.i151' (line 686)
+    [128, 168) 'bufdesc.i152' (line 687)
+    [208, 304) 'dscaps.i153' (line 688)
+    [336, 354) 'wfx.i154' (line 689)
+    [400, 418) 'wfx1.i' (line 689)
+    [464, 504) 'wfxe.i' (line 731)
+    [544, 552) 'dso.i96' (line 544) <== Memory access at offset 504 partially underflows this variable
+    [576, 584) 'primary.i97' (line 545)
+    [608, 616) 'secondary.i98' (line 545)
+    [640, 680) 'bufdesc.i99' (line 546)
+    [720, 816) 'dscaps.i100' (line 547)
+    [848, 866) 'wfx.i101' (line 548)
+    [912, 930) 'wfx2.i' (line 548)
+    [976, 984) 'dso.i62' (line 394)
+    [1008, 1016) 'primary.i' (line 395)
+    [1040, 1048) 'second.i' (line 395)
+    [1072, 1080) 'third.i' (line 395)
+    [1104, 1112) 'pb8.i' (line 396)
+    [1136, 1176) 'bufdesc.i63' (line 397)
+    [1216, 1312) 'dscaps.i' (line 398)
+    [1344, 1362) 'wfx.i64' (line 399)
+    [1408, 1412) 'vol.i' (line 479)
+    [1424, 1432) 'dso.i' (line 281)
+    [1456, 1464) 'dso1.i' (line 310)
+    [1488, 1496) 'secondary.i' (line 337)
+    [1520, 1560) 'bufdesc.i' (line 338)
+    [1600, 1618) 'wfx.i' (line 339)
+    [1664, 1672) 'buffer3d.i' (line 353)
+    [1696, 1704) 'buffer8.i' (line 354)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dsound/primary.c:422:9 in DSOUND_CopyFormat
+Shadow bytes around the buggy address:
+  0x7ffffe1fe900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe980: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 00 f2 f2 f2
+  0x7ffffe1fea00: 00 f2 f2 f2 00 f2 f2 f2 00 00 00 00 00 f2 f2 f2
+  0x7ffffe1fea80: f2 f2 00 00 00 00 00 00 00 00 00 00 00 00 f2 f2
+  0x7ffffe1feb00: f2 f2 00 00 02 f2 f2 f2 f2 f2 00 00 02 f2 f2 f2
+=>0x7ffffe1feb80: f2 f2 00 00 00 00 00[f2]f2 f2 f2 f2 f8 f2 f2 f2
+  0x7ffffe1fec00: f8 f2 f2 f2 f8 f2 f2 f2 f8 f8 f8 f8 f8 f2 f2 f2
+  0x7ffffe1fec80: f2 f2 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f2 f2
+  0x7ffffe1fed00: f2 f2 f8 f8 f8 f2 f2 f2 f2 f2 f8 f8 f8 f2 f2 f2
+  0x7ffffe1fed80: f2 f2 f8 f2 f2 f2 f8 f2 f2 f2 f8 f2 f2 f2 f8 f2
+  0x7ffffe1fee00: f2 f2 f8 f2 f2 f2 f8 f8 f8 f8 f8 f2 f2 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==44==ABORTING
+01f4:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:158626: dlls/dsound/tests/x86_64-windows/dsound8.ok] Fehler 1
+---
+ dlls/dsound/tests/dsound8.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/dsound/tests/dsound8.c b/dlls/dsound/tests/dsound8.c
+index e95800af83e..9f09dffc3be 100644
+--- a/dlls/dsound/tests/dsound8.c
++++ b/dlls/dsound/tests/dsound8.c
+@@ -824,6 +824,7 @@ static HRESULT test_secondary8(LPGUID lpGuid)
+                 secondary=NULL;
+             }
+ 
++            wfxe.Format.cbSize = sizeof(wfxe) - sizeof(WAVEFORMATEX);
+             wfxe.SubFormat = (format_tags[tag] == WAVE_FORMAT_PCM ? KSDATAFORMAT_SUBTYPE_PCM : KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+             rc=IDirectSound8_CreateSoundBuffer(dso,&bufdesc,&secondary,NULL);
+             ok(rc==DS_OK && secondary,
+-- 
+2.47.1
+

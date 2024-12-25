@@ -1,0 +1,97 @@
+From 6435ed9b964f16d43f8de74ef39a0ea1bd467a8d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 8 Dec 2024 22:45:21 +0100
+Subject: [PATCH 55/86] d3dcompiler_43: Over-reserve memory to avoid
+ buffer-overflow. (ASan)
+
+effect.c:8932: Test failed: :8932
+01a8:fixme:d3d:wined3d_guess_card No card selector available for card vendor 0000 (using GL_RENDERER "llvmpipe (LLVM 15.0.6, 256 bits)").
+01a8:err:d3dcompiler:D3DCompile2 Failed to compile shader, vkd3d result -5.
+01a8:err:d3dcompiler:D3DCompile2 Shader log:
+01a8:err:d3dcompiler:D3DCompile2     <anonymous>:30:1: E5017: Aborting due to not yet implemented feature: Write pass assignments.
+01a8:err:d3dcompiler:D3DCompile2
+=================================================================
+==420==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f43cf38067e at pc 0x6ffff826aa11 bp 0x7ffffe1fe460 sp 0x7ffffe1fe4a8
+READ of size 1 at 0x7f43cf38067e thread T0
+01a8:fixme:dbghelp:elf_search_auxv can't find symbol in module
+01a8:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F3315530B80,symt:0000000000000000) in ctx(00007F33442B1D20,L"d3dx9_36")
+01a8:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r15/343 -> rbx/329)
+01a8:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F3315620B80,symt:0000000000000000) in ctx(00007F3344721590,L"d3dx9_36_test")
+    #0 0x6ffff826aa10 in D3DXCreateEffectEx Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6723
+    #1 0x6ffff826b14e in D3DXCreateEffectFromFileExW Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6936
+    #2 0x00014003a95b in func_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:8937
+    #3 0x0001401afd37 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1401afd37)
+    #4 0x0001401b1c8f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #5 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #6 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f43cf38067e is located 0 bytes after 94-byte region [0x7f43cf380620,0x7f43cf38067e)
+allocated by thread T0 here:
+01a8:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F3307690B80,symt:0000000000000000) in ctx(00007F3334DC4A20,L"libclang_rt.asan_dynamic-x86_64")
+01a8:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F3314A70B80,symt:0000000000000000) in ctx(00007F33442712A0,L"d3dcompiler_47")
+    #0 0x6ffff88fa3d6 in calloc+0x86 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a3d6)
+    #1 0x6ffff812acef in D3DCreateBlob Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dcompiler_43\blob.c
+    #2 0x6ffff813f5fe in D3DCompile2 Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dcompiler_43\compiler.c:596
+    #3 0x6ffff813ff4c in D3DCompile Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dcompiler_43\compiler.c:648
+    #4 0x6ffff826a3bd in D3DXCreateEffectEx Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c
+    #5 0x6ffff826b14e in D3DXCreateEffectFromFileExW Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6936
+    #6 0x00014003a95b in func_effect Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\tests\effect.c:8937
+    #7 0x0001401afd37 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1401afd37)
+    #8 0x0001401b1c8f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #9 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #10 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\effect.c:6723 in D3DXCreateEffectEx
+Shadow bytes around the buggy address:
+  0x7f43cf380380: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 06
+  0x7f43cf380400: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 07
+  0x7f43cf380480: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7f43cf380500: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7f43cf380580: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x7f43cf380600: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00[06]
+  0x7f43cf380680: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f43cf380700: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f43cf380780: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f43cf380800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f43cf380880: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==420==ABORTING
+make: *** [Makefile:105962: dlls/d3dx9_36/tests/x86_64-windows/effect.ok] Fehler 1
+---
+ dlls/d3dcompiler_43/blob.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/d3dcompiler_43/blob.c b/dlls/d3dcompiler_43/blob.c
+index f5bcb5f8fa3..a36137b4ef9 100644
+--- a/dlls/d3dcompiler_43/blob.c
++++ b/dlls/d3dcompiler_43/blob.c
+@@ -120,7 +120,7 @@ static HRESULT d3dcompiler_blob_init(struct d3dcompiler_blob *blob, SIZE_T data_
+     blob->refcount = 1;
+     blob->size = data_size;
+ 
+-    blob->data = calloc(1, data_size);
++    blob->data = calloc(2, data_size);
+     if (!blob->data)
+     {
+         ERR("Failed to allocate D3D blob data memory\n");
+-- 
+2.47.1
+
