@@ -1,0 +1,44 @@
+From e2be60158032e164952311200154ad54cafa280e Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 31 Dec 2024 14:35:39 -0800
+Subject: [PATCH] headers: Fix compilation with llvm-mingw UCRT if
+ -fgnuc-version>=5.
+
+---
+ include/msvcrt/intrin.h                | 4 ++++
+ libs/faudio/src/FAudio_internal_simd.c | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/include/msvcrt/intrin.h b/include/msvcrt/intrin.h
+index ba825b7b09e..de523ec5e89 100644
+--- a/include/msvcrt/intrin.h
++++ b/include/msvcrt/intrin.h
+@@ -8,6 +8,10 @@
+ #define _INC_INTRIN
+ 
+ #if defined(__i386__) || (defined(__x86_64__) && !defined(__arm64ec__))
++#if defined(__clang__) && (defined(__MINGW64__) || defined(__MINGW32__))
++#define __mingw_aligned_malloc _aligned_malloc
++#define __mingw_aligned_free _aligned_free
++#endif
+ # include <x86intrin.h>
+ #endif
+ 
+diff --git a/libs/faudio/src/FAudio_internal_simd.c b/libs/faudio/src/FAudio_internal_simd.c
+index 7b7997b2ad0..6c830d9a239 100644
+--- a/libs/faudio/src/FAudio_internal_simd.c
++++ b/libs/faudio/src/FAudio_internal_simd.c
+@@ -69,6 +69,10 @@
+ 
+ 
+ #ifdef __SSE2__
++#if defined(__clang__) && (defined(__MINGW64__) || defined(__MINGW32__))
++#define __mingw_aligned_malloc _aligned_malloc
++#define __mingw_aligned_free _aligned_free
++#endif
+ #include <emmintrin.h>
+ #define HAVE_SSE2_INTRINSICS 1
+ #endif
+-- 
+2.47.1
+

@@ -1,0 +1,34 @@
+From d72150150c50dd76064a395dfa8f5bf6342f6179 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 6 Jan 2025 15:28:02 -0600
+Subject: [PATCH] cryptnet: Do not perform OCSP requests with
+ CERT_VERIFY_CACHE_ONLY_BASED_REVOCATION flag.
+
+---
+ dlls/cryptnet/cryptnet_main.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/cryptnet/cryptnet_main.c b/dlls/cryptnet/cryptnet_main.c
+index ed4add512e6..1200416af58 100644
+--- a/dlls/cryptnet/cryptnet_main.c
++++ b/dlls/cryptnet/cryptnet_main.c
+@@ -2161,7 +2161,15 @@ static DWORD verify_cert_revocation_from_aia_ext(const CRYPT_DATA_BLOB *value, c
+             {
+                 const WCHAR *url = aia->rgAccDescr[i].AccessLocation.pwszURL;
+                 TRACE("OCSP URL = %s\n", debugstr_w(url));
+-                error = verify_cert_revocation_with_ocsp(cert, url, pRevPara, next_update);
++                if (dwFlags & CERT_VERIFY_CACHE_ONLY_BASED_REVOCATION)
++                {
++                    TRACE("Cache only revocation, returning CRYPT_E_REVOCATION_OFFLINE.\n");
++                    error = CRYPT_E_REVOCATION_OFFLINE;
++                }
++                else
++                {
++                    error = verify_cert_revocation_with_ocsp(cert, url, pRevPara, next_update);
++                }
+             }
+             else
+             {
+-- 
+GitLab
+

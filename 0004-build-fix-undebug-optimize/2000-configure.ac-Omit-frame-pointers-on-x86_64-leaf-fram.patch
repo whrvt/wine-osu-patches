@@ -1,0 +1,42 @@
+From 046670cd17d81661e58ac65ad75730df9dcfd957 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 30 Dec 2024 02:31:59 -0800
+Subject: [PATCH] configure.ac: Omit frame pointers on x86_64, leaf frame
+ pointers on i386.
+
+---
+ configure.ac | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 2648ea2f834..f86ddd3dd60 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -987,10 +987,12 @@ This is an error since --enable-archs=$wine_arch was requested.])])
+ 
+     case $wine_arch in
+       i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])
++            WINE_TRY_PE_CFLAGS([-momit-leaf-frame-pointer])
+             WINE_TRY_PE_CFLAGS([-mpreferred-stack-boundary=2])
+             WINE_TRY_PE_CFLAGS([-Wl,--disable-stdcall-fixup],
+                                [AS_VAR_APPEND([${wine_arch}_LDFLAGS],[" -Wl,--disable-stdcall-fixup"])]) ;;
+-      x86_64) WINE_TRY_PE_CFLAGS([-Wformat-overflow])
++      x86_64) WINE_TRY_PE_CFLAGS([-fomit-frame-pointer])
++              WINE_TRY_PE_CFLAGS([-Wformat-overflow])
+               WINE_TRY_PE_CFLAGS([-Wnonnull])
+               WINE_TRY_PE_CFLAGS([-mcx16])
+               WINE_TRY_PE_CFLAGS([-mcmodel=small]) ;;
+@@ -1984,8 +1986,9 @@ then
+ 
+   case $HOST_ARCH in
+     dnl gcc-4.6+ omits frame pointers by default, breaking some copy protections
+-    i386) WINE_TRY_CFLAGS([-fno-omit-frame-pointer],[MSVCRTFLAGS="$MSVCRTFLAGS -fno-omit-frame-pointer"]) ;;
++    i386) WINE_TRY_CFLAGS([-fno-omit-frame-pointer -momit-leaf-frame-pointer],[MSVCRTFLAGS="$MSVCRTFLAGS -fno-omit-frame-pointer -momit-leaf-frame-pointer"]) ;;
+     x86_64)
++      WINE_TRY_CFLAGS([-fomit-frame-pointer],[MSVCRTFLAGS="$MSVCRTFLAGS -fomit-frame-pointer"])
+       case $host_os in
+         dnl Mingw uses Windows 64-bit types, not Unix ones
+         cygwin*|mingw32*) WINE_TRY_CFLAGS([-Wno-format]) ;;
+-- 
+2.47.1
+

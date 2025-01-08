@@ -134,9 +134,9 @@ index 11111111111..11111111111 100644
 +    void *entry;
 +};
 +
+ #ifndef NDEBUG
  extern void mark_block_noaccess( void *ptr, size_t size );
- extern void mark_block_uninitialized( void *ptr, size_t size );
- extern void *mem_alloc( size_t size ) __WINE_ALLOC_SIZE(1) __WINE_DEALLOC(free) __WINE_MALLOC;
+ #endif
 @@ -164,6 +170,8 @@ extern void *create_named_object( struct object *parent, const struct object_ops
  extern void *open_named_object( struct object *parent, const struct object_ops *ops,
                                  const struct unicode_str *name, unsigned int attributes );

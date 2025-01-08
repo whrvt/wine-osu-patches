@@ -71,7 +71,7 @@ index 11111111111..11111111111 100644
      __u32 time_mult;
      NTSTATUS s;
  
-+#ifndef HAVE_STRUCT_PERF_EVENT_MMAP_PAGE_CAP_USER_TIME_SHORT
++
 +    /* allow disabling rdtscp if Wine is built with old Linux kernels (e.g. WineBuilder Ubuntu 20.04) */
 +    {
 +        const char *e = getenv("WINE_DISABLE_TSC");
@@ -81,7 +81,7 @@ index 11111111111..11111111111 100644
 +            return STATUS_NOT_SUPPORTED;
 +        }
 +    }
-+#endif
++
 +
      if (monotonic_time_raw( &ts ))
          return STATUS_NOT_SUPPORTED;

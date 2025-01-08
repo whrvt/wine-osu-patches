@@ -64,13 +64,13 @@ index 30caeba7622..ea57e7303c0 100644
  
  /* dump a thread on stdout for debugging purposes */
 @@ -1394,6 +1407,7 @@ void kill_thread( struct thread *thread, int violent_death )
-         fsync_abandon_mutexes( thread );
-     if (do_esync())
-         esync_abandon_mutexes( thread );
+         check_terminated( thread );
+     }
+     else wake_up( &thread->obj, 0 );
 +    set_inproc_event( thread->inproc_sync );
-     if (violent_death)
-     {
-         send_thread_signal( thread, SIGQUIT );
+     cleanup_thread( thread );
+     remove_process_thread( thread->process, thread );
+     release_object( thread );
 diff --git a/server/thread.h b/server/thread.h
 index 416b01db318..b5afb565ef4 100644
 --- a/server/thread.h

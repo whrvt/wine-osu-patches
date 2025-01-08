@@ -1,0 +1,31 @@
+From 5c62c3e456ae926fd6330e4d030e63c3d23eb70e Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 26 Dec 2024 03:10:39 -0800
+Subject: [PATCH] ntdll: Try FPWB in contended NtWaitForAlertByThreadId
+
+Some tentative benchmarks show that this reduces overall contention in
+highly contended scenarios. To be removed if I find a test that shows
+otherwise.
+
+---
+ dlls/ntdll/unix/sync.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 63d96ffdf67..b89430f3edc 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -4083,6 +4083,10 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
+                 end = get_absolute_timeout( timeout );
+         }
+ 
++        if (InterlockedExchange( futex, 0 ))
++            return STATUS_ALERTED;
++        NtFlushProcessWriteBuffers();
++
+         while (!InterlockedExchange( futex, 0 ))
+         {
+             if (timeout)
+-- 
+2.47.1
+

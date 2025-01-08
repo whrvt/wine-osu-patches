@@ -1,0 +1,67 @@
+From 480fc3a39a989580c33da00f51c6eddc67cf9c79 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Gabriel=20Iv=C4=83ncescu?= <gabrielopcode@gmail.com>
+Date: Wed, 8 Jan 2025 22:52:21 +0200
+Subject: [PATCH] winex11: Respect swp_flags when syncing window position.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 895ca2eda64f506b936999cdd8f14e224eef6a7f, we're not telling Win32
+side of the fact the window moved offscreen. This means any SetWindowPos
+sent afterwards has potential to resync the Window and "put it on screen
+again", even if such operation has SWP_NOMOVE or SWP_NOSIZE. This causes
+some fullscreen apps to follow the workspace/desktop instead of remaining
+offscreen.
+
+Fixes a regression introduced by 895ca2eda64f506b936999cdd8f14e224eef6a7f.
+
+Signed-off-by: Gabriel Ivăncescu <gabrielopcode@gmail.com>
+---
+ dlls/winex11.drv/window.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 1d43c4edbdb..d1518875c23 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1777,7 +1777,9 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
+ {
+     DWORD style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+     DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
++    LONG new_width, new_height;
+     BOOL above = FALSE;
++    RECT new_rect;
+ 
+     if (data->managed && data->desired_state.wm_state == IconicState) return;
+ 
+@@ -1795,7 +1797,26 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
+     set_size_hints( data, style );
+     set_mwm_hints( data, style, ex_style );
+     update_net_wm_states( data );
+-    window_set_config( data, &data->rects.visible, above );
++
++    new_rect = data->rects.visible;
++    if (swp_flags & SWP_NOSIZE)
++    {
++        new_width = data->pending_state.rect.right - data->pending_state.rect.left;
++        new_height = data->pending_state.rect.bottom - data->pending_state.rect.top;
++    }
++    else
++    {
++        new_width = new_rect.right - new_rect.left;
++        new_height = new_rect.bottom - new_rect.top;
++    }
++    if (swp_flags & SWP_NOMOVE)
++    {
++        new_rect.left = data->pending_state.rect.left;
++        new_rect.top = data->pending_state.rect.top;
++    }
++    new_rect.right = new_rect.left + new_width;
++    new_rect.bottom = new_rect.top + new_height;
++    window_set_config( data, &new_rect, above );
+ }
+ 
+ 
+-- 
+GitLab
+
