@@ -49,7 +49,7 @@ index d114f420120..94a4f68a511 100644
  struct _KUSER_SHARED_DATA *user_shared_data = NULL;
 -static const int user_shared_data_timeout = 16;
 +
-+static const int user_shared_data_timeout_ticks = TICKS_PER_100US; /* 0.1 ms */
++static const int user_shared_data_timeout_ticks = TICKS_PER_100US * 1; /* 0.1 ms */
 +
 +static inline void ticks_to_timespec(timeout_t ticks, struct timespec *ts)
 +{

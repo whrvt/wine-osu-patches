@@ -147,7 +147,7 @@ index d334c169332..28f14cc9afe 100644
 -        *(unaligned_ui64 *)(d + n - 8) = tmpn;
 +        int regs[4];
 +        __cpuid(regs, 1);
-+        if (user_shared_data->ProcessorFeatures[PF_XMMI64_INSTRUCTIONS_AVAILABLE] && (regs[2] & (1 << 28)) && ((_xgetbv(0) & 0x6) == 0x6))
++        if (user_shared_data->ProcessorFeatures[PF_XSAVE_ENABLED] && (regs[2] & (1 << 28)) && ((_xgetbv(0) & 0x6) == 0x6))
 +            supported = 1;
 +        else
 +            supported = -1;

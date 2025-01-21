@@ -1,0 +1,85 @@
+From 08b6a692e185cd7e81d6f6b0399dfdd3990b4752 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 8 Jan 2025 19:45:30 -0600
+Subject: [PATCH] crypt32: Only mind end certificate when checking revocation
+ status in verify_ssl_policy().
+
+---
+ dlls/crypt32/chain.c       | 25 +++++++++++++++++++++----
+ dlls/crypt32/tests/chain.c |  8 ++++----
+ 2 files changed, 25 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/crypt32/chain.c b/dlls/crypt32/chain.c
+index 61f9e66f30c..e8dc15ff7e9 100644
+--- a/dlls/crypt32/chain.c
++++ b/dlls/crypt32/chain.c
+@@ -2989,6 +2989,24 @@ static void find_element_with_error(PCCERT_CHAIN_CONTEXT chain, DWORD error,
+             }
+ }
+ 
++static BOOL find_chain_first_element_with_error(PCCERT_CHAIN_CONTEXT chain, DWORD error, LONG *chain_idx,
++                                                LONG *element_idx)
++{
++    unsigned int i;
++
++    for (i = 0; i < chain->cChain; i++)
++    {
++        if (!chain->rgpChain[i]->cElement) continue;
++        if (chain->rgpChain[i]->rgpElement[0]->TrustStatus.dwErrorStatus & error)
++        {
++            *chain_idx = i;
++            *element_idx = 0;
++            return TRUE;
++        }
++    }
++    return FALSE;
++}
++
+ static BOOL WINAPI verify_base_policy(LPCSTR szPolicyOID,
+  PCCERT_CHAIN_CONTEXT pChainContext, PCERT_CHAIN_POLICY_PARA pPolicyPara,
+  PCERT_CHAIN_POLICY_STATUS pPolicyStatus)
+@@ -3518,12 +3536,11 @@ static BOOL WINAPI verify_ssl_policy(LPCSTR szPolicyOID,
+     }
+     else if (pChainContext->TrustStatus.dwErrorStatus &
+      CERT_TRUST_REVOCATION_STATUS_UNKNOWN &&
+-     !(checks & SECURITY_FLAG_IGNORE_REVOCATION) && !(baseChecks & CERT_CHAIN_POLICY_IGNORE_END_REV_UNKNOWN_FLAG))
++     !(checks & SECURITY_FLAG_IGNORE_REVOCATION) && !(baseChecks & CERT_CHAIN_POLICY_IGNORE_END_REV_UNKNOWN_FLAG)
++     && find_chain_first_element_with_error(pChainContext, CERT_TRUST_REVOCATION_STATUS_UNKNOWN,
++                                            &pPolicyStatus->lChainIndex, &pPolicyStatus->lElementIndex))
+     {
+         pPolicyStatus->dwError = CRYPT_E_REVOCATION_OFFLINE;
+-        find_element_with_error(pChainContext,
+-         CERT_TRUST_REVOCATION_STATUS_UNKNOWN, &pPolicyStatus->lChainIndex,
+-         &pPolicyStatus->lElementIndex);
+     }
+     else if (pChainContext->TrustStatus.dwErrorStatus &
+      CERT_TRUST_HAS_NOT_SUPPORTED_CRITICAL_EXT)
+diff --git a/dlls/crypt32/tests/chain.c b/dlls/crypt32/tests/chain.c
+index 9bf5f890167..d9f674bdc0e 100644
+--- a/dlls/crypt32/tests/chain.c
++++ b/dlls/crypt32/tests/chain.c
+@@ -5391,8 +5391,8 @@ static void test_VerifyCertChainPolicy_flags(void)
+     {
+         { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 0, 0, 0, CRYPT_E_REVOCATION_OFFLINE },
+         /* CERT_TRUST_REVOCATION_STATUS_UNKNOWN is only cheked on the end certificate. */
+-        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 1, 0, 0, ERROR_SUCCESS, TRUE },
+-        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 2, 0, 0, ERROR_SUCCESS, TRUE },
++        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 1, 0, 0, ERROR_SUCCESS },
++        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 2, 0, 0, ERROR_SUCCESS },
+         { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 0, CERT_CHAIN_POLICY_IGNORE_END_REV_UNKNOWN_FLAG, 0, 0 },
+         { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 0, CERT_CHAIN_POLICY_IGNORE_CTL_SIGNER_REV_UNKNOWN_FLAG, 0, CRYPT_E_REVOCATION_OFFLINE },
+         { CERT_TRUST_REVOCATION_STATUS_UNKNOWN | CERT_TRUST_IS_OFFLINE_REVOCATION, 0, CERT_CHAIN_POLICY_IGNORE_CA_REV_UNKNOWN_FLAG, 0, CRYPT_E_REVOCATION_OFFLINE },
+@@ -5403,8 +5403,8 @@ static void test_VerifyCertChainPolicy_flags(void)
+         { CERT_TRUST_IS_OFFLINE_REVOCATION, 2, 0, 0, ERROR_SUCCESS },
+         { CERT_TRUST_REVOCATION_STATUS_UNKNOWN, 0, 0, 0, CRYPT_E_REVOCATION_OFFLINE },
+         /* CERT_TRUST_REVOCATION_STATUS_UNKNOWN is only cheked on the end certificate. */
+-        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN, 1, 0, 0, ERROR_SUCCESS, TRUE },
+-        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN, 2, 0, 0, ERROR_SUCCESS, TRUE },
++        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN, 1, 0, 0, ERROR_SUCCESS },
++        { CERT_TRUST_REVOCATION_STATUS_UNKNOWN, 2, 0, 0, ERROR_SUCCESS },
+         { CERT_TRUST_REVOCATION_STATUS_UNKNOWN, 0, CERT_CHAIN_POLICY_IGNORE_END_REV_UNKNOWN_FLAG, 0, 0 },
+ 
+         { CERT_TRUST_IS_REVOKED, 0, 0, 0, CRYPT_E_REVOKED },
+-- 
+GitLab
+

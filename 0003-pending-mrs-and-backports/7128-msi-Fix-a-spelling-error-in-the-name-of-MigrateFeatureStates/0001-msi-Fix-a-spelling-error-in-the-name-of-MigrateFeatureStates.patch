@@ -1,0 +1,31 @@
+From 3acef9d8ea37df429f2b5cf951cba782a0f1eace Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Fri, 10 Jan 2025 13:18:25 -0600
+Subject: [PATCH] msi: Fix a spelling error in the name of
+ MigrateFeatureStates.
+
+Found while debugging <https://bugs.winehq.org/show_bug.cgi?id=50398>.
+
+--
+
+This may not be suitable for code freeze.
+---
+ dlls/msi/action.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/msi/action.c b/dlls/msi/action.c
+index d5e3af9cdba..f9b43692ab3 100644
+--- a/dlls/msi/action.c
++++ b/dlls/msi/action.c
+@@ -7717,7 +7717,7 @@ StandardActions[] =
+     { L"InstallValidate", IDS_DESC_INSTALLVALIDATE, 0, ACTION_InstallValidate, NULL },
+     { L"IsolateComponents", 0, 0, ACTION_IsolateComponents, NULL },
+     { L"LaunchConditions", IDS_DESC_LAUNCHCONDITIONS, 0, ACTION_LaunchConditions, NULL },
+-    { L"MigrateFeutureStates", IDS_DESC_MIGRATEFEATURESTATES, IDS_TEMP_MIGRATEFEATURESTATES, ACTION_MigrateFeatureStates, NULL },
++    { L"MigrateFeatureStates", IDS_DESC_MIGRATEFEATURESTATES, IDS_TEMP_MIGRATEFEATURESTATES, ACTION_MigrateFeatureStates, NULL },
+     { L"MoveFiles", IDS_DESC_MOVEFILES, IDS_TEMP_MOVEFILES, ACTION_MoveFiles, NULL },
+     { L"MsiPublishAssemblies", IDS_DESC_MSIPUBLISHASSEMBLIES, IDS_TEMP_MSIPUBLISHASSEMBLIES, ACTION_MsiPublishAssemblies, L"MsiUnpublishAssemblies" },
+     { L"MsiUnpublishAssemblies", IDS_DESC_MSIUNPUBLISHASSEMBLIES, IDS_TEMP_MSIUNPUBLISHASSEMBLIES, ACTION_MsiUnpublishAssemblies, L"MsiPublishAssemblies" },
+-- 
+GitLab
+

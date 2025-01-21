@@ -1,0 +1,55 @@
+From 729198536b84ba8067598ee06e1da3b6406803cf Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 8 Jan 2025 22:46:32 -0800
+Subject: [PATCH] musl: Use builtins for fetestexcept and fegetround if
+ available.
+
+---
+ libs/musl/src/math/fmaf.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/libs/musl/src/math/fmaf.c b/libs/musl/src/math/fmaf.c
+index 3e4636fd204..ab70d7cecb8 100644
+--- a/libs/musl/src/math/fmaf.c
++++ b/libs/musl/src/math/fmaf.c
+@@ -30,6 +30,20 @@
+ #include <stdint.h>
+ #include "libm.h"
+ 
++#if __has_builtin(__builtin_fegetround)
++#undef fegetround
++#define __fegetround __builtin_fegetround
++#else
++#define __fegetround fegetround
++#endif
++
++#if __has_builtin(__builtin_fetestexcept)
++#undef fetestexcept
++#define __fetestexcept __builtin_fetestexcept
++#else
++#define __fetestexcept fetestexcept
++#endif
++
+ /*
+  * Fused multiply-add: Compute x * y + z with a single rounding error.
+  *
+@@ -51,14 +65,14 @@ float __cdecl fmaf(float x, float y, float z)
+ 	if ((u.i & 0x1fffffff) != 0x10000000 || /* not a halfway case */
+ 		e == 0x7ff ||                   /* NaN */
+ 		(result - xy == z && result - z == xy) || /* exact */
+-		fegetround() != FE_TONEAREST)       /* not round-to-nearest */
++		__fegetround() != FE_TONEAREST)       /* not round-to-nearest */
+ 	{
+ 		if (!isnan(x) && !isnan(y) && !isnan(z) && isnan(u.f)) errno = EDOM;
+ 		/*
+ 		underflow may not be raised correctly, example:
+ 		fmaf(0x1p-120f, 0x1p-120f, 0x1p-149f)
+ 		*/
+-		if (e < 0x3ff-126 && e >= 0x3ff-149 && fetestexcept(FE_INEXACT)) {
++		if (e < 0x3ff-126 && e >= 0x3ff-149 && __fetestexcept(FE_INEXACT)) {
+ 			fp_barrierf((float)u.f * (float)u.f);
+ 		}
+ 		z = result;
+-- 
+2.47.1
+

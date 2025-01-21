@@ -1,0 +1,57 @@
+From 241482e3d2790b009b961d48c9351ff775e31a9d Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 8 Jan 2025 19:52:03 -0600
+Subject: [PATCH] crypt32: Favour CERT_CHAIN_POLICY_IGNORE_WRONG_USAGE_FLAG in
+ verify_ssl_policy().
+
+---
+ dlls/crypt32/chain.c       | 2 +-
+ dlls/crypt32/tests/chain.c | 5 ++---
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/crypt32/chain.c b/dlls/crypt32/chain.c
+index e8dc15ff7e9..fa74ade13d6 100644
+--- a/dlls/crypt32/chain.c
++++ b/dlls/crypt32/chain.c
+@@ -3519,7 +3519,7 @@ static BOOL WINAPI verify_ssl_policy(LPCSTR szPolicyOID,
+     }
+     else if (pChainContext->TrustStatus.dwErrorStatus &
+      CERT_TRUST_IS_NOT_VALID_FOR_USAGE &&
+-     !(checks & SECURITY_FLAG_IGNORE_WRONG_USAGE))
++     !(checks & SECURITY_FLAG_IGNORE_WRONG_USAGE) && !(baseChecks & CERT_CHAIN_POLICY_IGNORE_WRONG_USAGE_FLAG))
+     {
+         pPolicyStatus->dwError = CERT_E_WRONG_USAGE;
+         find_element_with_error(pChainContext,
+diff --git a/dlls/crypt32/tests/chain.c b/dlls/crypt32/tests/chain.c
+index d9f674bdc0e..46e031101ad 100644
+--- a/dlls/crypt32/tests/chain.c
++++ b/dlls/crypt32/tests/chain.c
+@@ -5385,7 +5385,6 @@ static void test_VerifyCertChainPolicy_flags(void)
+         DWORD policy_flags;
+         DWORD ssl_policy_flags;
+         DWORD expected_error;
+-        BOOL wine_todo;
+     }
+     tests[] =
+     {
+@@ -5415,7 +5414,7 @@ static void test_VerifyCertChainPolicy_flags(void)
+         { CERT_TRUST_IS_NOT_VALID_FOR_USAGE, 1, 0, 0, CERT_E_WRONG_USAGE },
+         { CERT_TRUST_IS_NOT_VALID_FOR_USAGE, 2, 0, 0, CERT_E_WRONG_USAGE },
+         { CERT_TRUST_IS_NOT_VALID_FOR_USAGE, 0, 0, SECURITY_FLAG_IGNORE_WRONG_USAGE, ERROR_SUCCESS },
+-        { CERT_TRUST_IS_NOT_VALID_FOR_USAGE, 0, CERT_CHAIN_POLICY_IGNORE_WRONG_USAGE_FLAG, 0, ERROR_SUCCESS, TRUE },
++        { CERT_TRUST_IS_NOT_VALID_FOR_USAGE, 0, CERT_CHAIN_POLICY_IGNORE_WRONG_USAGE_FLAG, 0, ERROR_SUCCESS },
+ 
+         { CERT_TRUST_IS_SELF_SIGNED, 0, 0, 0, TRUST_E_CERT_SIGNATURE },
+         { CERT_TRUST_IS_SELF_SIGNED, 1, 0, 0, TRUST_E_CERT_SIGNATURE },
+@@ -5486,7 +5485,7 @@ static void test_VerifyCertChainPolicy_flags(void)
+         policy_para.pvExtraPolicyPara = &ssl_para;
+         ret = CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL, chain, &policy_para, &status);
+         ok(ret, "got error %#lx.\n", GetLastError());
+-        todo_wine_if(tests[i].wine_todo) ok(status.dwError == tests[i].expected_error, "got %#lx, expected %#lx.\n", status.dwError, tests[i].expected_error);
++        ok(status.dwError == tests[i].expected_error, "got %#lx, expected %#lx.\n", status.dwError, tests[i].expected_error);
+         if (status.dwError)
+         {
+             ok(!status.lChainIndex, "got %ld.\n", status.lChainIndex);
+-- 
+GitLab
+

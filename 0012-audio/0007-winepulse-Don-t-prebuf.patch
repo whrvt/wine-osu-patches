@@ -1,0 +1,61 @@
+From dc3cd9e282ffe6b954f00a6cb08e1002c859b213 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 19 Jan 2025 12:59:09 -0800
+Subject: [PATCH] winepulse: Don't prebuf.
+
+---
+ dlls/winepulse.drv/pulse.c | 22 +++++++++++++---------
+ 1 file changed, 13 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index efdb6fe8ff0..b919c6f2257 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -390,9 +390,20 @@ static void pulse_attr_update(pa_stream *s, void *user) {
+     dump_attr(attr);
+ }
+ 
++
++static void pulse_op_cb(pa_stream *s, int success, void *user)
++{
++    TRACE("Success: %i\n", success);
++    *(int*)user = success;
++    pulse_broadcast();
++}
++
+ static void pulse_underflow_callback(pa_stream *s, void *userdata)
+ {
+-    WARN("Underflow\n");
++    struct pulse_stream *stream = userdata;
++    int success;
++    wait_pa_operation_complete(pa_stream_trigger(stream->stream, pulse_op_cb, &success));
++    WARN("Underflow %d\n", success);
+ }
+ 
+ /* Latency is periodically updated even when nothing is played,
+@@ -412,13 +423,6 @@ static void pulse_started_callback(pa_stream *s, void *userdata)
+     TRACE("(Re)started playing\n");
+ }
+ 
+-static void pulse_op_cb(pa_stream *s, int success, void *user)
+-{
+-    TRACE("Success: %i\n", success);
+-    *(int*)user = success;
+-    pulse_broadcast();
+-}
+-
+ static void silence_buffer(pa_sample_format_t format, BYTE *buffer, UINT32 bytes)
+ {
+     memset(buffer, format == PA_SAMPLE_U8 ? 0x80 : 0, bytes);
+@@ -1109,7 +1113,7 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+     /* PulseAudio will fill in correct values */
+     attr.minreq = attr.fragsize = period_bytes;
+     attr.maxlength = attr.tlength = stream->bufsize_bytes;
+-    attr.prebuf = pa_frame_size(&stream->ss);
++    attr.prebuf = 0;
+     dump_attr(&attr);
+ 
+     /* If specific device was requested, use it exactly */
+-- 
+2.48.1
+

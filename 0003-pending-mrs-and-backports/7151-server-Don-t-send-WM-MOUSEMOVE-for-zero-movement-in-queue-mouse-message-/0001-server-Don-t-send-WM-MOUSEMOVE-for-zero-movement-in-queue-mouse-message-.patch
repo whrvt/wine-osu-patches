@@ -1,0 +1,48 @@
+From 323a2cbdaaa4a8312744520f3d7583fc408e33c9 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 16 Jan 2025 20:07:36 -0600
+Subject: [PATCH] server: Don't send WM_MOUSEMOVE for zero movement in
+ queue_mouse_message().
+
+---
+ dlls/user32/tests/input.c | 1 +
+ server/queue.c            | 5 ++---
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/user32/tests/input.c b/dlls/user32/tests/input.c
+index 9196e67c15b..eb548ea0924 100644
+--- a/dlls/user32/tests/input.c
++++ b/dlls/user32/tests/input.c
+@@ -4131,6 +4131,7 @@ static void test_SendInput_mouse_messages(void)
+ 
+     mouse_event( MOUSEEVENTF_MOVE, 0, 0, 0, 0 );
+     /* recent Windows versions don't call the hooks with no movement */
++    ok(!current_sequence_len || broken(current_sequence_len) /* before Win10 1709 */, "got %ld.\n", current_sequence_len);
+     if (current_sequence_len)
+     {
+         ok_seq( mouse_move );
+diff --git a/server/queue.c b/server/queue.c
+index 76a82dcf712..8e639fa4bc9 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -2250,15 +2250,14 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
+         {
+             x = input->mouse.x;
+             y = input->mouse.y;
+-            if (flags & ~(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE) &&
+-                x == desktop_shm->cursor.x && y == desktop_shm->cursor.y)
+-                flags &= ~MOUSEEVENTF_MOVE;
+         }
+         else
+         {
+             x = desktop_shm->cursor.x + input->mouse.x;
+             y = desktop_shm->cursor.y + input->mouse.y;
+         }
++        if (x == desktop_shm->cursor.x && y == desktop_shm->cursor.y)
++            flags &= ~MOUSEEVENTF_MOVE;
+     }
+     else
+     {
+-- 
+GitLab
+
