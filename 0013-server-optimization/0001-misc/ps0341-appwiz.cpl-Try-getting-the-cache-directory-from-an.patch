@@ -16,7 +16,7 @@ index 11111111111..11111111111 100644
      const char *url_config_key;
      const char *dir_config_key;
      LPCWSTR dialog_template;
-+    const char *cache_dir_env_var;
++    const WCHAR *cache_dir_env_var;
  } addon_info_t;
  
  /* Download addon files over HTTP because Wine depends on an external library
@@ -40,28 +40,30 @@ index 11111111111..11111111111 100644
      }
  };
  
-@@ -318,13 +321,17 @@ static enum install_res install_from_default_dir(void)
+@@ -317,13 +320,19 @@ static enum install_res install_from_default_dir(void)
  
  static WCHAR *get_cache_file_name(BOOL ensure_exists)
  {
--    const char *xdg_dir;
-+    const char *env_var = NULL, *xdg_dir;
+-    const WCHAR *xdg_dir;
++    const WCHAR *xdg_dir, *env_var = NULL;
      const WCHAR *home_dir;
-     WCHAR *cache_dir, *ret;
+     WCHAR *cache_dir=NULL, *ret;
      size_t len, size;
  
--    xdg_dir = getenv( "XDG_CACHE_HOME" );
--    if (xdg_dir && *xdg_dir && p_wine_get_dos_file_name)
-+    if (addon->cache_dir_env_var && (env_var = getenv( addon->cache_dir_env_var )) && *env_var)
+-    xdg_dir = _wgetenv( L"XDG_CACHE_HOME" );
+-    if (xdg_dir && *xdg_dir)
++    if (addon->cache_dir_env_var && (env_var = _wgetenv( addon->cache_dir_env_var )) && env_var && *env_var)
 +    {
-+        if (!p_wine_get_dos_file_name) return NULL;
-+        if (!(cache_dir = p_wine_get_dos_file_name( env_var ))) return NULL;
++        if (!(cache_dir = HeapAlloc( GetProcessHeap(), 0, wcslen(env_var) * sizeof(WCHAR) + sizeof(L"\\\\?\\unix") ))) return NULL;
++        lstrcpyW( cache_dir, L"\\\\?\\unix" );
++        lstrcatW( cache_dir, env_var );
++        TRACE("cache dir %s\n", debugstr_w(cache_dir));
 +    }
-+    else if ((xdg_dir = getenv( "XDG_CACHE_HOME" )) && *xdg_dir && p_wine_get_dos_file_name)
++    else if ((xdg_dir = _wgetenv( L"XDG_CACHE_HOME" )) && xdg_dir && *xdg_dir)
      {
-         if (!(cache_dir = p_wine_get_dos_file_name( xdg_dir ))) return NULL;
-     }
-@@ -344,14 +351,17 @@ static WCHAR *get_cache_file_name(BOOL ensure_exists)
+         if (!(cache_dir = HeapAlloc( GetProcessHeap(), 0, wcslen(xdg_dir) * sizeof(WCHAR) + sizeof(L"\\\\?\\unix") ))) return NULL;
+         lstrcpyW( cache_dir, L"\\\\?\\unix" );
+@@ -346,14 +355,17 @@ static WCHAR *get_cache_file_name(BOOL ensure_exists)
          return NULL;
      }
  

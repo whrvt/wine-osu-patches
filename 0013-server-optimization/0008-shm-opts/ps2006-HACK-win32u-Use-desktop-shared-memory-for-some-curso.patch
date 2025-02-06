@@ -1,0 +1,78 @@
+From 7a6987c09a860a9afc0474e3b8682394ffb31197 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <openglfreak@googlemail.com>
+Date: Fri, 21 Jul 2023 10:23:14 +0200
+Subject: [PATCH 2006/7] HACK: win32u: Use desktop shared memory for some
+ cursor-related things.
+
+This is theoretically racy.
+---
+ dlls/win32u/cursoricon.c | 12 ++++++++++++
+ dlls/win32u/input.c      | 20 ++++++++++++++++++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/dlls/win32u/cursoricon.c b/dlls/win32u/cursoricon.c
+index 11111111111..11111111111 100644
+--- a/dlls/win32u/cursoricon.c
++++ b/dlls/win32u/cursoricon.c
+@@ -107,11 +107,20 @@ INT WINAPI NtUserShowCursor( BOOL show )
+  */
+ HCURSOR WINAPI NtUserSetCursor( HCURSOR cursor )
+ {
++    struct object_lock lock = OBJECT_LOCK_INIT;
++    const input_shm_t *input_shm;
++    NTSTATUS status;
+     struct cursoricon_object *obj;
+     HCURSOR old_cursor;
+     BOOL ret;
+ 
+     TRACE( "%p\n", cursor );
++    while ((status = get_shared_input( 0, &lock, &input_shm )) == STATUS_PENDING)
++    {
++        old_cursor = (HCURSOR)input_shm->cursor;
++    }
++    if (!status && old_cursor == cursor)
++        return old_cursor;
+ 
+     SERVER_START_REQ( set_cursor )
+     {
+#diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+#index 11111111111..11111111111 100644
+#--- a/dlls/win32u/input.c
+#+++ b/dlls/win32u/input.c
+#@@ -2663,6 +2663,7 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
+#  */
+# BOOL WINAPI NtUserClipCursor( const RECT *rect )
+# {
+#+    const desktop_shm_t *shared = get_desktop_shared_memory();
+#     static int keep_inside_window = -1;
+#     HWND foreground = NtUserGetForegroundWindow();
+#     UINT dpi;
+#@@ -2631,6 +2632,25 @@ BOOL WINAPI NtUserClipCursor( const RECT *rect )
+#         }
+#     }
+# 
+#+    if (shared)
+#+    {
+#+        RECT full_rect, *r = rect;
+#+        if (!r && NtUserGetWindowRect( NtUserGetForegroundWindow(), &full_rect ))
+#+            r = &full_rect;
+#+        if (r)
+#+        {
+#+            SHARED_READ_BEGIN( shared, desktop_shm_t )
+#+            {
+#+                ret = r->left == shared->cursor.clip.left &&
+#+                      r->top == shared->cursor.clip.top &&
+#+                      r->right == shared->cursor.clip.right &&
+#+                      r->bottom == shared->cursor.clip.bottom;
+#+            }
+#+            SHARED_READ_END;
+#+        }
+#+        if (ret) return TRUE;
+#+    }
+#+
+#     SERVER_START_REQ( set_cursor )
+#     {
+#         if (rect)
+-- 
+0.0.0
+

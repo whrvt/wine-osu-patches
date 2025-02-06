@@ -1,0 +1,110 @@
+From 5d678ab5df098678c6488eec9957a78c01be515d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 8 Dec 2024 23:58:21 +0100
+Subject: [PATCH 79/86] wined3d: Increase allocation size to avoid buffer
+ overflow.
+
+042c:fixme:d3dx:save_dds_surface_to_memory Default palette unimplemented.
+=================================================================
+==1084==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f2bb9b05220 at pc 0x6ffff88f8bfb bp 0x7ffffe1fe950 sp 0x7ffffe1fe998
+READ of size 8 at 0x7f2bb9b05220 thread T0
+042c:fixme:dbghelp:elf_search_auxv can't find symbol in module
+042c:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F25144B0B80,symt:0000000000000000) in ctx(00007F253C3F4A20,L"libclang_rt.asan_dynamic-x86_64")
+042c:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F2517EA0B80,symt:0000000000000000) in ctx(00007F25581C1D20,L"d3dx9_36")
+042c:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r15/343 -> rbx/329)
+042c:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F2517F90B80,symt:0000000000000000) in ctx(00007F2558311590,L"d3dx9_36_test")
+    #0 0x6ffff88f8bfa in __asan_memcpy+0x3aa (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x180048bfa)
+    #1 0x6ffff833da0f in copy_pixels Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:2166
+    #2 0x6ffff8342c4e in d3dx_load_pixels_from_pixels Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:2534
+    #3 0x6ffff8347583 in D3DXSaveSurfaceToFileInMemory Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:3023
+    #4 0x0001401775bf in func_surface+0x1fef (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1401775bf)
+    #5 0x00014020bec7 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x14020bec7)
+    #6 0x00014020de1f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #7 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #8 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f2bb9b05220 is located 0 bytes after 32-byte region [0x7f2bb9b05200,0x7f2bb9b05220)
+allocated by thread T1 here:
+042c:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F24FFE40B80,symt:0000000000000000) in ctx(00007F2558142890,L"wined3d")
+042c:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r12/340 -> rbx/329)
+042c:fixme:dbghelp_dwarf:compute_location Only supporting one breg (rsi/332 -> rbx/329)
+    #0 0x6ffff88fa3d6 in calloc+0x86 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a3d6)
+    #1 0x6ffff6560c30 in wined3d_resource_prepare_sysmem Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\wined3d\resource.c
+    #2 0x6ffff65c385f in wined3d_texture_load_location Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\wined3d\texture.c:817
+    #3 0x6ffff65d9b5f in texture_resource_sub_resource_map Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\wined3d\texture.c:3507
+    #4 0x6ffff64aa1f9 in wined3d_cs_exec_map+0xc9 (C:\windows\system32\wined3d.dll+0x1800aa1f9)
+    #5 0x6ffff64ace18 in wined3d_cs_execute_next+0x138 (C:\windows\system32\wined3d.dll+0x1800ace18)
+    #6 0x6ffff649dd3c in wined3d_cs_run+0x1ac (C:\windows\system32\wined3d.dll+0x18009dd3c)
+    #7 0x6ffff890b2dd in asan_thread_start+0x4d (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18005b2dd)
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #9 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Thread T1 created by T0 here:
+042c:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F25179B0B80,symt:0000000000000000) in ctx(00007F253C1F15B0,L"d3d9")
+    #0 0x6ffff890b1f6 in CreateThread+0x66 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18005b1f6)
+    #1 0x6ffff649d89b in wined3d_cs_create+0x44b (C:\windows\system32\wined3d.dll+0x18009d89b)
+    #2 0x6ffff64d56ec in wined3d_device_init Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\wined3d\device.c:5558
+    #3 0x6ffff6415da4 in adapter_gl_create_device Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\wined3d\adapter_gl.c:4081
+    #4 0x6ffff64e30e5 in wined3d_device_create Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\wined3d\directx.c:2766
+    #5 0x6ffff586ade1 in device_init Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d9\device.c:4680
+    #6 0x6ffff588030e in d3d9_CreateDevice Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3d9\directx.c:498
+    #7 0x000140175812 in func_surface+0x242 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x140175812)
+    #8 0x00014020bec7 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x14020bec7)
+    #9 0x00014020de1f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #10 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #11 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:2166 in copy_pixels
+Shadow bytes around the buggy address:
+  0x7f2bb9b04f80: fa fa fd fd fd fd fa fa fd fd fd fd fa fa fd fd
+  0x7f2bb9b05000: fd fd fa fa fd fd fd fd fa fa fd fd fd fd fa fa
+  0x7f2bb9b05080: fd fd fd fd fa fa fd fd fd fd fa fa fd fd fd fd
+  0x7f2bb9b05100: fa fa fd fd fd fd fa fa fd fd fd fd fa fa fd fd
+  0x7f2bb9b05180: fd fd fa fa fd fd fd fd fa fa fd fd fd fd fa fa
+=>0x7f2bb9b05200: 00 00 00 00[fa]fa fa fa fa fa fa fa fa fa fa fa
+  0x7f2bb9b05280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f2bb9b05300: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f2bb9b05380: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f2bb9b05400: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f2bb9b05480: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1084==ABORTING
+make: *** [Makefile:106630: dlls/d3dx9_36/tests/x86_64-windows/surface.ok] Fehler 1
+---
+ dlls/wined3d/resource.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/wined3d/resource.c b/dlls/wined3d/resource.c
+index fcfe05db835..5ba72cccfa9 100644
+--- a/dlls/wined3d/resource.c
++++ b/dlls/wined3d/resource.c
+@@ -322,7 +322,7 @@ static BOOL wined3d_resource_allocate_sysmem(struct wined3d_resource *resource)
+     static const SIZE_T align = RESOURCE_ALIGNMENT;
+     void *mem;
+ 
+-    if (!(mem = calloc(1, resource->size + align)))
++    if (!(mem = calloc(1, resource->size + align + 8)))
+     {
+         ERR("Failed to allocate system memory.\n");
+         return FALSE;
+-- 
+2.47.1
+

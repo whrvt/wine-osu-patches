@@ -1,0 +1,55 @@
+From e9d146653d292d5c05675a1c9d7f53473af3a95c Mon Sep 17 00:00:00 2001
+From: Evan Tang <etang@codeweavers.com>
+Date: Mon, 30 Oct 2023 14:34:03 -0500
+Subject: [PATCH] ntdll/tests: Add test for reserving massive amounts of
+ memory.
+
+---
+ dlls/ntdll/tests/virtual.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/dlls/ntdll/tests/virtual.c b/dlls/ntdll/tests/virtual.c
+index a9dec1b5a8a..808b67b9b27 100644
+--- a/dlls/ntdll/tests/virtual.c
++++ b/dlls/ntdll/tests/virtual.c
+@@ -2676,6 +2676,31 @@ static void test_query_image_information(void)
+     NtClose( file );
+ }
+ 
++static void test_massive_memory_reservation(void)
++{
++    /* Test to make sure large address space reservations don't use more ram than the system has.
++     * Most failures here will be the test getting killed by the OOM killer. */
++    int i;
++    for (i = 12; i < sizeof(void*) * 8; i++)
++    {
++        void* ptr;
++        BOOL is_ok;
++        SetLastError(0xdeadbeef);
++        ptr = VirtualAlloc(NULL, 1ull << i, MEM_RESERVE, PAGE_NOACCESS);
++        if (i < 40 && sizeof(void*) == 8) /* These should succeed */
++            is_ok = GetLastError() == 0xdeadbeef;
++        else if (i < 47) /* These might run out of address space */
++            is_ok = GetLastError() == 0xdeadbeef || GetLastError() == ERROR_NOT_ENOUGH_MEMORY;
++        else
++            is_ok = GetLastError() == ERROR_INVALID_PARAMETER;
++        ok(is_ok, "Unexpected error allocating 1 << %d: %lx.\n", i, GetLastError());
++        if (ptr)
++            VirtualFree(ptr, 1ull << i, MEM_RELEASE);
++        ptr = malloc(1ull << i);
++        free(ptr);
++    }
++}
++
+ START_TEST(virtual)
+ {
+     HMODULE mod;
+@@ -2726,4 +2751,5 @@ START_TEST(virtual)
+     test_query_region_information();
+     test_query_image_information();
+     test_exec_memory_writes();
++    test_massive_memory_reservation();
+ }
+-- 
+GitLab
+

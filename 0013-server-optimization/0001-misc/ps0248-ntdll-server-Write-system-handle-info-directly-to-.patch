@@ -158,7 +158,7 @@ index 11111111111..11111111111 100644
 +    unsigned char       object_type;
 +    unsigned char       handle_flags;
 +    unsigned short      handle_value;
-+    unsigned __int64    object_pointer;
++    UINT64              object_pointer;
 +    unsigned int        access_mask;
 +};
 +
@@ -176,9 +176,9 @@ index 11111111111..11111111111 100644
 +
 +struct system_handle_entry_ex_64
 +{
-+    unsigned __int64    object;
-+    unsigned __int64    unique_process_id;
-+    unsigned __int64    handle_value;
++    UINT64              object;
++    UINT64              unique_process_id;
++    UINT64              handle_value;
 +    unsigned int        granted_access;
 +    unsigned short      creator_back_trace_index;
 +    unsigned short      object_type_index;
@@ -263,7 +263,7 @@ index 11111111111..11111111111 100644
      struct handle_table *table = process->handles;
      struct handle_entry *entry;
 -    struct handle_info *handle;
-     unsigned int i;
+     int i;
  
      if (!table)
 @@ -855,20 +979,21 @@ static int enum_handles( struct process *process, void *user )
@@ -362,18 +362,6 @@ index 11111111111..11111111111 100644
  @END
  
  
-diff --git a/server/request.h b/server/request.h
-index 11111111111..11111111111 100644
---- a/server/request.h
-+++ b/server/request.h
-@@ -741,7 +741,6 @@ C_ASSERT( sizeof(select_op_t) == 264 );
- C_ASSERT( sizeof(short int) == 2 );
- C_ASSERT( sizeof(startup_info_t) == 96 );
- C_ASSERT( sizeof(struct filesystem_event) == 12 );
--C_ASSERT( sizeof(struct handle_info) == 20 );
- C_ASSERT( sizeof(struct luid) == 8 );
- C_ASSERT( sizeof(struct luid_attr) == 12 );
- C_ASSERT( sizeof(struct object_attributes) == 16 );
 diff --git a/server/trace.c b/server/trace.c
 index 11111111111..11111111111 100644
 --- a/server/trace.c
@@ -403,14 +391,14 @@ diff --git a/tools/make_requests b/tools/make_requests
 index 11111111111..11111111111 100755
 --- a/tools/make_requests
 +++ b/tools/make_requests
-@@ -64,7 +64,6 @@ my %formats =
-     "startup_info_t"           => [  96,  4 ],
-     "user_apc_t"               => [  40,  8 ],
+@@ -58,7 +58,6 @@ my %formats =
+     "union debug_event_data"   => [ 160, 8 ],
      "struct filesystem_event"  => [ 12, 4 ],
+     "struct generic_map"       => [ 16, 4 ],
 -    "struct handle_info"       => [ 20, 4 ],
-     "struct luid_attr"         => [ 12, 4 ],
-     "struct object_attributes" => [ 16, 4 ],
-     "struct object_type_info"  => [ 44, 4 ],
+     "union hw_input"           => [ 40, 8 ],
+     "union irp_params"         => [ 32, 8 ],
+     "struct luid"              => [  8, 4 ],
 -- 
 0.0.0
 

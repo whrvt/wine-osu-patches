@@ -1,0 +1,35 @@
+From 9f455b55b7f9921840a40d02043eab52c6b7a8db Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 20 Jan 2025 15:41:46 +0100
+Subject: [PATCH] winex11: Only erase the desktop window pixels on expose
+ events.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57665
+---
+ dlls/winex11.drv/event.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 428dcb7b8b7..e5617d3ac11 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -968,7 +968,7 @@ static BOOL X11DRV_Expose( HWND hwnd, XEvent *xev )
+     RECT rect, abs_rect;
+     POINT pos;
+     struct x11drv_win_data *data;
+-    UINT flags = RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN;
++    UINT flags = RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN;
+ 
+     TRACE( "win %p (%lx) %d,%d %dx%d\n",
+            hwnd, event->window, event->x, event->y, event->width, event->height );
+@@ -1008,6 +1008,7 @@ static BOOL X11DRV_Expose( HWND hwnd, XEvent *xev )
+ 
+     release_win_data( data );
+ 
++    if (hwnd == NtUserGetDesktopWindow()) flags |= RDW_ERASE;
+     NtUserExposeWindowSurface( hwnd, flags, &rect, NtUserGetWinMonitorDpi( hwnd, MDT_RAW_DPI ) );
+     return TRUE;
+ }
+-- 
+GitLab
+

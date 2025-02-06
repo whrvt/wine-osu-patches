@@ -1,4 +1,4 @@
-From 345b3433ccab0f54c769a72f53cc419ea15be6fb Mon Sep 17 00:00:00 2001
+From 4e851a71c70ed4af0ec8200bd221b3a29e5873cf Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 17 Sep 2024 15:01:54 -0600
 Subject: [PATCH] ntdll: Implement NtSetInformationProcess(
@@ -14,10 +14,10 @@ Subject: [PATCH] ntdll: Implement NtSetInformationProcess(
  6 files changed, 181 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
-index d379ad5c152..1a3c866980f 100644
+index 12b785dbc22..c3971d13b7e 100644
 --- a/dlls/ntdll/tests/info.c
 +++ b/dlls/ntdll/tests/info.c
-@@ -4132,19 +4132,18 @@ static void test_set_process_tls_info(void)
+@@ -4139,19 +4139,18 @@ static void test_set_process_tls_info(void)
                                        offsetof(PROCESS_TLS_INFORMATION, ThreadData[tlsinfo->ThreadDataCount]));
      if (wow)
      {
@@ -42,10 +42,10 @@ index d379ad5c152..1a3c866980f 100644
      /* Other PROCESS_TLS_INFORMATION flags are invalid. STATUS_INFO_LENGTH_MISMATCH is weird but that's for any flag
       * besides 1. */
 diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
-index f5c230e9dc1..d8ef0dde6bb 100644
+index ec585fe2d6c..8b14140b1da 100644
 --- a/dlls/ntdll/unix/process.c
 +++ b/dlls/ntdll/unix/process.c
-@@ -1649,6 +1649,33 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
+@@ -1711,6 +1711,33 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
          process_error_mode = *(UINT *)info;
          break;
  
@@ -92,10 +92,10 @@ index 8815f174de9..dc41804ee03 100644
                                              SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page );
  extern void virtual_map_user_shared_data(void);
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index e168eed8c37..320a4e08f70 100644
+index 684a58a724b..93d71b2030c 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -3870,6 +3870,98 @@ NTSTATUS virtual_clear_tls_index( ULONG index )
+@@ -3874,6 +3874,98 @@ NTSTATUS virtual_clear_tls_index( ULONG index )
  }
  
  
@@ -195,10 +195,10 @@ index e168eed8c37..320a4e08f70 100644
   *           virtual_alloc_thread_stack
   */
 diff --git a/dlls/wow64/process.c b/dlls/wow64/process.c
-index 653422a5013..3af4c3a5267 100644
+index 0153dba3433..fb21e2dabc9 100644
 --- a/dlls/wow64/process.c
 +++ b/dlls/wow64/process.c
-@@ -893,6 +893,39 @@ NTSTATUS WINAPI wow64_NtSetInformationProcess( UINT *args )
+@@ -894,6 +894,39 @@ NTSTATUS WINAPI wow64_NtSetInformationProcess( UINT *args )
          }
          else return STATUS_INVALID_PARAMETER;
  
@@ -236,7 +236,7 @@ index 653422a5013..3af4c3a5267 100644
 +    }
 +
      case ProcessInstrumentationCallback:   /* PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION */
-         if (len >= sizeof(void *))
+         if (len >= sizeof(ULONG))
          {
 diff --git a/dlls/wow64/struct32.h b/dlls/wow64/struct32.h
 index fe2bbc758ee..c8588bd4f4a 100644

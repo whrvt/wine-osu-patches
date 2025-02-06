@@ -1,0 +1,34 @@
+From 403a1fbf0d068290edbf52b6bc948fc349120089 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 13 Jan 2025 19:05:06 +0100
+Subject: [PATCH] win32u: Always return the visible rect from
+ get_window_region.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57665
+---
+ dlls/win32u/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index ba204957669..3711c76f5a6 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1817,6 +1817,7 @@ static NTSTATUS get_window_region( HWND hwnd, BOOL surface, HRGN *region, RECT *
+             if (!(status = wine_server_call( req )))
+             {
+                 size_t reply_size = wine_server_reply_size( reply );
++                *visible = wine_server_get_rect( reply->visible_rect );
+                 if (reply_size)
+                 {
+                     data->rdh.dwSize   = sizeof(data->rdh);
+@@ -1824,7 +1825,6 @@ static NTSTATUS get_window_region( HWND hwnd, BOOL surface, HRGN *region, RECT *
+                     data->rdh.nCount   = reply_size / sizeof(RECT);
+                     data->rdh.nRgnSize = reply_size;
+                     *region = NtGdiExtCreateRegion( NULL, data->rdh.dwSize + data->rdh.nRgnSize, data );
+-                    *visible = wine_server_get_rect( reply->visible_rect );
+                 }
+             }
+             else size = reply->total_size;
+-- 
+GitLab
+

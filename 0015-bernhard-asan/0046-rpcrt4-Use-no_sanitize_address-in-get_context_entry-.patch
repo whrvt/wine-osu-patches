@@ -1,0 +1,139 @@
+From a8924354ce559c929be5e8e8e71f840882abaecd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Wed, 11 Dec 2024 00:08:22 +0100
+Subject: [PATCH 46/86] rpcrt4: Use no_sanitize_address in
+ get_context_entry/NDRCContextBinding.
+
+/home/bernhard/data/entwicklung/2024/wine/wine/tools/runtest -q -P wine -T . -M services.exe -p programs/services/tests/x86_64-windows/services.exe_test.exe service && touch programs/services/tests/x86_64-windows/service.ok
+=================================================================
+==1424==ERROR: AddressSanitizer: heap-use-after-free on address 0x7ebf035c0330 at pc 0x6ffff8362808 bp 0x7ffffe1fdca0 sp 0x7ffffe1fdce8
+READ of size 4 at 0x7ebf035c0330 thread T0
+05e4:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff8362807 in get_context_entry /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:65:14
+    #1 0x6ffff8362807 in NDRCContextBinding /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:87:11
+    #2 0x6ffff83a07ac in client_get_handle /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:344:44
+    #3 0x6ffff83994e0 in ndr_client_call /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:748:24
+    #4 0x6ffff83985be in NdrpClientCall2 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:981:18
+    #5 0x6ffff8395a3a in NdrClientCall2 (C:\windows\system32\rpcrt4.dll+0x180045a3a)
+    #6 0x6ffffc02d730 in svcctl_QueryServiceStatusEx /home/bernhard/data/entwicklung/2024/wine/wine-build/build-64/obj\dlls/sechost/x86_64-windows\svcctl_c.c:867:15
+    #7 0x6ffffc027529 in QueryServiceStatusEx /home/bernhard/data/entwicklung/2024/wine/wine/dlls/sechost\service.c:1122:15
+    #8 0x6ffffc027285 in QueryServiceStatus /home/bernhard/data/entwicklung/2024/wine/wine/dlls/sechost\service.c:1096:11
+    #9 0x6ffffc027285 in QueryServiceStatus /home/bernhard/data/entwicklung/2024/wine/wine/dlls/sechost\service.c:1085:31
+    #10 0x000140004b8a in test_no_stop /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:576:11
+    #11 0x000140001c46 in test_runner /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:605:5
+    #12 0x0001400011dc in func_service /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:753:9
+    #13 0x00014000e243 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #14 0x00014000dc8b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #15 0x00014000fbbf in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #16 0x6ffffabf4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #17 0x6ffffadcfa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7ebf035c0330 is located 16 bytes inside of 56-byte region [0x7ebf035c0320,0x7ebf035c0358)
+freed by thread T0 here:
+    #0 0x6ffff885a1a1 in free /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:71:3
+    #1 0x6ffff8362f6a in ndr_update_context_handle /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:185:13
+    #2 0x6ffff8362f6a in NDRCContextUnmarshall /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:219:14
+    #3 0x6ffff8374399 in NdrClientContextUnmarshall /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_marshall.c:7092:5
+    #4 0x6ffff8374399 in NdrContextHandleUnmarshall /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_marshall.c:7038:9
+    #5 0x6ffff8396328 in call_unmarshaller /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:126:19
+    #6 0x6ffff8396328 in client_do_args /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:531:17
+    #7 0x6ffff8399824 in ndr_client_call /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:841:9
+    #8 0x6ffff83985be in NdrpClientCall2 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:981:18
+    #9 0x6ffff8395a3a in NdrClientCall2 (C:\windows\system32\rpcrt4.dll+0x180045a3a)
+    #10 0x6ffffc02cbc9 in svcctl_CloseServiceHandle /home/bernhard/data/entwicklung/2024/wine/wine-build/build-64/obj\dlls/sechost/x86_64-windows\svcctl_c.c:128:15
+    #11 0x6ffffc02355d in CloseServiceHandle /home/bernhard/data/entwicklung/2024/wine/wine/dlls/sechost\service.c:456:15
+    #12 0x000140004b79 in test_no_stop /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:574:5
+    #13 0x000140001c46 in test_runner /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:605:5
+    #14 0x0001400011dc in func_service /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:753:9
+    #15 0x00014000e243 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #16 0x00014000dc8b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #17 0x00014000fbbf in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #18 0x6ffffabf4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #19 0x6ffffadcfa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+previously allocated by thread T0 here:
+    #0 0x6ffff885a2c1 in malloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:80:3
+    #1 0x6ffff8362e10 in ndr_update_context_handle /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:192:15
+    #2 0x6ffff8362e10 in NDRCContextUnmarshall /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:219:14
+    #3 0x6ffff8374399 in NdrClientContextUnmarshall /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_marshall.c:7092:5
+    #4 0x6ffff8374399 in NdrContextHandleUnmarshall /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_marshall.c:7038:9
+    #5 0x6ffff8396328 in call_unmarshaller /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:126:19
+    #6 0x6ffff8396328 in client_do_args /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:531:17
+    #7 0x6ffff8399824 in ndr_client_call /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:841:9
+    #8 0x6ffff83985be in NdrpClientCall2 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_stubless.c:981:18
+    #9 0x6ffff8395a3a in NdrClientCall2 (C:\windows\system32\rpcrt4.dll+0x180045a3a)
+    #10 0x6ffffc02ce11 in svcctl_CreateServiceW /home/bernhard/data/entwicklung/2024/wine/wine-build/build-64/obj\dlls/sechost/x86_64-windows\svcctl_c.c:324:15
+    #11 0x6ffffc0244b3 in CreateServiceW /home/bernhard/data/entwicklung/2024/wine/wine/dlls/sechost\service.c:407:19
+    #12 0x6ffffc0241a0 in CreateServiceA /home/bernhard/data/entwicklung/2024/wine/wine/dlls/sechost\service.c:360:14
+    #13 0x00014000af9f in register_service /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:365:15
+    #14 0x00014000304a in test_no_stop /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:494:32
+    #15 0x000140001c46 in test_runner /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:605:5
+    #16 0x0001400011dc in func_service /home/bernhard/data/entwicklung/2024/wine\wine/programs/services/tests/service.c:753:9
+    #17 0x00014000e243 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #18 0x00014000dc8b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #19 0x00014000fbbf in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #20 0x6ffffabf4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #21 0x6ffffadcfa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /home/bernhard/data/entwicklung/2024/wine\wine/dlls/rpcrt4/ndr_contexthandle.c:65:14 in get_context_entry
+Shadow bytes around the buggy address:
+  0x7ebf035c0080: fd fd fd fd fd fd fd fa fa fa fa fa fd fd fd fd
+  0x7ebf035c0100: fd fd fd fa fa fa fa fa fd fd fd fd fd fd fd fa
+  0x7ebf035c0180: fa fa fa fa fd fd fd fd fd fd fd fa fa fa fa fa
+  0x7ebf035c0200: fd fd fd fd fd fd fd fa fa fa fa fa fd fd fd fd
+  0x7ebf035c0280: fd fd fd fa fa fa fa fa fd fd fd fd fd fd fd fa
+=>0x7ebf035c0300: fa fa fa fa fd fd[fd]fd fd fd fd fa fa fa fa fa
+  0x7ebf035c0380: fd fd fd fd fd fd fd fa fa fa fa fa fd fd fd fd
+  0x7ebf035c0400: fd fd fd fa fa fa fa fa fd fd fd fd fd fd fd fa
+  0x7ebf035c0480: fa fa fa fa fd fd fd fd fd fd fd fa fa fa fa fa
+  0x7ebf035c0500: fd fd fd fd fd fd fd fa fa fa fa fa fd fd fd fd
+  0x7ebf035c0580: fd fd fd fa fa fa fa fa fd fd fd fd fd fd fd fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1424==ABORTING
+05e4:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:543942: programs/services/tests/x86_64-windows/service.ok] Fehler 1
+---
+ dlls/rpcrt4/ndr_contexthandle.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/rpcrt4/ndr_contexthandle.c b/dlls/rpcrt4/ndr_contexthandle.c
+index 1bff1e82936..3ab83426175 100644
+--- a/dlls/rpcrt4/ndr_contexthandle.c
++++ b/dlls/rpcrt4/ndr_contexthandle.c
+@@ -58,6 +58,7 @@ static CRITICAL_SECTION_DEBUG ndr_context_debug =
+ };
+ static CRITICAL_SECTION ndr_context_cs = { &ndr_context_debug, -1, 0, 0, 0, 0 };
+ 
++__attribute__((no_sanitize_address))
+ static struct context_handle_entry *get_context_entry(NDR_CCONTEXT CContext)
+ {
+     struct context_handle_entry *che = CContext;
+@@ -76,6 +77,7 @@ static struct context_handle_entry *context_entry_from_guid(LPCGUID uuid)
+     return NULL;
+ }
+ 
++__attribute__((no_sanitize_address))
+ RPC_BINDING_HANDLE WINAPI NDRCContextBinding(NDR_CCONTEXT CContext)
+ {
+     struct context_handle_entry *che;
+-- 
+2.47.1
+

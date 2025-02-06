@@ -1,0 +1,51 @@
+From a3e8123c6f310525d453704b50b9fc2c993dd4a4 Mon Sep 17 00:00:00 2001
+From: Nobody <a@b.c>
+Date: Wed, 25 Dec 2024 00:46:37 -0800
+Subject: [PATCH] fixup! HACK: win32u: Always call get_message request after
+ waiting.
+
+---
+ dlls/win32u/message.c        |  2 +-
+ dlls/win32u/win32u_private.h | 13 +++++++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index c379c87d916..7ae0a0cafe7 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2776,7 +2776,7 @@ int peek_message( MSG *msg, const struct peek_message_filter *filter, BOOL waite
+         thread_info->client_info.msg_source = prev_source;
+         wake_mask = filter->mask & (QS_SENDMESSAGE | QS_SMRESULT);
+ 
+-        if ((!waited && (NtGetTickCount() - thread_info->last_getmsg_time < 3000)) && /* avoid hung queue */
++        if (((using_server_or_ntsync() || !waited) && (NtGetTickCount() - thread_info->last_getmsg_time < 3000)) && /* avoid hung queue */
+             check_queue_bits( wake_mask, filter->mask, wake_mask | signal_bits, filter->mask | clear_bits,
+                               &wake_bits, &changed_bits ))
+             res = STATUS_PENDING;
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 9689d78a929..84a98b0ecd9 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -325,6 +325,19 @@ extern const struct user_driver_funcs *user_driver;
+ 
+ extern ULONG_PTR zero_bits;
+ 
++static inline BOOL using_server_or_ntsync(void)
++{
++    static int server_or_nt_cached = -1;
++    if (server_or_nt_cached == -1)
++    {
++        BOOL do_ntsync = !(getenv("WINE_DISABLE_FAST_SYNC") && atoi(getenv("WINE_DISABLE_FAST_SYNC")));
++        BOOL do_fsync = !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")) && !do_ntsync);
++        BOOL do_esync = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC")) && !do_fsync && !do_ntsync);
++        server_or_nt_cached = do_ntsync || !(do_fsync || do_esync);
++    }
++    return !!server_or_nt_cached;
++}
++
+ static inline BOOL set_ntstatus( NTSTATUS status )
+ {
+     if (status) RtlSetLastWin32Error( RtlNtStatusToDosError( status ));
+-- 
+2.47.1
+

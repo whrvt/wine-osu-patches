@@ -5,7 +5,7 @@ index 11111111111..11111111111 100644
 @@ -76,6 +76,7 @@ typedef struct {
      const char *dir_config_key;
      LPCWSTR dialog_template;
-     const char *cache_dir_env_var;
+     const WCHAR *cache_dir_env_var;
 +    const char *control_env_var;
  } addon_info_t;
  

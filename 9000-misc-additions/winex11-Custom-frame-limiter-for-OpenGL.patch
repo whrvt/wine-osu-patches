@@ -4,34 +4,33 @@ Date: Wed, 18 Sep 2024 13:23:09 -0700
 Subject: [PATCH] winex11: Custom frame limiter for OpenGL
 
 ---
- dlls/winex11.drv/opengl.c      | 61 ++++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/opengl.c      | 59 ++++++++++++++++++++++++++++++++
  dlls/winex11.drv/x11drv.h      |  2 ++
  dlls/winex11.drv/x11drv_main.c | 26 +++++++++++++++
- 3 files changed, 89 insertions(+)
+ 3 files changed, 87 insertions(+)
 
-Added in the use-clock_nanosleep-for-delay patch
-# diff --git a/configure.ac b/configure.ac
-# index d539ee50bda..7585324602c 100644
-# --- a/configure.ac
-# +++ b/configure.ac
-# @@ -2170,6 +2170,17 @@ case $host_os in
-#      ;;
-#  esac
+diff --git a/configure.ac b/configure.ac
+index d539ee50bda..7585324602c 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2170,6 +2170,17 @@ case $host_os in
+     ;;
+ esac
  
-# +dnl Check for clock_nanosleep which may be in -lrt
-# +case $host_os in
-# +    darwin*|macosx*) ;;
-# +    *) ac_save_LIBS=$LIBS
-# +        AC_SEARCH_LIBS(clock_nanosleep, rt,
-# +            [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define to 1 if you have the `clock_nanosleep' function.])
-# +                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
-# +    LIBS=$ac_save_LIBS
-# +    ;;
-# +esac
-# +
-#  AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
-#                  AC_LINK_IFELSE([AC_LANG_PROGRAM(
-#  [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
++dnl Check for clock_nanosleep which may be in -lrt
++case $host_os in
++    darwin*|macosx*) ;;
++    *) ac_save_LIBS=$LIBS
++        AC_SEARCH_LIBS(clock_nanosleep, rt,
++            [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define to 1 if you have the `clock_nanosleep' function.])
++                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
++    LIBS=$ac_save_LIBS
++    ;;
++esac
++
+ AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
+                 AC_LINK_IFELSE([AC_LANG_PROGRAM(
+ [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
 diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
 index 008a92dad98..f46b03ca2e4 100644
 --- a/dlls/winex11.drv/opengl.c
@@ -45,7 +44,7 @@ index 008a92dad98..f46b03ca2e4 100644
  #include <assert.h>
  #include <stdlib.h>
  #include <string.h>
-@@ -2807,6 +2808,58 @@ static void X11DRV_WineGL_LoadExtensions(void)
+@@ -2807,6 +2808,56 @@ static void X11DRV_WineGL_LoadExtensions(void)
      }
  }
  
@@ -59,7 +58,7 @@ index 008a92dad98..f46b03ca2e4 100644
 +static long long get_time_ns() {
 +    struct timespec ts;
 +    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
-+        ERR("clock_gettime failed with errno %d\n", errno);
++        /* ERR("clock_gettime failed with errno %d\n", errno); */
 +        return 0;
 +    }
 +    return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
@@ -76,8 +75,6 @@ index 008a92dad98..f46b03ca2e4 100644
 +}
 +
 +static void limit_frame_rate() {
-+    if (!custom_fps) return;
-+
 +    long long current_time = get_time_ns();
 +    long long frame_time = current_time - last_frame_time;
 +    long long target_frame_time = 1000000000LL / custom_fps;
@@ -104,13 +101,13 @@ index 008a92dad98..f46b03ca2e4 100644
  /**
   * glxdrv_SwapBuffers
   *
-@@ -2880,6 +2933,11 @@ static BOOL glxdrv_wglSwapBuffers( HDC hdc )
+@@ -2880,6 +2931,11 @@ static BOOL glxdrv_wglSwapBuffers( HDC hdc )
      present_gl_drawable( hwnd, ctx ? ctx->hdc : hdc, gl, !pglXWaitForSbcOML );
      update_gl_drawable_size( gl );
      release_gl_drawable( gl );
 +
 +#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
-+    limit_frame_rate();
++    if (custom_fps) limit_frame_rate();
 +#endif
 +
      return TRUE;

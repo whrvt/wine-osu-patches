@@ -1,0 +1,52 @@
+From c4378bec3c4c479d76e57286d44c9d30253b9711 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Stefan=20D=C3=B6singer?= <stefan@codeweavers.com>
+Date: Thu, 23 Jan 2025 20:11:45 +0300
+Subject: [PATCH] gdi32: Windows adds an extra 4 bytes to EMREXTCREATEPEN.
+
+The application in question doesn't care since it is at the end of a
+struct, but the behavior is consistent and adding it is easier than
+making our tests check for it.
+---
+ dlls/gdi32/emfdc.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/gdi32/emfdc.c b/dlls/gdi32/emfdc.c
+index e48da848a96..2fd4f72f9cc 100644
+--- a/dlls/gdi32/emfdc.c
++++ b/dlls/gdi32/emfdc.c
+@@ -666,8 +666,11 @@ static DWORD emfdc_ext_create_pen( struct emf *emf, HPEN pen )
+ 
+     if (!(size = GetObjectW( pen, 0, NULL )))
+         return 0;
+-    emr_size = sizeof(*emr) - sizeof(emr->elp) + size;
+-    emr = HeapAlloc( GetProcessHeap(), 0, emr_size );
++
++    /* Native adds an extra 4 bytes, presumably because someone wasn't careful about the
++     * dynamic array [1] at the end of EXTLOGPEN. */
++    emr_size = sizeof(*emr) - sizeof(emr->elp) + sizeof(emr->elp.elpStyleEntry) + size;
++    emr = calloc( 1, emr_size );
+     if (!emr)
+         return 0;
+     GetObjectW( pen, size, &emr->elp );
+@@ -677,16 +680,15 @@ static DWORD emfdc_ext_create_pen( struct emf *emf, HPEN pen )
+             emr->elp.elpBrushStyle == BS_PATTERN)
+     {
+         FIXME( "elpBrushStyle = %d\n", emr->elp.elpBrushStyle );
+-        HeapFree( GetProcessHeap(), 0, emr );
++        free( emr );
+         return 0;
+     }
+-    emr->offBmi = emr->cbBmi = emr->offBits = emr->cbBits = 0;
+ 
+     emr->emr.iType = EMR_EXTCREATEPEN;
+     emr->emr.nSize = emr_size;
+     emr->ihPen = ret = emfdc_add_handle( emf, pen );
+     ret = emfdc_record( emf, &emr->emr ) ? ret : 0;
+-    HeapFree( GetProcessHeap(), 0, emr );
++    free( emr );
+     return ret;
+ }
+ 
+-- 
+GitLab
+

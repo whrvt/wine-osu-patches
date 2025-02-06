@@ -1,0 +1,97 @@
+From 62d6666c6316fc8b449d6b3f8c215ae500495835 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 30 Dec 2024 02:14:28 -0800
+Subject: [PATCH] server: Disable debug features if NDEBUG is defined.
+
+Co-authored-by: Torge Matthies <openglfreak@googlemail.com>
+---
+ server/mapping.c |  4 ++++
+ server/object.c  | 11 ++++++++---
+ server/object.h  |  4 ++++
+ 3 files changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/server/mapping.c b/server/mapping.c
+index 177c7bab7d0..2a49e61f6fb 100644
+--- a/server/mapping.c
++++ b/server/mapping.c
+@@ -1397,7 +1397,9 @@ const volatile void *alloc_shared_object(void)
+     SHARED_WRITE_BEGIN( &object->obj.shm, object_shm_t )
+     {
+         /* mark the object data as uninitialized */
++#ifndef NDEBUG
+         mark_block_uninitialized( (void *)shared, sizeof(*shared) );
++#endif
+         CONTAINING_RECORD( shared, shared_object_t, shm )->id = ++session.last_object_id;
+     }
+     SHARED_WRITE_END;
+@@ -1411,7 +1413,9 @@ void free_shared_object( const volatile void *object_shm )
+ 
+     SHARED_WRITE_BEGIN( &object->obj.shm, object_shm_t )
+     {
++#ifndef NDEBUG
+         mark_block_noaccess( (void *)shared, sizeof(*shared) );
++#endif
+         CONTAINING_RECORD( shared, shared_object_t, shm )->id = 0;
+     }
+     SHARED_WRITE_END;
+diff --git a/server/object.c b/server/object.c
+index 529296c3674..69746b66ff4 100644
+--- a/server/object.c
++++ b/server/object.c
+@@ -190,8 +190,6 @@ void close_objects(void)
+     dump_objects();  /* dump any remaining objects */
+ }
+ 
+-#endif  /* DEBUG_OBJECTS */
+-
+ /*****************************************************************/
+ 
+ /* mark a block of memory as not accessible for debugging purposes */
+@@ -221,11 +219,18 @@ void mark_block_uninitialized( void *ptr, size_t size )
+ #endif
+ }
+ 
++#endif  /* DEBUG_OBJECTS */
++
+ /* malloc replacement */
+ void *mem_alloc( size_t size )
+ {
+     void *ptr = malloc( size );
+-    if (ptr) mark_block_uninitialized( ptr, size );
++    if (ptr)
++#ifndef NDEBUG
++        mark_block_uninitialized( ptr, size );
++#else
++0;
++#endif
+     else set_error( STATUS_NO_MEMORY );
+     return ptr;
+ }
+diff --git a/server/object.h b/server/object.h
+index 1a09c1f2548..6c0b83a4326 100644
+--- a/server/object.h
++++ b/server/object.h
+@@ -26,7 +26,9 @@
+ #include "wine/server_protocol.h"
+ #include "wine/list.h"
+ 
++#ifndef NDEBUG
+ #define DEBUG_OBJECTS
++#endif
+ 
+ /* kernel objects */
+ 
+@@ -152,8 +154,10 @@ struct namespace_iterator
+     void *entry;
+ };
+ 
++#ifndef NDEBUG
+ extern void mark_block_noaccess( void *ptr, size_t size );
+ extern void mark_block_uninitialized( void *ptr, size_t size );
++#endif
+ extern void *mem_alloc( size_t size ) __WINE_ALLOC_SIZE(1) __WINE_DEALLOC(free) __WINE_MALLOC;
+ extern void *memdup( const void *data, size_t len ) __WINE_ALLOC_SIZE(2) __WINE_DEALLOC(free);
+ extern void *alloc_object( const struct object_ops *ops );
+-- 
+2.47.1
+

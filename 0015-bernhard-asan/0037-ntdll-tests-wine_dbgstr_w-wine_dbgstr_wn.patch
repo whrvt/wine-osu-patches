@@ -1,0 +1,92 @@
+From a2753160949fd62293160b65dee35b88d0a5f157 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 21:35:18 +0100
+Subject: [PATCH 37/86] ntdll/tests: wine_dbgstr_w - wine_dbgstr_wn
+
+=================================================================
+==904==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1fe0e0 at pc 0x000140218eae bp 0x7ffffe1fdc00 sp 0x7ffffe1fdc48
+READ of size 2 at 0x7ffffe1fe0e0 thread T0
+02a4:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x000140218ead in wine_dbgstr_wn /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30
+    #1 0x0001402178d7 in wine_dbgstr_w /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:305:12
+    #2 0x0001402178d7 in _test_file_name /home/bernhard/data/entwicklung/2024/wine\wine/dlls/ntdll/tests/pipe.c:1939:80
+    #3 0x0001401f300c in test_file_info /home/bernhard/data/entwicklung/2024/wine\wine/dlls/ntdll/tests/pipe.c:2426:5
+    #4 0x0001401f300c in func_pipe /home/bernhard/data/entwicklung/2024/wine\wine/dlls/ntdll/tests/pipe.c:3204:5
+    #5 0x000140366881 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #6 0x000140366881 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #7 0x00014036880f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #8 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #9 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1fe0e0 is located in stack of thread T0 at offset 544 in frame
+    #0 0x00014021738f in _test_file_name /home/bernhard/data/entwicklung/2024/wine\wine/dlls/ntdll/tests/pipe.c:1922
+
+  This frame has 2 object(s):
+    [32, 544) 'buffer' (line 1923) <== Memory access at offset 544 overflows this variable
+    [608, 624) 'iosb' (line 1925)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30 in wine_dbgstr_wn
+Shadow bytes around the buggy address:
+  0x7ffffe1fde00: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fde80: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 00 00 00 00
+  0x7ffffe1fdf00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fdf80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1fe080: 00 00 00 00 00 00 00 00 00 00 00 00[f2]f2 f2 f2
+  0x7ffffe1fe100: f2 f2 f2 f2 00 00 f3 f3 00 00 00 00 00 00 00 00
+  0x7ffffe1fe180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fe280: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1 f1
+  0x7ffffe1fe300: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==904==ABORTING
+02a4:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:299065: dlls/ntdll/tests/x86_64-windows/pipe.ok] Fehler 1
+---
+ dlls/ntdll/tests/pipe.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index df693d07cbd..fe398fde4f0 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -1936,7 +1936,7 @@ static void _test_file_name(unsigned line, HANDLE pipe)
+     ok_(__FILE__,line)( iosb.Information == sizeof(name_info->FileNameLength) + sizeof(nameW),
+         "Information = %Iu\n", iosb.Information );
+     ok( name_info->FileNameLength == sizeof(nameW), "FileNameLength = %lu\n", name_info->FileNameLength );
+-    ok( !memcmp(name_info->FileName, nameW, sizeof(nameW)), "FileName = %s\n", wine_dbgstr_w(name_info->FileName) );
++    ok( !memcmp(name_info->FileName, nameW, sizeof(nameW)), "FileName = %s\n", wine_dbgstr_wn(name_info->FileName, name_info->FileNameLength) );
+ 
+     /* too small buffer */
+     memset( buffer, 0xaa, sizeof(buffer) );
+@@ -1946,7 +1946,7 @@ static void _test_file_name(unsigned line, HANDLE pipe)
+     ok( iosb.Status == STATUS_BUFFER_OVERFLOW, "Status = %lx\n", iosb.Status );
+     ok( iosb.Information == 20, "Information = %Iu\n", iosb.Information );
+     ok( name_info->FileNameLength == sizeof(nameW), "FileNameLength = %lu\n", name_info->FileNameLength );
+-    ok( !memcmp(name_info->FileName, nameW, 16), "FileName = %s\n", wine_dbgstr_w(name_info->FileName) );
++    ok( !memcmp(name_info->FileName, nameW, 16), "FileName = %s\n", wine_dbgstr_wn(name_info->FileName, name_info->FileNameLength) );
+ 
+     /* too small buffer */
+     memset( buffer, 0xaa, sizeof(buffer) );
+-- 
+2.47.1
+

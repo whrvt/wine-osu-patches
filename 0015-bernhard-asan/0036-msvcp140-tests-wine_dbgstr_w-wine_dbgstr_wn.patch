@@ -1,0 +1,146 @@
+From 409beef4d2b146238e98dd3617b4129cdae7bd29 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 21:23:44 +0100
+Subject: [PATCH 36/86] msvcp140/tests: wine_dbgstr_w - wine_dbgstr_wn.
+
+=================================================================
+==540==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1feeb0 at pc 0x00014001f331 bp 0x7ffffe1f96a0 sp 0x7ffffe1f96e8
+READ of size 2 at 0x7ffffe1feeb0 thread T0
+0200:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x00014001f330 in wine_dbgstr_wn /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30
+    #1 0x00014001f330 in wine_dbgstr_w /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:305:12
+    #2 0x000140006b13 in test_to_wide /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcp140/tests/msvcp140.c:751:17
+    #3 0x000140006b13 in func_msvcp140 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcp140/tests/msvcp140.c:1756:5
+    #4 0x000140021bf3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #5 0x00014002163b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #6 0x00014002356f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #7 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #8 0x6ffffacefa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1feeb0 is located in stack of thread T0 at offset 21456 in frame
+    #0 0x00014000100f in func_msvcp140 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcp140/tests/msvcp140.c:1746
+
+  This frame has 66 object(s):
+    [32, 332) 'buffer.i.i.i'
+    [400, 920) 'wpath.i' (line 1708)
+    [1056, 1064) 'mtx.i1406' (line 1677)
+    [1088, 1608) 'origin_path.i1231' (line 1616)
+    [1744, 2264) 'temp_path.i1232' (line 1616)
+    [2400, 2560) 'threads.i' (line 1533)
+    [2624, 2640) 'xt.i' (line 1534)
+    [2656, 2672) 'before.i' (line 1534)
+    [2688, 2704) 'after.i' (line 1534)
+    [2720, 2760) 'cm.i' (line 1535)
+    [2800, 2808) 'cnd.i' (line 1537)
+    [2832, 2840) 'mtx.i' (line 1538)
+    [2864, 2880) 'byval-temp.i1128' (line 1563)
+    [2896, 2912) 'byval-temp58.i' (line 1591)
+    [2928, 2944) 'byval-temp85.i' (line 1607)
+    [2960, 3480) 'temp_path.i1078' (line 1442)
+    [3616, 4136) 'current_path.i1079' (line 1442)
+    [4272, 4528) 'buf.i' (line 1351)
+    [4592, 4848) 'buf_fm.i' (line 1351)
+    [4912, 4920) 'lwt.i' (line 1268)
+    [4944, 5464) 'temp_path.i819' (line 1270)
+    [5600, 6120) 'origin_path.i820' (line 1270)
+    [6256, 6308) 'info1.i' (line 1190)
+    [6352, 6404) 'info2.i' (line 1190)
+    [6448, 6968) 'temp_path.i628' (line 1191)
+    [7104, 7624) 'current_path.i629' (line 1191)
+    [7760, 8282) 'path.i' (line 1165)
+    [8416, 8936) 'temp_path.i596' (line 1165)
+    [9072, 9592) 'temp_path.i519' (line 1104)
+    [9728, 10248) 'current_path.i520' (line 1104)
+    [10384, 10904) 'first_file_name.i' (line 1005)
+    [11040, 11560) 'dest.i' (line 1005)
+    [11696, 12216) 'longer_path.i' (line 1005)
+    [12352, 12872) 'origin_path.i408' (line 1006)
+    [13008, 13528) 'temp_path.i409' (line 1006)
+    [13664, 13668) 'type.i' (line 1008)
+    [13680, 13684) 'err.i' (line 1009)
+    [13696, 13700) 'perms.i' (line 883)
+    [13712, 14232) 'sys_path.i' (line 887)
+    [14368, 14888) 'origin_path.i353' (line 887)
+    [15024, 15544) 'temp_path.i354' (line 887)
+    [15680, 16200) 'temp_path.i314' (line 846)
+    [16336, 16856) 'current_path.i315' (line 846)
+    [16992, 17512) 'origin_path.i316' (line 846)
+    [17648, 18168) 'temp_path.i288' (line 824)
+    [18304, 18824) 'current_path.i' (line 824)
+    [18960, 19480) 'origin_path.i289' (line 824)
+    [19616, 20136) 'temp_path.i' (line 760)
+    [20272, 20792) 'origin_path.i' (line 760)
+    [20928, 21456) 'dst.i160' (line 716) <== Memory access at offset 21456 overflows this variable
+    [21584, 22112) 'compare.i161' (line 717)
+    [22240, 22503) 'longstr.i162' (line 720)
+    [22576, 22840) 'dst.i' (line 670)
+    [22912, 23176) 'compare.i' (line 671)
+    [23248, 23774) 'longstr.i' (line 674)
+    [23904, 23928) 'chore.i' (line 614)
+    [23968, 23992) 'old_chore.i' (line 614)
+    [24032, 24048) 'logger.i' (line 537)
+    [24064, 24072) 'cc.i' (line 475)
+    [24096, 24144) 'function_vtbl.i' (line 478)
+    [24176, 24240) 'function.i' (line 486)
+    [24272, 24336) 'byval-temp.i' (line 511)
+    [24368, 24432) 'byval-temp88.i' (line 517)
+    [24464, 24528) 'byval-temp109.i' (line 523)
+    [24560, 24624) 'byval-temp130.i' (line 529)
+    [24656, 24672) 'tcc.i' (line 452)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30 in wine_dbgstr_wn
+Shadow bytes around the buggy address:
+  0x7ffffe1fec00: f8 f8 f8 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x7ffffe1fec80: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fed00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fed80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fee00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1fee80: 00 00 00 00 00 00[f2]f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x7ffffe1fef00: f2 f2 f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fef80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ff000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ff080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ff100: 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==540==ABORTING
+0200:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:252429: dlls/msvcp140/tests/x86_64-windows/msvcp140.ok] Fehler 1
+---
+ dlls/msvcp140/tests/msvcp140.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/msvcp140/tests/msvcp140.c b/dlls/msvcp140/tests/msvcp140.c
+index 128ea20add2..5e062f27939 100644
+--- a/dlls/msvcp140/tests/msvcp140.c
++++ b/dlls/msvcp140/tests/msvcp140.c
+@@ -748,7 +748,7 @@ static void test_to_wide(void)
+         expected = MultiByteToWideChar(CP_ACP, 0, longstr, -1, compare, MAX_PATH);
+         ok(ret == expected,  "Got unexpected result %d, expected %d, length %u\n", ret, expected, i);
+         ok(!memcmp(dst, compare, sizeof(compare)), "Got unexpected output %s, length %u\n",
+-                wine_dbgstr_w(dst), i);
++                wine_dbgstr_wn(dst, ARRAY_SIZE(dst)), i);
+     }
+ }
+ 
+-- 
+2.47.1
+

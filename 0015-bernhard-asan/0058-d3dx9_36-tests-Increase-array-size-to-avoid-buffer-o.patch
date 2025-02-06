@@ -1,0 +1,122 @@
+From 675110836008f8734d4b451eb39f200241fbe6da Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 9 Dec 2024 10:56:21 +0100
+Subject: [PATCH 58/86] d3dx9_36/tests: Increase array size to avoid buffer
+ overflow. (ASan)
+
+0748:fixme:d3dx:d3dx_load_pixels_from_pixels Unhandled filter 0x80004.
+=================================================================
+==1860==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1ffae0 at pc 0x6ffff833fa4f bp 0x7ffffe1febb0 sp 0x7ffffe1febf8
+READ of size 1 at 0x7ffffe1ffae0 thread T0
+0748:fixme:dbghelp:elf_search_auxv can't find symbol in module
+0748:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F40437B0B80,symt:0000000000000000) in ctx(00007F4088051D20,L"d3dx9_36")
+0748:fixme:dbghelp_dwarf:compute_location Only supporting one breg (r15/343 -> rbx/329)
+0748:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007F40438A0B80,symt:0000000000000000) in ctx(00007F40881B1590,L"d3dx9_36_test")
+    #0 0x6ffff833fa4e in get_relevant_argb_components Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c
+    #1 0x6ffff834107b in point_filter_argb_pixels Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:2325
+    #2 0x6ffff8342d98 in d3dx_load_pixels_from_pixels Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:2644
+    #3 0x6ffff8342f0e in d3dx_load_pixels_from_pixels Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c:2593
+    #4 0x6ffff8363a33 in d3dx_load_volume_from_memory Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\volume.c:140
+    #5 0x6ffff836324a in D3DXLoadVolumeFromMemory Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\volume.c:175
+    #6 0x0001401fcdbc in func_volume+0x285c (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1401fcdbc)
+    #7 0x00014020bec7 in main+0x777 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x14020bec7)
+    #8 0x00014020de1f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #9 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #10 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1ffae0 is located in stack of thread T0 at offset 672 in frame
+    #0 0x0001401fa56f in func_volume+0xf (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\d3dx9_36\tests\x86_64-windows\d3dx9_36_test.exe+0x1401fa56f)
+
+  This frame has 15 object(s):
+    [32, 56) 'src_box.i63' (line 219)
+    [96, 124) 'desc.i' (line 221)
+    [160, 188) 'img_info.i' (line 222)
+    [224, 232) 'volume.i64' (line 223)
+    [256, 272) 'locked_box.i65' (line 224)
+    [288, 312) 'volume_rb.i' (line 225)
+    [352, 360) 'volume_texture.i66' (line 226)
+    [384, 408) 'src_box.i' (line 54)
+    [448, 472) 'dst_box.i' (line 54)
+    [512, 528) 'locked_box.i' (line 55)
+    [544, 552) 'volume.i' (line 56)
+    [576, 584) 'volume_texture.i' (line 57)
+    [608, 672) 'pixels.i' (line 58) <== Memory access at offset 672 overflows this variable
+    [704, 712) 'device' (line 399)
+    [736, 800) 'd3dpp' (line 400)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\d3dx9_36\surface.c in get_relevant_argb_components
+Shadow bytes around the buggy address:
+  0x7ffffe1ff800: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 f8 f8 f8 f2
+  0x7ffffe1ff880: f2 f2 f2 f2 f8 f8 f8 f8 f2 f2 f2 f2 f8 f8 f8 f8
+  0x7ffffe1ff900: f2 f2 f2 f2 f8 f2 f2 f2 f8 f8 f2 f2 f8 f8 f8 f2
+  0x7ffffe1ff980: f2 f2 f2 f2 f8 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2
+  0x7ffffe1ffa00: 00 00 00 f2 f2 f2 f2 f2 00 00 f2 f2 00 f2 f2 f2
+=>0x7ffffe1ffa80: 00 f2 f2 f2 00 00 00 00 00 00 00 00[f2]f2 f2 f2
+  0x7ffffe1ffb00: 00 f2 f2 f2 00 00 00 00 00 00 00 00 f3 f3 f3 f3
+  0x7ffffe1ffb80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ffc00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ffc80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1ffd00: f1 f1 f1 f1 f8 f8 f8 f8 f8 f8 f8 f8 f2 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1860==ABORTING
+make: *** [Makefile:106898: dlls/d3dx9_36/tests/x86_64-windows/volume.ok] Fehler 1
+---
+ dlls/d3dx9_36/tests/volume.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/d3dx9_36/tests/volume.c b/dlls/d3dx9_36/tests/volume.c
+index d7529eb486c..21ff47a896d 100644
+--- a/dlls/d3dx9_36/tests/volume.c
++++ b/dlls/d3dx9_36/tests/volume.c
+@@ -58,7 +58,11 @@ static void test_D3DXLoadVolumeFromMemory(IDirect3DDevice9 *device)
+     const DWORD pixels[] = { 0xc3394cf0, 0x235ae892, 0x09b197fd, 0x8dc32bf6,
+                              0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+                              0x00000000, 0x00000000, 0x00000000, 0xffffffff,
+-                             0xffffffff, 0x00000000, 0xffffffff, 0x00000000 };
++                             0xffffffff, 0x00000000, 0xffffffff, 0x00000000,
++                             0x11111111, 0x11111111, 0x11111111, 0x11111111,
++                             0x22222222, 0x22222222, 0x22222222, 0x22222222,
++                             0x33333333, 0x33333333, 0x33333333, 0x33333333,
++                             0x44444444, 0x44444444, 0x44444444, 0x44444444};
+ 
+     hr = IDirect3DDevice9_CreateVolumeTexture(device, 256, 256, 4, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT,
+             &volume_texture, NULL);
+@@ -98,14 +102,14 @@ static void test_D3DXLoadVolumeFromMemory(IDirect3DDevice9 *device)
+ 
+     set_box(&src_box, 0, 0, 4, 4, 0, 1);
+     set_box(&dst_box, 0, 0, 4, 4, 0, 1);
+-    hr = D3DXLoadVolumeFromMemory(volume, NULL, &dst_box, pixels, D3DFMT_A8R8G8B8, 16, sizeof(pixels), NULL, &src_box, D3DX_DEFAULT, 0);
++    hr = D3DXLoadVolumeFromMemory(volume, NULL, &dst_box, pixels, D3DFMT_A8R8G8B8, 16, sizeof(pixels)-64, NULL, &src_box, D3DX_DEFAULT, 0);
+     ok(hr == D3D_OK, "D3DXLoadVolumeFromMemory returned %#lx, expected %#lx\n", hr, D3D_OK);
+ 
+     IDirect3DVolume9_LockBox(volume, &locked_box, &dst_box, D3DLOCK_READONLY);
+     for (i = 0; i < 16; i++) check_pixel_4bpp(&locked_box, i % 4, i / 4, 0, pixels[i]);
+     IDirect3DVolume9_UnlockBox(volume);
+ 
+-    hr = D3DXLoadVolumeFromMemory(volume, NULL, NULL, pixels, D3DFMT_A8R8G8B8, 16, sizeof(pixels), NULL, &src_box, D3DX_FILTER_NONE, 0);
++    hr = D3DXLoadVolumeFromMemory(volume, NULL, NULL, pixels, D3DFMT_A8R8G8B8, 16, sizeof(pixels)-64, NULL, &src_box, D3DX_FILTER_NONE, 0);
+     ok(hr == D3D_OK, "D3DXLoadVolumeFromMemory returned %#lx, expected %#lx\n", hr, D3D_OK);
+ 
+     IDirect3DVolume9_LockBox(volume, &locked_box, NULL, D3DLOCK_READONLY);
+-- 
+2.47.1
+

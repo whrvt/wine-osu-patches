@@ -1,0 +1,97 @@
+From 17645bebade39c34ee65fab9175d653021558eb7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Tue, 10 Dec 2024 01:47:28 +0100
+Subject: [PATCH 76/86] wbemprox: Avoid overflow by allocating 4 bytes.
+
+(Was easier to reserve 32 bits instead of using just 16 bits later.)
+
+=================================================================
+==2544==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7e84e25f0c52 at pc 0x6ffff8e88bfb bp 0x7ffffe1fd3b0 sp 0x7ffffe1fd3f8
+READ of size 4 at 0x7e84e25f0c52 thread T0
+0a34:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff8e88bfa in __asan_memcpy /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #1 0x6ffff8253e13 in SafeArrayPutElement /home/bernhard/data/entwicklung/2024/wine\wine/dlls/oleaut32/safearray.c:922:9
+    #2 0x6ffff75fcb40 in to_safearray /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/query.c:1090:18
+    #3 0x6ffff75fdadc in get_propval /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/query.c:1216:19
+    #4 0x6ffff75efc60 in class_object_Get /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/class.c:409:12
+    #5 0x0001400119a2 in IWbemClassObject_Get /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\wbemcli.h:1989:12
+    #6 0x0001400119a2 in test_Win32_SystemEnclosure /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/tests/query.c:905:10
+    #7 0x0001400119a2 in func_query /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/tests/query.c:2501:5
+    #8 0x000140033d71 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #9 0x000140033d71 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #10 0x000140035c0f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #11 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #12 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7e84e25f0c52 is located 0 bytes after 2-byte region [0x7e84e25f0c50,0x7e84e25f0c52)
+allocated by thread T0 here:
+    #0 0x6ffff8e8a2c1 in malloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:80:3
+    #1 0x6ffff75e8645 in get_systemenclosure_chassistypes /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/builtin.c:4119:19
+    #2 0x6ffff75e8645 in fill_systemenclosure /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/builtin.c:4150:25
+    #3 0x6ffff75fba38 in exec_select_view /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/query.c:708:18
+    #4 0x6ffff75fba38 in execute_view /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/query.c:746:16
+    #5 0x6ffff75fc6d9 in exec_query /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/query.c:795:10
+    #6 0x0001400116ef in IWbemServices_ExecQuery /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\wbemcli.h:1402:12
+    #7 0x0001400116ef in test_Win32_SystemEnclosure /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/tests/query.c:895:10
+    #8 0x0001400116ef in func_query /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wbemprox/tests/query.c:2501:5
+    #9 0x000140033d71 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #10 0x000140033d71 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #11 0x000140035c0f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #12 0x6ffffc1c4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #13 0x6ffffc39fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/oleaut32/safearray.c:922:9 in SafeArrayPutElement
+Shadow bytes around the buggy address:
+  0x7e84e25f0980: fa fa fd fd fa fa fd fd fa fa fd fa fa fa fd fd
+  0x7e84e25f0a00: fa fa fd fd fa fa fd fd fa fa fd fd fa fa fd fa
+  0x7e84e25f0a80: fa fa fd fd fa fa fd fd fa fa fd fd fa fa fd fa
+  0x7e84e25f0b00: fa fa fd fd fa fa fd fd fa fa fd fd fa fa fd fa
+  0x7e84e25f0b80: fa fa fd fd fa fa fd fd fa fa fd fa fa fa fd fa
+=>0x7e84e25f0c00: fa fa 00 fa fa fa 00 00 fa fa[02]fa fa fa 04 fa
+  0x7e84e25f0c80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e84e25f0d00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e84e25f0d80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e84e25f0e00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e84e25f0e80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2544==ABORTING
+0a34:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:397130: dlls/wbemprox/tests/x86_64-windows/query.ok] Fehler 1
+---
+ dlls/wbemprox/builtin.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/wbemprox/builtin.c b/dlls/wbemprox/builtin.c
+index 3e8c320028d..51bcc3114c8 100644
+--- a/dlls/wbemprox/builtin.c
++++ b/dlls/wbemprox/builtin.c
+@@ -4110,7 +4110,7 @@ static struct array *get_systemenclosure_chassistypes( const char *buf, UINT len
+     const struct smbios_header *hdr;
+     const struct smbios_chassis *chassis;
+     struct array *ret = NULL;
+-    UINT16 *types;
++    UINT32 *types;
+ 
+     if (!(hdr = find_smbios_entry( SMBIOS_TYPE_CHASSIS, 0, buf, len )) || hdr->length < sizeof(*chassis)) goto done;
+     chassis = (const struct smbios_chassis *)hdr;
+-- 
+2.47.1
+

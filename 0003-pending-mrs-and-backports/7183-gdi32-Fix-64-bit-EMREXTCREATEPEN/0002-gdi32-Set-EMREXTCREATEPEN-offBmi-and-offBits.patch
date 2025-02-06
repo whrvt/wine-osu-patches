@@ -1,0 +1,26 @@
+From a3cad8135cbd94c6417527be26dcbebe5d9f01d0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Stefan=20D=C3=B6singer?= <stefan@codeweavers.com>
+Date: Thu, 23 Jan 2025 21:40:32 +0300
+Subject: [PATCH] gdi32: Set EMREXTCREATEPEN offBmi and offBits.
+
+Again to match what the tests get on native.
+---
+ dlls/gdi32/emfdc.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/gdi32/emfdc.c b/dlls/gdi32/emfdc.c
+index 2fd4f72f9cc..66a9ef7ed0f 100644
+--- a/dlls/gdi32/emfdc.c
++++ b/dlls/gdi32/emfdc.c
+@@ -683,6 +683,8 @@ static DWORD emfdc_ext_create_pen( struct emf *emf, HPEN pen )
+         free( emr );
+         return 0;
+     }
++    /* Native sets these even if there is no bitmap or brush BITMAPINFO. */
++    emr->offBmi = emr->offBits = emr_size;
+ 
+     emr->emr.iType = EMR_EXTCREATEPEN;
+     emr->emr.nSize = emr_size;
+-- 
+GitLab
+

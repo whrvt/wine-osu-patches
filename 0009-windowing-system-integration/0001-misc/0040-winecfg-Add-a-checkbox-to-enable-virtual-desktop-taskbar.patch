@@ -1,0 +1,179 @@
+From 2f1de1c78dcb32cde3d7673a9345cc616ec72e09 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 10 Dec 2024 22:12:41 +0100
+Subject: [PATCH] winecfg: Add a checkbox to enable virtual desktop taskbar.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57515
+---
+ programs/winecfg/libraries.c |  2 +-
+ programs/winecfg/resource.h  |  1 +
+ programs/winecfg/winecfg.c   | 30 ++++++++++++++++++++++++++++++
+ programs/winecfg/winecfg.h   |  5 +++--
+ programs/winecfg/winecfg.rc  |  4 +++-
+ programs/winecfg/x11drvdlg.c | 14 +++++++++++++-
+ 6 files changed, 51 insertions(+), 5 deletions(-)
+
+diff --git a/programs/winecfg/libraries.c b/programs/winecfg/libraries.c
+index 09fd397ab63..8980b1691df 100644
+--- a/programs/winecfg/libraries.c
++++ b/programs/winecfg/libraries.c
+@@ -439,7 +439,7 @@ static void on_add_combo_change(HWND dialog)
+ 
+     if (buffer[0] || len>0)
+     {
+-        enable(IDC_DLLS_ADDDLL)
++        enable(IDC_DLLS_ADDDLL);
+         SendMessageW(GetParent(dialog), DM_SETDEFID, IDC_DLLS_ADDDLL, 0);
+     }
+     else
+diff --git a/programs/winecfg/resource.h b/programs/winecfg/resource.h
+index cd7eaaf711e..a35775931d4 100644
+--- a/programs/winecfg/resource.h
++++ b/programs/winecfg/resource.h
+@@ -105,6 +105,7 @@
+ #define IDS_DRIVE_NO_C                  1075
+ #define IDC_BUTTON_SHOW_HIDE_ADVANCED   1076
+ #define IDC_STATIC_TYPE                 1077
++#define IDC_ENABLE_SHELL                1078
+ #define IDC_SHOW_DOT_FILES              1080
+ 
+ #define IDS_DRIVE_UNKNOWN               8200
+diff --git a/programs/winecfg/winecfg.c b/programs/winecfg/winecfg.c
+index 17104fa7dbd..a8b7016f7fd 100644
+--- a/programs/winecfg/winecfg.c
++++ b/programs/winecfg/winecfg.c
+@@ -236,6 +236,36 @@ static void free_setting(struct setting *setting)
+     free(setting);
+ }
+ 
++DWORD get_reg_key_dword(HKEY root, const WCHAR *path, const WCHAR *name, DWORD def)
++{
++    struct list *cursor;
++    struct setting *s;
++    DWORD val, size = sizeof(val);
++
++    WINE_TRACE("path=%s, name=%s, def=%lu\n", wine_dbgstr_w(path),
++               wine_dbgstr_w(name), def);
++
++    LIST_FOR_EACH( cursor, &settings )
++    {
++        s = LIST_ENTRY(cursor, struct setting, entry);
++
++        if (root != s->root) continue;
++        if (lstrcmpiW(path, s->path) != 0) continue;
++        if (!s->name) continue;
++        if (lstrcmpiW(name, s->name) != 0) continue;
++
++        WINE_TRACE("found %s:%s in settings list, returning %s\n",
++                   wine_dbgstr_w(path), wine_dbgstr_w(name),
++                   wine_dbgstr_w(s->value));
++        return *(DWORD *)s->value;
++    }
++
++    if (RegGetValueW( root, path, name, RRF_RT_REG_DWORD, NULL, &val, &size ))
++        val = def;
++    WINE_TRACE("returning %lu\n", val);
++    return val;
++}
++
+ /**
+  * Returns the contents of the value at path. If not in the settings
+  * list, it will be fetched from the registry - failing that, the
+diff --git a/programs/winecfg/winecfg.h b/programs/winecfg/winecfg.h
+index f3f3ad2addf..236438d0753 100644
+--- a/programs/winecfg/winecfg.h
++++ b/programs/winecfg/winecfg.h
+@@ -54,6 +54,7 @@ extern WCHAR* current_app; /* NULL means editing global settings  */
+ 
+ void set_reg_key(HKEY root, const WCHAR *path, const WCHAR *name, const WCHAR *value);
+ void set_reg_key_dword(HKEY root, const WCHAR *path, const WCHAR *name, DWORD value);
++DWORD get_reg_key_dword(HKEY root, const WCHAR *path, const WCHAR *name, DWORD def);
+ WCHAR *get_reg_key(HKEY root, const WCHAR *path, const WCHAR *name, const WCHAR *def)
+     __WINE_DEALLOC(free) __WINE_MALLOC;
+ 
+@@ -121,8 +122,8 @@ BOOL browse_for_unix_folder(HWND dialog, WCHAR *pszPath);
+ extern struct drive drives[26]; /* one for each drive letter */
+ 
+ /* Some basic utilities to make win32 suck less */
+-#define disable(id) EnableWindow(GetDlgItem(dialog, id), 0);
+-#define enable(id) EnableWindow(GetDlgItem(dialog, id), 1);
++#define disable(id) EnableWindow(GetDlgItem(dialog, id), 0)
++#define enable(id) EnableWindow(GetDlgItem(dialog, id), 1)
+ void PRINTERROR(void); /* WINE_TRACE() the plaintext error message from GetLastError() */
+ 
+ /* create a unicode string from a string in Unix locale */
+diff --git a/programs/winecfg/winecfg.rc b/programs/winecfg/winecfg.rc
+index 779a2f900e3..e642c71ed61 100644
+--- a/programs/winecfg/winecfg.rc
++++ b/programs/winecfg/winecfg.rc
+@@ -175,7 +175,9 @@ BEGIN
+     CONTROL     "Allow the window manager to &decorate the windows",IDC_ENABLE_DECORATED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,15,20,230,10
+     CONTROL     "Allow the &window manager to control the windows",IDC_ENABLE_MANAGED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,15,32,230,10
+     CONTROL     "&Emulate a virtual desktop",IDC_ENABLE_DESKTOP,"Button",
+-                BS_AUTOCHECKBOX | WS_TABSTOP,15,44,230,10
++                BS_AUTOCHECKBOX | WS_TABSTOP,15,44,100,10
++    CONTROL     "&with a taskbar",IDC_ENABLE_SHELL,"Button",
++                BS_AUTOCHECKBOX | WS_TABSTOP,120,44,100,10,WS_DISABLED
+     LTEXT       "Desktop &size:",IDC_DESKTOP_SIZE,15,58,64,16,WS_DISABLED
+     LTEXT       "#msgctxt#do not translate#X",IDC_DESKTOP_BY,129,58,8,8,WS_DISABLED
+     EDITTEXT    IDC_DESKTOP_WIDTH,84,56,40,12,ES_AUTOHSCROLL | ES_NUMBER | WS_DISABLED
+diff --git a/programs/winecfg/x11drvdlg.c b/programs/winecfg/x11drvdlg.c
+index aea52717a78..f184bff9030 100644
+--- a/programs/winecfg/x11drvdlg.c
++++ b/programs/winecfg/x11drvdlg.c
+@@ -61,10 +61,12 @@ static void update_gui_for_desktop_mode(HWND dialog)
+ {
+     WCHAR *buf, *bufindex;
+     const WCHAR *desktop_name = current_app ? current_app : L"Default";
++    WCHAR buffer[MAX_PATH];
+ 
+     WINE_TRACE("\n");
+     updating_ui = TRUE;
+ 
++    swprintf( buffer, ARRAY_SIZE(buffer), L"Explorer\\Desktops\\%s", desktop_name );
+     buf = get_reg_key(config_key, L"Explorer\\Desktops", desktop_name, NULL);
+     if (buf && (bufindex = wcschr(buf, 'x')))
+     {
+@@ -81,7 +83,11 @@ static void update_gui_for_desktop_mode(HWND dialog)
+     /* do we have desktop mode enabled? */
+     if (reg_key_exists(config_key, keypath(L"Explorer"), L"Desktop"))
+     {
+-	CheckDlgButton(dialog, IDC_ENABLE_DESKTOP, BST_CHECKED);
++        BOOL enable_shell = get_reg_key_dword(config_key, buffer, L"EnableShell", 0);
++        CheckDlgButton(dialog, IDC_ENABLE_DESKTOP, BST_CHECKED);
++        CheckDlgButton(dialog, IDC_ENABLE_SHELL, enable_shell ? BST_CHECKED : BST_UNCHECKED);
++        if (enable_shell) enable(IDC_ENABLE_SHELL);
++        else enable(IDC_ENABLE_SHELL);
+         enable(IDC_DESKTOP_WIDTH);
+         enable(IDC_DESKTOP_HEIGHT);
+         enable(IDC_DESKTOP_SIZE);
+@@ -90,6 +96,8 @@ static void update_gui_for_desktop_mode(HWND dialog)
+     else
+     {
+ 	CheckDlgButton(dialog, IDC_ENABLE_DESKTOP, BST_UNCHECKED);
++    CheckDlgButton(dialog, IDC_ENABLE_SHELL, BST_UNCHECKED);
++    disable(IDC_ENABLE_SHELL);
+ 	disable(IDC_DESKTOP_WIDTH);
+ 	disable(IDC_DESKTOP_HEIGHT);
+ 	disable(IDC_DESKTOP_SIZE);
+@@ -183,6 +191,9 @@ static void set_from_desktop_edits(HWND dialog)
+     set_reg_key(config_key, L"Explorer\\Desktops", desktop_name, buffer);
+     set_reg_key(config_key, keypath(L"Explorer"), L"Desktop", desktop_name);
+ 
++    swprintf( buffer, ARRAY_SIZE(buffer), L"Explorer\\Desktops\\%s", desktop_name );
++    set_reg_key_dword(config_key, buffer, L"EnableShell", IsDlgButtonChecked(dialog, IDC_ENABLE_SHELL) == BST_CHECKED);
++
+     free(width);
+     free(height);
+ }
+@@ -380,6 +391,7 @@ GraphDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+ 		    SendMessageW(GetParent(hDlg), PSM_CHANGED, 0, 0);
+ 		    switch(LOWORD(wParam)) {
+ 			case IDC_ENABLE_DESKTOP: on_enable_desktop_clicked(hDlg); break;
++                        case IDC_ENABLE_SHELL: on_enable_desktop_clicked(hDlg); break;
+                         case IDC_ENABLE_MANAGED: on_enable_managed_clicked(hDlg); break;
+                         case IDC_ENABLE_DECORATED: on_enable_decorated_clicked(hDlg); break;
+ 			case IDC_FULLSCREEN_GRAB:  on_fullscreen_grab_clicked(hDlg); break;
+-- 
+GitLab
+

@@ -1,0 +1,152 @@
+From 74e8b85db92a4f5643115d6c7f434795d5b535e3 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 24 Apr 2023 19:58:11 -0600
+Subject: [PATCH 0868/2346] HACK: server: Disable hooks that time out.
+
+An addition to "HACK: user32: Remove hooks that time out."
+
+CW-Bug-Id: #22178
+---
+ server/hook.c  | 25 ++++++++++++++++++++++++-
+ server/queue.c | 22 ++++++++++++++++++----
+ server/user.h  |  3 ++-
+ 3 files changed, 44 insertions(+), 6 deletions(-)
+
+diff --git a/server/hook.c b/server/hook.c
+index 3a89a883c3c..24eb27434db 100644
+--- a/server/hook.c
++++ b/server/hook.c
+@@ -405,16 +405,39 @@ void remove_thread_hooks( struct thread *thread )
+ }
+ 
+ /* return the thread that owns the first global hook */
+-struct thread *get_first_global_hook( struct desktop *desktop, int id )
++struct thread *get_first_global_hook( struct desktop *desktop, int id, thread_id_t *thread_id, client_ptr_t *proc )
+ {
+     struct hook *hook;
+     struct hook_table *global_hooks = desktop->global_hooks;
+ 
+     if (!global_hooks) return NULL;
+     if (!(hook = get_first_valid_hook( global_hooks, id - WH_MINHOOK, EVENT_MIN, 0, 0, 0 ))) return NULL;
++    *thread_id = hook->owner->id;
++    *proc = hook->proc;
+     return hook->owner;
+ }
+ 
++void disable_hung_hook( struct desktop *desktop, int id, thread_id_t thread_id, client_ptr_t proc )
++{
++    struct hook_table *global_hooks = desktop->global_hooks;
++    int index = id - WH_MINHOOK;
++    struct hook *hook;
++
++    if (!global_hooks || !proc) return;
++
++    hook = get_first_hook( global_hooks, index );
++
++    while (hook)
++    {
++        if (hook->proc == proc && hook->owner->id == thread_id)
++        {
++            hook->proc = 0;
++            return;
++        }
++        hook = HOOK_ENTRY( list_next( &global_hooks->hooks[index], &hook->chain ) );
++    }
++}
++
+ /* set a window hook */
+ DECL_HANDLER(set_hook)
+ {
+diff --git a/server/queue.c b/server/queue.c
+index fb6fe2d9478..12592241c92 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -72,6 +72,8 @@ struct message_result
+     void                  *data;          /* message reply data */
+     unsigned int           data_size;     /* size of message reply data */
+     struct timeout_user   *timeout;       /* result timeout */
++    thread_id_t            hook_thread_id;/* Hook owner thread id. */
++    client_ptr_t           hook_proc;     /* Hook proc address. */
+ };
+ 
+ struct message
+@@ -1016,6 +1018,13 @@ static void result_timeout( void *private )
+     {
+         struct message *msg = result->msg;
+ 
++        if (result->sender && result->hook_thread_id && result->hook_proc)
++        {
++            if (debug_level > 1)
++                fprintf( stderr, "disabling hung hook: tid %04x, proc %#lx\n",
++                         result->hook_thread_id, (unsigned long)result->hook_proc );
++            disable_hung_hook( result->sender->input->desktop, msg->msg, result->hook_thread_id, result->hook_proc );
++        }
+         result->msg = NULL;
+         msg->result = NULL;
+         remove_queue_message( result->receiver, msg, SEND_MESSAGE );
+@@ -1027,7 +1036,8 @@ static void result_timeout( void *private )
+ /* allocate and fill a message result structure */
+ static struct message_result *alloc_message_result( struct msg_queue *send_queue,
+                                                     struct msg_queue *recv_queue,
+-                                                    struct message *msg, timeout_t timeout )
++                                                    struct message *msg, timeout_t timeout,
++                                                    thread_id_t hook_thread_id, client_ptr_t hook_proc)
+ {
+     struct message_result *result = mem_alloc( sizeof(*result) );
+     if (result)
+@@ -1042,6 +1052,8 @@ static struct message_result *alloc_message_result( struct msg_queue *send_queue
+         result->hardware_msg = NULL;
+         result->desktop      = NULL;
+         result->callback_msg = NULL;
++        result->hook_thread_id = hook_thread_id;
++        result->hook_proc = hook_proc;
+ 
+         if (msg->type == MSG_CALLBACK)
+         {
+@@ -2027,8 +2039,10 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
+     struct msg_queue *queue;
+     struct message *msg;
+     timeout_t timeout = 2000 * -10000;  /* FIXME: load from registry */
++    thread_id_t hook_thread_id;
++    client_ptr_t hook_proc;
+ 
+-    if (!(hook_thread = get_first_global_hook( desktop, id ))) return 0;
++    if (!(hook_thread = get_first_global_hook( desktop, id, &hook_thread_id, &hook_proc ))) return 0;
+     if (!(queue = hook_thread->queue)) return 0;
+     if (is_queue_hung( queue )) return 0;
+ 
+@@ -2046,7 +2060,7 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
+     msg->result    = NULL;
+ 
+     if (!(msg->data = memdup( hardware_msg->data, hardware_msg->data_size )) ||
+-        !(msg->result = alloc_message_result( sender, queue, msg, timeout )))
++        !(msg->result = alloc_message_result( sender, queue, msg, timeout, hook_thread_id, hook_proc )))
+     {
+         free_message( msg );
+         return 0;
+@@ -3272,7 +3286,7 @@ DECL_HANDLER(send_message)
+         case MSG_ASCII:
+         case MSG_UNICODE:
+         case MSG_CALLBACK:
+-            if (!(msg->result = alloc_message_result( send_queue, recv_queue, msg, req->timeout )))
++            if (!(msg->result = alloc_message_result( send_queue, recv_queue, msg, req->timeout, 0, 0 )))
+             {
+                 free_message( msg );
+                 break;
+diff --git a/server/user.h b/server/user.h
+index 26d22a00240..a6ef5fc1f83 100644
+--- a/server/user.h
++++ b/server/user.h
+@@ -115,7 +115,8 @@ extern void cleanup_clipboard_thread( struct thread *thread );
+ 
+ extern void remove_thread_hooks( struct thread *thread );
+ extern unsigned int get_active_hooks(void);
+-extern struct thread *get_first_global_hook( struct desktop *desktop, int id );
++extern struct thread *get_first_global_hook( struct desktop *desktop, int id, thread_id_t *thread_id, client_ptr_t *proc );
++extern void disable_hung_hook( struct desktop *desktop, int id, thread_id_t thread_id, client_ptr_t proc );
+ extern void add_desktop_hook_count( struct desktop *desktop, struct thread *thread, int count );
+ 
+ /* queue functions */
+-- 
+2.47.0
+

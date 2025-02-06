@@ -1,0 +1,58 @@
+From 294e2338a222d73247412b989272c08d3e01a6d9 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 30 Jan 2025 01:01:55 -0800
+Subject: [PATCH] rpcrt4: Pointer arithmetic fixes (-Wtautological-compare).
+
+---
+ dlls/rpcrt4/ndr_marshall.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/rpcrt4/ndr_marshall.c b/dlls/rpcrt4/ndr_marshall.c
+index c68eb0ee57e..f0249cba953 100644
+--- a/dlls/rpcrt4/ndr_marshall.c
++++ b/dlls/rpcrt4/ndr_marshall.c
+@@ -711,9 +711,8 @@ static inline ULONG safe_multiply(ULONG a, ULONG b)
+ 
+ static inline void safe_buffer_increment(MIDL_STUB_MESSAGE *pStubMsg, ULONG size)
+ {
+-    if ((pStubMsg->Buffer + size < pStubMsg->Buffer) || /* integer overflow of pStubMsg->Buffer */
+-        (pStubMsg->Buffer + size > (unsigned char *)pStubMsg->RpcMsg->Buffer + pStubMsg->BufferLength))
+-        RpcRaiseException(RPC_X_BAD_STUB_DATA);
++    if (size > (SIZE_T)(((unsigned char *)pStubMsg->RpcMsg->Buffer + pStubMsg->BufferLength) - pStubMsg->Buffer))
++        RpcRaiseException(RPC_X_BAD_STUB_DATA); /* integer overflow of pStubMsg->BufferSize */
+     pStubMsg->Buffer += size;
+ }
+ 
+@@ -732,8 +731,7 @@ static inline void safe_buffer_length_increment(MIDL_STUB_MESSAGE *pStubMsg, ULO
+  * to do so */
+ static inline void safe_copy_from_buffer(MIDL_STUB_MESSAGE *pStubMsg, void *p, ULONG size)
+ {
+-    if ((pStubMsg->Buffer + size < pStubMsg->Buffer) || /* integer overflow of pStubMsg->Buffer */
+-        (pStubMsg->Buffer + size > pStubMsg->BufferEnd))
++    if (size > (SIZE_T)(pStubMsg->BufferEnd - pStubMsg->Buffer)) /* integer overflow of pStubMsg->Buffer */
+     {
+         ERR("buffer overflow - Buffer = %p, BufferEnd = %p, size = %lu\n",
+             pStubMsg->Buffer, pStubMsg->BufferEnd, size);
+@@ -748,8 +746,7 @@ static inline void safe_copy_from_buffer(MIDL_STUB_MESSAGE *pStubMsg, void *p, U
+ /* copies data to the buffer, checking that there is enough space to do so */
+ static inline void safe_copy_to_buffer(MIDL_STUB_MESSAGE *pStubMsg, const void *p, ULONG size)
+ {
+-    if ((pStubMsg->Buffer + size < pStubMsg->Buffer) || /* integer overflow of pStubMsg->Buffer */
+-        (pStubMsg->Buffer + size > (unsigned char *)pStubMsg->RpcMsg->Buffer + pStubMsg->BufferLength))
++    if (size > (SIZE_T)(((unsigned char *)pStubMsg->RpcMsg->Buffer + pStubMsg->BufferLength) - pStubMsg->Buffer)) /* integer overflow of pStubMsg->Buffer */
+     {
+         ERR("buffer overflow - Buffer = %p, BufferEnd = %p, size = %lu\n",
+             pStubMsg->Buffer, (unsigned char *)pStubMsg->RpcMsg->Buffer + pStubMsg->BufferLength,
+@@ -767,8 +764,7 @@ static void validate_string_data(MIDL_STUB_MESSAGE *pStubMsg, ULONG bufsize, ULO
+     ULONG i;
+ 
+     /* verify the buffer is safe to access */
+-    if ((pStubMsg->Buffer + bufsize < pStubMsg->Buffer) ||
+-        (pStubMsg->Buffer + bufsize > pStubMsg->BufferEnd))
++    if (bufsize > (SIZE_T)(pStubMsg->BufferEnd - pStubMsg->Buffer))
+     {
+         ERR("bufsize 0x%lx exceeded buffer end %p of buffer %p\n", bufsize,
+             pStubMsg->BufferEnd, pStubMsg->Buffer);
+-- 
+GitLab
+

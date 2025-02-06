@@ -1,0 +1,199 @@
+From e91f435f305e72c86c6f8a1744d61303717ae932 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Wed, 4 Dec 2024 22:49:20 +0100
+Subject: [PATCH 33/86] kernel32/tests: locale: debugstr_w - debugstr_wn.
+
+kernel32_test.exe locale
+
+ASAN_OPTIONS='verbosity=0:windows_hook_rtl_allocators=1' WINEDLLOVERRIDES="$F=n;*.dll=n" WINEDEBUG= wine64 z:/home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj/dlls/kernel32/tests/x86_64-windows/kernel32_test.exe locale
+...
+=================================================================
+==1748==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1f58da at pc 0x0001402ca8ce bp 0x7ffffe1f4000 sp 0x7ffffe1f4048
+READ of size 2 at 0x7ffffe1f58da thread T0
+06e8:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x0001402ca8cd in wine_dbgstr_wn /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30
+    #1 0x00014028a4d3 in debugstr_w /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:521:65
+    #2 0x00014028a4d3 in test_ResolveLocaleName /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:6042:60
+    #3 0x00014028a4d3 in func_locale /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:8714:3
+    #4 0x0001404d7f01 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #5 0x0001404d7f01 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #6 0x0001404d9eef in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #7 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #8 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1f58da is located in stack of thread T0 at offset 5434 in frame
+    #0 0x000140264a7f in func_locale /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:8664
+
+  This frame has 117 object(s):
+    [32, 1032) 'buffer.i3963' (line 3811)
+    [1168, 2168) 'buff1.i' (line 3819)
+    [2304, 3304) 'buff2.i' (line 3820)
+    [3440, 3696) 'buf.i3926' (line 3442)
+    [3760, 3824) 'reg_name.i' (line 8219)
+    [3856, 3920) 'buf.i3810' (line 8219)
+    [3952, 4016) 'set_name.i' (line 8219)
+    [4048, 4112) 'nation.i' (line 8219)
+    [4144, 4208) 'region.i' (line 8219)
+    [4240, 4244) 'size.i3811' (line 8221)
+    [4256, 4260) 'type.i3812' (line 8221)
+    [4272, 4280) 'key.i3813' (line 8225)
+    [4304, 4312) 'addr.i' (line 8171)
+    [4336, 4344) 'addr2.i' (line 8171)
+    [4368, 4372) 'lcid.i3591' (line 8173)
+    [4384, 4392) 'size.i3592' (line 8174)
+    [4416, 4432) 'src.i3515' (line 7722)
+    [4448, 4464) 'buffer.i3516' (line 7722)
+    [4480, 4484) 'found.i' (line 7093)
+    [4496, 4500) 'count.i3040' (line 6876)
+    [4512, 4516) 'size.i3041' (line 6876)
+    [4528, 4532) 'size_id.i3042' (line 6876)
+    [4544, 4548) 'size_name.i' (line 6876)
+    [4560, 4564) 'count.i' (line 6800)
+    [4576, 4580) 'size.i' (line 6800)
+    [4592, 4596) 'size_id.i' (line 6800)
+    [4608, 4736) 'buffer.i2658' (line 6505)
+    [4768, 4788) 'buffA.i' (line 6158)
+    [4832, 4872) 'buffW.i' (line 6159)
+    [4912, 4922) 'test1.i' (line 6071)
+    [4944, 4954) 'test2.i' (line 6072)
+    [4976, 4988) 'test3.i' (line 6073)
+    [5008, 5016) 'null1.i' (line 6074)
+    [5040, 5048) 'null2.i' (line 6075)
+    [5072, 5086) 'bills1.i' (line 6076)
+    [5104, 5116) 'bills2.i' (line 6077)
+    [5136, 5148) 'coop1.i' (line 6078)
+    [5168, 5178) 'coop2.i' (line 6079)
+    [5200, 5204) 'nonascii1.i' (line 6080)
+    [5216, 5220) 'nonascii2.i' (line 6081)
+    [5232, 5234) 'ch1.i' (line 6082)
+    [5248, 5250) 'ch2.i' (line 6082)
+    [5264, 5434) 'buffer.i2117' (line 6021) <== Memory access at offset 5434 overflows this variable
+    [5504, 5674) 'system.i' (line 6021)
+    [5744, 9776) 'test_data.i282.i' (line 5661)
+    [9904, 11952) 'buf.i283.i' (line 5690)
+    [12080, 16448) 'test_data.i253.i' (line 5616)
+    [16704, 18752) 'buf.i254.i' (line 5645)
+    [18880, 25760) 'test_data.i.i' (line 5498)
+    [26016, 28064) 'buf.i.i' (line 5537)
+    [28192, 28196) 'len.i.i' (line 5604)
+    [28208, 30256) 'buffer.i1771' (line 5740)
+    [30384, 33968) 'columns.i' (line 5741)
+    [34096, 34608) 'dst.i1772' (line 5741)
+    [34672, 34712) 'types.i' (line 5378)
+    [34752, 34756) 'ch.i' (line 5379)
+    [34768, 34928) 'buffer.i1615' (line 4763)
+    [34992, 34994) 'type.i' (line 4060)
+    [35008, 35520) 'src.i1064' (line 4062)
+    [35584, 36096) 'dst.i1065' (line 4062)
+    [36160, 36162) 'wch.i' (line 4289)
+    [36176, 36432) 'src.i' (line 3851)
+    [36496, 36752) 'dst.i' (line 3851)
+    [36816, 37328) 'buf.i957' (line 2879)
+    [37392, 37904) 'buf.i940' (line 2854)
+    [37968, 38224) 'buf.i833' (line 2347)
+    [38288, 38544) 'buf2.i' (line 2347)
+    [38608, 38620) 'locale.i804' (line 2294)
+    [38640, 38688) 'si.i' (line 2056)
+    [38720, 38724) 'old_prot.i' (line 2057)
+    [38736, 38992) 'a.i' (line 1904)
+    [39056, 39340) 'cpinfo.i' (line 1906)
+    [39408, 39448) 'format.i567' (line 1653)
+    [39488, 39744) 'buffer.i568' (line 1659)
+    [39808, 39872) 'grouping.i' (line 1411)
+    [39904, 39920) 't1000.i' (line 1411)
+    [39936, 39952) 'dec.i' (line 1411)
+    [39968, 39984) 'frac.i' (line 1411)
+    [40000, 40016) 'lzero.i' (line 1411)
+    [40032, 40160) 'buffer.i484' (line 1412)
+    [40192, 40232) 'format.i485' (line 1413)
+    [40272, 40400) 'buffer.i435' (line 1238)
+    [40432, 40480) 'format.i' (line 1239)
+    [40512, 40528) 'curtime.i402' (line 1128)
+    [40544, 40800) 'buffer.i403' (line 1129)
+    [40864, 40880) 'curtime.i367' (line 1040)
+    [40896, 41152) 'buffer.i368' (line 1041)
+    [41216, 41232) 'curtime.i300' (line 895)
+    [41248, 41376) 'buffer.i301' (line 899)
+    [41408, 41536) 'Expected.i' (line 899)
+    [41568, 41578) 'short_day.i' (line 900)
+    [41600, 41610) 'month.i' (line 900)
+    [41632, 41642) 'genitive_month.i' (line 900)
+    [41664, 41680) 'curtime.i234' (line 723)
+    [41696, 41952) 'buffer.i235' (line 724)
+    [42016, 42032) 'curtime.i' (line 535)
+    [42048, 42176) 'buffer.i197' (line 537)
+    [42208, 42368) 'bufferW.i151' (line 5814)
+    [42432, 42592) 'buffer2.i' (line 5814)
+    [42656, 42660) 'val.i152' (line 5833)
+    [42672, 42832) 'bufferW.i' (line 394)
+    [42896, 43056) 'buffer2W.i' (line 394)
+    [43120, 43200) 'bufferA.i' (line 395)
+    [43232, 43236) 'val.i114' (line 396)
+    [43248, 43376) 'buffer.i77' (line 265)
+    [43408, 43536) 'expected.i' (line 266)
+    [43568, 43572) 'val.i' (line 267)
+    [43584, 43840) 'buf.i49' (line 4906)
+    [43904, 44416) 'bufW.i' (line 5014)
+    [44480, 44736) 'buf.i22' (line 5039)
+    [44800, 45056) 'buf.i' (line 4986)
+    [45120, 45376) 'data.i' (line 8584)
+    [45440, 45610) 'locale.i' (line 8585)
+    [45680, 45936) 'key.i' (line 8586)
+    [46000, 46008) 'end.i' (line 8588)
+    [46032, 47056) 'buffer.i' (line 8588)
+    [47184, 47192) 'argv' (line 8665)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30 in wine_dbgstr_wn
+Shadow bytes around the buggy address:
+  0x7ffffe1f5600: f8 f8 f8 f8 f2 f2 f2 f2 f8 f8 f8 f2 f2 f2 f2 f2
+  0x7ffffe1f5680: f8 f8 f8 f8 f8 f2 f2 f2 f2 f2 f8 f8 f2 f2 f8 f8
+  0x7ffffe1f5700: f2 f2 f8 f8 f2 f2 f8 f2 f2 f2 f8 f2 f2 f2 f8 f8
+  0x7ffffe1f5780: f2 f2 f8 f8 f2 f2 f8 f8 f2 f2 f8 f8 f2 f2 f8 f2
+  0x7ffffe1f5800: f8 f2 f8 f2 f8 f2 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1f5880: 00 00 00 00 00 00 00 00 00 00 00[02]f2 f2 f2 f2
+  0x7ffffe1f5900: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f5980: 00 00 00 00 00 00 00 00 00 02 f2 f2 f2 f2 f2 f2
+  0x7ffffe1f5a00: f2 f2 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1f5a80: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1f5b00: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1748==ABORTING
+---
+ dlls/kernel32/tests/locale.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/kernel32/tests/locale.c b/dlls/kernel32/tests/locale.c
+index 8681736a4cc..2911513a90e 100644
+--- a/dlls/kernel32/tests/locale.c
++++ b/dlls/kernel32/tests/locale.c
+@@ -6039,7 +6039,7 @@ static void test_ResolveLocaleName(void)
+         else
+         {
+             ok( !ret || broken( ret == 1 ) /* win7 */,
+-                "%s: got %s\n", debugstr_w(tests[i].name), debugstr_w(buffer) );
++                "%s: got %s\n", debugstr_w(tests[i].name), debugstr_wn(buffer, ARRAY_SIZE(buffer)) );
+             if (!ret)
+                 ok( GetLastError() == ERROR_INVALID_PARAMETER,
+                     "%s: wrong error %lu\n", debugstr_w(tests[i].name), GetLastError() );
+-- 
+2.47.1
+

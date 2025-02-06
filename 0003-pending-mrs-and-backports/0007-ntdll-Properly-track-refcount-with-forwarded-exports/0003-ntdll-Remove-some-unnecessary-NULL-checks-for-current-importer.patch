@@ -1,0 +1,37 @@
+From 70c7ad699e99be555301c6666739cad295ac3872 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Thu, 18 Apr 2024 23:23:32 +0900
+Subject: [PATCH] ntdll: Remove some unnecessary NULL checks for
+ current_importer.
+
+current_importer is now set by all callers of build_import_name,
+find_forwarded_export, and find_ordinal_export.
+---
+ dlls/ntdll/loader.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index ea01263d023..5f7ce313113 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -825,7 +825,7 @@ static NTSTATUS build_import_name( WCHAR buffer[256], const char *import, int le
+ {
+     const API_SET_NAMESPACE *map = NtCurrentTeb()->Peb->ApiSetMap;
+     const API_SET_NAMESPACE_ENTRY *entry;
+-    const WCHAR *host = current_importer ? current_importer->modref->ldr.BaseDllName.Buffer : NULL;
++    const WCHAR *host = current_importer->modref->ldr.BaseDllName.Buffer;
+     UNICODE_STRING str;
+ 
+     while (len && import[len-1] == ' ') len--;  /* remove trailing spaces */
+@@ -1009,7 +1009,7 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
+         if (load_dll( load_path, mod_name, 0, &wm, imp->system ) == STATUS_SUCCESS &&
+             !(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS))
+         {
+-            if (!imports_fixup_done && current_importer)
++            if (!imports_fixup_done)
+             {
+                 add_module_dependency( current_importer->modref->ldr.DdagNode, wm->ldr.DdagNode );
+             }
+-- 
+GitLab
+

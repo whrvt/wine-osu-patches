@@ -26,7 +26,7 @@ index c565b524d58..43bed51d5b0 100644
 +    struct timespec ts;
 +    clock_gettime(CLOCK_REALTIME, &ts);
 +    timeout_t seconds = (timeout_t)ts.tv_sec * TICKS_PER_SEC;
-+    timeout_t nanoseconds = (timeout_t)(ts.tv_nsec / 100);
++    timeout_t nanoseconds = (timeout_t)((ts.tv_nsec + 50) / 100);
 +
 +    current_time = seconds + nanoseconds + ticks_1601_to_1970;
 +#else
@@ -42,7 +42,7 @@ index c565b524d58..43bed51d5b0 100644
 +    /* Somehow, the clock_gettime path revealed a memory ordering bug
 +     * that either didn't ever occur, or only rarely did, with the gettimeofday path
 +     */
-+    __atomic_signal_fence(__ATOMIC_SEQ_CST);
++    // __atomic_signal_fence(__ATOMIC_SEQ_CST);
 +
      monotonic_time = monotonic_counter();
      if (user_shared_data) set_user_shared_data_time();

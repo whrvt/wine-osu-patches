@@ -1,0 +1,97 @@
+From 9f383ebf8445851ee723ad1867e7cd06be0c8c4d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 4 Nov 2024 17:42:22 +0100
+Subject: [PATCH 77/86] winecfg: Do not call strdup with a null pointer.
+
+This gets visible when ASAN replaces the strdup implementation,
+which does not handle the NULL case like the msvcrt implementation.
+
+winecfg, Drives tab.
+
+Unhandled exception: page fault on read access to 0x0000000000000000 in 64-bit code (0x006ffffa38c300).
+Register dump:
+ rip:00006ffffa38c300 rsp:00007ffffe1fca78 rbp:00007ffffe1fcb00 eflags:00010202 (  R- --  I   - - - )
+ rax:ffffffffffffffff rbx:000000014005b248 rcx:0000000000000000 rdx:000000002800b645
+ rsi:0000000000000000 rdi:000000002800b649  r8:0000000000000000  r9:0000000000000000 r10:ffffffffffffffff
+ r11:0000000000000000 r12:0000000140200000 r13:0000000000000000 r14:0000000000000000 r15:00007f7ad88478a2
+Stack dump:
+0x007ffffe1fca78:  00006ffffa3c6531 00006ffffdb6bc94
+0x007ffffe1fca88:  00006ffffad72d58 0000000000000400
+0x007ffffe1fca98:  00007ffffe1fcb80 0000000000000001
+0x007ffffe1fcaa8:  000000000000001e 00007ffffe1fcb90
+0x007ffffe1fcab8:  000000000000001c 00007ffffe1fcad0
+0x007ffffe1fcac8:  000000000000001c 00006ffffa3c6602
+0x007ffffe1fcad8:  0000000140009969 000000014000a6fb
+0x007ffffe1fcae8:  000000014000d56e 00006ffffdc08d49
+0x007ffffe1fcaf8:  00006ffffdc0b13c 00006ffffdbcf529
+0x007ffffe1fcb08:  00006ffffdbcf7b5 00006ffffdc08c2b
+0x007ffffe1fcb18:  00006ffffdc0ac44 00006ffffdbf179d
+0x007ffffe1fcb28:  00006ffffdbf32ef 00006ffffdbd2d1b
+Backtrace:
+=>0 0x006ffffa38c300 in libclang_rt.asan_dynamic-x86_64 (+0xc300) (0x007ffffe1fcb00)
+  1 0x006ffffa3c6531 __asan_wrap__strdup+0x31() in libclang_rt.asan_dynamic-x86_64 (0x007ffffe1fcb00)
+  2 0x0000014000998c add_drive+0x13c(letter=<internal error>, targetpath="../drive_c", device=0x00000000000000000, label=00007FFFFE1FD5D0, serial=0x43000000, type=0) [/home/bernhard/data/entwicklung/2024/wine/wine/programs/winecfg/drive.c:105] in winecfg.exe_asan (0x00000000000043)
+  3 0x0000014000a6fb load_drives+0x22b() [/home/bernhard/data/entwicklung/2024/wine/wine/programs/winecfg/drive.c:0] in winecfg.exe_asan (0x007ffffe1fd440)
+  4 0x0000014000d56e DriveDlgProc+0x58e(dialog=<has been optimized away by compiler>, msg=<internal error>, wParam=<has been optimized away by compiler>, lParam=<has been optimized away by compiler>) [/home/bernhard/data/entwicklung/2024/wine/wine/programs/winecfg/driveui.c:660] in winecfg.exe_asan (0x007ffffe1fdf10)
+  5 0x006ffffdc08d49 call_dialog_proc+0x59(hwnd=00000000000101B4, msg=0x110, wp=0x101ba, lp=0x7ffffe808028, result=00007FFFFE1FE058, arg=000000014000CFE0) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:86] in user32 (0x00000000000110)
+  6 0x006ffffdc0b13c WINPROC_CallDlgProcW+0x6c(hwnd=00000000000101B4, msg=0x110, wParam=0x101ba, lParam=0x7ffffe808028) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:948] in user32 (0x000000000101ba)
+  7 0x006ffffdbcf529 USER_DefDlgProcW+0x3b(lParam=<internal error>, wParam=<internal error>, msg=<internal error>, hwnd=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/defdlg.c:375] in user32 (0x007ffffe8328a0)
+  8 0x006ffffdbcf529 USER_DefDlgProc+0x59(hwnd=<register RSI not accessible in this frame>, msg=<register RBX not accessible in this frame>, wParam=<register R13 not accessible in this frame>, lParam=<register R12 not accessible in this frame>, unicode=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/defdlg.c:372] in user32 (0x007ffffe8328a0)
+  9 0x006ffffdbcf7b5 DefDlgProcW+0x15(hwnd=<internal error>, msg=<internal error>, wParam=<internal error>, lParam=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/defdlg.c:439] in user32 (0x007ffffe808028)
+  10 0x006ffffdc08c2b call_window_proc+0x4b(hwnd=<register RSI not accessible in this frame>, msg=<register R12 not accessible in this frame>, wp=<register RDI not accessible in this frame>, lp=<register RBP not accessible in this frame>, result=[<register RSP not accessible in this frame>, arg=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:111] in user32 (0x007ffffe808028)
+  11 0x006ffffdc0ac44 dispatch_win_proc_params+0x104(params=<register RBX not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:725] in user32 (0000000000000000)
+  12 0x006ffffdbf179d dispatch_send_message+0x5d(params=<register RBX not accessible in this frame>, wparam=<internal error>, lparam=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/message.c:582] in user32 (0000000000000000)
+  13 0x006ffffdbf32ef SendMessageW+0x4f(hwnd=<internal error>, msg=<internal error>, wparam=<register RBX not accessible in this frame>, lparam=<register RSI not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/message.c:600] in user32 (0x00000050010003)
+  14 0x006ffffdbd2d1b DIALOG_CreateIndirect+0xc0b(hInst=[<register RSP not accessible in this frame>, dlgTemplate=<is not available>, owner=<is not available>, dlgProc=[<register RSP not accessible in this frame>, param=[<register RSP not accessible in this frame>, unicode=[<register RSP not accessible in this frame>, modal_owner=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/dialog.c:676] in user32 (0x00000050010003)
+  15 0x006ffffdbd40d4 CreateDialogIndirectParamW+0x24(hInst=<internal error>, dlgTemplate=<internal error>, owner=<internal error>, dlgProc=<internal error>, param=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/dialog.c:750] in user32 (0x00000000060128)
+  16 0x006ffffc197772 HPSP_create_page+0x28(parent=<internal error>, template=<internal error>, hpsp=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/propsheet.c:506] in comctl32 (0x00000000060128)
+  17 0x006ffffc197772 PROPSHEET_CreatePage+0xd2(hwndParent=<register RBP not accessible in this frame>, index=<register RDI not accessible in this frame>, psInfo=<register R12 not accessible in this frame>, hpsp=<register RSI not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/propsheet.c:1614] in comctl32 (0x00000000060128)
+  18 0x006ffffc198158 PROPSHEET_SetCurSel+0x318(hwndDlg=<register RBX not accessible in this frame>, index=<register RDI not accessible in this frame>, skipdir=[<register RSP not accessible in this frame>, hpage=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/propsheet.c:2169] in comctl32 (0x006ffffdbd0fe0)
+  19 0x006ffffc19c7af PROPSHEET_DialogProc+0x20ef(hwnd=<register RBX not accessible in this frame>, uMsg=<register RSI not accessible in this frame>, wParam=<register RDI not accessible in this frame>, lParam=<register R15 not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/propsheet.c:3715] in comctl32 (0x0000000000004e)
+  20 0x006ffffdc08d49 call_dialog_proc+0x59(hwnd=<register RBX not accessible in this frame>, msg=<register RBP not accessible in this frame>, wp=<register RSI not accessible in this frame>, lp=<register RDI not accessible in this frame>, result=[<register RSP not accessible in this frame>, arg=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:86] in user32 (0x0000000000004e)
+  21 0x006ffffdc0b13c WINPROC_CallDlgProcW+0x6c(hwnd=<register RSI not accessible in this frame>, msg=<register RDI not accessible in this frame>, wParam=<register RBP not accessible in this frame>, lParam=<register R12 not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:948] in user32 (0x00000000003020)
+  22 0x006ffffdbcf529 USER_DefDlgProcW+0x3b(lParam=<internal error>, wParam=<internal error>, msg=<internal error>, hwnd=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/defdlg.c:375] in user32 (0x007ffffe819bf0)
+  23 0x006ffffdbcf529 USER_DefDlgProc+0x59(hwnd=<register RSI not accessible in this frame>, msg=<register RBX not accessible in this frame>, wParam=<register R13 not accessible in this frame>, lParam=<register R12 not accessible in this frame>, unicode=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/defdlg.c:372] in user32 (0x007ffffe819bf0)
+  24 0x006ffffdbcf7b5 DefDlgProcW+0x15(hwnd=<internal error>, msg=<internal error>, wParam=<internal error>, lParam=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/defdlg.c:439] in user32 (0x007ffffe1ff0b0)
+  25 0x006ffffdc08c2b call_window_proc+0x4b(hwnd=<register RSI not accessible in this frame>, msg=<register R12 not accessible in this frame>, wp=<register RDI not accessible in this frame>, lp=<register RBP not accessible in this frame>, result=[<register RSP not accessible in this frame>, arg=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:111] in user32 (0x007ffffe1ff0b0)
+  26 0x006ffffdc0ac44 dispatch_win_proc_params+0x104(params=<register RBX not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:725] in user32 (0x00000100000002)
+  27 0x006ffffdbf179d dispatch_send_message+0x5d(params=<register RBX not accessible in this frame>, wparam=<internal error>, lparam=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/message.c:582] in user32 (0x00000100000002)
+  28 0x006ffffdbf32ef SendMessageW+0x4f(hwnd=<internal error>, msg=<internal error>, wparam=<register RBX not accessible in this frame>, lparam=<register RSI not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/message.c:600] in user32 (0x00000000000005)
+  29 0x006ffffc1b29b9 TAB_InsertItemT+0x12da(code=<internal error>, infoPtr=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/tab.c:179] in comctl32 (0x00000000000005)
+  30 0x006ffffc1b29b9 TAB_WindowProc+0x1459(hwnd=<internal error>, uMsg=<internal error>, wParam=<internal error>, lParam=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/tab.c:3373] in comctl32 (0x00000000000005)
+  31 0x006ffffdc08c2b call_window_proc+0x4b(hwnd=<register RSI not accessible in this frame>, msg=<register R12 not accessible in this frame>, wp=<register RDI not accessible in this frame>, lp=<register RBP not accessible in this frame>, result=[<register RSP not accessible in this frame>, arg=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:111] in user32 (0x00000000210062)
+  32 0x006ffffdc0ac44 dispatch_win_proc_params+0x104(params=<register RBX not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/winproc.c:725] in user32 (0x006ffffdb6bc60)
+  33 0x006ffffdbf1851 dispatch_message+0x61(msg=<register RBX not accessible in this frame>, ansi=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/message.c:855] in user32 (0x006ffffdb6bc60)
+  34 0x006ffffdbf3afd DispatchMessageW+0x35(msg=[<register RSP not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/message.c:943] in user32 (0x006ffffdb6bc60)
+  35 0x006ffffdbd42d9 IsDialogMessageW+0x109(hwndDlg=<register RBX not accessible in this frame>, msg=<register RDI not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/user32/dialog.c:1294] in user32 (0x006ffffdb6bc60)
+  36 0x006ffffc198905 do_loop+0x7d(psInfo=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/propsheet.c:2971] in comctl32 (0x00000000060128)
+  37 0x006ffffc198905 PROPSHEET_PropertySheet+0x2c5(psInfo=<register RBX not accessible in this frame>, unicode=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/comctl32/propsheet.c:3001] in comctl32 (0x00000000060128)
+  38 0x000001400158cd doPropertySheet+0x40d(hInstance=<register R14 not accessible in this frame>) [/home/bernhard/data/entwicklung/2024/wine/wine/programs/winecfg/main.c:173] in winecfg.exe_asan (0x007ffffe1ffb10)
+  39 0x00000140014872 wWinMain+0x3f2(hInstance=<register RDI not accessible in this frame>, hPrev=<internal error>, cmdline=<register RSI not accessible in this frame>, nShow=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/programs/winecfg/main.c:0] in winecfg.exe_asan (0x007ffffe1ffbe0)
+  40 0x000001400250a3 wmain+0x203(argc=<has been optimized away by compiler>, argv=<has been optimized away by compiler>) in winecfg.exe_asan (0x007ffffe1ffee0)
+  41 0x00000140024dcb wmainCRTStartup+0xfb() [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/msvcrt/crt_wmain.c:58] in winecfg.exe_asan (0000000000000000)
+  42 0x006fffffa98d59 BaseThreadInitThunk+0x9(unknown=<internal error>, entry=<internal error>, arg=<internal error>) [/home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32/thread.c:61] in kernel32 (0000000000000000)
+  43 0x006fffffc95afb in ntdll (+0x55afb) (0000000000000000)
+0x006ffffa38c300 libclang_rt.asan_dynamic-x86_64+0xc300: cmpb $0x00, 0x01(%rcx,%rax,1)
+---
+ programs/winecfg/drive.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/programs/winecfg/drive.c b/programs/winecfg/drive.c
+index b113b71b199..0a1f930cbee 100644
+--- a/programs/winecfg/drive.c
++++ b/programs/winecfg/drive.c
+@@ -101,8 +101,8 @@ BOOL add_drive(char letter, const char *targetpath, const char *device, const WC
+                wine_dbgstr_w(label), serial, type);
+ 
+     drives[driveIndex].letter   = toupper(letter);
+-    drives[driveIndex].unixpath = strdup(targetpath);
+-    drives[driveIndex].device   = strdup(device);
++    drives[driveIndex].unixpath = targetpath ? strdup(targetpath) : NULL;
++    drives[driveIndex].device   = device ? strdup(device) : NULL;
+     drives[driveIndex].label    = wcsdup(label);
+     drives[driveIndex].serial   = serial;
+     drives[driveIndex].type     = type;
+-- 
+2.47.1
+

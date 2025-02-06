@@ -11,19 +11,14 @@ diff --git a/include/winnt.h b/include/winnt.h
 index 4fcd037bf08..9bf5f8a5c3d 100644
 --- a/include/winnt.h
 +++ b/include/winnt.h
-@@ -7129,13 +7129,18 @@ static FORCEINLINE void MemoryBarrier(void)
- #pragma intrinsic(__iso_volatile_load32)
- #pragma intrinsic(__iso_volatile_load64)
- #pragma intrinsic(__iso_volatile_store32)
-+#pragma intrinsic(__iso_volatile_store64)
- #define __WINE_LOAD32_NO_FENCE(src) (__iso_volatile_load32(src))
- #define __WINE_LOAD64_NO_FENCE(src) (__iso_volatile_load64(src))
+@@ -7129,10 +7129,12 @@ static FORCEINLINE void MemoryBarrier(void)
  #define __WINE_STORE32_NO_FENCE(dest, value) (__iso_volatile_store32(dest, value))
-+#define __WINE_STORE64_NO_FENCE(dest, value) (__iso_volatile_store64(dest, value))
+ #define __WINE_STORE64_NO_FENCE(dest, value) (__iso_volatile_store64(dest, value))
  #else  /* _MSC_VER >= 1700 */
 -#define __WINE_LOAD32_NO_FENCE(src) (*(src))
 -#define __WINE_LOAD64_NO_FENCE(src) (*(src))
 -#define __WINE_STORE32_NO_FENCE(dest, value) ((void)(*(dest) = (value)))
+-#define __WINE_STORE64_NO_FENCE(dest, value) ((void)(*(dest) = (value)))
 +#define __WINE_LOAD_NO_FENCE(src) (*(src))
 +#define __WINE_STORE_NO_FENCE(dest, value) ((void)(*(dest) = (value)))
 +#define __WINE_LOAD32_NO_FENCE(src) __WINE_LOAD_NO_FENCE(src)
@@ -474,7 +469,7 @@ index fa64917029a..281d7943d03 100644
 + * Returns TRUE if the lock is acquired, FALSE otherwise.
   */
 -void WINAPI RtlAcquireSRWLockShared( RTL_SRWLOCK *lock )
-+#ifdef __GNUC__
++#if defined (__GNUC__) || defined(__clang__)
 +__attribute__((force_align_arg_pointer))
 +#endif
 +static BOOLEAN srwlock_wait(RTL_SRWLOCK *lock, DWORD waiter_state,

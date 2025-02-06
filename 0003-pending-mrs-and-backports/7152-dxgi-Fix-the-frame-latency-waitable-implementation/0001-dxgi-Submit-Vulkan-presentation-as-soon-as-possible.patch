@@ -1,0 +1,179 @@
+From b4029719d10e755e730f1af8b2f630fc275f2f56 Mon Sep 17 00:00:00 2001
+From: Giovanni Mascellani <gmascellani@codeweavers.com>
+Date: Fri, 17 Jan 2025 13:05:50 +0100
+Subject: [PATCH] dxgi: Submit Vulkan presentation as soon as possible.
+
+The new vkd3d API allows submitting presentation as soon as the
+internal vkd3d work is flushed to Vulkan. Now we're also waiting
+for it to be executed, which is useless.
+---
+ dlls/dxgi/swapchain.c                 |  2 +-
+ dlls/wined3d/wined3d.spec             |  1 +
+ libs/vkd3d/include/vkd3d.h            | 29 ++++++++++++++++++---
+ libs/vkd3d/libs/vkd3d/command.c       | 37 +++++++++++++++++++++++++++
+ libs/vkd3d/libs/vkd3d/vkd3d_private.h |  1 +
+ 5 files changed, 66 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
+index 4797fcecd8d..b1ce578e8be 100644
+--- a/dlls/dxgi/swapchain.c
++++ b/dlls/dxgi/swapchain.c
+@@ -2363,7 +2363,7 @@ static HRESULT d3d12_swapchain_present(struct d3d12_swapchain *swapchain,
+         }
+     }
+ 
+-    if (FAILED(hr = ID3D12CommandQueue_Signal(swapchain->command_queue,
++    if (FAILED(hr = vkd3d_signal_fence_on_cpu(swapchain->command_queue,
+             swapchain->present_fence, swapchain->frame_number)))
+     {
+         ERR("Failed to signal present fence, hf %#lx.\n", hr);
+diff --git a/dlls/wined3d/wined3d.spec b/dlls/wined3d/wined3d.spec
+index 151bcaf9751..eb352d144db 100644
+--- a/dlls/wined3d/wined3d.spec
++++ b/dlls/wined3d/wined3d.spec
+@@ -360,6 +360,7 @@
+ @ cdecl vkd3d_resource_incref(ptr)
+ @ cdecl vkd3d_serialize_root_signature(ptr long ptr ptr)
+ @ cdecl vkd3d_serialize_versioned_root_signature(ptr ptr ptr)
++@ cdecl vkd3d_signal_fence_on_cpu(ptr ptr long)
+ 
+ @ cdecl vkd3d_shader_compile(ptr ptr ptr)
+ @ cdecl vkd3d_shader_convert_root_signature(ptr long ptr)
+diff --git a/libs/vkd3d/include/vkd3d.h b/libs/vkd3d/include/vkd3d.h
+index b18fd14f4c3..59516f4af80 100644
+--- a/libs/vkd3d/include/vkd3d.h
++++ b/libs/vkd3d/include/vkd3d.h
+@@ -411,9 +411,13 @@ VKD3D_API uint32_t vkd3d_get_vk_queue_family_index(ID3D12CommandQueue *queue);
+  * the Vulkan driver as being submitted before other work submitted
+  * though the Direct3D 12 API. If this is not desired, it is
+  * recommended to synchronize work submission using an ID3D12Fence
+- * object, by submitting to the queue a signal operation after all the
+- * Direct3D 12 work is submitted and waiting for it before calling
+- * vkd3d_acquire_vk_queue().
++ * object:
++ *  1. submit work through the Direct3D 12 API;
++ *  2. call vkd3d_signal_fence_on_cpu();
++ *  3. wait for the fence to be signalled;
++ *  4. call vkd3d_acquire_vk_queue(); it is guaranteed that all work submitted
++ *     at point 1 has already been submitted to Vulkan (though not necessarily
++ *     executed).
+  *
+  * \since 1.0
+  */
+@@ -466,6 +470,21 @@ VKD3D_API HRESULT vkd3d_create_versioned_root_signature_deserializer(const void
+  */
+ VKD3D_API void vkd3d_set_log_callback(PFN_vkd3d_log callback);
+ 
++/**
++ * Signal a fence on the CPU once all the currently outstanding queue work is
++ * submitted to Vulkan.
++ *
++ * The fence will be signalled on the CPU (as if ID3D12Fence_Signal() was
++ * called) once all the work submitted through the Direct3D 12 API before
++ * vkd3d_signal_fence_on_cpu() is called has left the internal queue and has
++ * been submitted to the underlying Vulkan queue. Read the documentation for
++ * vkd3d_acquire_vk_queue() for more details.
++ *
++ * \since 1.15
++ */
++VKD3D_API enum vkd3d_result vkd3d_signal_fence_on_cpu(ID3D12CommandQueue *queue,
++        ID3D12Fence *fence, uint64_t value);
++
+ #endif  /* VKD3D_NO_PROTOTYPES */
+ 
+ /*
+@@ -512,6 +531,10 @@ typedef HRESULT (*PFN_vkd3d_create_versioned_root_signature_deserializer)(const
+ /** Type of vkd3d_set_log_callback(). \since 1.4 */
+ typedef void (*PFN_vkd3d_set_log_callback)(PFN_vkd3d_log callback);
+ 
++/** Type of vkd3d_signal_fence_on_cpu(). \since 1.15 */
++typedef enum vkd3d_result (*PFN_vkd3d_signal_fence_on_cpu)(ID3D12CommandQueue *queue,
++        ID3D12Fence *fence, uint64_t value);
++
+ #ifdef __cplusplus
+ }
+ #endif  /* __cplusplus */
+diff --git a/libs/vkd3d/libs/vkd3d/command.c b/libs/vkd3d/libs/vkd3d/command.c
+index a55a97f6f2f..ed7c2aa8677 100644
+--- a/libs/vkd3d/libs/vkd3d/command.c
++++ b/libs/vkd3d/libs/vkd3d/command.c
+@@ -6345,6 +6345,7 @@ static void d3d12_command_queue_destroy_op(struct vkd3d_cs_op_data *op)
+             break;
+ 
+         case VKD3D_CS_OP_SIGNAL:
++        case VKD3D_CS_OP_SIGNAL_ON_CPU:
+             d3d12_fence_decref(op->u.signal.fence);
+             break;
+ 
+@@ -7335,6 +7336,7 @@ static HRESULT d3d12_command_queue_flush_ops_locked(struct d3d12_command_queue *
+     struct vkd3d_cs_op_data *op;
+     struct d3d12_fence *fence;
+     unsigned int i;
++    HRESULT hr;
+ 
+     queue->is_flushing = true;
+ 
+@@ -7368,6 +7370,11 @@ static HRESULT d3d12_command_queue_flush_ops_locked(struct d3d12_command_queue *
+                     d3d12_command_queue_signal(queue, op->u.signal.fence, op->u.signal.value);
+                     break;
+ 
++                case VKD3D_CS_OP_SIGNAL_ON_CPU:
++                    if (FAILED(hr = d3d12_fence_Signal(&op->u.signal.fence->ID3D12Fence1_iface, op->u.signal.value)))
++                        ERR("Failed to signal fence %p, hr %s.\n", op->u.signal.fence, debugstr_hresult(hr));
++                    break;
++
+                 case VKD3D_CS_OP_EXECUTE:
+                     d3d12_command_queue_execute(queue, op->u.execute.buffers, op->u.execute.buffer_count);
+                     break;
+@@ -7510,6 +7517,36 @@ void vkd3d_release_vk_queue(ID3D12CommandQueue *queue)
+     return vkd3d_queue_release(d3d12_queue->vkd3d_queue);
+ }
+ 
++enum vkd3d_result vkd3d_signal_fence_on_cpu(ID3D12CommandQueue *iface, ID3D12Fence *fence_iface, uint64_t value)
++{
++    struct d3d12_command_queue *command_queue = impl_from_ID3D12CommandQueue(iface);
++    struct d3d12_fence *fence = unsafe_impl_from_ID3D12Fence(fence_iface);
++    struct vkd3d_cs_op_data *op;
++    HRESULT hr = S_OK;
++
++    TRACE("iface %p, fence %p, value %#"PRIx64".\n", iface, fence_iface, value);
++
++    vkd3d_mutex_lock(&command_queue->op_mutex);
++
++    if (!(op = d3d12_command_queue_op_array_require_space(&command_queue->op_queue)))
++    {
++        ERR("Failed to add op.\n");
++        hr = E_OUTOFMEMORY;
++        goto done;
++    }
++    op->opcode = VKD3D_CS_OP_SIGNAL_ON_CPU;
++    op->u.signal.fence = fence;
++    op->u.signal.value = value;
++
++    d3d12_fence_incref(fence);
++
++    d3d12_command_queue_submit_locked(command_queue);
++
++done:
++    vkd3d_mutex_unlock(&command_queue->op_mutex);
++    return hr;
++}
++
+ /* ID3D12CommandSignature */
+ static inline struct d3d12_command_signature *impl_from_ID3D12CommandSignature(ID3D12CommandSignature *iface)
+ {
+diff --git a/libs/vkd3d/libs/vkd3d/vkd3d_private.h b/libs/vkd3d/libs/vkd3d/vkd3d_private.h
+index 97a99782d6a..fde6e9e9d4e 100644
+--- a/libs/vkd3d/libs/vkd3d/vkd3d_private.h
++++ b/libs/vkd3d/libs/vkd3d/vkd3d_private.h
+@@ -1324,6 +1324,7 @@ enum vkd3d_cs_op
+ {
+     VKD3D_CS_OP_WAIT,
+     VKD3D_CS_OP_SIGNAL,
++    VKD3D_CS_OP_SIGNAL_ON_CPU,
+     VKD3D_CS_OP_EXECUTE,
+     VKD3D_CS_OP_UPDATE_MAPPINGS,
+     VKD3D_CS_OP_COPY_MAPPINGS,
+-- 
+GitLab
+

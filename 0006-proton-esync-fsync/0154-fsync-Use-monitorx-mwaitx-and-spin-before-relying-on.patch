@@ -1,0 +1,274 @@
+From 32aa9edf082b7f3ac39ad7152ce52c36cb3ab9fe Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 19 Jan 2025 20:43:24 -0800
+Subject: [PATCH v4] fsync: Use monitorx+mwaitx and spin before relying on
+ futex_waitv in wait-all.
+
+monitor/mwait inspired by a patch by Torge Matthies, spin setup with ideas from 'nsync'.
+
+v4: Consolidate additions with best-by-test configuration.
+---
+ dlls/ntdll/unix/fsync.c | 200 ++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 182 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
+index c593343616c..649eeebe120 100644
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -765,6 +765,162 @@ static NTSTATUS do_single_wait( int *addr, int val, const struct timespec64 *end
+         return STATUS_PENDING;
+ }
+ 
++#if defined(__x86_64__) || defined(__i386__)
++static inline int mwaitx_supported( void )
++{
++    static int supported;
++    if (!supported)
++    {
++        unsigned int eax, ecx;
++        __asm__ __volatile__ (
++            "cpuid"
++            : "=a" (eax), "=c" (ecx)
++            : "a" (0x80000001U)
++            : "ebx", "edx"
++        );
++        if (ecx & (1U << 29))
++            supported = 1;
++        else
++            supported = -1;
++    }
++    return supported > 0;
++}
++#else
++#define mwaitx_supported() 0
++#endif
++
++#define CHECK_VALUE_CHANGED( addr, expected, observed )          \
++    do                                                           \
++    {                                                            \
++        int __val = __atomic_load_n( (addr), __ATOMIC_ACQUIRE ); \
++        if (__val != (expected))                                 \
++        {                                                        \
++            if (observed)                                        \
++                *(observed) = __val;                             \
++            return STATUS_SUCCESS;                               \
++        }                                                        \
++    } while (0)
++
++/* Time to wait in mwaitx, values
++ * probably capture 0 real-world scenarios. */
++#define SEM_MON_TIMEOUT     1000
++#define MUTEX_MON_TIMEOUT   1000
++#define AUTO_MON_TIMEOUT    1000
++#define MANUAL_MON_TIMEOUT  2000
++
++/* Conservative spin config */
++#define SPIN_MAX_RETRIES    2   /* Maximum retries before switching to pure yields */
++#define SPIN_MAX_YIELDS     6  /* Maximum number of pure yields before giving up */
++
++/* Fast path attempt to detect a value change using monitorx/mwaitx instructions + spinning
++ * Returns STATUS_SUCCESS if the value changed, STATUS_UNSUCCESSFUL otherwise.
++ *
++ * Parameters:
++ *   addr         - Memory address to monitor
++ *   expected_val - Value we're waiting to change
++ *   observed_val - If non-NULL, receives the last observed value
++ *   mon_timeout  - Max cycles to wait in mwaitx before falling back to spin
++ */
++static FORCEINLINE NTSTATUS try_wait_value( volatile int *addr, int expected_val,
++                                            int *observed_val, const unsigned int mon_timeout )
++{
++    unsigned int attempts = 0;
++
++    CHECK_VALUE_CHANGED( addr, expected_val, observed_val );
++
++    if (mwaitx_supported())
++    {
++        /* acts as acquire barrier */
++        __asm__ __volatile__(
++            ".byte 0x0f,0x01,0xfa" /* monitorx */
++            ::"a"(addr),
++            "c"(0U), "d"(0U) : "memory");
++
++        CHECK_VALUE_CHANGED( addr, expected_val, observed_val );
++
++        /* acts as full barrier */
++        __asm__ __volatile__(
++            ".byte 0x0f,0x01,0xfb" /* mwaitx */
++            ::"a"(0xF0U),
++            "b"(mon_timeout), "c"(0x2U) : "memory");
++
++        CHECK_VALUE_CHANGED( addr, expected_val, observed_val );
++    }
++
++    /* exponential backoff transitioning to pure yields */
++    while (attempts < SPIN_MAX_YIELDS)
++    {
++        CHECK_VALUE_CHANGED( addr, expected_val, observed_val );
++
++        if (attempts < SPIN_MAX_RETRIES)
++        {
++            int i;
++            for (i = 0; i != 1 << attempts; i++)
++            {
++                YieldProcessor();
++            }
++        }
++        else
++        {
++            YieldProcessor();
++        }
++        attempts++;
++    }
++
++    if (observed_val)
++        *observed_val = __atomic_load_n( addr, __ATOMIC_ACQUIRE );
++    return STATUS_UNSUCCESSFUL;
++}
++
++static FORCEINLINE BOOL try_acquire_mutex( struct mutex *mutex, int current_tid,
++                                           int *observed_tid, const BOOL no_retry )
++{
++    int tid = *observed_tid;
++
++    if (tid == current_tid)
++    {
++        mutex->count++;
++        return TRUE;
++    }
++    if (!tid && !__sync_val_compare_and_swap( &mutex->tid, 0, current_tid ))
++    {
++        mutex->count = 1;
++        return TRUE;
++    }
++    if (tid == ~0 &&
++        (tid = __sync_val_compare_and_swap( &mutex->tid, ~0, current_tid )) == ~0)
++    {
++        mutex->count = 1;
++        return TRUE;
++    }
++    if (!no_retry && try_wait_value( &mutex->tid, tid, &tid, MUTEX_MON_TIMEOUT ) == STATUS_SUCCESS)
++    {
++        *observed_tid = tid;
++        return TRUE;
++    }
++    return FALSE; /* fall back to futex */
++}
++
++static FORCEINLINE BOOL try_acquire_semaphore( struct semaphore *semaphore, const BOOL no_retry )
++{
++    int count, new_count;
++
++    new_count = __atomic_load_n( &semaphore->count, __ATOMIC_SEQ_CST );
++    while ((count = new_count))
++    {
++        if ((new_count = __sync_val_compare_and_swap( &semaphore->count,
++                                                      count, count - 1 )) == count)
++        {
++            return TRUE;
++        }
++        if (!no_retry && try_wait_value( &semaphore->count, new_count, &new_count, SEM_MON_TIMEOUT ) == STATUS_SUCCESS)
++        {
++            continue;
++        }
++    }
++    return FALSE;
++}
++
+ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+     BOOLEAN wait_any, BOOLEAN alertable, const LARGE_INTEGER *timeout )
+ {
+@@ -775,6 +931,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+     struct futex_waitv futexes[MAXIMUM_WAIT_OBJECTS + 1];
+     struct fsync objs[MAXIMUM_WAIT_OBJECTS];
+     BOOL msgwait = FALSE, waited = FALSE;
++    BOOL no_retry = !timeout || (timeout && !timeout->QuadPart);
+     int has_fsync = 0, has_server = 0;
+     clockid_t clock_id = 0;
+     struct timespec64 end;
+@@ -882,17 +1039,13 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                     case FSYNC_SEMAPHORE:
+                     {
+                         struct semaphore *semaphore = obj->shm;
+-                        int current, new;
+ 
+-                        new = __atomic_load_n( &semaphore->count, __ATOMIC_SEQ_CST );
+-                        while ((current = new))
++                        if (try_acquire_semaphore( semaphore, no_retry ))
+                         {
+-                            if ((new = __sync_val_compare_and_swap( &semaphore->count, current, current - 1 )) == current)
+-                            {
+-                                TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+-                                return i;
+-                            }
++                            TRACE("Woken up by handle %p [%d].\n", handles[i], i);
++                            return i;
+                         }
++
+                         futex_vector_set( &futexes[i], &semaphore->count, 0 );
+                         break;
+                     }
+@@ -908,17 +1061,11 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                             return i;
+                         }
+ 
+-                        if (!(tid = __sync_val_compare_and_swap( &mutex->tid, 0, CURRENT_TID )))
++                        tid = __atomic_load_n( &mutex->tid, __ATOMIC_SEQ_CST );
++                        if (try_acquire_mutex( mutex, CURRENT_TID, &tid, no_retry ))
+                         {
+                             TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+-                            mutex->count = 1;
+-                            return i;
+-                        }
+-                        else if (tid == ~0 && (tid = __sync_val_compare_and_swap( &mutex->tid, ~0, CURRENT_TID )) == ~0)
+-                        {
+-                            TRACE("Woken up by abandoned mutex %p [%d].\n", handles[i], i);
+-                            mutex->count = 1;
+-                            return STATUS_ABANDONED_WAIT_0 + i;
++                            return (tid == ~0) ? STATUS_ABANDONED_WAIT_0 + i : i;
+                         }
+ 
+                         futex_vector_set( &futexes[i], &mutex->tid, tid );
+@@ -928,12 +1075,20 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                     case FSYNC_AUTO_SERVER:
+                     {
+                         struct event *event = obj->shm;
++                        int signaled;
+ 
+                         if (__sync_val_compare_and_swap( &event->signaled, 1, 0 ))
+                         {
+                             TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+                             return i;
+                         }
++
++                        if (!no_retry && try_wait_value( &event->signaled, 0, &signaled, AUTO_MON_TIMEOUT ) == STATUS_SUCCESS &&
++                            __sync_val_compare_and_swap( &event->signaled, 1, 0 ))
++                        {
++                            TRACE("Woken up by handle %p [%d].\n", handles[i], i);
++                            return i;
++                        }
+                         futex_vector_set( &futexes[i], &event->signaled, 0 );
+                         break;
+                     }
+@@ -942,8 +1097,17 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
+                     case FSYNC_QUEUE:
+                     {
+                         struct event *event = obj->shm;
++                        int signaled;
+ 
+-                        if (__atomic_load_n( &event->signaled, __ATOMIC_SEQ_CST ))
++                        signaled = __atomic_load_n( &event->signaled, __ATOMIC_SEQ_CST );
++                        if (signaled)
++                        {
++                            TRACE("Woken up by handle %p [%d].\n", handles[i], i);
++                            return i;
++                        }
++                        /* always retry for manual events */
++                        if (try_wait_value( &event->signaled, 0, &signaled, MANUAL_MON_TIMEOUT ) == STATUS_SUCCESS &&
++                            signaled)
+                         {
+                             TRACE("Woken up by handle %p [%d].\n", handles[i], i);
+                             return i;
+-- 
+2.48.1
+

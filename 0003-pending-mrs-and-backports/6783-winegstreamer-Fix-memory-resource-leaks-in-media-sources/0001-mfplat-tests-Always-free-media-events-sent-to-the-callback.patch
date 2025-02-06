@@ -1,0 +1,33 @@
+From 9f9481f19474bd341af79c6e1f564d03e629b882 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Sat, 9 Nov 2024 11:54:55 +1000
+Subject: [PATCH] mfplat/tests: Always free media events sent to the callback.
+
+---
+ dlls/mfplat/tests/mfplat.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 752be9ea260..40bb12b683b 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -986,12 +986,14 @@ static BOOL get_event(IMFMediaEventGenerator *generator, MediaEventType expected
+                 ok(hr == S_OK, "Failed to get value of event, hr %#lx.\n", hr);
+             }
+ 
++            IMFMediaEvent_Release(callback->media_event);
+             break;
+         }
++
++        if (callback->media_event)
++            IMFMediaEvent_Release(callback->media_event);
+     }
+ 
+-    if (callback->media_event)
+-        IMFMediaEvent_Release(callback->media_event);
+     IMFAsyncCallback_Release(&callback->IMFAsyncCallback_iface);
+ 
+     return ret;
+-- 
+GitLab
+

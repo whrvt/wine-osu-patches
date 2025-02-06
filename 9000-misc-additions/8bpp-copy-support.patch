@@ -21,7 +21,7 @@ index 11111111111..11111111111 100644
 +            srcstride = prc->Width;
 +            srcdatasize = srcstride * prc->Height;
 +
-+            srcdata = HeapAlloc(GetProcessHeap(), 0, srcdatasize);
++            srcdata = malloc(srcdatasize);
 +            if (!srcdata) return E_OUTOFMEMORY;
 +
 +            res = IWICBitmapSource_CopyPixels(This->source, prc, srcstride, srcdatasize, srcdata);
@@ -45,7 +45,7 @@ index 11111111111..11111111111 100644
 +                }
 +            }
 +
-+            HeapFree(GetProcessHeap(), 0, srcdata);
++            free(srcdata);
 +
 +            return res;
 +        }

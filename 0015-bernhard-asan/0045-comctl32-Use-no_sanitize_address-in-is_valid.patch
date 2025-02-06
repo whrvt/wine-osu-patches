@@ -1,0 +1,24 @@
+From 2552da1a4accc050b1b9687dedfb2b5678db4b5a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sat, 14 Dec 2024 15:47:05 +0100
+Subject: [PATCH 45/86] comctl32: Use no_sanitize_address in is_valid.
+
+---
+ dlls/comctl32/imagelist.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/comctl32/imagelist.c b/dlls/comctl32/imagelist.c
+index 49155e8d2c1..b7a2a642135 100644
+--- a/dlls/comctl32/imagelist.c
++++ b/dlls/comctl32/imagelist.c
+@@ -3788,6 +3788,7 @@ static const IImageList2Vtbl ImageListImpl_Vtbl = {
+     ImageListImpl_ReplaceFromImageList
+ };
+ 
++__attribute__((no_sanitize_address))
+ static BOOL is_valid(HIMAGELIST himl)
+ {
+     BOOL valid;
+-- 
+2.47.1
+

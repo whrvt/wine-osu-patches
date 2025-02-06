@@ -1,54 +1,19 @@
-From 40c541416374161e9825fb265ad2cd60d04cccef Mon Sep 17 00:00:00 2001
+From 466786a1fb3715caee11a0499f2d4bb2e0219c51 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Mon, 23 Sep 2024 20:51:44 -0600
 Subject: [PATCH] ntdll: Match memory allocation layout for
  ThreadLocalStoragePointer.
 
 ---
- dlls/kernel32/tests/module.c | 73 +++++++++++++++++++++++++-----------
- dlls/ntdll/loader.c          | 51 +++++++++++++++++++------
- 2 files changed, 92 insertions(+), 32 deletions(-)
+ dlls/kernel32/tests/module.c | 23 ++++++++++++++++
+ dlls/ntdll/loader.c          | 51 ++++++++++++++++++++++++++++--------
+ 2 files changed, 63 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/kernel32/tests/module.c b/dlls/kernel32/tests/module.c
-index 4b4269c821b..93878a9bd22 100644
+index 0619ce5f747..3d6e195e23c 100644
 --- a/dlls/kernel32/tests/module.c
 +++ b/dlls/kernel32/tests/module.c
-@@ -141,6 +141,34 @@ static void create_test_dll( const char *name )
-     CloseHandle( handle );
- }
- 
-+static BOOL is_old_loader_struct(void)
-+{
-+    LDR_DATA_TABLE_ENTRY *mod, *mod2;
-+    LDR_DDAG_NODE *ddag_node;
-+    NTSTATUS status;
-+    HMODULE hexe;
-+
-+    /* Check for old LDR data strcuture. */
-+    hexe = GetModuleHandleW( NULL );
-+    ok( !!hexe, "Got NULL exe handle.\n" );
-+    status = LdrFindEntryForAddress( hexe, &mod );
-+    ok( !status, "got %#lx.\n", status );
-+    if (!(ddag_node = mod->DdagNode))
-+    {
-+        win_skip( "DdagNode is NULL, skipping tests.\n" );
-+        return TRUE;
-+    }
-+    ok( !!ddag_node->Modules.Flink, "Got NULL module link.\n" );
-+    mod2 = CONTAINING_RECORD(ddag_node->Modules.Flink, LDR_DATA_TABLE_ENTRY, NodeModuleLink);
-+    ok( mod2 == mod || broken( (void **)mod2 == (void **)mod - 1 ), "got %p, expected %p.\n", mod2, mod );
-+    if (mod2 != mod)
-+    {
-+        win_skip( "Old LDR_DATA_TABLE_ENTRY structure, skipping tests.\n" );
-+        return TRUE;
-+    }
-+    return FALSE;
-+}
-+
- static void testGetModuleFileName(const char* name)
- {
-     HMODULE     hMod;
-@@ -1641,7 +1669,10 @@ static void test_tls_links(void)
+@@ -1708,7 +1708,10 @@ static void test_tls_links(void)
      TEB *teb = NtCurrentTeb(), *thread_teb;
      THREAD_BASIC_INFORMATION tbi;
      NTSTATUS status;
@@ -59,7 +24,7 @@ index 4b4269c821b..93878a9bd22 100644
  
      ok(!!teb->ThreadLocalStoragePointer, "got NULL.\n");
  
-@@ -1661,6 +1692,26 @@ static void test_tls_links(void)
+@@ -1728,6 +1731,26 @@ static void test_tls_links(void)
      ResumeThread(thread);
      WaitForSingleObject(test_tls_links_started, INFINITE);
  
@@ -86,42 +51,11 @@ index 4b4269c821b..93878a9bd22 100644
      ok(!!thread_teb->ThreadLocalStoragePointer, "got NULL.\n");
      ok(!teb->TlsLinks.Flink, "got %p.\n", teb->TlsLinks.Flink);
      ok(!teb->TlsLinks.Blink, "got %p.\n", teb->TlsLinks.Blink);
-@@ -1714,29 +1765,9 @@ static void test_base_address_index_tree(void)
-     unsigned int tree_count, list_count = 0;
-     LDR_DATA_TABLE_ENTRY *mod, *mod2;
-     RTL_BALANCED_NODE *root, *node;
--    LDR_DDAG_NODE *ddag_node;
--    NTSTATUS status;
--    HMODULE hexe;
-     char *base;
- 
--    /* Check for old LDR data strcuture. */
--    hexe = GetModuleHandleW( NULL );
--    ok( !!hexe, "Got NULL exe handle.\n" );
--    status = LdrFindEntryForAddress( hexe, &mod );
--    ok( !status, "got %#lx.\n", status );
--    if (!(ddag_node = mod->DdagNode))
--    {
--        win_skip( "DdagNode is NULL, skipping tests.\n" );
--        return;
--    }
--    ok( !!ddag_node->Modules.Flink, "Got NULL module link.\n" );
--    mod2 = CONTAINING_RECORD(ddag_node->Modules.Flink, LDR_DATA_TABLE_ENTRY, NodeModuleLink);
--    ok( mod2 == mod || broken( (void **)mod2 == (void **)mod - 1 ), "got %p, expected %p.\n", mod2, mod );
--    if (mod2 != mod)
--    {
--        win_skip( "Old LDR_DATA_TABLE_ENTRY structure, skipping tests.\n" );
--        return;
--    }
-+    if (is_old_loader_struct()) return;
- 
-     mod = CONTAINING_RECORD(first->Flink, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
-     ok( mod->BaseAddressIndexNode.ParentValue || mod->BaseAddressIndexNode.Left || mod->BaseAddressIndexNode.Right,
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index aa3ac83cbb5..6322aff1711 100644
+index 617b0143b6d..5c9c9e4e923 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
-@@ -1324,6 +1324,36 @@ static BOOL is_dll_native_subsystem( LDR_DATA_TABLE_ENTRY *mod, const IMAGE_NT_H
+@@ -1333,6 +1333,36 @@ static BOOL is_dll_native_subsystem( LDR_DATA_TABLE_ENTRY *mod, const IMAGE_NT_H
      return TRUE;
  }
  
@@ -158,7 +92,7 @@ index aa3ac83cbb5..6322aff1711 100644
  /*************************************************************************
   *		alloc_tls_slot
   *
-@@ -1390,13 +1420,13 @@ static BOOL alloc_tls_slot( LDR_DATA_TABLE_ENTRY *mod )
+@@ -1399,13 +1429,13 @@ static BOOL alloc_tls_slot( LDR_DATA_TABLE_ENTRY *mod )
  
          t->ThreadData[j].Flags = 0;
  
@@ -174,7 +108,7 @@ index aa3ac83cbb5..6322aff1711 100644
              if (!vector) return FALSE;
              t->ThreadData[j].TlsVector = vector;
              vector[i] = new_ptr;
-@@ -1416,12 +1446,12 @@ static BOOL alloc_tls_slot( LDR_DATA_TABLE_ENTRY *mod )
+@@ -1425,12 +1455,12 @@ static BOOL alloc_tls_slot( LDR_DATA_TABLE_ENTRY *mod )
          {
              /* There could be fewer active threads than we counted here due to force terminated threads, first
               * free extra TLS directory data set in the new TLS vector. */
@@ -189,7 +123,7 @@ index aa3ac83cbb5..6322aff1711 100644
          }
      }
      RtlFreeHeap( GetProcessHeap(), 0, t );
-@@ -1633,8 +1663,7 @@ static NTSTATUS alloc_thread_tls(void)
+@@ -1643,8 +1673,7 @@ static NTSTATUS alloc_thread_tls(void)
      void **pointers;
      UINT i, size;
  
@@ -199,7 +133,7 @@ index aa3ac83cbb5..6322aff1711 100644
          return STATUS_NO_MEMORY;
  
      for (i = 0; i < tls_module_count; i++)
-@@ -1645,10 +1674,10 @@ static NTSTATUS alloc_thread_tls(void)
+@@ -1655,10 +1684,10 @@ static NTSTATUS alloc_thread_tls(void)
          size = dir->EndAddressOfRawData - dir->StartAddressOfRawData;
          if (!size && !dir->SizeOfZeroFill) continue;
  
@@ -213,7 +147,7 @@ index aa3ac83cbb5..6322aff1711 100644
              return STATUS_NO_MEMORY;
          }
          memcpy( pointers[i], (void *)dir->StartAddressOfRawData, size );
-@@ -3946,8 +3975,8 @@ void WINAPI LdrShutdownThread(void)
+@@ -3963,8 +3992,8 @@ void WINAPI LdrShutdownThread(void)
          if (NtCurrentTeb()->Instrumentation[0])
              ((TEB *)NtCurrentTeb()->Instrumentation[0])->ThreadLocalStoragePointer = NULL;
  #endif

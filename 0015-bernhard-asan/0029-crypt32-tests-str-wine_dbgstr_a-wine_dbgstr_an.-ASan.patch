@@ -1,0 +1,80 @@
+From 2fe5b0659ed00e4144f2d71c639555099d58a7ef Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 8 Dec 2024 11:18:08 +0100
+Subject: [PATCH 29/86] crypt32/tests: str: wine_dbgstr_a - wine_dbgstr_an.
+ (ASan)
+
+=================================================================
+==1288==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1fd790 at pc 0x00014015a789 bp 0x7ffffe1fcce0 sp 0x7ffffe1fcd28
+READ of size 1 at 0x7ffffe1fd790 thread T0
+04f4:fixme:dbghelp:elf_search_auxv can't find symbol in module
+04f4:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007EBA5AE30B80,symt:0000000000000000) in ctx(00007EBA5CBC18E0,L"crypt32_test")
+    #0 0x00014015a788 in wine_dbgstr_an Z:\home\bernhard\data\entwicklung\2024\wine\wine\include\wine\debug.h:218
+    #1 0x000140159ec9 in test_NameToStrConversionA_ Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\crypt32\tests\str.c:482
+    #2 0x000140152699 in func_str Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\crypt32\tests\str.c:1228
+    #3 0x00014015ec41 in main+0x541 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\crypt32\tests\x86_64-windows\crypt32_test.exe+0x14015ec41)
+    #4 0x000140160b4f in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #5 0x6ffffbfd4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #6 0x6ffffacefa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1fd790 is located in stack of thread T0 at offset 2032 in frame
+    #0 0x0001401596ff in test_NameToStrConversionA_ Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\crypt32\tests\str.c:464
+
+  This frame has 1 object(s):
+    [32, 2032) 'buffer' (line 465) <== Memory access at offset 2032 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow Z:\home\bernhard\data\entwicklung\2024\wine\wine\include\wine\debug.h:218 in wine_dbgstr_an
+Shadow bytes around the buggy address:
+  0x7ffffe1fd500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd680: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd700: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1fd780: 00 00[f3]f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x7ffffe1fd800: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fd900: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1 f1
+  0x7ffffe1fd980: f8 f2 f8 f2 f8 f2 f2 f2 f8 f8 f8 f8 f8 f8 f8 f8
+  0x7ffffe1fda00: f8 f8 f8 f8 f8 f2 f2 f2 f2 f2 f8 f2 f8 f8 f8 f8
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1288==ABORTING
+make: *** [Makefile:37447: dlls/crypt32/tests/x86_64-windows/str.ok] Fehler 1
+---
+ dlls/crypt32/tests/str.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/crypt32/tests/str.c b/dlls/crypt32/tests/str.c
+index 1f65234f400..9ce1821e2b6 100644
+--- a/dlls/crypt32/tests/str.c
++++ b/dlls/crypt32/tests/str.c
+@@ -479,7 +479,7 @@ static void test_NameToStrConversionA_(unsigned int line, PCERT_NAME_BLOB pName,
+     memset(buffer, 0xcc, sizeof(buffer));
+     retlen = CertNameToStrA(X509_ASN_ENCODING, pName, dwStrType, buffer, 0);
+     ok(retlen == len, "line %u: expected %lu chars, got %lu\n", line, len - 1, retlen);
+-    ok((unsigned char)buffer[0] == 0xcc, "line %u: got %s\n", line, wine_dbgstr_a(buffer));
++    ok((unsigned char)buffer[0] == 0xcc, "line %u: got %s\n", line, wine_dbgstr_an(buffer, ARRAY_SIZE(buffer)));
+ }
+ 
+ static BYTE encodedSimpleCN[] = {
+-- 
+2.47.1
+

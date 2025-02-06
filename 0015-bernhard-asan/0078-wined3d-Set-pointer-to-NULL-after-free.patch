@@ -1,0 +1,94 @@
+From e941acf294b39b25b0e727d8b2d3bd6b95520b6f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Fri, 6 Dec 2024 22:44:27 +0100
+Subject: [PATCH 78/86] wined3d: Set pointer to NULL after free.
+
+d3d11:d3d11
+d3d10core:d3d10core
+
+ASAN_OPTIONS='verbosity=0:windows_hook_rtl_allocators=1' WINEDLLOVERRIDES="$F=n;*.dll=n" WINEDEBUG= wine64 z:/home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj/dlls/d3d11/tests/x86_64-windows/d3d11_test.exe d3d11
+...
+0664:fixme:d3d:wined3d_guess_card No card selector available for card vendor 0000 (using GL_RENDERER "llvmpipe (LLVM 15.0.6, 256 bits)").
+=================================================================
+==1556==ERROR: AddressSanitizer: attempting double-free on 0x7f9e9e29c440 in thread T13:
+06f4:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffffbe8a1a1 in free /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:71:3
+    #1 0x6ffff8861db6 in shader_cleanup /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:1941:5
+    #2 0x6ffff894bd2f in pixel_shader_init /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:3162:9
+    #3 0x6ffff894bd2f in wined3d_shader_create_ps /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:3319:9
+    #4 0x6ffffa08af3f in d3d_pixel_shader_init /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\shader.c:1445:9
+    #5 0x6ffffa08af3f in d3d_pixel_shader_create /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\shader.c:1469:9
+    #6 0x6ffffa073369 in d3d11_device_CreatePixelShader /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\device.c:4101:9
+    #7 0x00014003327b in ID3D11Device_CreatePixelShader /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\d3d11.h:10924:12
+    #8 0x00014003327b in test_create_shader /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:5097:10
+    #9 0x0001401a6cb9 in run_mt_test /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:184:9
+    #10 0x0001401a6cb9 in thread_func /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:201:13
+    #11 0x6ffffbe9b2dd in asan_thread_start(void*) /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_win.cpp:147:14
+    #12 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #13 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f9e9e29c440 is located 0 bytes inside of 288-byte region [0x7f9e9e29c440,0x7f9e9e29c560)
+freed by thread T13 here:
+    #0 0x6ffffbe8a1a1 in free /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:71:3
+    #1 0x6ffff8861db6 in shader_cleanup /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:1941:5
+    #2 0x6ffff887fe17 in shader_set_function /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:2393:13
+    #3 0x6ffff894bcda in pixel_shader_init /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:3159:9
+    #4 0x6ffff894bcda in wined3d_shader_create_ps /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:3319:9
+    #5 0x6ffffa08af3f in d3d_pixel_shader_init /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\shader.c:1445:9
+    #6 0x6ffffa08af3f in d3d_pixel_shader_create /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\shader.c:1469:9
+    #7 0x6ffffa073369 in d3d11_device_CreatePixelShader /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\device.c:4101:9
+    #8 0x00014003327b in ID3D11Device_CreatePixelShader /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\d3d11.h:10924:12
+    #9 0x00014003327b in test_create_shader /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:5097:10
+    #10 0x0001401a6cb9 in run_mt_test /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:184:9
+    #11 0x0001401a6cb9 in thread_func /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:201:13
+    #12 0x6ffffbe9b2dd in asan_thread_start(void*) /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_win.cpp:147:14
+    #13 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #14 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+previously allocated by thread T13 here:
+    #0 0x6ffffbe8a2c1 in malloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:80:3
+    #1 0x6ffff887fa8c in shader_set_function /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:2382:35
+    #2 0x6ffff894bcda in pixel_shader_init /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:3159:9
+    #3 0x6ffff894bcda in wined3d_shader_create_ps /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:3319:9
+    #4 0x6ffffa08af3f in d3d_pixel_shader_init /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\shader.c:1445:9
+    #5 0x6ffffa08af3f in d3d_pixel_shader_create /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\shader.c:1469:9
+    #6 0x6ffffa073369 in d3d11_device_CreatePixelShader /home/bernhard/data/entwicklung/2024/wine/wine/dlls/d3d11\device.c:4101:9
+    #7 0x00014003327b in ID3D11Device_CreatePixelShader /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\d3d11.h:10924:12
+    #8 0x00014003327b in test_create_shader /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:5097:10
+    #9 0x0001401a6cb9 in run_mt_test /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:184:9
+    #10 0x0001401a6cb9 in thread_func /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:201:13
+    #11 0x6ffffbe9b2dd in asan_thread_start(void*) /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_win.cpp:147:14
+    #12 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #13 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Thread T13 created by T0 here:
+    #0 0x6ffffbe9b1f6 in CreateThread /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_win.cpp:158:3
+    #1 0x00014000801c in run_queued_tests /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:229:22
+    #2 0x00014000801c in func_d3d11 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/d3d11/tests/d3d11.c:36786:5
+    #3 0x0001401a8823 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #4 0x0001401a826b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #5 0x0001401aa1df in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #6 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #7 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: double-free /home/bernhard/data/entwicklung/2024/wine/wine/dlls/wined3d\shader.c:1941:5 in shader_cleanup
+==1556==ABORTING
+---
+ dlls/wined3d/shader.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/wined3d/shader.c b/dlls/wined3d/shader.c
+index c40dc69e8ec..2fa513d7a37 100644
+--- a/dlls/wined3d/shader.c
++++ b/dlls/wined3d/shader.c
+@@ -1939,6 +1939,7 @@ static void shader_cleanup(struct wined3d_shader *shader)
+     shader->device->shader_backend->shader_destroy(shader);
+     shader_cleanup_reg_maps(&shader->reg_maps);
+     free(shader->byte_code);
++    shader->byte_code = NULL;
+     shader_delete_constant_list(&shader->constantsF);
+     shader_delete_constant_list(&shader->constantsB);
+     shader_delete_constant_list(&shader->constantsI);
+-- 
+2.47.1
+

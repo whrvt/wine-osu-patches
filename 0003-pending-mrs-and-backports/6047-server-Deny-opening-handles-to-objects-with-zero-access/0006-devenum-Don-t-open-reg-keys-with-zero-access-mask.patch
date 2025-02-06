@@ -1,0 +1,52 @@
+From 9b04dff46b38c30cc78d8c7b1b443c99a46def28 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 6 Dec 2024 15:50:57 -0600
+Subject: [PATCH] devenum: Don't open reg keys with zero access mask.
+
+---
+ dlls/devenum/mediacatenum.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/devenum/mediacatenum.c b/dlls/devenum/mediacatenum.c
+index 906d01b2057..7ba370a3a02 100644
+--- a/dlls/devenum/mediacatenum.c
++++ b/dlls/devenum/mediacatenum.c
+@@ -205,7 +205,7 @@ static HRESULT WINAPI property_bag_Read(IPropertyBag *iface,
+             StringFromGUID2(&moniker->class, path + wcslen(path), CHARS_IN_GUID);
+             wcscat(path, L"\\Instance");
+         }
+-        if ((ret = RegOpenKeyExW(HKEY_CLASSES_ROOT, path, 0, 0, &parent)))
++        if ((ret = RegOpenKeyExW(HKEY_CLASSES_ROOT, path, 0, KEY_ENUMERATE_SUB_KEYS, &parent)))
+             return HRESULT_FROM_WIN32(ret);
+         break;
+ 
+@@ -213,7 +213,7 @@ static HRESULT WINAPI property_bag_Read(IPropertyBag *iface,
+         wcscpy(path, L"Software\\Microsoft\\ActiveMovie\\devenum\\");
+         if (moniker->has_class)
+             StringFromGUID2(&moniker->class, path + wcslen(path), CHARS_IN_GUID);
+-        if ((ret = RegOpenKeyExW(HKEY_CURRENT_USER, path, 0, 0, &parent)))
++        if ((ret = RegOpenKeyExW(HKEY_CURRENT_USER, path, 0, KEY_ENUMERATE_SUB_KEYS, &parent)))
+             return HRESULT_FROM_WIN32(ret);
+         break;
+ 
+@@ -317,7 +317,7 @@ static HRESULT WINAPI property_bag_Write(IPropertyBag *iface, const WCHAR *name,
+             StringFromGUID2(&moniker->class, path + wcslen(path), CHARS_IN_GUID);
+             wcscat(path, L"\\Instance");
+         }
+-        if ((ret = RegCreateKeyExW(HKEY_CLASSES_ROOT, path, 0, NULL, 0, 0, NULL, &parent, NULL)))
++        if ((ret = RegCreateKeyExW(HKEY_CLASSES_ROOT, path, 0, NULL, 0, KEY_ENUMERATE_SUB_KEYS, NULL, &parent, NULL)))
+             return HRESULT_FROM_WIN32(ret);
+         break;
+ 
+@@ -325,7 +325,7 @@ static HRESULT WINAPI property_bag_Write(IPropertyBag *iface, const WCHAR *name,
+         wcscpy(path, L"Software\\Microsoft\\ActiveMovie\\devenum\\");
+         if (moniker->has_class)
+             StringFromGUID2(&moniker->class, path + wcslen(path), CHARS_IN_GUID);
+-        if ((ret = RegCreateKeyExW(HKEY_CURRENT_USER, path, 0, NULL, 0, 0, NULL, &parent, NULL)))
++        if ((ret = RegCreateKeyExW(HKEY_CURRENT_USER, path, 0, NULL, 0, KEY_ENUMERATE_SUB_KEYS, NULL, &parent, NULL)))
+             return HRESULT_FROM_WIN32(ret);
+         break;
+ 
+-- 
+GitLab
+

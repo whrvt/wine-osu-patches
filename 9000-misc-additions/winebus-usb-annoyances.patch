@@ -6,10 +6,10 @@ index 11111111111..11111111111 100644
  
      TRACE("dev %p, node %s, desc %s.\n", dev, debugstr_a(devnode), debugstr_device_desc(&desc));
  
-+    if (desc.vid == 0x31e3) // Fixes usb_main_loop crashing when a keyboard key is pressed (wooting/linux firmware bug?)
++    if (desc.vid == 0x31e3) /* prevents usb_main_loop crashing when a keyboard key is pressed (wooting/linux firmware bug?) */
 +    {
 +        close(fd);
-+        TRACE("Not adding Wooting device\n");
++        FIXME("not adding Wooting device\n");
 +    }
 +   
      if (strcmp(subsystem, "hidraw") == 0)

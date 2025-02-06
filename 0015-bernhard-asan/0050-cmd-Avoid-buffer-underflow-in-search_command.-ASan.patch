@@ -1,0 +1,84 @@
+From 67e178c6301405f07a17335ebd0c5b9d3c8f5060 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Tue, 5 Nov 2024 15:44:57 +0100
+Subject: [PATCH 50/86] cmd: Avoid buffer underflow in search_command. (ASan)
+
+benutzer@debian:/mnt/sda1/wineprefix_asan_test_2/drive_c/x86_64$ wine cmd.exe_asan.exe
+Microsoft Windows 10.0.19043
+
+C:\x86_64>ls
+=================================================================
+==556==ERROR: AddressSanitizer: stack-buffer-underflow on address 0x7ffffe1fa6fe at pc 0x000140029f79 bp 0x7ffffe1f5960 sp 0x7ffffe1f59a8
+READ of size 2 at 0x7ffffe1fa6fe thread T0
+023c:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x000140029f78 in search_command /home/bernhard/data/entwicklung/2024/wine/wine/programs/cmd\wcmdmain.c:1591:17
+    #1 0x00014002fb76 in execute_single_command /home/bernhard/data/entwicklung/2024/wine/wine/programs/cmd\wcmdmain.c:1877:19
+    #2 0x00014002fb76 in node_execute /home/bernhard/data/entwicklung/2024/wine/wine/programs/cmd\wcmdmain.c:3738:27
+    #3 0x000140032bc4 in wmain /home/bernhard/data/entwicklung/2024/wine/wine/programs/cmd\wcmdmain.c:4228:11
+    #4 0x00014003c6ca in wmainCRTStartup /home/bernhard/data/entwicklung/2024/wine/wine/dlls/msvcrt\crt_wmain.c:58:11
+    #5 0x6fffffa98d58 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #6 0x6fffffc95afa in RtlRaiseException (C:\windows\system32\ntdll.dll+0x170055afa)
+
+Address 0x7ffffe1fa6fe is located in stack of thread T0 at offset 30 in frame
+    #0 0x00014002f3bf in node_execute /home/bernhard/data/entwicklung/2024/wine/wine/programs/cmd\wcmdmain.c:3719
+
+  This frame has 3 object(s):
+    [32, 564) 'sc.i' (line 1864) <== Memory access at offset 30 underflows this variable
+    [704, 1224) 'temp_path' (line 3763)
+    [1360, 1880) 'filename' (line 3764)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-underflow /home/bernhard/data/entwicklung/2024/wine/wine/programs/cmd\wcmdmain.c:1591:17 in search_command
+Shadow bytes around the buggy address:
+  0x7ffffe1fa400: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fa480: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fa500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 f3
+  0x7ffffe1fa580: f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x7ffffe1fa600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1fa680: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1[f1]
+  0x7ffffe1fa700: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fa780: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fa800: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fa880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fa900: 00 00 04 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==556==ABORTING
+023c:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+---
+ programs/cmd/wcmdmain.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/programs/cmd/wcmdmain.c b/programs/cmd/wcmdmain.c
+index 1018fd56624..f7f415bf301 100644
+--- a/programs/cmd/wcmdmain.c
++++ b/programs/cmd/wcmdmain.c
+@@ -1586,7 +1586,7 @@ static RETURN_CODE search_command(WCHAR *command, struct search_command *sc, BOO
+ 
+             /* Remove quotes */
+             length = wcslen(sc->path);
+-            if (sc->path[length - 1] == L'"')
++            if (length > 1 && sc->path[length - 1] == L'"')
+                 sc->path[length - 1] = 0;
+ 
+             if (*sc->path != L'"')
+-- 
+2.47.1
+

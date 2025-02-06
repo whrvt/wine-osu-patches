@@ -15,7 +15,7 @@ index 11111111111..11111111111 100644
      char name[15];
  };
  
-+#ifdef __GNUC__
++#if defined(__GNUC__) || defined(__clang__)
 +# define __WINE_GET_DEBUGGING_UNLIKELY(x) (__builtin_expect(!!(x), 0))
 +# define __WINE_GET_DEBUGGING_LIKELY(x) (__builtin_expect(!!(x), 1))
 +#else
