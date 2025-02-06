@@ -11,7 +11,7 @@ diff --git a/dlls/ntdll/string.c b/dlls/ntdll/string.c
 index d334c169332..28f14cc9afe 100644
 --- a/dlls/ntdll/string.c
 +++ b/dlls/ntdll/string.c
-@@ -32,8 +32,11 @@
+@@ -32,8 +32,15 @@
  #include "winbase.h"
  #include "winnls.h"
  #include "winternl.h"
@@ -19,6 +19,10 @@ index d334c169332..28f14cc9afe 100644
 +#include "ddk/wdm.h"
  #include "ntdll_misc.h"
  
++#if defined(__clang__) && (defined(__MINGW64__) || defined(__MINGW32__))
++#define __mingw_aligned_malloc _aligned_malloc
++#define __mingw_aligned_free _aligned_free
++#endif
 +#include <immintrin.h>
  
  /* same as wctypes except for TAB, which doesn't have C1_BLANK for some reason... */

@@ -51,14 +51,14 @@ index b08518220d9..4f155ecf29c 100644
      x11drv_thread_data()->last_focus = hwnd;
      xim_set_focus( hwnd, FALSE );
  
-@@ -962,6 +995,7 @@ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
- {
-     HWND foreground = NtUserGetForegroundWindow();
-     XFocusChangeEvent *event = &xev->xfocus;
-+    struct x11drv_win_data *data;
- 
-     if (event->detail == NotifyPointer)
-     {
+#@@ -962,6 +995,7 @@ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
+# {
+#     HWND foreground = NtUserGetForegroundWindow();
+#     XFocusChangeEvent *event = &xev->xfocus;
+#+    struct x11drv_win_data *data;
+# 
+#     if (event->detail == NotifyPointer)
+#     {
 @@ -976,6 +1010,17 @@ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
      }
      if (!hwnd) return FALSE;

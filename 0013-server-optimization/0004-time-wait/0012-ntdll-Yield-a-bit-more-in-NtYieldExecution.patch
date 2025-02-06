@@ -1,0 +1,25 @@
+From fa2b6294be2bc9b069748f6f8749088c7fa594d7 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 21 Jan 2025 21:20:05 -0800
+Subject: [PATCH 2/2] ntdll: Yield a bit more in NtYieldExecution.
+
+---
+ dlls/ntdll/unix/sync.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index d486b50001d..458c0f4cb35 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -1624,7 +1624,7 @@ NTSTATUS WINAPI NtYieldExecution(void)
+ 
+     ret = getrusage( RUSAGE_THREAD, &u1 );
+ #endif
+-    sched_yield();
++    for (int i=0;i<10;i++) sched_yield();
+ #ifdef RUSAGE_THREAD
+     if (!ret) ret = getrusage( RUSAGE_THREAD, &u2 );
+     if (!ret && u1.ru_nvcsw == u2.ru_nvcsw && u1.ru_nivcsw == u2.ru_nivcsw) return STATUS_NO_YIELD_PERFORMED;
+-- 
+2.48.1
+

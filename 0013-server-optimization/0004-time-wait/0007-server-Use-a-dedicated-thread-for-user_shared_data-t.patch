@@ -128,7 +128,7 @@ index d114f420120..94a4f68a511 100644
  static int get_next_timeout(void)
  {
 -    int ret = user_shared_data ? user_shared_data_timeout : -1;
-+    int ret = user_shared_data ? 2 : -1;
++    int ret = user_shared_data ? 1 : -1;
  
      if (!list_empty( &abs_timeout_list ) || !list_empty( &rel_timeout_list ))
      {

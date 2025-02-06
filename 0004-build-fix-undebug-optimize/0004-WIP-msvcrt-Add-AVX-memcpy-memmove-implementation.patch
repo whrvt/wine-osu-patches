@@ -74,7 +74,7 @@ index a4e05bd4e7e..3d18e3c77c9 100644
  #include "wine/asm.h"
  #include "wine/debug.h"
  
-+#include <immintrin.h>
++#include "msvcrt/intrin.h"
 +
  WINE_DEFAULT_DEBUG_CHANNEL(msvcrt);
  

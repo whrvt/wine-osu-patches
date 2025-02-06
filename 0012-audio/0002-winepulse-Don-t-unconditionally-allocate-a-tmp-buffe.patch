@@ -8,10 +8,10 @@ Subject: [PATCH 2/6] winepulse: Don't unconditionally allocate a tmp buffer.
  1 file changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index de2cb379d86..32995e8ac85 100644
+index 2674b913f78..252d7844803 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -1197,9 +1197,14 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1196,9 +1196,14 @@ static NTSTATUS pulse_create_stream(void *args)
          /* Update frames according to new size */
          dump_attr(attr);
          if (stream->dataflow == eRender) {
@@ -20,7 +20,7 @@ index de2cb379d86..32995e8ac85 100644
 -                hr = E_OUTOFMEMORY;
 +            /* Don't unconditionally create a tmp buffer outside of experimental wow64 mode */
 +            if ((attr->tlength < stream->bufsize_bytes) || zero_bits) {
-+                WARN("Allocating a temporary audio buffer. WoW64=%s tlength=%u bufsize_bytes=%zu\n",
++                WARN("Allocating a temporary audio buffer. WoW64=%s tlength=%u bufsize_bytes=%lu\n",
 +                     zero_bits ? "yes" : "no", attr->tlength, stream->bufsize_bytes);
 +                if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
 +                                            zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))

@@ -113,14 +113,6 @@ diff --git a/include/winnt.h b/include/winnt.h
 index c6ed535c8d8..5e4a5694e18 100644
 --- a/include/winnt.h
 +++ b/include/winnt.h
-@@ -34,6 +34,7 @@
- 
- 
- #if defined(_MSC_VER) && (defined(__arm__) || defined(__aarch64__) || defined(__arm64ec__))
-+#include <immintrin.h>
- #include <intrin.h>
- #endif
- 
 @@ -221,7 +222,7 @@ extern "C" {
  #define __WINE_DEALLOC(...)
  #endif

@@ -1,0 +1,107 @@
+From 8ca4c49b148909437cd6e67a4411a90ff5fc6615 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Thu, 30 Jan 2025 15:36:33 +1000
+Subject: [PATCH] mfplat/tests: Test mixing of MF platform functions with their
+ Rtwq equivalents.
+
+---
+ dlls/mfplat/tests/Makefile.in |  2 +-
+ dlls/mfplat/tests/mfplat.c    | 57 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/mfplat/tests/Makefile.in b/dlls/mfplat/tests/Makefile.in
+index 217ea437b3c..05c14288769 100644
+--- a/dlls/mfplat/tests/Makefile.in
++++ b/dlls/mfplat/tests/Makefile.in
+@@ -1,5 +1,5 @@
+ TESTDLL   = mfplat.dll
+-IMPORTS   = ole32 mfplat user32 d3d9 dxva2 mfuuid propsys uuid strmiids
++IMPORTS   = ole32 mfplat user32 d3d9 dxva2 mfuuid propsys uuid strmiids rtworkq
+ 
+ SOURCES = \
+ 	mfplat.c \
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index df45e369928..7ed34d0305f 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -42,6 +42,7 @@
+ #include "evr.h"
+ #include "mfmediaengine.h"
+ #include "codecapi.h"
++#include "rtworkq.h"
+ 
+ #include "wine/test.h"
+ 
+@@ -3858,6 +3859,8 @@ static void test_MFCreateAsyncResult(void)
+ 
+ static void test_startup(void)
+ {
++    struct test_callback *callback;
++    IMFAsyncResult *result;
+     DWORD queue;
+     HRESULT hr;
+ 
+@@ -3907,6 +3910,60 @@ static void test_startup(void)
+ 
+     hr = MFShutdown();
+     ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++
++    /* Rtwq equivalence */
++
++    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
++    ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
++
++    hr = RtwqStartup();
++    ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
++    hr = RtwqShutdown();
++    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++    check_platform_lock_count(1);
++
++    /* Matching MFStartup() with RtwqShutdown() causes shutdown. */
++    hr = RtwqShutdown();
++    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++
++    hr = MFAllocateWorkQueue(&queue);
++    ok(hr == MF_E_SHUTDOWN, "Failed to allocate a queue, hr %#lx.\n", hr);
++
++    hr = MFShutdown();
++    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++
++    /* RtwqStartup() enables MF functions */
++    hr = RtwqStartup();
++    ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
++
++    check_platform_lock_count(1);
++
++    callback = create_test_callback(NULL);
++
++    /* MF platform lock is the Rtwq lock */
++    hr = RtwqUnlockPlatform();
++    ok(hr == S_OK, "Failed to unlock platform, hr %#lx.\n", hr);
++
++    hr = MFAllocateWorkQueue(&queue);
++    ok(hr == MF_E_SHUTDOWN, "Failed to allocate a queue, hr %#lx.\n", hr);
++
++    hr = MFCreateAsyncResult(NULL, &callback->IMFAsyncCallback_iface, NULL, &result);
++    ok(hr == S_OK, "Failed to create result, hr %#lx.\n", hr);
++    check_platform_lock_count(1);
++
++    hr = RtwqLockPlatform();
++    ok(hr == S_OK, "Failed to lock platform, hr %#lx.\n", hr);
++    check_platform_lock_count(2);
++
++    IMFAsyncResult_Release(result);
++
++    hr = RtwqShutdown();
++    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++
++    hr = MFAllocateWorkQueue(&queue);
++    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
++
++    IMFAsyncCallback_Release(&callback->IMFAsyncCallback_iface);
+ }
+ 
+ static void test_allocate_queue(void)
+-- 
+GitLab
+

@@ -1,0 +1,193 @@
+From 00000dbf9060b89b36007679f4b18e784fef735e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Stefan=20D=C3=B6singer?= <stefan@codeweavers.com>
+Date: Thu, 23 Jan 2025 21:42:38 +0300
+Subject: [PATCH] gdi32: EMREXTCREATEPEN contains a 32 bit EXTLOGPEN.
+
+---
+
+This is what actually mattered. The extra offset moved the style count
+and broke creation of the stored pens.
+---
+ dlls/gdi32/emfdc.c           | 43 ++++++++++++++++++++++++++----------
+ dlls/gdi32/tests/generated.c | 16 ++++++--------
+ dlls/wow64win/gdi.c          | 11 ---------
+ include/wingdi.h             | 13 ++++++++++-
+ 4 files changed, 50 insertions(+), 33 deletions(-)
+
+diff --git a/dlls/gdi32/emfdc.c b/dlls/gdi32/emfdc.c
+index 66a9ef7ed0f..098caff0c0b 100644
+--- a/dlls/gdi32/emfdc.c
++++ b/dlls/gdi32/emfdc.c
+@@ -660,37 +660,56 @@ static BOOL emfdc_select_font( DC_ATTR *dc_attr, HFONT font )
+ 
+ static DWORD emfdc_ext_create_pen( struct emf *emf, HPEN pen )
+ {
+-    EMREXTCREATEPEN *emr;
++    EMREXTCREATEPEN *emr = NULL;
++    EXTLOGPEN *elp = NULL;
+     int size, emr_size;
++    unsigned int i;
+     DWORD ret = 0;
+ 
+     if (!(size = GetObjectW( pen, 0, NULL )))
+         return 0;
+ 
++    elp = malloc( size );
++    if (!elp)
++        return 0;
++
+     /* Native adds an extra 4 bytes, presumably because someone wasn't careful about the
+-     * dynamic array [1] at the end of EXTLOGPEN. */
+-    emr_size = sizeof(*emr) - sizeof(emr->elp) + sizeof(emr->elp.elpStyleEntry) + size;
++     * dynamic array [1] at the end of EXTLOGPEN. Also note that GetObject returns an
++     * EXTLOGPEN with a pointer-sized elpHatch, whereas a metafile always has a 32 bit
++     * sized emr->elp.elpHatch .*/
++    emr_size = sizeof(*emr) - sizeof(*elp) + sizeof(emr->elp.elpStyleEntry) + size;
+     emr = calloc( 1, emr_size );
+     if (!emr)
+-        return 0;
+-    GetObjectW( pen, size, &emr->elp );
++        goto out;
++    GetObjectW( pen, size, elp );
+ 
+-    if (emr->elp.elpBrushStyle == BS_DIBPATTERN ||
+-            emr->elp.elpBrushStyle == BS_DIBPATTERNPT ||
+-            emr->elp.elpBrushStyle == BS_PATTERN)
++    if (elp->elpBrushStyle == BS_DIBPATTERN ||
++            elp->elpBrushStyle == BS_DIBPATTERNPT ||
++            elp->elpBrushStyle == BS_PATTERN)
+     {
+-        FIXME( "elpBrushStyle = %d\n", emr->elp.elpBrushStyle );
+-        free( emr );
+-        return 0;
++        FIXME( "elpBrushStyle = %d\n", elp->elpBrushStyle );
++        goto out;
+     }
+-    /* Native sets these even if there is no bitmap or brush BITMAPINFO. */
+     emr->offBmi = emr->offBits = emr_size;
+ 
++    emr->elp.elpPenStyle = elp->elpPenStyle;
++    emr->elp.elpWidth = elp->elpWidth;
++    emr->elp.elpBrushStyle = elp->elpBrushStyle;
++    emr->elp.elpColor = elp->elpColor;
++    emr->elp.elpHatch = elp->elpHatch;
++    emr->elp.elpNumEntries = elp->elpNumEntries;
++
++    for (i = 0; i < elp->elpNumEntries; ++i)
++        emr->elp.elpStyleEntry[i] = elp->elpStyleEntry[i];
++
+     emr->emr.iType = EMR_EXTCREATEPEN;
+     emr->emr.nSize = emr_size;
+     emr->ihPen = ret = emfdc_add_handle( emf, pen );
+     ret = emfdc_record( emf, &emr->emr ) ? ret : 0;
++
++out:
+     free( emr );
++    free( elp );
+     return ret;
+ }
+ 
+diff --git a/dlls/gdi32/tests/generated.c b/dlls/gdi32/tests/generated.c
+index 02898227b2b..43467e75a04 100644
+--- a/dlls/gdi32/tests/generated.c
++++ b/dlls/gdi32/tests/generated.c
+@@ -5,8 +5,6 @@
+  * Unit tests for data structure packing
+  */
+ 
+-#define WINE_NOWINSOCK
+-
+ #include "windows.h"
+ 
+ #include "wine/test.h"
+@@ -1082,8 +1080,8 @@ static void test_pack_EMREXTCREATEFONTINDIRECTW(void)
+ static void test_pack_EMREXTCREATEPEN(void)
+ {
+     /* EMREXTCREATEPEN */
+-    TEST_TYPE_SIZE   (EMREXTCREATEPEN, 64)
+-    TEST_TYPE_ALIGN  (EMREXTCREATEPEN, 8)
++    TEST_TYPE_SIZE   (EMREXTCREATEPEN, 56)
++    TEST_TYPE_ALIGN  (EMREXTCREATEPEN, 4)
+     TEST_FIELD_SIZE  (EMREXTCREATEPEN, emr, 8)
+     TEST_FIELD_ALIGN (EMREXTCREATEPEN, emr, 4)
+     TEST_FIELD_OFFSET(EMREXTCREATEPEN, emr, 0)
+@@ -1102,9 +1100,9 @@ static void test_pack_EMREXTCREATEPEN(void)
+     TEST_FIELD_SIZE  (EMREXTCREATEPEN, cbBits, 4)
+     TEST_FIELD_ALIGN (EMREXTCREATEPEN, cbBits, 4)
+     TEST_FIELD_OFFSET(EMREXTCREATEPEN, cbBits, 24)
+-    TEST_FIELD_SIZE  (EMREXTCREATEPEN, elp, 32)
+-    TEST_FIELD_ALIGN (EMREXTCREATEPEN, elp, 8)
+-    TEST_FIELD_OFFSET(EMREXTCREATEPEN, elp, 32)
++    TEST_FIELD_SIZE  (EMREXTCREATEPEN, elp, 28)
++    TEST_FIELD_ALIGN (EMREXTCREATEPEN, elp, 4)
++    TEST_FIELD_OFFSET(EMREXTCREATEPEN, elp, 28)
+ }
+ 
+ static void test_pack_EMREXTFLOODFILL(void)
+@@ -5091,8 +5089,8 @@ static void test_pack_PEMREXTCREATEPEN(void)
+     /* PEMREXTCREATEPEN */
+     TEST_TYPE_SIZE   (PEMREXTCREATEPEN, 8)
+     TEST_TYPE_ALIGN  (PEMREXTCREATEPEN, 8)
+-    TEST_TARGET_SIZE (PEMREXTCREATEPEN, 64)
+-    TEST_TARGET_ALIGN(PEMREXTCREATEPEN, 8)
++    TEST_TARGET_SIZE (PEMREXTCREATEPEN, 56)
++    TEST_TARGET_ALIGN(PEMREXTCREATEPEN, 4)
+ }
+ 
+ static void test_pack_PEMREXTFLOODFILL(void)
+diff --git a/dlls/wow64win/gdi.c b/dlls/wow64win/gdi.c
+index bcd430be4c9..61e719fba5d 100644
+--- a/dlls/wow64win/gdi.c
++++ b/dlls/wow64win/gdi.c
+@@ -39,17 +39,6 @@ typedef struct
+     ULONG bmBits;
+ } BITMAP32;
+ 
+-typedef struct
+-{
+-    DWORD    elpPenStyle;
+-    DWORD    elpWidth;
+-    UINT     elpBrushStyle;
+-    COLORREF elpColor;
+-    ULONG    elpHatch;
+-    DWORD    elpNumEntries;
+-    DWORD    elpStyleEntry[1];
+-} EXTLOGPEN32;
+-
+ typedef struct
+ {
+     UINT          otmSize;
+diff --git a/include/wingdi.h b/include/wingdi.h
+index 039436fbbf1..be3d724cb49 100644
+--- a/include/wingdi.h
++++ b/include/wingdi.h
+@@ -1568,6 +1568,17 @@ typedef struct tagEXTLOGPEN
+     DWORD elpStyleEntry[1];
+ } EXTLOGPEN, *PEXTLOGPEN, *NPEXTLOGPEN, *LPEXTLOGPEN;
+ 
++typedef struct tagEXTLOGPEN32
++{
++    DWORD    elpPenStyle;
++    DWORD    elpWidth;
++    UINT     elpBrushStyle;
++    COLORREF elpColor;
++    ULONG    elpHatch;
++    DWORD    elpNumEntries;
++    DWORD    elpStyleEntry[1];
++} EXTLOGPEN32, *PEXTLOGPEN32, *NPEXTLOGPEN32, *LPEXTLOGPEN32;
++
+ #define PS_SOLID         0x00000000
+ #define PS_DASH          0x00000001
+ #define PS_DOT           0x00000002
+@@ -2338,7 +2349,7 @@ typedef struct {
+     DWORD     cbBmi;
+     DWORD     offBits;
+     DWORD     cbBits;
+-    EXTLOGPEN elp;
++    EXTLOGPEN32 elp;
+ } EMREXTCREATEPEN, *PEMREXTCREATEPEN;
+ 
+ typedef struct tagEMREXTESCAPE
+-- 
+GitLab
+

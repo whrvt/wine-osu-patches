@@ -9,7 +9,7 @@ Subject: [PATCH 15/32] server: Create in-process synchronization objects for
  1 file changed, 41 insertions(+), 3 deletions(-)
 
 diff --git a/server/queue.c b/server/queue.c
-index ddcf45ff519..323f0f90e2c 100644
+index c2105caf4d4..1b14d9e036d 100644
 --- a/server/queue.c
 +++ b/server/queue.c
 @@ -135,6 +135,7 @@ struct msg_queue
@@ -58,16 +58,16 @@ index ddcf45ff519..323f0f90e2c 100644
  }
  
  /* clear some queue bits */
-@@ -780,6 +787,9 @@ static inline void clear_queue_bits( struct msg_queue *queue, unsigned int bits
-         if (queue->keystate_lock) unlock_input_keystate( queue->input );
-         queue->keystate_lock = 0;
+@@ -1139,6 +1146,9 @@ static void reply_message( struct msg_queue *queue, lparam_t result,
+         if (len && (res->data = memdup( data, len ))) res->data_size = len;
+         store_message_result( res, result, error );
      }
 +
 +    if (!is_signaled( queue ))
 +        reset_inproc_event( queue->inproc_sync );
  }
  
- /* check if message is matched by the filter */
+ static int match_window( user_handle_t win, user_handle_t msg_win )
 @@ -1355,6 +1365,18 @@ static void msg_queue_satisfied( struct object *obj, struct wait_queue_entry *en
          shared->changed_mask = 0;
      }
@@ -103,7 +103,7 @@ index ddcf45ff519..323f0f90e2c 100644
  }
  
  static void thread_input_dump( struct object *obj, int verbose )
-@@ -3187,7 +3211,15 @@ DECL_HANDLER(set_queue_mask)
+@@ -3186,7 +3210,15 @@ DECL_HANDLER(set_queue_mask)
                  }
                  SHARED_WRITE_END;
              }
@@ -120,17 +120,17 @@ index ddcf45ff519..323f0f90e2c 100644
          }
  
          if (do_fsync() && !is_signaled( queue ))
-@@ -3221,6 +3253,9 @@ DECL_HANDLER(get_queue_status)
-             shared->changed_bits &= ~req->clear_bits;
+@@ -3215,6 +3247,9 @@ DECL_HANDLER(get_queue_status)
          }
          SHARED_WRITE_END;
-+
+ 
 +        if (!is_signaled( queue ))
 +            reset_inproc_event( queue->inproc_sync );
-     }
-     else reply->wake_bits = reply->changed_bits = 0;
- }
-@@ -3419,6 +3454,9 @@ DECL_HANDLER(get_message)
++
+         if (do_fsync() && !is_signaled( queue ))
+             fsync_clear( &queue->obj );
+ 
+@@ -3418,6 +3453,9 @@ DECL_HANDLER(get_message)
      }
      SHARED_WRITE_END;
  
@@ -140,11 +140,12 @@ index ddcf45ff519..323f0f90e2c 100644
      /* then check for posted messages */
      if ((filter & QS_POSTMESSAGE) &&
          get_posted_message( queue, queue->ignore_post_msg, get_win, req->get_first, req->get_last, req->flags, reply ))
-@@ -3488,6 +3526,7 @@ DECL_HANDLER(get_message)
+@@ -3487,6 +3525,8 @@ DECL_HANDLER(get_message)
      }
      SHARED_WRITE_END;
  
 +    reset_inproc_event( queue->inproc_sync );
++
      set_error( STATUS_PENDING );  /* FIXME */
  
      if (do_fsync() && !is_signaled( queue ))

@@ -1,0 +1,146 @@
+From 1d4145f9f8b0bb5a601c59a141ca1a925af12185 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Thu, 30 Jan 2025 16:26:11 +1000
+Subject: [PATCH] rtworkq: Introduce a platform startup count.
+
+---
+ dlls/mfplat/tests/mfplat.c   |  6 ------
+ dlls/rtworkq/queue.c         | 11 +++++++----
+ dlls/rtworkq/tests/rtworkq.c |  4 ----
+ 3 files changed, 7 insertions(+), 14 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 79525b31dec..8ced5518c5f 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -3978,7 +3978,6 @@ void test_startup_counts(void)
+     hr = MFLockPlatform();
+     ok(hr == S_OK, "Failed to lock, %#lx.\n", hr);
+     hr = MFAllocateWorkQueue(&queue);
+-    todo_wine
+     ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+     hr = MFUnlockPlatform();
+     ok(hr == S_OK, "Failed to unlock, %#lx.\n", hr);
+@@ -4001,7 +4000,6 @@ void test_startup_counts(void)
+     hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+     ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
+     /* Startup only locks once. */
+-    todo_wine
+     check_platform_lock_count(1);
+     hr = MFShutdown();
+     ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
+@@ -4052,7 +4050,6 @@ void test_startup_counts(void)
+ 
+     /* Platform is in shutdown state if either the lock count or the startup count is <= 0. */
+     hr = MFAllocateWorkQueue(&queue);
+-    todo_wine
+     ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+ 
+     /* Platform can be unlocked after shutdown. */
+@@ -4136,11 +4133,9 @@ void test_startup_counts(void)
+     ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
+ 
+     hr = MFAllocateWorkQueue(&queue);
+-    todo_wine
+     ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+ 
+     hr = MFCancelWorkItem(key);
+-    todo_wine
+     ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+ 
+     res = wait_async_callback_result(&callback->IMFAsyncCallback_iface, 0, &result);
+@@ -4150,7 +4145,6 @@ void test_startup_counts(void)
+     ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
+ 
+     /* Shutdown while a scheduled item is pending leaks the internal AsyncResult. */
+-    todo_wine
+     check_platform_lock_count(2);
+ 
+     hr = MFShutdown();
+diff --git a/dlls/rtworkq/queue.c b/dlls/rtworkq/queue.c
+index 9046a70b359..4486aafc253 100644
+--- a/dlls/rtworkq/queue.c
++++ b/dlls/rtworkq/queue.c
+@@ -66,6 +66,7 @@ static CRITICAL_SECTION_DEBUG queues_critsect_debug =
+ };
+ static CRITICAL_SECTION queues_section = { &queues_critsect_debug, -1, 0, 0, 0, 0 };
+ 
++static LONG startup_count;
+ static LONG platform_lock;
+ static CO_MTA_USAGE_COOKIE mta_cookie;
+ 
+@@ -954,7 +955,7 @@ static HRESULT alloc_user_queue(const struct queue_desc *desc, DWORD *queue_id)
+ 
+     *queue_id = RTWQ_CALLBACK_QUEUE_UNDEFINED;
+ 
+-    if (platform_lock <= 0)
++    if (startup_count <= 0 || platform_lock <= 0)
+         return RTWQ_E_SHUTDOWN;
+ 
+     if (!(queue = calloc(1, sizeof(*queue))))
+@@ -1206,8 +1207,9 @@ static void init_system_queues(void)
+ 
+ HRESULT WINAPI RtwqStartup(void)
+ {
+-    if (InterlockedIncrement(&platform_lock) == 1)
++    if (InterlockedIncrement(&startup_count) == 1)
+     {
++        RtwqLockPlatform();
+         init_system_queues();
+     }
+ 
+@@ -1234,12 +1236,13 @@ static void shutdown_system_queues(void)
+ 
+ HRESULT WINAPI RtwqShutdown(void)
+ {
+-    if (platform_lock <= 0)
++    if (startup_count <= 0)
+         return S_OK;
+ 
+-    if (InterlockedExchangeAdd(&platform_lock, -1) == 1)
++    if (InterlockedExchangeAdd(&startup_count, -1) == 1)
+     {
+         shutdown_system_queues();
++        RtwqUnlockPlatform();
+     }
+ 
+     return S_OK;
+diff --git a/dlls/rtworkq/tests/rtworkq.c b/dlls/rtworkq/tests/rtworkq.c
+index e7d59bae656..32fe82b29bb 100644
+--- a/dlls/rtworkq/tests/rtworkq.c
++++ b/dlls/rtworkq/tests/rtworkq.c
+@@ -257,7 +257,6 @@ static void test_work_queue(void)
+     hr = RtwqLockPlatform();
+     ok(hr == S_OK, "Failed to lock, %#lx.\n", hr);
+     hr = RtwqAllocateWorkQueue(RTWQ_STANDARD_WORKQUEUE, &queue);
+-    todo_wine
+     ok(hr == RTWQ_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+     hr = RtwqUnlockPlatform();
+     ok(hr == S_OK, "Failed to unlock, %#lx.\n", hr);
+@@ -280,7 +279,6 @@ static void test_work_queue(void)
+     hr = RtwqStartup();
+     ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
+     /* Startup only locks once. */
+-    todo_wine
+     check_platform_lock_count(1);
+     hr = RtwqShutdown();
+     ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
+@@ -331,7 +329,6 @@ static void test_work_queue(void)
+ 
+     /* Platform is in shutdown state if either the lock count or the startup count is <= 0. */
+     hr = RtwqAllocateWorkQueue(RTWQ_STANDARD_WORKQUEUE, &queue);
+-    todo_wine
+     ok(hr == RTWQ_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+ 
+     /* Platform can be unlocked after shutdown. */
+@@ -428,7 +425,6 @@ static void test_work_queue(void)
+     ok(hr == RTWQ_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+ 
+     hr = RtwqCancelWorkItem(key);
+-    todo_wine
+     ok(hr == RTWQ_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
+ 
+     res = wait_async_callback_result(&test_callback->IRtwqAsyncCallback_iface, 0, &callback_result);
+-- 
+GitLab
+

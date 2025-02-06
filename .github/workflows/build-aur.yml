@@ -149,11 +149,11 @@ jobs:
         sudo -u builder bash << EOF
         mkdir -p /tmp/artifact/${AUR_PACKAGE}
         mkdir -p /tmp/artifact/${AUR_PACKAGE}-wow64
-        mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}/*.pkg.tar.xz /tmp/artifact/${AUR_PACKAGE}/
-        mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64/*.pkg.tar.xz /tmp/artifact/${AUR_PACKAGE}-wow64/
+        mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}/*.pkg.tar.zst /tmp/artifact/${AUR_PACKAGE}/
+        mv ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64/*.pkg.tar.zst /tmp/artifact/${AUR_PACKAGE}-wow64/
 
-        echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --detach-sign --no-armor /tmp/artifact/${AUR_PACKAGE}/*.pkg.tar.xz
-        echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --detach-sign --no-armor /tmp/artifact/${AUR_PACKAGE}-wow64/*.pkg.tar.xz
+        echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --detach-sign --no-armor /tmp/artifact/${AUR_PACKAGE}/*.pkg.tar.zst
+        echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --detach-sign --no-armor /tmp/artifact/${AUR_PACKAGE}-wow64/*.pkg.tar.zst
 
         rm -rf ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}
         rm -rf ${{ env.PARU_CACHE }}/clone/${AUR_PACKAGE}-wow64
@@ -207,12 +207,12 @@ jobs:
         - name: Extract version from package name
           id: get_version
           run: |
-            PKGFILE=$(ls artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.xz | head -n1)
+            PKGFILE=$(ls artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.zst | head -n1)
 
-            # from e.g. wine-osu-spectator-9.20.w1.s5a1b9d5-1-x86_64.pkg.tar.xz
+            # from e.g. wine-osu-spectator-9.20.w1.s5a1b9d5-1-x86_64.pkg.tar.zst
             # get VERSION=9.20 and RELEASE=1
-            VERSION=$(basename "$PKGFILE" | sed -E 's/.*-([0-9]+\.[0-9]+)\..*-([0-9]+)-.*pkg\.tar\.xz/\1/')
-            RELEASE=$(basename "$PKGFILE" | sed -E 's/.*-([0-9]+\.[0-9]+)\..*-([0-9]+)-.*pkg\.tar\.xz/\2/')
+            VERSION=$(basename "$PKGFILE" | sed -E 's/.*-([0-9]+\.[0-9]+)\..*-([0-9]+)-.*pkg\.tar\.zst/\1/')
+            RELEASE=$(basename "$PKGFILE" | sed -E 's/.*-([0-9]+\.[0-9]+)\..*-([0-9]+)-.*pkg\.tar\.zst/\2/')
 
             echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
             echo "RELEASE=$RELEASE" >> $GITHUB_OUTPUT
@@ -225,7 +225,7 @@ jobs:
             draft: false
             prerelease: false
             files: |
-              artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.xz*
-              artifacts/${{ env.AUR_PACKAGE }}-wow64/*.pkg.tar.xz*
+              artifacts/${{ env.AUR_PACKAGE }}/*.pkg.tar.zst*
+              artifacts/${{ env.AUR_PACKAGE }}-wow64/*.pkg.tar.zst*
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

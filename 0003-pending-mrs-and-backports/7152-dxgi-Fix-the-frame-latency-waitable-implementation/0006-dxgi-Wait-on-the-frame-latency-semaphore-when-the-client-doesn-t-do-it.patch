@@ -1,4 +1,4 @@
-From 1f5f3edeaebf3843f69e05a48fafc9766864bf0b Mon Sep 17 00:00:00 2001
+From b453329779ecb34e57493a79c703f3064eb98ab7 Mon Sep 17 00:00:00 2001
 From: Giovanni Mascellani <gmascellani@codeweavers.com>
 Date: Fri, 17 Jan 2025 15:11:40 +0100
 Subject: [PATCH] dxgi: Wait on the frame latency semaphore when the client
@@ -8,11 +8,11 @@ The client is expected to wait on the frame latency semaphore when
 the swapchain is created with DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.
 But when it is not, we're supposed to do it ourselves.
 ---
- dlls/dxgi/swapchain.c | 38 +++++++++++++++++++++++---------------
- 1 file changed, 23 insertions(+), 15 deletions(-)
+ dlls/dxgi/swapchain.c | 37 ++++++++++++++++++++++---------------
+ 1 file changed, 22 insertions(+), 15 deletions(-)
 
 diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
-index 67b637fbeaf..57783972a9c 100644
+index 67b637fbeaf..833d1a12c49 100644
 --- a/dlls/dxgi/swapchain.c
 +++ b/dlls/dxgi/swapchain.c
 @@ -2290,13 +2290,10 @@ static HRESULT d3d12_swapchain_op_present_execute(struct d3d12_swapchain *swapch
@@ -32,11 +32,10 @@ index 67b637fbeaf..57783972a9c 100644
      }
  
      return S_OK;
-@@ -2348,6 +2345,14 @@ static HRESULT d3d12_swapchain_present(struct d3d12_swapchain *swapchain,
+@@ -2322,6 +2319,13 @@ static HRESULT d3d12_swapchain_present(struct d3d12_swapchain *swapchain,
+         return S_OK;
      }
  
-     swapchain->current_buffer_index = (swapchain->current_buffer_index + 1) % swapchain->desc.BufferCount;
-+
 +    if (!(swapchain->desc.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)
 +            && WaitForSingleObject(swapchain->frame_latency_semaphore, INFINITE) != WAIT_OBJECT_0)
 +    {
@@ -44,10 +43,10 @@ index 67b637fbeaf..57783972a9c 100644
 +        return HRESULT_FROM_WIN32(GetLastError());
 +    }
 +
-     return S_OK;
- }
- 
-@@ -2900,8 +2905,11 @@ static HANDLE STDMETHODCALLTYPE d3d12_swapchain_GetFrameLatencyWaitableObject(ID
+     if (!(op = calloc(1, sizeof(*op))))
+     {
+         WARN("Cannot allocate memory.\n");
+@@ -2900,8 +2904,11 @@ static HANDLE STDMETHODCALLTYPE d3d12_swapchain_GetFrameLatencyWaitableObject(ID
  
      TRACE("iface %p.\n", iface);
  
@@ -60,7 +59,7 @@ index 67b637fbeaf..57783972a9c 100644
  
      ret = DuplicateHandle(GetCurrentProcess(), swapchain->frame_latency_semaphore, GetCurrentProcess(),
              &dup, 0, FALSE, DUPLICATE_SAME_ACCESS);
-@@ -3341,16 +3349,16 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
+@@ -3341,16 +3348,16 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
      swapchain->current_buffer_index = 0;
  
      if (swapchain_desc->Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)

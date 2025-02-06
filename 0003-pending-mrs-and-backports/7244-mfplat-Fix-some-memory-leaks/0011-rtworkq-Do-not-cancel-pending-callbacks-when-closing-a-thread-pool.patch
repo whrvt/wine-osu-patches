@@ -1,0 +1,80 @@
+From 9f17d0ba027fc8a7493531fdccd84c7813b28a47 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Tue, 19 Nov 2024 16:50:33 +1000
+Subject: [PATCH] rtworkq: Do not cancel pending callbacks when closing a
+ thread pool.
+
+---
+ dlls/mfplat/tests/mfplat.c   | 1 -
+ dlls/rtworkq/queue.c         | 2 +-
+ dlls/rtworkq/tests/rtworkq.c | 8 --------
+ 3 files changed, 1 insertion(+), 10 deletions(-)
+
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 99fe44ca98b..c68997b22f0 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -4406,7 +4406,6 @@ static void test_scheduled_items(void)
+     /* An callback invocation with RTWQ_E_OPERATION_CANCELLED may have been pending
+      * when MFShutdown() was called. Release depends upon its execution. */
+     refcount = IMFAsyncResult_Release(result);
+-    flaky_wine
+     ok(refcount == 0, "Unexpected refcount %lu.\n", refcount);
+ 
+     IMFAsyncCallback_Release(&callback->IMFAsyncCallback_iface);
+diff --git a/dlls/rtworkq/queue.c b/dlls/rtworkq/queue.c
+index 394b2b30abf..41c0d5aa520 100644
+--- a/dlls/rtworkq/queue.c
++++ b/dlls/rtworkq/queue.c
+@@ -365,7 +365,7 @@ static BOOL pool_queue_shutdown(struct queue *queue)
+     if (!queue->pool)
+         return FALSE;
+ 
+-    CloseThreadpoolCleanupGroupMembers(queue->envs[0].CleanupGroup, TRUE, NULL);
++    CloseThreadpoolCleanupGroupMembers(queue->envs[0].CleanupGroup, FALSE, NULL);
+     CloseThreadpool(queue->pool);
+     queue->pool = NULL;
+ 
+diff --git a/dlls/rtworkq/tests/rtworkq.c b/dlls/rtworkq/tests/rtworkq.c
+index 30a2895c42c..c4e69ca4083 100644
+--- a/dlls/rtworkq/tests/rtworkq.c
++++ b/dlls/rtworkq/tests/rtworkq.c
+@@ -459,17 +459,13 @@ static void test_queue_shutdown(void)
+     ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
+ 
+     res = wait_async_callback_result(&test_callback->IRtwqAsyncCallback_iface, 100, &callback_result);
+-    flaky_wine
+     ok(res == 0, "got %#lx\n", res);
+     res = wait_async_callback_result(&test_callback2->IRtwqAsyncCallback_iface, 100, &callback_result);
+-    todo_wine
+     ok(res == 0, "got %#lx\n", res);
+ 
+     refcount = IRtwqAsyncResult_Release(result);
+-    flaky_wine
+     ok(!refcount, "Unexpected refcount %ld.\n", refcount);
+     refcount = IRtwqAsyncResult_Release(result2);
+-    todo_wine
+     ok(!refcount, "Unexpected refcount %ld.\n", refcount);
+ 
+     hr = RtwqStartup();
+@@ -490,17 +486,13 @@ static void test_queue_shutdown(void)
+     RtwqUnlockWorkQueue(queue);
+ 
+     res = wait_async_callback_result(&test_callback->IRtwqAsyncCallback_iface, 100, &callback_result);
+-    flaky_wine
+     ok(res == 0, "got %#lx\n", res);
+     res = wait_async_callback_result(&test_callback2->IRtwqAsyncCallback_iface, 100, &callback_result);
+-    todo_wine
+     ok(res == 0, "got %#lx\n", res);
+ 
+     refcount = IRtwqAsyncResult_Release(result);
+-    flaky_wine
+     ok(!refcount, "Unexpected refcount %ld.\n", refcount);
+     refcount = IRtwqAsyncResult_Release(result2);
+-    todo_wine
+     ok(!refcount, "Unexpected refcount %ld.\n", refcount);
+ 
+     hr = RtwqShutdown();
+-- 
+GitLab
+

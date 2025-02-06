@@ -1,0 +1,125 @@
+From 1cfde8116a9e88ba7438cc8cc3499d6e64d1b40b Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Fri, 31 Jan 2025 16:29:15 +1000
+Subject: [PATCH] rtworkq/tests: Test queue shutdown with pending items.
+
+---
+ dlls/rtworkq/tests/rtworkq.c | 86 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 86 insertions(+)
+
+diff --git a/dlls/rtworkq/tests/rtworkq.c b/dlls/rtworkq/tests/rtworkq.c
+index 05e81a3116d..30a2895c42c 100644
+--- a/dlls/rtworkq/tests/rtworkq.c
++++ b/dlls/rtworkq/tests/rtworkq.c
+@@ -80,6 +80,7 @@ struct test_callback
+     IRtwqAsyncCallback IRtwqAsyncCallback_iface;
+     LONG refcount;
+     HANDLE event;
++    UINT sleep_ms;
+     IRtwqAsyncResult *result;
+ };
+ 
+@@ -132,6 +133,9 @@ static HRESULT WINAPI testcallback_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncR
+ {
+     struct test_callback *callback = impl_from_IRtwqAsyncCallback(iface);
+ 
++    if (callback->sleep_ms)
++        Sleep(callback->sleep_ms);
++
+     callback->result = result;
+     SetEvent(callback->event);
+ 
+@@ -425,8 +429,90 @@ static void test_work_queue(void)
+     IRtwqAsyncCallback_Release(&test_callback->IRtwqAsyncCallback_iface);
+ }
+ 
++static void test_queue_shutdown(void)
++{
++    IRtwqAsyncResult *result, *result2, *callback_result;
++    struct test_callback *test_callback, *test_callback2;
++    DWORD res, queue;
++    LONG refcount;
++    HRESULT hr;
++
++    hr = RtwqStartup();
++    ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
++
++    test_callback = create_test_callback();
++    test_callback2 = create_test_callback();
++    test_callback->sleep_ms = 10;
++    test_callback2->sleep_ms = 10;
++
++    hr = RtwqCreateAsyncResult(NULL, &test_callback->IRtwqAsyncCallback_iface, NULL, &result);
++    ok(hr == S_OK, "Failed to create result, hr %#lx.\n", hr);
++    hr = RtwqCreateAsyncResult(NULL, &test_callback2->IRtwqAsyncCallback_iface, NULL, &result2);
++    ok(hr == S_OK, "Failed to create result, hr %#lx.\n", hr);
++    hr = RtwqPutWorkItem(RTWQ_CALLBACK_QUEUE_STANDARD, 0, result);
++    ok(hr == S_OK, "got %#lx\n", hr);
++    hr = RtwqPutWorkItem(RTWQ_CALLBACK_QUEUE_STANDARD, 0, result2);
++    ok(hr == S_OK, "got %#lx\n", hr);
++
++    /* At least the second item will be delayed until after shutdown. Execution still occurs after shutdown. */
++    hr = RtwqShutdown();
++    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++
++    res = wait_async_callback_result(&test_callback->IRtwqAsyncCallback_iface, 100, &callback_result);
++    flaky_wine
++    ok(res == 0, "got %#lx\n", res);
++    res = wait_async_callback_result(&test_callback2->IRtwqAsyncCallback_iface, 100, &callback_result);
++    todo_wine
++    ok(res == 0, "got %#lx\n", res);
++
++    refcount = IRtwqAsyncResult_Release(result);
++    flaky_wine
++    ok(!refcount, "Unexpected refcount %ld.\n", refcount);
++    refcount = IRtwqAsyncResult_Release(result2);
++    todo_wine
++    ok(!refcount, "Unexpected refcount %ld.\n", refcount);
++
++    hr = RtwqStartup();
++    ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
++
++    hr = RtwqAllocateWorkQueue(RTWQ_STANDARD_WORKQUEUE, &queue);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    hr = RtwqCreateAsyncResult(NULL, &test_callback->IRtwqAsyncCallback_iface, NULL, &result);
++    ok(hr == S_OK, "Failed to create result, hr %#lx.\n", hr);
++    hr = RtwqCreateAsyncResult(NULL, &test_callback2->IRtwqAsyncCallback_iface, NULL, &result2);
++    ok(hr == S_OK, "Failed to create result, hr %#lx.\n", hr);
++    hr = RtwqPutWorkItem(queue, 0, result);
++    ok(hr == S_OK, "got %#lx\n", hr);
++    hr = RtwqPutWorkItem(queue, 0, result2);
++    ok(hr == S_OK, "got %#lx\n", hr);
++
++    /* Execution still occurs after unlock. */
++    RtwqUnlockWorkQueue(queue);
++
++    res = wait_async_callback_result(&test_callback->IRtwqAsyncCallback_iface, 100, &callback_result);
++    flaky_wine
++    ok(res == 0, "got %#lx\n", res);
++    res = wait_async_callback_result(&test_callback2->IRtwqAsyncCallback_iface, 100, &callback_result);
++    todo_wine
++    ok(res == 0, "got %#lx\n", res);
++
++    refcount = IRtwqAsyncResult_Release(result);
++    flaky_wine
++    ok(!refcount, "Unexpected refcount %ld.\n", refcount);
++    refcount = IRtwqAsyncResult_Release(result2);
++    todo_wine
++    ok(!refcount, "Unexpected refcount %ld.\n", refcount);
++
++    hr = RtwqShutdown();
++    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
++
++    IRtwqAsyncCallback_Release(&test_callback->IRtwqAsyncCallback_iface);
++    IRtwqAsyncCallback_Release(&test_callback2->IRtwqAsyncCallback_iface);
++}
++
+ START_TEST(rtworkq)
+ {
+     test_platform_init();
+     test_work_queue();
++    test_queue_shutdown();
+ }
+-- 
+GitLab
+
