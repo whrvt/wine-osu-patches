@@ -23,7 +23,7 @@ env:
   AUR_PACKAGE: ${{ github.event.inputs.aur_package || 'wine-osu-spectator' }}
   PARU_CACHE: /home/builder/.cache/paru
   PACKAGE_CACHE: /home/builder/package_cache
-  _CCACHE_DIR: /home/builder/.cache/ccache
+  _CCACHE_DIR: /home/builder/.ccache
   PUBKEY: 0B47490955565BD2
   GNUPGHOME: /home/builder/.gnupg
 

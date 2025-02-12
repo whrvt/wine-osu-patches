@@ -1,0 +1,53 @@
+From 9e5b40392be654cc0344ea0540112ba3be24ac29 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 8 Feb 2025 23:13:46 -0800
+Subject: [PATCH] configure.ac: Omit frame pointers except on llvm i386.
+
+---
+ configure.ac | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index b889b32f5a1..40d94b0ebbd 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -985,11 +985,16 @@ This is an error since --enable-archs=$wine_arch was requested.])])
+     WINE_TRY_PE_CFLAGS([-flarge-source-files -Wmisleading-indentation],[AS_VAR_APPEND(${wine_arch}_EXTRACFLAGS,[" -Wno-misleading-indentation"])])
+ 
+     case $wine_arch in
+-      i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])
++      i386) WINE_TRY_PE_CFLAGS([-momit-leaf-frame-pointer])
+             WINE_TRY_PE_CFLAGS([-mpreferred-stack-boundary=2])
+             WINE_TRY_PE_CFLAGS([-Wl,--disable-stdcall-fixup],
+-                               [AS_VAR_APPEND([${wine_arch}_LDFLAGS],[" -Wl,--disable-stdcall-fixup"])]) ;;
+-      x86_64) WINE_TRY_PE_CFLAGS([-Wformat-overflow])
++                               [AS_VAR_APPEND([${wine_arch}_LDFLAGS],[" -Wl,--disable-stdcall-fixup"])]) 
++            case "x$with_mingw" in
++                xclang|x*/clang|x*/*-clang|x*-clang) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer]) ;;
++                x*-gcc|x*/*-gcc) WINE_TRY_PE_CFLAGS([-fomit-frame-pointer]) ;;
++            esac ;;
++      x86_64) WINE_TRY_PE_CFLAGS([-fomit-frame-pointer])
++              WINE_TRY_PE_CFLAGS([-Wformat-overflow])
+               WINE_TRY_PE_CFLAGS([-Wnonnull])
+               WINE_TRY_PE_CFLAGS([-mcx16])
+               WINE_TRY_PE_CFLAGS([-mcmodel=small]) ;;
+@@ -1983,7 +1988,6 @@ then
+ 
+   case $HOST_ARCH in
+     dnl gcc-4.6+ omits frame pointers by default, breaking some copy protections
+-    i386) WINE_TRY_CFLAGS([-fno-omit-frame-pointer],[MSVCRTFLAGS="$MSVCRTFLAGS -fno-omit-frame-pointer"]) ;;
+     x86_64)
+       case $host_os in
+         dnl Mingw uses Windows 64-bit types, not Unix ones
+@@ -2002,6 +2006,8 @@ int a(int b, ...) { __builtin_ms_va_list list; __builtin_ms_va_start(list,b); }]
+       esac ;;
+     arm)
+       WINE_TRY_CFLAGS([-Wincompatible-function-pointer-types],[EXTRACFLAGS="$EXTRACFLAGS -Wno-error=incompatible-function-pointer-types"]) ;;
++    *)
++      WINE_TRY_CFLAGS([-fomit-frame-pointer],[MSVCRTFLAGS="$MSVCRTFLAGS -fomit-frame-pointer"])
+   esac
+ 
+   CFLAGS=$saved_CFLAGS
+-- 
+2.48.1
+

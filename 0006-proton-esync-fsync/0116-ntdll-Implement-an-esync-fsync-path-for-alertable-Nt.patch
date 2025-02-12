@@ -64,40 +64,34 @@ index c28b4e27597..f419e4b826d 100644
          msgwait = TRUE;
          server_set_msgwait( 1 );
 diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
-index 2efa9fa5870..2a118fab809 100644
+index 539e912069c..a129a5315f8 100644
 --- a/dlls/ntdll/unix/sync.c
 +++ b/dlls/ntdll/unix/sync.c
-@@ -1753,14 +1753,31 @@ NTSTATUS WINAPI NtYieldExecution(void)
-  */
- NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeout )
- {
--    unsigned int status = STATUS_SUCCESS;
-+    unsigned int ret, status = STATUS_SUCCESS;
- 
+@@ -2754,9 +2754,26 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
      /* if alertable, we need to query the server */
      if (alertable)
      {
 +        if (do_fsync())
 +        {
-+            ret = fsync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
-+            if (ret != STATUS_NOT_IMPLEMENTED)
++            status = fsync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
++            if (status != STATUS_NOT_IMPLEMENTED)
 +                goto alert_waited;
 +        }
 +
 +        if (do_esync())
 +        {
-+            ret = esync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
-+            if (ret != STATUS_NOT_IMPLEMENTED)
++            status = esync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
++            if (status != STATUS_NOT_IMPLEMENTED)
 +                goto alert_waited;
 +        }
 +
          /* Since server_wait will result in an unconditional implicit yield,
             we never return STATUS_NO_YIELD_PERFORMED */
 -        if ((status = server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout )) == STATUS_TIMEOUT)
-+        ret = server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout );
++        status = server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout );
 +
 +alert_waited:
-+        if (ret == STATUS_TIMEOUT)
++        if (status == STATUS_TIMEOUT)
              status = STATUS_SUCCESS;
          return status;
      }

@@ -1,0 +1,110 @@
+From afa425984fe74122a8e059b388861c6dbaff9dc3 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 10 Feb 2025 09:06:00 -0800
+Subject: [PATCH] HACK: kernelbase: Busy-wait instead of server-wait for <=1ms
+ sleeps in osu!.
+
+Also allow forcing it on (with WINE_FORCE_BUSYWAIT=1) for the placebo-chasers
+out there who might use this build for other games, to see how it affects them.
+---
+ dlls/kernelbase/sync.c | 74 ++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 71 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/kernelbase/sync.c b/dlls/kernelbase/sync.c
+index cff93c17598..5a52f26e37f 100644
+--- a/dlls/kernelbase/sync.c
++++ b/dlls/kernelbase/sync.c
+@@ -361,12 +361,31 @@ DWORD WINAPI DECLSPEC_HOTPATCH SignalObjectAndWait( HANDLE signal, HANDLE wait,
+  */
+ void WINAPI DECLSPEC_HOTPATCH Sleep( DWORD timeout )
+ {
+-    LARGE_INTEGER time;
+-
+-    NtDelayExecution( FALSE, get_nt_timeout( &time, timeout ) );
++    SleepEx( timeout, FALSE );
+ }
+ 
+ 
++static inline BOOL is_osu(void)
++{
++    static volatile char cache = -1;
++    BOOL ret = cache;
++    if (ret == -1)
++    {
++        const 
++        const WCHAR *p, *name = NtCurrentTeb()->Peb->ProcessParameters->ImagePathName.Buffer;
++        if ((p = wcsrchr( name, '/' ))) name = p + 1;
++        if ((p = wcsrchr( name, '\\' ))) name = p + 1;
++        ret = !wcsicmp( name, L"osu!.exe" );
++        if (!ret)
++        {
++            WCHAR buffer[2];
++            ret = (GetEnvironmentVariableW( L"WINE_FORCE_BUSYWAIT", buffer, ARRAY_SIZE(buffer) ) && buffer[0] != '0');
++        }
++        cache = ret;
++    }
++    return ret;
++}
++
+ /******************************************************************************
+  *              SleepEx   (kernelbase.@)
+  */
+@@ -375,6 +394,55 @@ DWORD WINAPI DECLSPEC_HOTPATCH SleepEx( DWORD timeout, BOOL alertable )
+     NTSTATUS status;
+     LARGE_INTEGER time;
+ 
++    if (!timeout && !alertable)
++    {
++        for (int i=0;i<10;i++) YieldProcessor();
++        return 0;
++    }
++
++    if (is_osu() && alertable && timeout <= 1)
++    {
++        static BOOL cached_result;
++        static DWORD last_check_time;
++        DWORD current = GetTickCount();
++        BOOL do_check = (current - last_check_time >= 30000);
++
++        if (!do_check && cached_result)
++        {
++            LARGE_INTEGER start, now, freq;
++            ULONGLONG target;
++
++            if (!timeout)
++            {
++                for (int i=0;i<10;i++) YieldProcessor();
++                return 0;
++            }
++
++            RtlQueryPerformanceCounter( &start );
++            RtlQueryPerformanceFrequency( &freq );
++
++            target = (ULONGLONG)(start.QuadPart + (freq.QuadPart / 1000));
++
++            do {
++                RtlQueryPerformanceCounter( &now );
++                if (( now.QuadPart - start.QuadPart ) % 128 == 0)
++                    YieldProcessor();
++            } while ((ULONGLONG)now.QuadPart < target);
++
++            return 0;
++        }
++
++        status = NtDelayExecution( TRUE, get_nt_timeout( &time, timeout ) );
++
++        if (do_check)
++        {
++            cached_result = (status != STATUS_USER_APC);
++            last_check_time = current;
++        }
++
++        return (status == STATUS_USER_APC) ? WAIT_IO_COMPLETION : 0;
++    }
++
+     status = NtDelayExecution( alertable, get_nt_timeout( &time, timeout ) );
+     if (status == STATUS_USER_APC) return WAIT_IO_COMPLETION;
+     return 0;
+-- 
+2.48.1
+
