@@ -60,7 +60,7 @@ jobs:
         path: |
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-${{ hashFiles('**pkg.tar.zst') }}
+        key: ${{ runner.os }}-
         restore-keys: |
           ${{ runner.os }}
 
@@ -190,7 +190,7 @@ jobs:
         path: |
           ${{ env.PACKAGE_CACHE }}
           ${{ env._CCACHE_DIR }}
-        key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+        key: ${{ runner.os }}-
 
   create-release:
       needs: build

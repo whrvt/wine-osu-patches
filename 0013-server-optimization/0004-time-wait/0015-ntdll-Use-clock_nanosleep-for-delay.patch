@@ -1,0 +1,89 @@
+From b615c5d332b0517752a96f68d9196f7283447dd1 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 12 Feb 2025 14:04:16 -0800
+Subject: [PATCH] ntdll: Use clock_nanosleep for delay.
+
+---
+ dlls/ntdll/unix/sync.c | 57 +++++++++++++++++++++++++++++-------------
+ 1 file changed, 39 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 9ec53bdb05e..b00904b92b1 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2800,33 +2800,54 @@ alert_waited:
+ 
+     if (!timeout || timeout->QuadPart == TIMEOUT_INFINITE)  /* sleep forever */
+     {
+-        for (;;) select( 0, NULL, NULL, NULL, NULL );
++        struct timespec ts = { .tv_sec = ~0UL >> 1, .tv_nsec = 0 };
++        while (clock_nanosleep( CLOCK_MONOTONIC, 0, &ts, &ts ) == EINTR);
+     }
+     else
+     {
+-        LARGE_INTEGER now;
+-        timeout_t when, diff;
++        timeout_t when;
++        struct timespec ts;
++        when = timeout->QuadPart;
+ 
+-        if ((when = timeout->QuadPart) < 0)
++        if (when < 0)
+         {
+-            NtQuerySystemTime( &now );
+-            when = now.QuadPart - when;
+-        }
++            when = -when;
++            when -= 450; /* rough overhead adjustment */
+ 
+-        /* Note that we yield after establishing the desired timeout, but
+-           we only care about the result of the yield for zero timeouts */
+-        status = NtYieldExecution();
+-        if (!when) return status;
++            ts.tv_sec  = when / TICKSPERSEC;
++            ts.tv_nsec = (when % TICKSPERSEC) * 100;
+ 
+-        for (;;)
++            while (clock_nanosleep( CLOCK_MONOTONIC, 0, &ts, &ts ) == EINTR);
++        }
++        else
+         {
+-            struct timeval tv;
++            LARGE_INTEGER now;
++            unsigned int ret;
++
++            /* Note that we only care about the result of the yield for zero timeouts */
++            status = NtYieldExecution();
++            if (!when)
++                return status;
++
++            when -= 450;
++
+             NtQuerySystemTime( &now );
+-            diff = (when - now.QuadPart + 9) / 10;
+-            if (diff <= 0) break;
+-            tv.tv_sec  = diff / 1000000;
+-            tv.tv_usec = diff % 1000000;
+-            if (select( 0, NULL, NULL, NULL, &tv ) != -1) break;
++            if (when <= now.QuadPart)
++                return status;
++
++            ts.tv_sec  = when / TICKSPERSEC;
++            ts.tv_nsec = (when % TICKSPERSEC) * 100;
++
++            do
++            {
++                ret = clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, NULL );
++                if (ret == EINTR)
++                {
++                    LARGE_INTEGER now;
++                    NtQuerySystemTime( &now );
++                    if (when <= now.QuadPart) break;
++                }
++            } while (ret == EINTR);
+         }
+     }
+     return STATUS_SUCCESS;
+-- 
+2.48.1
+

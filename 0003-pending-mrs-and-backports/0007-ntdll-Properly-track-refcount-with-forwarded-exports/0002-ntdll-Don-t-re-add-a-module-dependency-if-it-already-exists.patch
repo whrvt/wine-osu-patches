@@ -1,0 +1,66 @@
+From fe1cf54f6d8c7561c1bc1e9e7055bee0313b90aa Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Thu, 18 Apr 2024 23:23:43 +0900
+Subject: [PATCH] ntdll: Don't re-add a module dependency if it already exists.
+
+Today, calling add_module_dependency() multiple times with the same
+arguments results in duplicate edges.
+
+Duplicate edges are harmless, but bloats memory usage.  The number of
+duplicate edges does not affect the dependency graph; the graph is
+determined by the set of unique edges.
+
+Consciously avoid duplicates by checking for them in
+add_module_dependency_after().  This allows us to generate a unique
+dependency edge for all imports of export forwarders that belong to the
+same DLL.
+---
+ dlls/ntdll/loader.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index e51ea7197f4..c0cd5d41a05 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -837,6 +837,21 @@ static void remove_single_list_entry( LDRP_CSLIST *list, SINGLE_LIST_ENTRY *entr
+     entry->Next = NULL;
+ }
+ 
++static LDR_DEPENDENCY *find_module_dependency( LDR_DDAG_NODE *from, LDR_DDAG_NODE *to )
++{
++    SINGLE_LIST_ENTRY *entry, *mark = from->Dependencies.Tail;
++
++    if (!mark) return NULL;
++
++    for (entry = mark->Next; entry != mark; entry = entry->Next)
++    {
++        LDR_DEPENDENCY *dep = CONTAINING_RECORD( entry, LDR_DEPENDENCY, dependency_to_entry );
++        if (dep->dependency_from == from && dep->dependency_to == to) return dep;
++    }
++
++    return NULL;
++}
++
+ /**********************************************************************
+  *	    add_module_dependency_after
+  */
+@@ -845,6 +860,16 @@ static BOOL add_module_dependency_after( LDR_DDAG_NODE *from, LDR_DDAG_NODE *to,
+ {
+     LDR_DEPENDENCY *dep;
+ 
++    if ((dep = find_module_dependency( from, to )))
++    {
++        /* Dependency already exists; consume the module reference stolen from the caller */
++        LDR_DATA_TABLE_ENTRY *mod = CONTAINING_RECORD( to->Modules.Flink, LDR_DATA_TABLE_ENTRY, NodeModuleLink );
++        WINE_MODREF *wm = CONTAINING_RECORD( mod, WINE_MODREF, ldr );
++        assert( wm->ldr.LoadCount != 1 );
++        if (wm->ldr.LoadCount != -1) wm->ldr.LoadCount--;
++        return TRUE;
++    }
++
+     if (!(dep = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*dep) ))) return FALSE;
+ 
+     dep->dependency_from = from;
+-- 
+GitLab
+

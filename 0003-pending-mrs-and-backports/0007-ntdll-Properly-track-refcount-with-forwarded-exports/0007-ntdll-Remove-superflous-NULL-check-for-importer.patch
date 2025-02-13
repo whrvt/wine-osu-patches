@@ -1,0 +1,62 @@
+From 39b1922c9f2f3b0a8bcb642cba0b0b89fcf621ab Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Wed, 12 Feb 2025 22:30:34 +0900
+Subject: [PATCH] ntdll: Remove superflous NULL check for importer.
+
+---
+ dlls/ntdll/loader.c | 21 +++++++--------------
+ 1 file changed, 7 insertions(+), 14 deletions(-)
+
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index f354ddb1ab9..8682b1d138c 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -739,7 +739,7 @@ static NTSTATUS build_import_name( WINE_MODREF *importer, WCHAR buffer[256], con
+ {
+     const API_SET_NAMESPACE *map = NtCurrentTeb()->Peb->ApiSetMap;
+     const API_SET_NAMESPACE_ENTRY *entry;
+-    const WCHAR *host = importer ? importer->ldr.BaseDllName.Buffer : NULL;
++    const WCHAR *host = importer->ldr.BaseDllName.Buffer;
+     UNICODE_STRING str;
+ 
+     while (len && import[len-1] == ' ') len--;  /* remove trailing spaces */
+@@ -987,17 +987,10 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
+     {
+         if (!(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS))
+         {
+-            if (importer)
+-            {
+-                /* Prepare for the callee stealing the reference */
+-                if (wm_owned_ref) wm_owned_ref = FALSE;
+-                else if (wm->ldr.LoadCount != -1) wm->ldr.LoadCount++;
+-                add_module_dependency( importer->ldr.DdagNode, wm->ldr.DdagNode );
+-            }
+-            else if (wm_owned_ref && process_attach( wm->ldr.DdagNode, NULL ) != STATUS_SUCCESS)
+-            {
+-                proc = NULL;
+-            }
++            /* Prepare for the callee stealing the reference */
++            if (wm_owned_ref) wm_owned_ref = FALSE;
++            else if (wm->ldr.LoadCount != -1) wm->ldr.LoadCount++;
++            add_module_dependency( importer->ldr.DdagNode, wm->ldr.DdagNode );
+         }
+         if (proc && wm_owned_ref)
+         {
+@@ -1040,12 +1033,12 @@ static FARPROC find_ordinal_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY
+ 
+     if (TRACE_ON(snoop))
+     {
+-        const WCHAR *user = !is_dynamic && importer ? importer->ldr.BaseDllName.Buffer : NULL;
++        const WCHAR *user = !is_dynamic ? importer->ldr.BaseDllName.Buffer : NULL;
+         proc = SNOOP_GetProcAddress( module, exports, exp_size, proc, ordinal, user );
+     }
+     if (TRACE_ON(relay))
+     {
+-        const WCHAR *user = !is_dynamic && importer ? importer->ldr.BaseDllName.Buffer : NULL;
++        const WCHAR *user = !is_dynamic ? importer->ldr.BaseDllName.Buffer : NULL;
+         proc = RELAY_GetProcAddress( module, exports, exp_size, proc, ordinal, user );
+     }
+     return proc;
+-- 
+GitLab
+

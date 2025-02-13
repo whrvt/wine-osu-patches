@@ -1,6 +1,6 @@
 # Patchset context
 
-wine commit: [wine-902dcd6e](https://gitlab.winehq.org/wine/wine/-/tree/902dcd6e47e5bde8d8f3f053bdb70c4884788289)
+wine commit: [wine-17915f73](https://gitlab.winehq.org/wine/wine/-/tree/17915f730267b2b50550636fb6928a6ace247ccd)
 
 staging commit: [staging-7042b486](https://gitlab.winehq.org/wine/wine-staging/-/tree/7042b486e25429858d716bde87266b43c341f550)
 
@@ -212,15 +212,20 @@ cursor clip hack
 
 ## WINE_FORCE_BUSYWAIT
 
-Patch: [0014-HACK-kernelbase-Busy-wait-instead-of-server-wait-for.patch](0013-server-optimization/0004-time-wait/0014-HACK-kernelbase-Busy-wait-instead-of-server-wait-for.patch)
+Patch: [0016-HACK-ntdll-Do-a-non-alertable-wait-for-small-1ms-sle.patch](0013-server-optimization/0004-time-wait/0016-HACK-ntdll-Do-a-non-alertable-wait-for-small-1ms-sle.patch)
 
 ### Commit message
 
 ```
-HACK: kernelbase: Busy-wait instead of server-wait for <=1ms sleeps in osu!.
+HACK: ntdll: Do a non-alertable wait for small (<=1ms) sleeps in osu!.
 Also allow forcing it on (with WINE_FORCE_BUSYWAIT=1) for the placebo-chasers
 out there who might use this build for other games, to see how it affects them.
+Only with ntsync/esync/server sync, as fsync is fast enough already.
 ```
+
+### Type
+
+`boolean`
 
 ## WINE_FSYNC_SIMULATE_SCHED_QUANTUM
 

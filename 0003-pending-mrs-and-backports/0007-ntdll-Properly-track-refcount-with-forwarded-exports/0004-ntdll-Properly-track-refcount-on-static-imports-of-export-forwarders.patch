@@ -1,0 +1,51 @@
+From 2fe2baa7e8d2476f346c1332e1cba5ccc5dee3c9 Mon Sep 17 00:00:00 2001
+From: Jinoh Kang <jinoh.kang.kr@gmail.com>
+Date: Fri, 19 Apr 2024 00:42:57 +0900
+Subject: [PATCH] ntdll: Properly track refcount on static imports of export
+ forwarders.
+
+Today this is only done for the the main EXE.  Generalize this to DLLs
+as well.
+---
+ dlls/kernel32/tests/loader.c | 4 ++--
+ dlls/ntdll/loader.c          | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/kernel32/tests/loader.c b/dlls/kernel32/tests/loader.c
+index 2c7cc784be4..d0a2c514136 100644
+--- a/dlls/kernel32/tests/loader.c
++++ b/dlls/kernel32/tests/loader.c
+@@ -2777,7 +2777,7 @@ static void subtest_export_forwarder_dep_chain( size_t num_chained_export_module
+ 
+         /* FreeLibrary() should *not* unload the DLL immediately */
+         module = GetModuleHandleA( temp_paths[i] );
+-        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index)
++        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index && exporter_index)
+         ok( module == modules[i], "modules[%Iu] expected %p, got %p (unloaded?) err=%lu\n",
+             i, modules[i], module, GetLastError() );
+     }
+@@ -2789,7 +2789,7 @@ static void subtest_export_forwarder_dep_chain( size_t num_chained_export_module
+     {
+         HMODULE module = GetModuleHandleA( temp_paths[i] );
+ 
+-        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index)
++        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index && exporter_index)
+         ok( module == modules[i], "modules[%Iu] expected %p, got %p (unloaded?) err=%lu\n",
+             i, modules[i], module, GetLastError() );
+     }
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index cce46090754..2de180558c3 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -983,7 +983,7 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
+     {
+         if (!(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS))
+         {
+-            if (!imports_fixup_done && importer)
++            if (importer)
+             {
+                 /* Prepare for the callee stealing the reference */
+                 if (wm_owned_ref) wm_owned_ref = FALSE;
+-- 
+GitLab
+
