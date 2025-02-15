@@ -304,7 +304,7 @@ index 90538533d95..d913dbc97c2 100644
  
 +#if defined(__GNUC__) && !defined(__clang__)
 +#pragma GCC push_options
-+#pragma GCC target("inline-all-stringops")
++#pragma GCC optimize("no-tree-loop-distribute-patterns")
  #endif
  
 -/*********************************************************************
@@ -736,7 +736,7 @@ index 46fb80a3a69..af0116b95e4 100644
 +
 +#if defined(__GNUC__) && !defined(__clang__)
 +#pragma GCC push_options
-+#pragma GCC target("inline-all-stringops")
++#pragma GCC optimize("no-tree-loop-distribute-patterns")
 +#endif
 +
 +#define IMPLEMENT_MEMMOVE(arch) \
@@ -880,7 +880,7 @@ index 46fb80a3a69..af0116b95e4 100644
  
 +#if defined(__GNUC__) && !defined(__clang__)
 +#pragma GCC push_options
-+#pragma GCC target("inline-all-stringops")
++#pragma GCC optimize("no-tree-loop-distribute-patterns")
 +#endif
  
 -static inline void memset_aligned_32( unsigned char *d, uint64_t v, size_t n )

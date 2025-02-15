@@ -1,4 +1,4 @@
-From 2042d32f1ddbeb71ef8befd543a89826365e19f0 Mon Sep 17 00:00:00 2001
+From 5e6cfeca37dc88e73b731f9e2b17a1d1d56f8502 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Wed, 12 Feb 2025 22:15:10 +0900
 Subject: [PATCH] ntdll: Properly track refcount on dynamic imports of export
@@ -11,14 +11,14 @@ Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=52094
  2 files changed, 2 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/kernel32/tests/loader.c b/dlls/kernel32/tests/loader.c
-index d0a2c514136..5ea169beb51 100644
+index 697bb5a8944..5ea169beb51 100644
 --- a/dlls/kernel32/tests/loader.c
 +++ b/dlls/kernel32/tests/loader.c
 @@ -2777,7 +2777,6 @@ static void subtest_export_forwarder_dep_chain( size_t num_chained_export_module
  
          /* FreeLibrary() should *not* unload the DLL immediately */
          module = GetModuleHandleA( temp_paths[i] );
--        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index && exporter_index)
+-        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index && !(i < importer_index))
          ok( module == modules[i], "modules[%Iu] expected %p, got %p (unloaded?) err=%lu\n",
              i, modules[i], module, GetLastError() );
      }
@@ -26,12 +26,12 @@ index d0a2c514136..5ea169beb51 100644
      {
          HMODULE module = GetModuleHandleA( temp_paths[i] );
  
--        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index && exporter_index)
+-        todo_wine_if(i < ultimate_depender_index && i + 1 != importer_index && !(i < importer_index))
          ok( module == modules[i], "modules[%Iu] expected %p, got %p (unloaded?) err=%lu\n",
              i, modules[i], module, GetLastError() );
      }
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index 0f229a5c257..f354ddb1ab9 100644
+index f5fff86f5d2..e1b1db3b273 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
 @@ -2079,8 +2079,8 @@ NTSTATUS WINAPI LdrGetProcedureAddress(HMODULE module, const ANSI_STRING *name,

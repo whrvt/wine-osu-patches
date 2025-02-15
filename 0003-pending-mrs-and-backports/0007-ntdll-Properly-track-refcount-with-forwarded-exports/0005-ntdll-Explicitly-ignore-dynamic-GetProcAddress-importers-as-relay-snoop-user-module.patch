@@ -1,4 +1,4 @@
-From 1e3439a4d7313293d1b86d23ff31704ad4328e92 Mon Sep 17 00:00:00 2001
+From db845e291e03dd6bde4ba34650b00ad407a93cc9 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Wed, 12 Feb 2025 22:21:35 +0900
 Subject: [PATCH] ntdll: Explicitly ignore dynamic (GetProcAddress) importers
@@ -9,7 +9,7 @@ Subject: [PATCH] ntdll: Explicitly ignore dynamic (GetProcAddress) importers
  1 file changed, 20 insertions(+), 14 deletions(-)
 
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index 2de180558c3..0f229a5c257 100644
+index b34a8a8d02f..f5fff86f5d2 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
 @@ -191,9 +191,11 @@ static LDR_DDAG_NODE *node_ntdll, *node_kernel32;
@@ -26,7 +26,7 @@ index 2de180558c3..0f229a5c257 100644
  
  /* check whether the file name contains a path */
  static inline BOOL contains_path( LPCWSTR name )
-@@ -967,9 +969,11 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
+@@ -966,9 +968,11 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
  
          if (*name == '#') { /* ordinal */
              proc = find_ordinal_export( wm->ldr.DllBase, exports, exp_size,

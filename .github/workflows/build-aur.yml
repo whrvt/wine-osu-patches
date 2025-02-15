@@ -28,7 +28,46 @@ env:
   GNUPGHOME: /home/builder/.gnupg
 
 jobs:
+  wait-for-aur:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for AUR package update
+        id: check_aur
+        run: |
+          MAX_ATTEMPTS=30
+          ATTEMPT=1
+
+          TAG="${{ github.ref_name }}"
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS"
+
+            # Get PKGBUILD content directly from AUR Git
+            PKGBUILD_CONTENT=$(curl -s "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=${{ env.AUR_PACKAGE }}")
+
+            if echo "$PKGBUILD_CONTENT" | grep -q "_patchbase_tag=\"$TAG\""; then
+              echo "AUR PKGBUILD found with matching tag!"
+              exit 0
+            fi
+
+            echo "Package not updated yet, waiting 30 seconds..."
+            sleep 30
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          echo "Timeout waiting for AUR package update"
+          exit 1
+
   build:
+    needs: [wait-for-aur]
+    if: |
+      always() &&
+      (needs.wait-for-aur.result == 'success' ||
+       needs.wait-for-aur.result == 'skipped' ||
+       github.event_name == 'workflow_dispatch')
     name: ${{ github.event.inputs.run_description }}
     runs-on: ubuntu-latest
     container:
@@ -53,18 +92,28 @@ jobs:
         gpg_private_key: ${{ secrets.GPG_PRIV }}
         passphrase: ${{ secrets.GPG_PASS }}
 
-    - name: Restore package cache
-      id: cache-restore
+    - name: Restore ccache
       uses: actions/cache/restore@v4
       with:
-        path: |
-          ${{ env.PACKAGE_CACHE }}
-          ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-
+        path: ${{ env._CCACHE_DIR }}
+        key: arch-ccache-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
         restore-keys: |
-          ${{ runner.os }}
+          arch-ccache-${{ runner.arch }}-
 
-    # Adding chaotic-aur for more prebuilt dependencies
+    - name: Restore package cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ env.PACKAGE_CACHE }}
+        key: arch-deps-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+        restore-keys: |
+          arch-deps-${{ runner.arch }}-
+
+    - name: Install cached packages
+      run: |
+        if [ -d "${{ env.PACKAGE_CACHE }}" ]; then
+          find ${{ env.PACKAGE_CACHE }} -name "*.pkg.tar.zst" -exec pacman -U --noconfirm {} +
+        fi
+
     - name: Set up system
       run: |
         chown -R builder:builder ${{ env.GNUPGHOME }}
@@ -83,10 +132,6 @@ jobs:
 
     - name: Update package repositories
       run: pacman -Syu --noconfirm
-
-    - name: Install cached packages
-      run: |
-        find ${{ env.PACKAGE_CACHE }} -name "*.pkg.tar.zst" -exec pacman -U --noconfirm {} +
 
     - name: Setup and build paru
       run: |
@@ -138,7 +183,6 @@ jobs:
       run: |
         sudo -u builder bash << EOF
         cd ~
-        sleep 240
         paru -S --nocheck --noconfirm --mflags "--skipinteg" ${AUR_PACKAGE} --assume-installed=ntsync-dkms
         paru -S --nocheck --noconfirm --mflags "--skipinteg" ${AUR_PACKAGE}-wow64 --assume-installed=ntsync-dkms
         EOF
@@ -171,26 +215,24 @@ jobs:
         name: ${{ env.AUR_PACKAGE }}-wow64
         path: /tmp/artifact/${{ env.AUR_PACKAGE }}-wow64
 
-    - name: Consolidate intermediate compiled dependencies for caching
+    - name: Consolidate packages for cache
       run: |
+        find /var/cache/pacman/pkg -name "*.pkg.tar.zst" -exec mv {} ${{ env.PACKAGE_CACHE }} \;
         sudo -u builder bash << EOF
         find ${{ env.PARU_CACHE }}/clone -name "*.pkg.tar.zst" -exec mv {} ${{ env.PACKAGE_CACHE }} \;
         EOF
 
-    - name: Invalidate cache on failure (rerun action manually)
-      if: failure()
-      run: |
-        echo "Build process failed. Clearing cache (besides ccache)."
-        rm -rf /etc/pacman.conf /etc/pacman.d/chaotic-mirrorlist /etc/pacman.d/gnupg /etc/makepkg.conf ${{ env.PACKAGE_CACHE }}
-
-    - name: Save cache
-      if: always()
+    - name: Save package cache
       uses: actions/cache/save@v4
       with:
-        path: |
-          ${{ env.PACKAGE_CACHE }}
-          ${{ env._CCACHE_DIR }}
-        key: ${{ runner.os }}-
+        path: ${{ env.PACKAGE_CACHE }}
+        key: arch-deps-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+
+    - name: Save ccache
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ env._CCACHE_DIR }}
+        key: arch-ccache-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
 
   create-release:
       needs: build

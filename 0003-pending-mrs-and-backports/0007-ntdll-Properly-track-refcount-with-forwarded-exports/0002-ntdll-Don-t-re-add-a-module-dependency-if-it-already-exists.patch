@@ -1,4 +1,4 @@
-From fe1cf54f6d8c7561c1bc1e9e7055bee0313b90aa Mon Sep 17 00:00:00 2001
+From ee7fb174e4b22d562a9bc1a19c4735be6efb44f5 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Thu, 18 Apr 2024 23:23:43 +0900
 Subject: [PATCH] ntdll: Don't re-add a module dependency if it already exists.
@@ -15,11 +15,11 @@ add_module_dependency_after().  This allows us to generate a unique
 dependency edge for all imports of export forwarders that belong to the
 same DLL.
 ---
- dlls/ntdll/loader.c | 25 +++++++++++++++++++++++++
- 1 file changed, 25 insertions(+)
+ dlls/ntdll/loader.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
 
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index e51ea7197f4..c0cd5d41a05 100644
+index 04a68116c1e..7424b1898a2 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
 @@ -837,6 +837,21 @@ static void remove_single_list_entry( LDRP_CSLIST *list, SINGLE_LIST_ENTRY *entr
@@ -35,7 +35,7 @@ index e51ea7197f4..c0cd5d41a05 100644
 +    for (entry = mark->Next; entry != mark; entry = entry->Next)
 +    {
 +        LDR_DEPENDENCY *dep = CONTAINING_RECORD( entry, LDR_DEPENDENCY, dependency_to_entry );
-+        if (dep->dependency_from == from && dep->dependency_to == to) return dep;
++        if (dep->dependency_to == to && dep->dependency_from == from) return dep;
 +    }
 +
 +    return NULL;
@@ -44,15 +44,14 @@ index e51ea7197f4..c0cd5d41a05 100644
  /**********************************************************************
   *	    add_module_dependency_after
   */
-@@ -845,6 +860,16 @@ static BOOL add_module_dependency_after( LDR_DDAG_NODE *from, LDR_DDAG_NODE *to,
+@@ -845,6 +860,15 @@ static BOOL add_module_dependency_after( LDR_DDAG_NODE *from, LDR_DDAG_NODE *to,
  {
      LDR_DEPENDENCY *dep;
  
 +    if ((dep = find_module_dependency( from, to )))
 +    {
 +        /* Dependency already exists; consume the module reference stolen from the caller */
-+        LDR_DATA_TABLE_ENTRY *mod = CONTAINING_RECORD( to->Modules.Flink, LDR_DATA_TABLE_ENTRY, NodeModuleLink );
-+        WINE_MODREF *wm = CONTAINING_RECORD( mod, WINE_MODREF, ldr );
++        WINE_MODREF *wm = CONTAINING_RECORD( to->Modules.Flink, WINE_MODREF, ldr.NodeModuleLink );
 +        assert( wm->ldr.LoadCount != 1 );
 +        if (wm->ldr.LoadCount != -1) wm->ldr.LoadCount--;
 +        return TRUE;

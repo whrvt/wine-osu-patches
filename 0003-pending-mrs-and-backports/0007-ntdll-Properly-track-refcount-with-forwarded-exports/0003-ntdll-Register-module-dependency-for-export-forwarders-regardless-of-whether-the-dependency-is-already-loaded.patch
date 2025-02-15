@@ -1,4 +1,4 @@
-From a6d1a6d252c7afe801816defabf4369d8be268ff Mon Sep 17 00:00:00 2001
+From 576b5c9fedd5fb04b2b6a5cd89bc61778508fb9a Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Thu, 13 Feb 2025 06:46:30 +0900
 Subject: [PATCH] ntdll: Register module dependency for export forwarders
@@ -9,21 +9,20 @@ Prepare for generalization to imports from DLLs.
 Calling add_module_dependency() multiple times for the same dependency
 edge no longer bloats memory usage.
 ---
- dlls/ntdll/loader.c | 7 ++++---
- 1 file changed, 4 insertions(+), 3 deletions(-)
+ dlls/ntdll/loader.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index c0cd5d41a05..cce46090754 100644
+index 7424b1898a2..7ecc17e7cae 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
-@@ -979,17 +979,18 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
-             forward, debugstr_w(get_modref(module)->ldr.FullDllName.Buffer),
-             debugstr_w(get_modref(module)->ldr.BaseDllName.Buffer) );
+@@ -980,15 +980,17 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
      }
--    else if (wm_owned_ref)
-+    else if (wm->ldr.DdagNode != node_ntdll && wm->ldr.DdagNode != node_kernel32)
+     else
      {
-         if (!(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS))
+-        if (wm_owned_ref && !(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS))
++        if (!(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS) &&
++            wm->ldr.DdagNode != node_ntdll && wm->ldr.DdagNode != node_kernel32)
          {
              if (!imports_fixup_done && importer)
              {

@@ -1,8 +1,8 @@
 # Patchset context
 
-wine commit: [wine-17915f73](https://gitlab.winehq.org/wine/wine/-/tree/17915f730267b2b50550636fb6928a6ace247ccd)
+wine commit: [wine-4de56399](https://gitlab.winehq.org/wine/wine/-/tree/4de563994426e258d1f2848b663f6ed85dd1298d)
 
-staging commit: [staging-7042b486](https://gitlab.winehq.org/wine/wine-staging/-/tree/7042b486e25429858d716bde87266b43c341f550)
+staging commit: [staging-735225db](https://gitlab.winehq.org/wine/wine-staging/-/tree/735225dbaa71dc0cbff67c13708e63e3a44981aa)
 
 Staging exclude flags: `-W vkd3d-latest -W eventfd_synchronization`
 

@@ -1,14 +1,14 @@
-From 39b1922c9f2f3b0a8bcb642cba0b0b89fcf621ab Mon Sep 17 00:00:00 2001
+From 8fd5917df5f938db9ca40c0fc411c1b66ef9c9c8 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Wed, 12 Feb 2025 22:30:34 +0900
 Subject: [PATCH] ntdll: Remove superflous NULL check for importer.
 
 ---
- dlls/ntdll/loader.c | 21 +++++++--------------
- 1 file changed, 7 insertions(+), 14 deletions(-)
+ dlls/ntdll/loader.c | 23 ++++++++---------------
+ 1 file changed, 8 insertions(+), 15 deletions(-)
 
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index f354ddb1ab9..8682b1d138c 100644
+index e1b1db3b273..4e71e217eba 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
 @@ -739,7 +739,7 @@ static NTSTATUS build_import_name( WINE_MODREF *importer, WCHAR buffer[256], con
@@ -20,9 +20,9 @@ index f354ddb1ab9..8682b1d138c 100644
      UNICODE_STRING str;
  
      while (len && import[len-1] == ' ') len--;  /* remove trailing spaces */
-@@ -987,17 +987,10 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
-     {
-         if (!(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS))
+@@ -987,19 +987,12 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
+         if (!(wm->ldr.Flags & LDR_DONT_RESOLVE_REFS) &&
+             wm->ldr.DdagNode != node_ntdll && wm->ldr.DdagNode != node_kernel32)
          {
 -            if (importer)
 -            {
@@ -40,8 +40,11 @@ index f354ddb1ab9..8682b1d138c 100644
 +            else if (wm->ldr.LoadCount != -1) wm->ldr.LoadCount++;
 +            add_module_dependency( importer->ldr.DdagNode, wm->ldr.DdagNode );
          }
-         if (proc && wm_owned_ref)
+-        if (proc && wm_owned_ref)
++        if (wm_owned_ref)
          {
+             /* Owned, but no way to bind to a dependency; leak the reference instead */
+             wm_owned_ref = FALSE;
 @@ -1040,12 +1033,12 @@ static FARPROC find_ordinal_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY
  
      if (TRACE_ON(snoop))
