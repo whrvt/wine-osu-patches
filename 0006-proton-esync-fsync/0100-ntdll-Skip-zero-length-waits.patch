@@ -22,7 +22,7 @@ index 522803268dc..30c996a6329 100644
 +                /* Unlike esync, we already know that we've timed out, so we
 +                 * can avoid a syscall. */
 +                TRACE("Wait timed out.\n");
-+                return NtYieldExecution();
++                return STATUS_TIMEOUT;
 +            }
 +            else if (timeout)
              {

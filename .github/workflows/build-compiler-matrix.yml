@@ -1,0 +1,383 @@
+name: Build AUR packages (compiler matrix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      compiler_combo:
+        description: 'Specific compiler combination to build (or all)'
+        type: choice
+        required: true
+        options:
+          - all
+          - gcc-gccmingw
+          - gcc-llvmmingw
+          - gcc-clangmsvc
+          - clang-clangmsvc
+          - clang-llvmmingw
+          - clang-gccmingw
+  workflow_run:
+    workflows: ["Build AUR packages"]
+    types:
+      - completed
+
+env:
+  AUR_PACKAGE: wine-osu-spectator
+  PARU_CACHE: /home/builder/.cache/paru
+  PACKAGE_CACHE: /home/builder/package_cache
+  _CCACHE_DIR: /home/builder/.ccache
+  PUBKEY: 0B47490955565BD2
+  GNUPGHOME: /home/builder/.gnupg
+
+jobs:
+  matrix-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    container:
+      image: archlinux:multilib-devel
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler_config:
+          - host_compiler: gcc
+            cross_compiler: mingw-gcc
+            use_clang: 'false'
+            with_mingw: 'gcc'
+            pkg_suffix: 'gcc-gccmingw'
+          - host_compiler: gcc
+            cross_compiler: llvm-mingw
+            use_clang: 'false'
+            with_mingw: 'llvm'
+            pkg_suffix: 'gcc-llvmmingw'
+          - host_compiler: gcc
+            cross_compiler: clang-msvc
+            use_clang: 'false'
+            with_mingw: 'msvc'
+            pkg_suffix: 'gcc-clangmsvc'
+          - host_compiler: clang
+            cross_compiler: clang-msvc
+            use_clang: 'bundled'
+            with_mingw: 'bundled-msvc'
+            pkg_suffix: 'clang-clangmsvc'
+          - host_compiler: clang
+            cross_compiler: llvm-mingw
+            use_clang: 'true'
+            with_mingw: 'llvm'
+            pkg_suffix: 'clang-llvmmingw'
+          - host_compiler: clang
+            cross_compiler: mingw-gcc
+            use_clang: 'true'
+            with_mingw: 'gcc'
+            pkg_suffix: 'clang-gccmingw'
+
+    steps:
+      - name: Get PKGBUILD defaults
+        id: pkgbuild_defaults
+        run: |
+          # Fetch PKGBUILD directly from AUR
+          PKGBUILD_CONTENT=$(curl -s "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=${AUR_PACKAGE}")
+
+          # Extract default values
+          DEFAULT_USE_CLANG=$(echo "$PKGBUILD_CONTENT" | grep '^_use_clang=' | cut -d'=' -f2)
+          DEFAULT_USE_MINGW=$(echo "$PKGBUILD_CONTENT" | grep '^_use_mingw=' | cut -d'=' -f2)
+
+          # Determine default suffix based on compiler settings
+          if [[ "$DEFAULT_USE_CLANG" == "true" ]]; then
+            HOST="clang"
+          elif [[ "$DEFAULT_USE_CLANG" == "bundled" ]]; then
+            HOST="clang"
+          else
+            HOST="gcc"
+          fi
+
+          if [[ "$DEFAULT_USE_MINGW" == "llvm" ]]; then
+            CROSS="llvmmingw"
+          elif [[ "$DEFAULT_USE_MINGW" == "msvc" ]]; then
+            CROSS="clangmsvc"
+          elif [[ "$DEFAULT_USE_MINGW" == "bundled-msvc" ]]; then
+            CROSS="clangmsvc"
+          else
+            CROSS="gccmingw"
+          fi
+
+          DEFAULT_SUFFIX="${HOST}-${CROSS}"
+          echo "default_suffix=${DEFAULT_SUFFIX}" >> $GITHUB_OUTPUT
+
+      - name: Check if should run
+        id: should_run
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.compiler_combo }}" == "all" ]] || \
+               [[ "${{ matrix.compiler_config.pkg_suffix }}" == "${{ github.event.inputs.compiler_combo }}" ]]; then
+              # Don't run if this is the default configuration
+              if [[ "${{ matrix.compiler_config.pkg_suffix }}" == "${{ steps.pkgbuild_defaults.outputs.default_suffix }}" ]]; then
+                echo "Skipping default configuration" >&2
+                echo "run=false" >> $GITHUB_OUTPUT
+              else
+                echo "run=true" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "run=false" >> $GITHUB_OUTPUT
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]] && \
+               [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]] && \
+               [[ "${{ github.event.workflow_run.event }}" == "workflow_dispatch" || \
+                  "${{ github.event.workflow_run.event }}" == "push" ]]; then
+            if [[ "${{ matrix.compiler_config.pkg_suffix }}" == "${{ steps.pkgbuild_defaults.outputs.default_suffix }}" ]]; then
+              echo "Skipping default configuration" >&2
+              echo "run=false" >> $GITHUB_OUTPUT
+            else
+              echo "run=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Initial system update
+        if: steps.should_run.outputs.run == 'true'
+        run: pacman -Syu --noconfirm git nodejs npm clang llvm-libs llvm lld polly mingw-w64-binutils mingw-w64-gcc mingw-w64-crt mingw-w64-headers mingw-w64-winpthreads lib32-llvm-libs
+
+      - name: Get build metadata
+        if: steps.should_run.outputs.run == 'true'
+        id: metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let ref = context.ref;
+            let releaseId = null;
+            let tag = null;
+
+            // Get list of releases first as we'll need it in multiple cases
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            if (releases.data.length === 0) {
+              throw new Error('No releases found in the repository');
+            }
+
+            if (context.payload.workflow_run) {
+              // This is a workflow_run trigger
+              const run = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.payload.workflow_run.id
+              });
+
+              ref = run.data.head_branch || run.data.head_sha;
+
+              if (run.data.head_branch?.startsWith('refs/tags/')) {
+                tag = run.data.head_branch.replace('refs/tags/', '');
+                const matchingRelease = releases.data.find(r => r.tag_name === tag);
+                if (matchingRelease) {
+                  releaseId = matchingRelease.id;
+                }
+              }
+            } else if (context.ref.startsWith('refs/tags/')) {
+              // This is a workflow_dispatch on a tag
+              tag = context.ref.replace('refs/tags/', '');
+              const matchingRelease = releases.data.find(r => r.tag_name === tag);
+              if (matchingRelease) {
+                releaseId = matchingRelease.id;
+              }
+            }
+
+            // If we still don't have a tag/release (e.g. workflow_dispatch not on a tag),
+            // use the latest release
+            if (!tag || !releaseId) {
+              const latestRelease = releases.data[0];  // GitHub returns these in reverse chronological order
+              tag = latestRelease.tag_name;
+              releaseId = latestRelease.id;
+              console.log(`No specific release targeted, using latest release: ${tag} (ID: ${releaseId})`);
+            }
+
+            core.setOutput('ref', ref);
+            core.setOutput('release_id', releaseId);
+            core.setOutput('tag', tag);
+
+      - name: Checkout repository
+        if: steps.should_run.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.metadata.outputs.ref }}
+
+      - name: Create build user and directories
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          sudo -u builder mkdir -p ${{ env.PARU_CACHE }}/clone ${{ env.PACKAGE_CACHE }} ${{ env._CCACHE_DIR }}
+
+      - name: Import GPG Key
+        if: steps.should_run.outputs.run == 'true'
+        uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIV }}
+          passphrase: ${{ secrets.GPG_PASS }}
+
+      - name: Restore main package cache
+        if: steps.should_run.outputs.run == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.PACKAGE_CACHE }}
+          key: arch-deps-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            arch-deps-${{ runner.arch }}-
+
+      - name: Restore compiler-specific ccache
+        if: steps.should_run.outputs.run == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env._CCACHE_DIR }}
+          key: arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ runner.arch }}-
+
+      - name: Install cached packages
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          if [ -d "${{ env.PACKAGE_CACHE }}" ]; then
+            find ${{ env.PACKAGE_CACHE }} -name "*.pkg.tar.zst" -exec pacman -U --noconfirm {} +
+          fi
+
+      - name: Set up system
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          chown -R builder:builder ${{ env.GNUPGHOME }}
+          pacman-key --init
+          pacman-key --populate archlinux
+
+          pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
+          pacman-key --lsign-key 3056513887B78AEB
+          pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst'
+          pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+          echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" >> /etc/pacman.conf
+
+          echo -e 'MAKEFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
+          echo -e 'NINJAFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
+
+      - name: Update package repositories
+        if: steps.should_run.outputs.run == 'true'
+        run: pacman -Syu --noconfirm
+
+      - name: Setup and build paru
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          sudo -u builder bash << EOF
+          if ! paru --version 1>/dev/null; then
+            cd ${{ env.PARU_CACHE }}/clone
+            if [ ! -d "paru-bin" ]; then
+              git clone https://aur.archlinux.org/paru-bin.git
+            fi
+            cd paru-bin
+            makepkg -si --noconfirm --nocheck
+          else
+            echo "paru already installed, skipping build"
+          fi
+          EOF
+
+      - name: Install and configure customizepkg
+        if: steps.should_run.outputs.run == 'true'
+        env:
+          CURRENT_TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          sudo -u builder bash << EOF
+          if ! paru -Qiq customizepkg-git 1>/dev/null; then
+            paru -S --noconfirm customizepkg-git
+          else
+            echo "customizepkg-git already installed, skipping build"
+          fi
+          mkdir -p ~/.customizepkg
+          echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}
+          echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}
+          echo "replace#global#sha512sums+=.*#sha512sums+=('SKIP')" >> ~/.customizepkg/${AUR_PACKAGE}
+          echo "replace#global#_generic_release=false#_generic_release=true" > ~/.customizepkg/${AUR_PACKAGE}-wow64
+          echo "replace#global#^_patchbase_tag=.*#_patchbase_tag=${CURRENT_TAG}" >> ~/.customizepkg/${AUR_PACKAGE}-wow64
+          echo "replace#global#sha512sums+=.*#sha512sums+=('SKIP')" >> ~/.customizepkg/${AUR_PACKAGE}-wow64
+          EOF
+
+          echo -e "\n[bin]\nPreBuildCommand = customizepkg --modify" >> /etc/paru.conf
+
+      - name: Install llvm-mingw-w64-toolchain-msvcrt-bin
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          sudo -u builder bash << EOF
+          if ! paru -Qiq llvm-mingw-w64-toolchain-msvcrt-bin 1>/dev/null; then
+            paru -S --noconfirm llvm-mingw-w64-toolchain-msvcrt-bin
+          else
+            echo "llvm-mingw-w64-toolchain-msvcrt-bin already installed, skipping build"
+          fi
+          EOF
+
+      - name: Build packages with compiler configuration
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          sudo -u builder bash << EOF
+          for suffix in "" "-wow64"; do
+            cd ${{ env.PARU_CACHE }}/clone
+            if [ ! -d "${AUR_PACKAGE}\${suffix}" ]; then
+              paru -G ${AUR_PACKAGE}\${suffix}
+            fi
+
+            cd "${AUR_PACKAGE}\${suffix}"
+            sed -i 's|^_use_clang=.*|_use_clang=${{ matrix.compiler_config.use_clang }}|g' PKGBUILD
+            sed -i 's|^_use_mingw=.*|_use_mingw=${{ matrix.compiler_config.with_mingw }}|g' PKGBUILD
+
+            if [ -d src ]; then
+              rm -rf src
+            fi
+
+            mkdir -p /tmp/artifact/${AUR_PACKAGE}\${suffix}
+            PACKAGER="spectator <william@horvath.blog>" paru -B --noconfirm --nocheck --mflags "--skippgpcheck" .
+
+            for pkg in *.pkg.tar.zst; do
+              new_name=\$(echo "\$pkg" | sed "s/-\([0-9]\)/-${{ matrix.compiler_config.pkg_suffix }}-\1/")
+              mv "\$pkg" "/tmp/artifact/${AUR_PACKAGE}\${suffix}/\$new_name"
+            done
+
+            cd /tmp/artifact/${AUR_PACKAGE}\${suffix}
+            for pkg in *.pkg.tar.zst; do
+              echo "${{ secrets.GPG_PASS }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --detach-sign --no-armor "\$pkg"
+            done
+          done
+          EOF
+
+      - name: Save compiler-specific ccache
+        if: steps.should_run.outputs.run == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env._CCACHE_DIR }}
+          key: arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+
+      - name: Upload to release
+        if: steps.should_run.outputs.run == 'true' && steps.metadata.outputs.release_id
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs').promises;
+            const path = require('path');
+
+            async function* walkFiles(dir) {
+              const files = await fs.readdir(dir, { withFileTypes: true });
+              for (const file of files) {
+                const res = path.resolve(dir, file.name);
+                if (file.isDirectory()) {
+                  yield* walkFiles(res);
+                } else if (file.name.endsWith('.pkg.tar.zst') || file.name.endsWith('.pkg.tar.zst.sig')) {
+                  yield res;
+                }
+              }
+            }
+
+            const artifactDir = '/tmp/artifact';
+            for await (const file of walkFiles(artifactDir)) {
+              const content = await fs.readFile(file);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: ${{ steps.metadata.outputs.release_id }},
+                name: path.basename(file),
+                data: content
+              });
+            }

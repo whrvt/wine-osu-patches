@@ -71,7 +71,7 @@ jobs:
     name: ${{ github.event.inputs.run_description }}
     runs-on: ubuntu-latest
     container:
-      image: archlinux:base-devel
+      image: archlinux:multilib-devel
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -119,7 +119,6 @@ jobs:
         chown -R builder:builder ${{ env.GNUPGHOME }}
         pacman-key --init
         pacman-key --populate archlinux
-        echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
 
         pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
         pacman-key --lsign-key 3056513887B78AEB
