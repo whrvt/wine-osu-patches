@@ -216,6 +216,15 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIV }}
           passphrase: ${{ secrets.GPG_PASS }}
 
+      - name: Prepare compiler-specific ccache
+        if: steps.should_run.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env._CCACHE_DIR }}
+          key: arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ github.workflow }}-${{ github.run_id }}
+          restore-keys: |
+            arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ github.workflow }}
+
       - name: Restore main package cache
         if: steps.should_run.outputs.run == 'true'
         uses: actions/cache/restore@v4
@@ -224,15 +233,6 @@ jobs:
           key: arch-deps-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
           restore-keys: |
             arch-deps-${{ runner.arch }}-
-
-      - name: Restore compiler-specific ccache
-        if: steps.should_run.outputs.run == 'true'
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env._CCACHE_DIR }}
-          key: arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
-          restore-keys: |
-            arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ runner.arch }}-
 
       - name: Install cached packages
         if: steps.should_run.outputs.run == 'true'
@@ -342,13 +342,6 @@ jobs:
             done
           done
           EOF
-
-      - name: Save compiler-specific ccache
-        if: steps.should_run.outputs.run == 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env._CCACHE_DIR }}
-          key: arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
 
       - name: Upload to release
         if: steps.should_run.outputs.run == 'true' && steps.metadata.outputs.release_id

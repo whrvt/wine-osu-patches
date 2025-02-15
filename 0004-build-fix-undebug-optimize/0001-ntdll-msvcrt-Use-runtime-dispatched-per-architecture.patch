@@ -5,15 +5,15 @@ Subject: [PATCH] ntdll, msvcrt: Use runtime-dispatched
  per-architecture-optimized code for string functions.
 
 ---
- dlls/msvcrt/string.c | 612 +++++++++++++++----------------------------
- dlls/ntdll/string.c  | 315 +++++++++++++++-------
- 2 files changed, 428 insertions(+), 499 deletions(-)
+ dlls/msvcrt/string.c | 600 ++++++++++++++-----------------------------
+ dlls/ntdll/string.c  | 301 +++++++++++++++-------
+ 2 files changed, 400 insertions(+), 501 deletions(-)
 
 diff --git a/dlls/msvcrt/string.c b/dlls/msvcrt/string.c
-index 90538533d95..d913dbc97c2 100644
+index 90538533d95..e284ab34eba 100644
 --- a/dlls/msvcrt/string.c
 +++ b/dlls/msvcrt/string.c
-@@ -2786,378 +2786,156 @@ int __cdecl memcmp(const void *ptr1, const void *ptr2, size_t n)
+@@ -2786,374 +2786,146 @@ int __cdecl memcmp(const void *ptr1, const void *ptr2, size_t n)
      return memcmp_blocks(p1, p2, n);
  }
  
@@ -45,17 +45,21 @@ index 90538533d95..d913dbc97c2 100644
 +#define likely(x) __builtin_expect(!!(x), 1)
 +#endif
 +#ifndef unlikely
-+#define unlikely(x) __builtin_expect(x, 0)
++#define unlikely(x) __builtin_expect(!!(x), 0)
 +#endif
  
--#else
++#ifdef __clang__
++#define NOBUILTIN __attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
+ #else
++#define NOBUILTIN __attribute__((__optimize__("-fno-tree-loop-distribute-patterns")))
++#endif
++
 +static inline int cpu_supports(const int featurelevel)
 +{
 +    static int cpu_featurelevel = -1;
 +    if (unlikely(cpu_featurelevel < 0))
 +    {
 +        cpu_featurelevel = 0;
-+#ifdef _MSC_VER
 +        int regs[4];
 +        int extended_regs[4];
 +
@@ -65,6 +69,35 @@ index 90538533d95..d913dbc97c2 100644
 +        const int edx_features = regs[3];
 +        const int ecx_features = regs[2];
 +        const int ebx_features = extended_regs[1];
++
++        cpu_featurelevel += !!(ecx_features & (1 << 20)) + (ecx_features & (1 << 28)) && (ebx_features & (1 << 5)) + !!(ebx_features & (1 << 16));
++    }
++    return (cpu_featurelevel >= featurelevel);
++}
++
++#define FEAT_AVX512 3
++#define FEAT_AVX2 2
++#define FEAT_SSE42 1
++
++#define IMPLEMENT_MEMMOVE(arch) \
++    NOBUILTIN static void* memmove_##arch(void* dst, const void* src, size_t n) \
++    { \
++        unsigned char *d = dst; \
++        const unsigned char *s = src; \
++        if (d == s || !n) \
++            return dst; \
++        if ((size_t)dst - (size_t)src >= n) \
++        { \
++            while (n--) *d++ = *s++; \
++        } \
++        else \
++        { \
++            d += n - 1; \
++            s += n - 1; \
++            while (n--) *d-- = *s--; \
++        } \
++        return dst; \
++    }
  
 -#define DEST_REG "%rdi"
 -#define SRC_REG "%rsi"
@@ -88,13 +121,17 @@ index 90538533d95..d913dbc97c2 100644
 -    __ASM_CFI(".cfi_adjust_cfa_offset -8\n\t") \
 -    "popq " SRC_REG "\n\t" \
 -    __ASM_CFI(".cfi_adjust_cfa_offset -8\n\t")
-+        cpu_featurelevel += !!(ecx_features & (1 << 20)) + (ecx_features & (1 << 28)) && (ebx_features & (1 << 5)) + !!(ebx_features & (1 << 16));
++#ifndef __AVX512F__
++#ifdef __clang__
++#pragma clang attribute push(__attribute__((target("avx512f,arch=x86-64-v4,tune=znver4"))), apply_to = function)
 +#else
-+        cpu_featurelevel += __builtin_cpu_supports("avx512f") + __builtin_cpu_supports("avx2") + __builtin_cpu_supports("sse4.2");
++#pragma GCC push_options
++#pragma GCC target("avx512f,arch=x86-64-v4,tune=znver4")
++#endif
++#define has_avx512f cpu_supports(FEAT_AVX512)
++#else
++#define has_avx512f 1
  #endif
-+    }
-+    return (cpu_featurelevel >= featurelevel);
-+}
  
 -void * __cdecl sse2_memmove(void *dst, const void *src, size_t n);
 -__ASM_GLOBAL_FUNC( sse2_memmove,
@@ -298,13 +335,14 @@ index 90538533d95..d913dbc97c2 100644
 -        "1:\n\t"
 -        MEMMOVE_CLEANUP
 -        "ret" )
-+#define FEAT_AVX512 3
-+#define FEAT_AVX2 2
-+#define FEAT_SSE42 1
++IMPLEMENT_MEMMOVE(avx512f)
  
-+#if defined(__GNUC__) && !defined(__clang__)
-+#pragma GCC push_options
-+#pragma GCC optimize("no-tree-loop-distribute-patterns")
++#ifndef __AVX512F__
++#ifdef __clang__
++#pragma clang attribute pop
++#else
++#pragma GCC pop_options
++#endif
  #endif
  
 -/*********************************************************************
@@ -312,40 +350,19 @@ index 90538533d95..d913dbc97c2 100644
 - */
 -#ifdef WORDS_BIGENDIAN
 -# define MERGE(w1, sh1, w2, sh2) ((w1 << sh1) | (w2 >> sh2))
-+#define IMPLEMENT_MEMMOVE(arch) \
-+    __attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp"))) \
-+    static void* memmove_##arch(void* dst, const void* src, size_t n) \
-+    { \
-+        unsigned char *d = dst; \
-+        const unsigned char *s = src; \
-+        if (d == s || !n) \
-+            return dst; \
-+        if ((size_t)dst - (size_t)src >= n) \
-+        { \
-+            while (n--) *d++ = *s++; \
-+        } \
-+        else \
-+        { \
-+            d += n - 1; \
-+            s += n - 1; \
-+            while (n--) *d-- = *s--; \
-+        } \
-+        return dst; \
-+    }
-+
-+#ifndef __AVX512F__
++#ifndef __AVX2__
 +#ifdef __clang__
-+#pragma clang attribute push(__attribute__((target("avx512f,arch=x86-64-v4,tune=znver4"))), apply_to = function)
++#pragma clang attribute push(__attribute__((target("avx2,arch=x86-64-v3,tune=haswell"))), apply_to = function)
  #else
 -# define MERGE(w1, sh1, w2, sh2) ((w1 >> sh1) | (w2 << sh2))
 +#pragma GCC push_options
-+#pragma GCC target("avx512f,arch=x86-64-v4,tune=znver4")
++#pragma GCC target("avx2,arch=x86-64-v3,tune=haswell")
  #endif
 -void * __cdecl memmove(void *dst, const void *src, size_t n)
 -{
 -#if defined(__x86_64__) && !defined(__arm64ec__)
 -    return sse2_memmove(dst, src, n);
-+#define has_avx512f cpu_supports(FEAT_AVX512)
++#define has_avx2 cpu_supports(FEAT_AVX2)
  #else
 -    unsigned char *d = dst;
 -    const unsigned char *s = src;
@@ -354,16 +371,16 @@ index 90538533d95..d913dbc97c2 100644
 -#ifdef __i386__
 -    if (sse2_supported)
 -        return sse2_memmove(dst, src, n);
-+#define has_avx512f 1
++#define has_avx2 1
  #endif
  
 -    if (!n) return dst;
-+IMPLEMENT_MEMMOVE(avx512f)
++IMPLEMENT_MEMMOVE(avx2)
  
 -    if ((size_t)dst - (size_t)src >= n)
 -    {
 -        for (; (size_t)d % sizeof(size_t) && n; n--) *d++ = *s++;
-+#ifndef __AVX512F__
++#ifndef __AVX2__
 +#ifdef __clang__
 +#pragma clang attribute pop
 +#else
@@ -386,16 +403,16 @@ index 90538533d95..d913dbc97c2 100644
 -        {
 -            int sh2 = 8 * sizeof(size_t) - sh1;
 -            size_t x, y;
-+#ifndef __AVX2__
++#ifndef __SSE4_2__
 +#ifdef __clang__
-+#pragma clang attribute push(__attribute__((target("avx2,arch=x86-64-v3,tune=haswell"))), apply_to = function)
++#pragma clang attribute push(__attribute__((target("sse4.2,arch=x86-64-v2,tune=nehalem"))), apply_to = function)
 +#else
 +#pragma GCC push_options
-+#pragma GCC target("avx2,arch=x86-64-v3,tune=haswell")
++#pragma GCC target("sse4.2,arch=x86-64-v2,tune=nehalem")
 +#endif
-+#define has_avx2 cpu_supports(FEAT_AVX2)
++#define has_sse42 cpu_supports(FEAT_SSE42)
 +#else
-+#define has_avx2 1
++#define has_sse42 1
 +#endif
  
 -            s -= sh1 / 8;
@@ -423,10 +440,10 @@ index 90538533d95..d913dbc97c2 100644
 -    {
 -        d += n;
 -        s += n;
-+IMPLEMENT_MEMMOVE(avx2)
++IMPLEMENT_MEMMOVE(sse42)
  
 -        for (; (size_t)d % sizeof(size_t) && n; n--) *--d = *--s;
-+#ifndef __AVX2__
++#ifndef __SSE4_2__
 +#ifdef __clang__
 +#pragma clang attribute pop
 +#else
@@ -449,17 +466,7 @@ index 90538533d95..d913dbc97c2 100644
 -        {
 -            int sh2 = 8 * sizeof(size_t) - sh1;
 -            size_t x, y;
-+#ifndef __SSE4_2__
-+#ifdef __clang__
-+#pragma clang attribute push(__attribute__((target("sse4.2,arch=x86-64-v2,tune=nehalem"))), apply_to = function)
-+#else
-+#pragma GCC push_options
-+#pragma GCC target("sse4.2,arch=x86-64-v2,tune=nehalem")
-+#endif
-+#define has_sse42 cpu_supports(FEAT_SSE42)
-+#else
-+#define has_sse42 1
-+#endif
++IMPLEMENT_MEMMOVE(base)
  
 -            s -= sh1 / 8;
 -            x = *(size_t*)s;
@@ -482,22 +489,10 @@ index 90538533d95..d913dbc97c2 100644
 -        while (n--) *--d = *--s;
 -    }
 -    return dst;
-+IMPLEMENT_MEMMOVE(sse42)
-+
-+#ifndef __SSE4_2__
-+#ifdef __clang__
-+#pragma clang attribute pop
-+#else
-+#pragma GCC pop_options
-+#endif
- #endif
-+
-+IMPLEMENT_MEMMOVE(base)
-+
+-#endif
 +/*********************************************************************
 + *                  memmove (MSVCRT.@)
 + */
-+__attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
 +void * __cdecl memmove(void *dst, const void *src, size_t n)
 +{
 +    if (has_avx512f)
@@ -513,12 +508,7 @@ index 90538533d95..d913dbc97c2 100644
  
  /*********************************************************************
   *                  memcpy   (MSVCRT.@)
-  */
-+__attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
- void * __cdecl memcpy(void *dst, const void *src, size_t n)
- {
-     return memmove(dst, src, n);
-@@ -3174,76 +2952,94 @@ void * __cdecl _memccpy(void *dst, const void *src, int c, size_t n)
+@@ -3174,74 +2946,86 @@ void * __cdecl _memccpy(void *dst, const void *src, int c, size_t n)
      return NULL;
  }
  
@@ -534,8 +524,7 @@ index 90538533d95..d913dbc97c2 100644
 -        *(uint64_t *)(d + 24) = v;
 -        d += 32;
 +#define IMPLEMENT_MEMSET(arch) \
-+    __attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp"))) \
-+    static void* memset_##arch(void* dst, int c, size_t n) \
++    NOBUILTIN static void* memset_##arch(void* dst, int c, size_t n) \
 +    { \
 +        unsigned char *d = dst; \
 +        while (n--) *d++ = c; \
@@ -605,16 +594,11 @@ index 90538533d95..d913dbc97c2 100644
  /*********************************************************************
   *		    memset (MSVCRT.@)
   */
-+__attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
  void *__cdecl memset(void *dst, int c, size_t n)
  {
 -    typedef uint64_t DECLSPEC_ALIGN(1) unaligned_ui64;
 -    typedef uint32_t DECLSPEC_ALIGN(1) unaligned_ui32;
 -    typedef uint16_t DECLSPEC_ALIGN(1) unaligned_ui16;
--
--    uint64_t v = 0x101010101010101ull * (unsigned char)c;
--    unsigned char *d = (unsigned char *)dst;
--    size_t a = 0x20 - ((uintptr_t)d & 0x1f);
 +    if (has_avx512f)
 +        return memset_avx512f(dst, c, n);
 +    if (likely(has_avx2))
@@ -622,6 +606,10 @@ index 90538533d95..d913dbc97c2 100644
 +    if (likely(has_sse42))
 +        return memset_sse42(dst, c, n);
  
+-    uint64_t v = 0x101010101010101ull * (unsigned char)c;
+-    unsigned char *d = (unsigned char *)dst;
+-    size_t a = 0x20 - ((uintptr_t)d & 0x1f);
+-
 -    if (n >= 16)
 -    {
 -        *(unaligned_ui64 *)(d + 0) = v;
@@ -666,18 +654,12 @@ index 90538533d95..d913dbc97c2 100644
 +    return memset_base(dst, c, n);
  }
  
-+#if defined(__GNUC__) && !defined(__clang__)
-+#pragma GCC pop_options
-+#endif
-+
  /*********************************************************************
-  *		    strchr (MSVCRT.@)
-  */
 diff --git a/dlls/ntdll/string.c b/dlls/ntdll/string.c
-index 46fb80a3a69..af0116b95e4 100644
+index 46fb80a3a69..622139e299c 100644
 --- a/dlls/ntdll/string.c
 +++ b/dlls/ntdll/string.c
-@@ -94,53 +94,164 @@ int __cdecl memcmp( const void *ptr1, const void *ptr2, size_t n )
+@@ -94,51 +94,154 @@ int __cdecl memcmp( const void *ptr1, const void *ptr2, size_t n )
      return 0;
  }
  
@@ -685,8 +667,21 @@ index 46fb80a3a69..af0116b95e4 100644
 +#define likely(x) __builtin_expect(!!(x), 1)
 +#endif
 +#ifndef unlikely
-+#define unlikely(x) __builtin_expect(x, 0)
++#define unlikely(x) __builtin_expect(!!(x), 0)
 +#endif
++
++#ifdef __clang__
++#define NOBUILTIN __attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
++#else
++#define NOBUILTIN __attribute__((__optimize__("-fno-tree-loop-distribute-patterns")))
++#endif
++
++static inline int cpu_supports(const int featurelevel)
++{
++    static int cpu_featurelevel = -1;
++    if (unlikely(cpu_featurelevel < 0))
++    {
++        cpu_featurelevel = 0;
  
 -/*********************************************************************
 - *                  memcpy   (NTDLL.@)
@@ -695,21 +690,15 @@ index 46fb80a3a69..af0116b95e4 100644
 - *  Behaves like memmove.
 - */
 -void * __cdecl memcpy( void *dst, const void *src, size_t n )
-+static inline int cpu_supports(const int featurelevel)
- {
+-{
 -    volatile unsigned char *d = dst;  /* avoid gcc optimizations */
 -    const unsigned char *s = src;
--
--    if ((size_t)dst - (size_t)src >= n)
-+    static int cpu_featurelevel = -1;
-+    if (unlikely(cpu_featurelevel < 0))
-     {
--        while (n--) *d++ = *s++;
-+        cpu_featurelevel = 0;
-+#ifdef _MSC_VER
 +        int regs[4];
 +        int extended_regs[4];
-+
+ 
+-    if ((size_t)dst - (size_t)src >= n)
+-    {
+-        while (n--) *d++ = *s++;
 +        __cpuid(regs, 1);
 +        __cpuidex(extended_regs, 7, 0);
 +
@@ -718,9 +707,6 @@ index 46fb80a3a69..af0116b95e4 100644
 +        const int ebx_features = extended_regs[1];
 +
 +        cpu_featurelevel += !!(ecx_features & (1 << 20)) + (ecx_features & (1 << 28)) && (ebx_features & (1 << 5)) + !!(ebx_features & (1 << 16));
-+#else
-+        cpu_featurelevel += __builtin_cpu_supports("avx512f") + __builtin_cpu_supports("avx2") + __builtin_cpu_supports("sse4.2");
-+#endif
      }
 -    else
 -    {
@@ -734,14 +720,8 @@ index 46fb80a3a69..af0116b95e4 100644
 +#define FEAT_AVX2 2
 +#define FEAT_SSE42 1
 +
-+#if defined(__GNUC__) && !defined(__clang__)
-+#pragma GCC push_options
-+#pragma GCC optimize("no-tree-loop-distribute-patterns")
-+#endif
-+
 +#define IMPLEMENT_MEMMOVE(arch) \
-+    __attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp"))) \
-+    static void* memmove_##arch(void* dst, const void* src, size_t n) \
++    NOBUILTIN static void* memmove_##arch(void* dst, const void* src, size_t n) \
 +    { \
 +        unsigned char *d = dst; \
 +        const unsigned char *s = src; \
@@ -833,7 +813,6 @@ index 46fb80a3a69..af0116b95e4 100644
  /*********************************************************************
   *                  memmove   (NTDLL.@)
   */
-+__attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
  void * __cdecl memmove( void *dst, const void *src, size_t n )
  {
 -    volatile unsigned char *d = dst;  /* avoid gcc optimizations */
@@ -862,27 +841,17 @@ index 46fb80a3a69..af0116b95e4 100644
 +/*********************************************************************
 + *                  memcpy   (NTDLL.@)
 + */
-+__attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
 +void * __cdecl memcpy( void *dst, const void *src, size_t n )
 +{
 +    return memmove( dst, src, n );
  }
  
-+#if defined(__GNUC__) && !defined(__clang__)
-+#pragma GCC pop_options
-+#endif
  
- /*********************************************************************
-  *		memcpy_s (MSVCRT.@)
-@@ -177,76 +288,98 @@ errno_t __cdecl memmove_s( void *dst, size_t len, const void *src, size_t count
+@@ -177,74 +280,86 @@ errno_t __cdecl memmove_s( void *dst, size_t len, const void *src, size_t count
      return 0;
  }
  
-+#if defined(__GNUC__) && !defined(__clang__)
-+#pragma GCC push_options
-+#pragma GCC optimize("no-tree-loop-distribute-patterns")
-+#endif
- 
+-
 -static inline void memset_aligned_32( unsigned char *d, uint64_t v, size_t n )
 -{
 -    unsigned char *end = d + n;
@@ -894,8 +863,7 @@ index 46fb80a3a69..af0116b95e4 100644
 -        *(uint64_t *)(d + 24) = v;
 -        d += 32;
 +#define IMPLEMENT_MEMSET(arch) \
-+    __attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp"))) \
-+    static void* memset_##arch(void* dst, int c, size_t n) \
++    NOBUILTIN static void* memset_##arch(void* dst, int c, size_t n) \
 +    { \
 +        unsigned char *d = dst; \
 +        while (n--) *d++ = c; \
@@ -965,12 +933,15 @@ index 46fb80a3a69..af0116b95e4 100644
  /*********************************************************************
   *                  memset   (NTDLL.@)
   */
-+__attribute__((no_builtin("memcpy", "memmove", "memset", "memcmp")))
  void *__cdecl memset( void *dst, int c, size_t n )
  {
 -    typedef uint64_t DECLSPEC_ALIGN(1) unaligned_ui64;
 -    typedef uint32_t DECLSPEC_ALIGN(1) unaligned_ui32;
 -    typedef uint16_t DECLSPEC_ALIGN(1) unaligned_ui16;
+-
+-    uint64_t v = 0x101010101010101ull * (unsigned char)c;
+-    unsigned char *d = (unsigned char *)dst;
+-    size_t a = 0x20 - ((uintptr_t)d & 0x1f);
 +    if (has_avx512f)
 +        return memset_avx512f(dst, c, n);
 +    if (likely(has_avx2))
@@ -978,10 +949,6 @@ index 46fb80a3a69..af0116b95e4 100644
 +    if (likely(has_sse42))
 +        return memset_sse42(dst, c, n);
  
--    uint64_t v = 0x101010101010101ull * (unsigned char)c;
--    unsigned char *d = (unsigned char *)dst;
--    size_t a = 0x20 - ((uintptr_t)d & 0x1f);
--
 -    if (n >= 16)
 -    {
 -        *(unaligned_ui64 *)(d + 0) = v;
@@ -1026,12 +993,7 @@ index 46fb80a3a69..af0116b95e4 100644
 +    return memset_base(dst, c, n);
  }
  
-+#if defined(__GNUC__) && !defined(__clang__)
-+#pragma GCC pop_options
-+#endif
  
- /******************************************************************************
-  *                  RtlCopyMemory   (NTDLL.@)
 -- 
 2.48.1
 

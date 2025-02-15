@@ -92,13 +92,13 @@ jobs:
         gpg_private_key: ${{ secrets.GPG_PRIV }}
         passphrase: ${{ secrets.GPG_PASS }}
 
-    - name: Restore ccache
-      uses: actions/cache/restore@v4
+    - name: Prepare ccache
+      uses: actions/cache@v4
       with:
         path: ${{ env._CCACHE_DIR }}
-        key: arch-ccache-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+        key: arch-ccache-${{ github.workflow }}-${{ github.run_id }}
         restore-keys: |
-          arch-ccache-${{ runner.arch }}-
+          arch-ccache-${{ github.workflow }}
 
     - name: Restore package cache
       uses: actions/cache/restore@v4
@@ -226,12 +226,6 @@ jobs:
       with:
         path: ${{ env.PACKAGE_CACHE }}
         key: arch-deps-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
-
-    - name: Save ccache
-      uses: actions/cache/save@v4
-      with:
-        path: ${{ env._CCACHE_DIR }}
-        key: arch-ccache-${{ runner.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
 
   create-release:
       needs: build
