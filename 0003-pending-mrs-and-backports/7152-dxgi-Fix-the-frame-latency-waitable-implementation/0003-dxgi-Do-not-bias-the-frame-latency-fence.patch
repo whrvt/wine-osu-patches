@@ -1,4 +1,4 @@
-From 733dd847c6c208255d7104416fd93c0fcc5fe5b0 Mon Sep 17 00:00:00 2001
+From b9a6c6139a8b08c632eddde8db518a86a832e532 Mon Sep 17 00:00:00 2001
 From: Giovanni Mascellani <gmascellani@codeweavers.com>
 Date: Fri, 17 Jan 2025 14:45:55 +0100
 Subject: [PATCH] dxgi: Do not bias the frame latency fence.
@@ -7,24 +7,16 @@ The bias was a broken solution for handling the maximum frame
 latency changes. However we now already set the event (and, in the
 future, release the sempahore) when the maximum frame latency is
 increased, so there is no need for the bias anymore.
-
-At the same time we also have to signal the fence directly instead
-of going through the command queue again. That's because at that
-point we just submitted the frame for presentation to Vulkan, so
-the best approximation we have for when the frame will be presented
-is now, not after the currently outstanding work in the command
-queue is processed. It's still a rather poor approximation, but for
-something better we need VK_KHR_present_wait.
 ---
- dlls/dxgi/swapchain.c  | 13 ++-----------
- dlls/dxgi/tests/dxgi.c |  1 -
- 2 files changed, 2 insertions(+), 12 deletions(-)
+ dlls/dxgi/swapchain.c  | 12 ++----------
+ dlls/dxgi/tests/dxgi.c |  2 +-
+ 2 files changed, 3 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
-index 05ffe628d95..38f0a6e6b07 100644
+index 4f217a7388d..35460691918 100644
 --- a/dlls/dxgi/swapchain.c
 +++ b/dlls/dxgi/swapchain.c
-@@ -2296,12 +2296,7 @@ static HRESULT d3d12_swapchain_op_present_execute(struct d3d12_swapchain *swapch
+@@ -2296,12 +2296,8 @@ static HRESULT d3d12_swapchain_op_present_execute(struct d3d12_swapchain *swapch
  
      if (swapchain->frame_latency_fence)
      {
@@ -32,13 +24,13 @@ index 05ffe628d95..38f0a6e6b07 100644
 -         * account for the "++swapchain->frame_number" there. */
 -        uint64_t number = op->present.frame_number + DXGI_MAX_SWAP_CHAIN_BUFFERS + 1;
 -
--        if (FAILED(hr = ID3D12CommandQueue_Signal(swapchain->command_queue,
+         if (FAILED(hr = ID3D12CommandQueue_Signal(swapchain->command_queue,
 -                swapchain->frame_latency_fence, number)))
-+        if (FAILED(hr = ID3D12Fence_Signal(swapchain->frame_latency_fence, op->present.frame_number + 1)))
++                swapchain->frame_latency_fence, op->present.frame_number + 1)))
          {
              ERR("Failed to signal frame latency fence, hr %#lx.\n", hr);
              return hr;
-@@ -2351,12 +2346,8 @@ static HRESULT d3d12_swapchain_present(struct d3d12_swapchain *swapchain,
+@@ -2351,12 +2347,8 @@ static HRESULT d3d12_swapchain_present(struct d3d12_swapchain *swapchain,
      ++swapchain->frame_number;
      if ((frame_latency_event = swapchain->frame_latency_event))
      {
@@ -53,14 +45,15 @@ index 05ffe628d95..38f0a6e6b07 100644
              ERR("Failed to enqueue frame latency event, hr %#lx.\n", hr);
              return hr;
 diff --git a/dlls/dxgi/tests/dxgi.c b/dlls/dxgi/tests/dxgi.c
-index 7cf52d626da..b8cf3597483 100644
+index 7cf52d626da..4ff27715459 100644
 --- a/dlls/dxgi/tests/dxgi.c
 +++ b/dlls/dxgi/tests/dxgi.c
-@@ -7222,7 +7222,6 @@ static void test_frame_latency_event(IUnknown *device, BOOL is_d3d12)
+@@ -7222,7 +7222,7 @@ static void test_frame_latency_event(IUnknown *device, BOOL is_d3d12)
          for (i = 0; i < 3; i++)
          {
              wait_result = WaitForSingleObject(semaphore, 100);
 -            todo_wine_if(i != 0)
++            todo_wine
              ok(!wait_result, "Got unexpected wait result %#lx.\n", wait_result);
          }
  

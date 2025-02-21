@@ -1,4 +1,4 @@
-From ee7fb174e4b22d562a9bc1a19c4735be6efb44f5 Mon Sep 17 00:00:00 2001
+From db7bb8a36beff3ecf3a2c74ecdefb76364603c52 Mon Sep 17 00:00:00 2001
 From: Jinoh Kang <jinoh.kang.kr@gmail.com>
 Date: Thu, 18 Apr 2024 23:23:43 +0900
 Subject: [PATCH] ntdll: Don't re-add a module dependency if it already exists.
@@ -19,7 +19,7 @@ same DLL.
  1 file changed, 24 insertions(+)
 
 diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
-index 04a68116c1e..7424b1898a2 100644
+index a5dc675a8f2..c745a488c5b 100644
 --- a/dlls/ntdll/loader.c
 +++ b/dlls/ntdll/loader.c
 @@ -837,6 +837,21 @@ static void remove_single_list_entry( LDRP_CSLIST *list, SINGLE_LIST_ENTRY *entr

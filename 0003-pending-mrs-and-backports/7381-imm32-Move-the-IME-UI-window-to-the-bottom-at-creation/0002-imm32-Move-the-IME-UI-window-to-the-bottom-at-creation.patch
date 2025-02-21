@@ -1,0 +1,41 @@
+From 6836043195e4190f8dab14b6d99ec3ef0790443a Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 20 Feb 2025 17:18:49 +0800
+Subject: [PATCH] imm32: Move the IME UI window to the bottom at creation.
+
+Tidy Cauldron (2708320), a Unity game, uses EnumWindows() to find the first window in the current
+thread and maximizes the window when changing to windowed mode. However, before this patch, the IME
+UI window and the DXGI fallback device window are on top of the game window at creation and thus
+they could get maximized instead. This causes the game window to lose focus and freeze.
+---
+ dlls/imm32/imm.c         | 1 +
+ dlls/imm32/tests/imm32.c | 1 -
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/imm32/imm.c b/dlls/imm32/imm.c
+index dbf8db63e11..5639c2ae11c 100644
+--- a/dlls/imm32/imm.c
++++ b/dlls/imm32/imm.c
+@@ -948,6 +948,7 @@ static HWND get_ime_ui_window(void)
+     {
+         imc->ui_hwnd = CreateWindowExW( WS_EX_TOOLWINDOW, ime->ui_class, NULL, WS_POPUP, 0, 0, 1, 1,
+                                         ImmGetDefaultIMEWnd( 0 ), 0, ime->module, 0 );
++        SetWindowPos( imc->ui_hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE );
+         SetWindowLongPtrW( imc->ui_hwnd, IMMGWL_IMC, (LONG_PTR)NtUserGetWindowInputContext( GetFocus() ) );
+     }
+     return imc->ui_hwnd;
+diff --git a/dlls/imm32/tests/imm32.c b/dlls/imm32/tests/imm32.c
+index 9e7497f2d97..3ee2afa53cb 100644
+--- a/dlls/imm32/tests/imm32.c
++++ b/dlls/imm32/tests/imm32.c
+@@ -8057,7 +8057,6 @@ static void test_ime_ui_window_child(void)
+     EnumWindows(enum_first_current_thread_window_proc, (LPARAM)&result_hwnd);
+     GetClassNameA(result_hwnd, class_name, ARRAY_SIZE(class_name));
+     GetWindowTextA(result_hwnd, window_name, ARRAY_SIZE(window_name));
+-    todo_wine
+     ok(result_hwnd == hwnd, "Got unexpected window %p %s %s.\n", result_hwnd, window_name, class_name);
+     DestroyWindow(hwnd);
+ }
+-- 
+GitLab
+

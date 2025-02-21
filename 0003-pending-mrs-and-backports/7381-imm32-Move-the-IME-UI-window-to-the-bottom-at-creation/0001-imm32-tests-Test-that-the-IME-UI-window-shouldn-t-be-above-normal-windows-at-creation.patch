@@ -1,0 +1,87 @@
+From 196ad9e86470dbc8e85eb871a9e9282bbe173bc8 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 20 Feb 2025 17:18:49 +0800
+Subject: [PATCH] imm32/tests: Test that the IME UI window shouldn't be above
+ normal windows at creation.
+
+---
+ dlls/imm32/tests/imm32.c | 54 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+diff --git a/dlls/imm32/tests/imm32.c b/dlls/imm32/tests/imm32.c
+index db73463ef49..9e7497f2d97 100644
+--- a/dlls/imm32/tests/imm32.c
++++ b/dlls/imm32/tests/imm32.c
+@@ -8037,8 +8037,61 @@ static void test_nihongo_no(void)
+     ime_call_count = 0;
+ }
+ 
++static BOOL CALLBACK enum_first_current_thread_window_proc(HWND hwnd, LPARAM lp)
++{
++    if (GetWindowThreadProcessId(hwnd, NULL) == GetCurrentThreadId())
++    {
++        *(HWND *)lp = hwnd;
++        return FALSE;
++    }
++    return TRUE;
++}
++
++static void test_ime_ui_window_child(void)
++{
++    char window_name[80], class_name[80];
++    HWND hwnd, result_hwnd;
++
++    /* Unity expects the first window in the current thread to be its game window, not Wine IME */
++    hwnd = CreateWindowA("static", "", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 100, 100, NULL, NULL, NULL, NULL);
++    EnumWindows(enum_first_current_thread_window_proc, (LPARAM)&result_hwnd);
++    GetClassNameA(result_hwnd, class_name, ARRAY_SIZE(class_name));
++    GetWindowTextA(result_hwnd, window_name, ARRAY_SIZE(window_name));
++    todo_wine
++    ok(result_hwnd == hwnd, "Got unexpected window %p %s %s.\n", result_hwnd, window_name, class_name);
++    DestroyWindow(hwnd);
++}
++
++static void test_ime_ui_window(const char *argv0)
++{
++    PROCESS_INFORMATION info;
++    STARTUPINFOA startup;
++    char cmd[MAX_PATH];
++
++    /* Run in a new process to avoid interference from windows in the current process */
++    sprintf(cmd, "%s imm32 test_ime_ui_window_child", argv0);
++    memset(&startup, 0, sizeof(startup));
++    startup.cb = sizeof(startup);
++    ok(CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info), "CreateProcess failed.\n");
++
++    wait_child_process(info.hProcess);
++    CloseHandle(info.hProcess);
++    CloseHandle(info.hThread);
++}
++
+ START_TEST(imm32)
+ {
++    char **argv;
++    int argc;
++
++    argc = winetest_get_mainargs( &argv );
++
++    if (argc == 3 && !strcmp(argv[2], "test_ime_ui_window_child"))
++    {
++        test_ime_ui_window_child();
++        return;
++    }
++
+     default_hkl = GetKeyboardLayout( 0 );
+ 
+     test_class.hInstance = GetModuleHandleW( NULL );
+@@ -8050,6 +8103,7 @@ START_TEST(imm32)
+         return;
+     }
+ 
++    test_ime_ui_window(argv[0]);
+     test_com_initialization();
+ 
+     test_ImmEnumInputContext();
+-- 
+GitLab
+
