@@ -128,7 +128,7 @@ index d86d036c5c0..14179e6c555 100644
  static struct timespec *get_next_timeout_ts( struct timespec *ts )
  {
 -    timeout_t next_timeout = user_shared_data ? (timeout_t)user_shared_data_timeout * 10000 : -1;
-+    timeout_t next_timeout = user_shared_data ? (timeout_t)user_shared_data_timeout_ticks : -1;
++    timeout_t next_timeout = user_shared_data ? (timeout_t)user_shared_data_timeout_ticks * 100 : -1;
  
      if (!list_empty( &abs_timeout_list ) || !list_empty( &rel_timeout_list ))
      {
