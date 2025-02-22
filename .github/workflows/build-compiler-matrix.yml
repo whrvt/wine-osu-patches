@@ -133,7 +133,7 @@ jobs:
 
       - name: Initial system update
         if: steps.should_run.outputs.run == 'true'
-        run: pacman -Syu --noconfirm git nodejs npm clang llvm-libs llvm lld polly mingw-w64-binutils mingw-w64-gcc mingw-w64-crt mingw-w64-headers mingw-w64-winpthreads lib32-llvm-libs
+        run: pacman -Syu --noconfirm ccache git nodejs npm clang llvm-libs llvm lld polly mingw-w64-binutils mingw-w64-gcc mingw-w64-crt mingw-w64-headers mingw-w64-winpthreads lib32-llvm-libs
 
       - name: Get build metadata
         if: steps.should_run.outputs.run == 'true'
@@ -254,7 +254,7 @@ jobs:
 
           echo -e 'MAKEFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
           echo -e 'NINJAFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
-          sed -i 's|!ccache|ccache|' /etc/makepkg.conf
+          sed -i 's|!ccache|ccache|g' /etc/makepkg.conf
 
       - name: Update package repositories
         if: steps.should_run.outputs.run == 'true'

@@ -84,7 +84,7 @@ jobs:
 
     - name: Initial system update and Node.js installation
       run: |
-        pacman -Syu --noconfirm git nodejs npm
+        pacman -Syu --noconfirm ccache git nodejs npm
 
     - name: Import GPG Key
       uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5
@@ -128,7 +128,7 @@ jobs:
 
         echo -e 'MAKEFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
         echo -e 'NINJAFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
-        sed -i 's|!ccache|ccache|' /etc/makepkg.conf
+        sed -i 's|!ccache|ccache|g' /etc/makepkg.conf
 
     - name: Update package repositories
       run: pacman -Syu --noconfirm
