@@ -24,7 +24,7 @@ env:
   AUR_PACKAGE: wine-osu-spectator
   PARU_CACHE: /home/builder/.cache/paru
   PACKAGE_CACHE: /home/builder/package_cache
-  _CCACHE_DIR: /home/builder/.ccache
+  CCACHE_DIR: /home/builder/.ccache
   PUBKEY: 0B47490955565BD2
   GNUPGHOME: /home/builder/.gnupg
 
@@ -61,7 +61,7 @@ jobs:
             pkg_suffix: 'clang-clangmsvc'
           - host_compiler: clang
             cross_compiler: llvm-mingw
-            use_clang: 'true'
+            use_clang: 'bundled'
             with_mingw: 'llvm'
             pkg_suffix: 'clang-llvmmingw'
           - host_compiler: clang
@@ -82,9 +82,7 @@ jobs:
           DEFAULT_USE_MINGW=$(echo "$PKGBUILD_CONTENT" | grep '^_use_mingw=' | cut -d'=' -f2)
 
           # Determine default suffix based on compiler settings
-          if [[ "$DEFAULT_USE_CLANG" == "true" ]]; then
-            HOST="clang"
-          elif [[ "$DEFAULT_USE_CLANG" == "bundled" ]]; then
+          if [[ "$DEFAULT_USE_CLANG" == "true" ]] || [[ "$DEFAULT_USE_CLANG" == "bundled" ]]; then
             HOST="clang"
           else
             HOST="gcc"
@@ -207,7 +205,7 @@ jobs:
         run: |
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          sudo -u builder mkdir -p ${{ env.PARU_CACHE }}/clone ${{ env.PACKAGE_CACHE }} ${{ env._CCACHE_DIR }}
+          sudo -u builder mkdir -p ${{ env.PARU_CACHE }}/clone ${{ env.PACKAGE_CACHE }} ${{ env.CCACHE_DIR }}
 
       - name: Import GPG Key
         if: steps.should_run.outputs.run == 'true'
@@ -220,7 +218,7 @@ jobs:
         if: steps.should_run.outputs.run == 'true'
         uses: actions/cache@v4
         with:
-          path: ${{ env._CCACHE_DIR }}
+          path: ${{ env.CCACHE_DIR }}
           key: arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ github.workflow }}-${{ github.run_id }}
           restore-keys: |
             arch-ccache-${{ matrix.compiler_config.pkg_suffix }}-${{ github.workflow }}
@@ -256,6 +254,7 @@ jobs:
 
           echo -e 'MAKEFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
           echo -e 'NINJAFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
+          sed -i 's|!ccache|ccache|' /etc/makepkg.conf
 
       - name: Update package repositories
         if: steps.should_run.outputs.run == 'true'

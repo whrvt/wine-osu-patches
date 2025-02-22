@@ -23,7 +23,7 @@ env:
   AUR_PACKAGE: ${{ github.event.inputs.aur_package || 'wine-osu-spectator' }}
   PARU_CACHE: /home/builder/.cache/paru
   PACKAGE_CACHE: /home/builder/package_cache
-  _CCACHE_DIR: /home/builder/.ccache
+  CCACHE_DIR: /home/builder/.ccache
   PUBKEY: 0B47490955565BD2
   GNUPGHOME: /home/builder/.gnupg
 
@@ -80,7 +80,7 @@ jobs:
       run: |
         useradd -m builder
         echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-        sudo -u builder mkdir -p ${{ env.PARU_CACHE }}/clone ${{ env.PACKAGE_CACHE }} ${{ env._CCACHE_DIR }}
+        sudo -u builder mkdir -p ${{ env.PARU_CACHE }}/clone ${{ env.PACKAGE_CACHE }} ${{ env.CCACHE_DIR }}
 
     - name: Initial system update and Node.js installation
       run: |
@@ -95,7 +95,7 @@ jobs:
     - name: Prepare ccache
       uses: actions/cache@v4
       with:
-        path: ${{ env._CCACHE_DIR }}
+        path: ${{ env.CCACHE_DIR }}
         key: arch-ccache-${{ github.workflow }}-${{ github.run_id }}
         restore-keys: |
           arch-ccache-${{ github.workflow }}
@@ -128,6 +128,7 @@ jobs:
 
         echo -e 'MAKEFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
         echo -e 'NINJAFLAGS="-j$(nproc)"' >> /etc/makepkg.conf
+        sed -i 's|!ccache|ccache|' /etc/makepkg.conf
 
     - name: Update package repositories
       run: pacman -Syu --noconfirm
