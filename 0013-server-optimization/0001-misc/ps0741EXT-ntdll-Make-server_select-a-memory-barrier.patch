@@ -13,7 +13,7 @@ index 11111111111..11111111111 100644
          for (;;)
          {
 +            /* ensure writes so far are visible to other threads */
-+            NtFlushProcessWriteBuffers();
++            MemoryBarrier();
 +
              SERVER_START_REQ( select )
              {

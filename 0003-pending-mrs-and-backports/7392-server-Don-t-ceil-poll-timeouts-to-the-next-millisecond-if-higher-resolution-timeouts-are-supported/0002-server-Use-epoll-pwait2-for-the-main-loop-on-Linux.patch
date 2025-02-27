@@ -1,4 +1,4 @@
-From 67cc3692d98f867af21952bc6ef3c8459a2e8197 Mon Sep 17 00:00:00 2001
+From d1508b836cde9751b93bcdf0d65cd10df0b9f9e1 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 20 Feb 2025 11:39:06 -0800
 Subject: [PATCH] server: Use epoll_pwait2 for the main loop on Linux.
@@ -9,8 +9,8 @@ we can already use a timespec directly.
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57849
 ---
  configure.ac |  1 +
- server/fd.c  | 18 ++++++++++++++++--
- 2 files changed, 17 insertions(+), 2 deletions(-)
+ server/fd.c  | 11 ++++++++++-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
 
 diff --git a/configure.ac b/configure.ac
 index dd139950e10..d483096fae6 100644
@@ -25,7 +25,7 @@ index dd139950e10..d483096fae6 100644
  	futimens \
  	futimes \
 diff --git a/server/fd.c b/server/fd.c
-index fa75009d12a..194d346260d 100644
+index 024fdc07fbb..35dd0150c9b 100644
 --- a/server/fd.c
 +++ b/server/fd.c
 @@ -102,6 +102,9 @@
@@ -38,34 +38,27 @@ index fa75009d12a..194d346260d 100644
  #endif /* HAVE_SYS_EPOLL_H && HAVE_EPOLL_CREATE */
  
  #if defined(HAVE_PORT_H) && defined(HAVE_PORT_CREATE)
-@@ -564,7 +567,7 @@ static inline void remove_epoll_user( struct fd *fd, int user )
- 
+@@ -564,6 +567,7 @@ static inline void remove_epoll_user( struct fd *fd, int user )
  static inline void main_loop_epoll(void)
  {
--    int i, ret, timeout;
-+    int i, ret;
+     int i, ret, timeout;
++    struct timespec ts;
      struct epoll_event events[128];
  
      assert( POLLIN == EPOLLIN );
-@@ -576,12 +579,23 @@ static inline void main_loop_epoll(void)
+@@ -575,12 +579,17 @@ static inline void main_loop_epoll(void)
  
      while (active_users)
      {
--        timeout = get_next_timeout();
-+#ifdef USE_EPOLL_PWAIT2
-+        struct timespec ts, *timeout;
-+        timeout = get_next_timeout_ts( &ts );
-+
-+        if (!active_users) break;  /* last user removed by a timeout */
-+        if (epoll_fd == -1) break;  /* an error occurred with epoll */
-+
-+        ret = epoll_pwait2( epoll_fd, events, ARRAY_SIZE( events ), timeout, NULL );
-+#else
-+        int timeout = get_next_timeout();
+-        timeout = get_next_timeout( NULL );
++        timeout = get_next_timeout( &ts );
  
          if (!active_users) break;  /* last user removed by a timeout */
          if (epoll_fd == -1) break;  /* an error occurred with epoll */
  
++#ifdef USE_EPOLL_PWAIT2
++        ret = epoll_pwait2( epoll_fd, events, ARRAY_SIZE( events ), timeout == -1 ? NULL : &ts, NULL );
++#else
          ret = epoll_wait( epoll_fd, events, ARRAY_SIZE( events ), timeout );
 +#endif
 +

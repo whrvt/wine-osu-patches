@@ -73,11 +73,6 @@ index 03bc0aeb11e..4ab6b97ba93 100644
  /* Setup keyboard auto-repeat */
  @REQ(set_keyboard_repeat)
      int enable;                /* whether to enable auto-repeat */
-@@ -3910,4 +3918,3 @@ enum esync_type
- @REPLY
-     int enable;                /* previous state of auto-repeat enable */
- @END
--
 -- 
 2.43.0
 

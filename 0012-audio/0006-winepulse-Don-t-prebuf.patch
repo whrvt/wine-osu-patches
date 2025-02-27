@@ -27,8 +27,8 @@ index efdb6fe8ff0..b919c6f2257 100644
  {
 -    WARN("Underflow\n");
 +    struct pulse_stream *stream = userdata;
-+    int success;
-+    wait_pa_operation_complete(pa_stream_trigger(stream->stream, pulse_op_cb, &success));
++    int success = 0;
++    if (!!getenv("STAGING_AUDIO_PERIOD")) wait_pa_operation_complete(pa_stream_trigger(stream->stream, pulse_op_cb, &success));
 +    WARN("Underflow %d\n", success);
  }
  
@@ -52,7 +52,7 @@ index efdb6fe8ff0..b919c6f2257 100644
      attr.minreq = attr.fragsize = period_bytes;
      attr.maxlength = attr.tlength = stream->bufsize_bytes;
 -    attr.prebuf = pa_frame_size(&stream->ss);
-+    attr.prebuf = 0;
++    attr.prebuf = (!!getenv("STAGING_AUDIO_PERIOD") ? 0 : pa_frame_size(&stream->ss));
      dump_attr(&attr);
  
      /* If specific device was requested, use it exactly */

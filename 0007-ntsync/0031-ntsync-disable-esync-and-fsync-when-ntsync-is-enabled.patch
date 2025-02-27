@@ -19,7 +19,7 @@ index 3074f7c72ea..126ef27c752 100644
      static int do_esync_cached = -1;
  
      if (do_esync_cached == -1)
--        do_esync_cached = getenv("WINEESYNC") && atoi(getenv("WINEESYNC")) && !do_fsync();
+-        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync();
 +        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync() &&
 +                          getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) );
  
@@ -33,7 +33,7 @@ index c3da44e4f26..f719c339783 100644
      if (do_fsync_cached == -1)
      {
          syscall( __NR_futex_waitv, NULL, 0, 0, NULL, 0 );
--        do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
+-        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
 +        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC"))) &&
 +                          getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) );
      }
@@ -47,7 +47,7 @@ index 24f3d41ad77..97deecd2514 100644
      static int do_esync_cached = -1;
  
      if (do_esync_cached == -1)
--        do_esync_cached = getenv("WINEESYNC") && atoi(getenv("WINEESYNC")) && !do_fsync();
+-        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync();
 +        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync() &&
 +                          getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) );
  
@@ -61,7 +61,7 @@ index d41fee58c0b..e1abfaae800 100644
      if (do_fsync_cached == -1)
      {
          syscall( __NR_futex_waitv, 0, 0, 0, 0, 0);
--        do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
+-        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
 +        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC"))) &&
 +                          getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) );
      }

@@ -113,7 +113,7 @@ index 9d09bd1555a..c72c4be6774 100644
 -        static const struct timespec zero;
 -        futex_wait_multiple( NULL, 0, &zero );
 +        syscall( __NR_futex_waitv, NULL, 0, 0, NULL, 0 );
-         do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
+         do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
          if (getenv("WINEFSYNC_SPINCOUNT"))
              spincount = atoi(getenv("WINEFSYNC_SPINCOUNT"));
 @@ -682,19 +705,13 @@ static NTSTATUS do_single_wait( int *addr, int val, ULONGLONG *end, BOOLEAN aler
@@ -262,7 +262,7 @@ index 3ad59f4735f..593070ad62e 100644
 -        static const struct timespec zero;
 -        futex_wait_multiple( NULL, 0, &zero );
 +        syscall( __NR_futex_waitv, 0, 0, 0, 0, 0);
-         do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
+         do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
      }
  
 -- 

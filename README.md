@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-4de56399](https://gitlab.winehq.org/wine/wine/-/tree/4de563994426e258d1f2848b663f6ed85dd1298d)
+wine commit: [wine-32a81ee2](https://gitlab.winehq.org/wine/wine/-/tree/32a81ee2135c67e393e49cce60ef8ebfbaefb531)
 
-staging commit: [staging-735225db](https://gitlab.winehq.org/wine/wine-staging/-/tree/735225dbaa71dc0cbff67c13708e63e3a44981aa)
+staging commit: [staging-35465516](https://gitlab.winehq.org/wine/wine-staging/-/tree/35465516857e3ad7c058364b66d520f2651e4c7e)
 
-Staging exclude flags: `-W vkd3d-latest -W eventfd_synchronization`
+Staging exclude flags: `-W setupapi-DiskSpaceList -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
 # Environment variables
 
@@ -159,6 +159,10 @@ server: Allow disabling in-process synchronization support.
 
 Patch: [disable-ime-envvar.patch](9000-misc-additions/disable-ime-envvar.patch)
 
+### Type
+
+`boolean`
+
 ## WINE_DISABLE_KERNEL_WRITEWATCH
 
 Patch: [0001-ntdll-Use-kernel-soft-dirty-flags-for-write-watches-.patch](0013-server-optimization/0005-writewatches/0001-ntdll-Use-kernel-soft-dirty-flags-for-write-watches-.patch)
@@ -209,23 +213,6 @@ cursor clip hack
 ### Type
 
 `numeric`
-
-## WINE_FORCE_BUSYWAIT
-
-Patch: [0016-HACK-ntdll-Do-a-non-alertable-wait-for-small-1ms-sle.patch](0013-server-optimization/0004-time-wait/0016-HACK-ntdll-Do-a-non-alertable-wait-for-small-1ms-sle.patch)
-
-### Commit message
-
-```
-HACK: ntdll: Do a non-alertable wait for small (<=1ms) sleeps in osu!.
-Also allow forcing it on (with WINE_FORCE_BUSYWAIT=1) for the placebo-chasers
-out there who might use this build for other games, to see how it affects them.
-Only with ntsync/esync/server sync, as fsync is fast enough already.
-```
-
-### Type
-
-`boolean`
 
 ## WINE_FSYNC_SIMULATE_SCHED_QUANTUM
 
