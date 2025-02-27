@@ -1,19 +1,19 @@
 Only applies for the nodrv/nores backend (i.e. wayland or (UseXRandr = N and UseXVidMode = N))
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index d1a5a75..668058d 100644
+index 10be29df62d..80bc973d9b1 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
-@@ -1938,7 +1938,7 @@ static void add_virtual_modes( struct device_manager_ctx *ctx, const DEVMODEW *c
-         {
-             .dmSize = sizeof(mode),
-             .dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS | DM_DISPLAYFREQUENCY,
--            .dmDisplayFrequency = 60,
-+            .dmDisplayFrequency = 600,
-             .dmBitsPerPel = depths[i],
-         };
- 
-@@ -2003,7 +2003,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
-     if (!read_source_mode( ctx->source_key, ENUM_CURRENT_SETTINGS, &current ))
+@@ -1670,7 +1670,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
+ static DEVMODEW *get_virtual_modes( const DEVMODEW *current, const DEVMODEW *initial, const DEVMODEW *maximum,
+                                     const DEVMODEW *host_modes, UINT host_modes_count, UINT32 *modes_count )
+ {
+-    UINT depths[] = {8, 16, initial->dmBitsPerPel}, freqs[] = {60, -1}, sizes_count, i, j, f, count = 0;
++    UINT depths[] = {8, 16, initial->dmBitsPerPel}, freqs[] = {600, -1}, sizes_count, i, j, f, count = 0;
+     DEVMODEW *modes = NULL;
+     SIZE *screen_sizes;
+     BOOL vertical;
+@@ -2269,7 +2269,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
+     if (!read_source_mode( source->key, ENUM_CURRENT_SETTINGS, &current ))
      {
          current = ctx->primary;
 -        current.dmDisplayFrequency = 60;

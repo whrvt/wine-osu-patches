@@ -1,0 +1,196 @@
+From f57f600dd6a09e3489b8cbb41bef40e1f2d75bfb Mon Sep 17 00:00:00 2001
+From: Attila Fidan <dev@print0.net>
+Date: Sun, 16 Feb 2025 10:00:41 +0000
+Subject: [PATCH] winewayland: Implement SetCursorPos via pointer lock.
+
+---
+ dlls/winewayland.drv/wayland_pointer.c | 95 ++++++++++++++++++++++++--
+ dlls/winewayland.drv/wayland_surface.c |  2 +-
+ dlls/winewayland.drv/waylanddrv.h      |  3 +-
+ dlls/winewayland.drv/waylanddrv_main.c |  1 +
+ 4 files changed, 94 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index c20ba170285..493ea196f5b 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -745,7 +745,8 @@ static BOOL wayland_surface_client_covers_vscreen(struct wayland_surface *surfac
+  */
+ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+                                               RECT *confine_rect,
+-                                              BOOL covers_vscreen)
++                                              BOOL covers_vscreen,
++                                              BOOL keep_relative)
+ {
+     struct wayland_pointer *pointer = &process_wayland.pointer;
+     BOOL needs_relative, needs_lock, needs_confine;
+@@ -856,7 +857,7 @@ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+                                              &relative_pointer_v1_listener, NULL);
+         TRACE("Enabling relative motion\n");
+     }
+-    else if (!needs_relative && pointer->zwp_relative_pointer_v1)
++    else if (!needs_relative && pointer->zwp_relative_pointer_v1 && !keep_relative)
+     {
+         zwp_relative_pointer_v1_destroy(pointer->zwp_relative_pointer_v1);
+         pointer->zwp_relative_pointer_v1 = NULL;
+@@ -864,9 +865,9 @@ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+     }
+ }
+ 
+-void wayland_pointer_clear_constraint(void)
++void wayland_pointer_clear_constraint(BOOL keep_relative)
+ {
+-    wayland_pointer_update_constraint(NULL, NULL, FALSE);
++    wayland_pointer_update_constraint(NULL, NULL, FALSE, keep_relative);
+ }
+ 
+ /***********************************************************************
+@@ -879,6 +880,90 @@ void WAYLAND_SetCursor(HWND hwnd, HCURSOR hcursor)
+     wayland_set_cursor(hwnd, hcursor, TRUE);
+ }
+ 
++/***********************************************************************
++ *           WAYLAND_SetCursorPos
++ */
++BOOL WAYLAND_SetCursorPos(INT x, INT y)
++{
++    struct wayland_pointer *pointer = &process_wayland.pointer;
++    struct wayland_win_data *data;
++    struct wayland_surface *surface;
++    struct zwp_locked_pointer_v1 *locked_pointer;
++    int warp_x, warp_y;
++    BOOL had_confined_pointer = FALSE;
++    RECT restore_rect;
++    UINT context;
++
++    if (!(data = wayland_win_data_get(NtUserGetForegroundWindow()))) return FALSE;
++    if (!(surface = data->wayland_surface))
++    {
++        wayland_win_data_release(data);
++        return FALSE;
++    }
++
++    wayland_surface_coords_from_window(surface,
++            x - surface->window.rect.left,
++            y - surface->window.rect.top,
++            &warp_x, &warp_y);
++
++    pthread_mutex_lock(&pointer->mutex);
++
++    if (pointer->zwp_locked_pointer_v1)
++    {
++        TRACE("Temporarily unlocking pointer to attempt warp\n");
++        zwp_locked_pointer_v1_set_cursor_position_hint(
++                pointer->zwp_locked_pointer_v1,
++                wl_fixed_from_int(warp_x),
++                wl_fixed_from_int(warp_y));
++        wl_surface_commit(surface->wl_surface);
++        zwp_locked_pointer_v1_destroy(pointer->zwp_locked_pointer_v1);
++        pointer->zwp_locked_pointer_v1 =
++            zwp_pointer_constraints_v1_lock_pointer(
++                    process_wayland.zwp_pointer_constraints_v1,
++                    surface->wl_surface,
++                    pointer->wl_pointer,
++                    NULL,
++                    ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
++        goto done;
++    }
++
++    had_confined_pointer = !!(pointer->zwp_confined_pointer_v1);
++
++    if (had_confined_pointer)
++    {
++        TRACE("Temporarily unconfining pointer to attempt warp\n");
++        context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
++        NtUserGetClipCursor(&restore_rect);
++        wayland_pointer_clear_constraint(TRUE);
++    }
++
++    locked_pointer = zwp_pointer_constraints_v1_lock_pointer(
++            process_wayland.zwp_pointer_constraints_v1,
++            surface->wl_surface,
++            pointer->wl_pointer,
++            NULL,
++            ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
++    zwp_locked_pointer_v1_set_cursor_position_hint(
++            locked_pointer,
++            wl_fixed_from_int(warp_x),
++            wl_fixed_from_int(warp_y));
++    wl_surface_commit(surface->wl_surface);
++    zwp_locked_pointer_v1_destroy(locked_pointer);
++
++done:
++    pthread_mutex_unlock(&pointer->mutex);
++    wayland_win_data_release(data);
++
++    if (had_confined_pointer)
++    {
++        NtUserClipCursor(&restore_rect);
++        NtUserSetThreadDpiAwarenessContext(context);
++    }
++
++    TRACE("Attempted warp to %d,%d, surface-local %d,%d.\n", x, y, warp_x, warp_y);
++    return TRUE;
++}
++
+ /***********************************************************************
+  *	     WAYLAND_ClipCursor
+  */
+@@ -908,7 +993,7 @@ BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
+     pthread_mutex_lock(&pointer->mutex);
+     wayland_pointer_update_constraint(wl_surface,
+                                       (clip && wl_surface) ? &confine_rect : NULL,
+-                                      covers_vscreen);
++                                      covers_vscreen, FALSE);
+     pthread_mutex_unlock(&pointer->mutex);
+ 
+     wl_display_flush(process_wayland.wl_display);
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 2178f5431cb..018e4422512 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -196,7 +196,7 @@ void wayland_surface_destroy(struct wayland_surface *surface)
+         process_wayland.pointer.enter_serial = 0;
+     }
+     if (process_wayland.pointer.constraint_hwnd == surface->hwnd)
+-        wayland_pointer_clear_constraint();
++        wayland_pointer_clear_constraint(FALSE);
+     pthread_mutex_unlock(&process_wayland.pointer.mutex);
+ 
+     pthread_mutex_lock(&process_wayland.keyboard.mutex);
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 5c5ce5bf130..bbdc7fc1821 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -351,7 +351,7 @@ void WAYLAND_ReleaseKbdTables(const KBDTABLES *);
+ 
+ void wayland_pointer_init(struct wl_pointer *wl_pointer);
+ void wayland_pointer_deinit(void);
+-void wayland_pointer_clear_constraint(void);
++void wayland_pointer_clear_constraint(BOOL keep_relative);
+ 
+ /**********************************************************************
+  *          Wayland text input
+@@ -396,6 +396,7 @@ LRESULT WAYLAND_DesktopWindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+ void WAYLAND_DestroyWindow(HWND hwnd);
+ BOOL WAYLAND_SetIMECompositionRect(HWND hwnd, RECT rect);
+ void WAYLAND_SetCursor(HWND hwnd, HCURSOR hcursor);
++BOOL WAYLAND_SetCursorPos(INT x, INT y);
+ void WAYLAND_SetWindowText(HWND hwnd, LPCWSTR text);
+ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT *pos);
+ UINT WAYLAND_UpdateDisplayDevices(const struct gdi_device_manager *device_manager, void *param);
+diff --git a/dlls/winewayland.drv/waylanddrv_main.c b/dlls/winewayland.drv/waylanddrv_main.c
+index 633b2f4a043..220d5e51863 100644
+--- a/dlls/winewayland.drv/waylanddrv_main.c
++++ b/dlls/winewayland.drv/waylanddrv_main.c
+@@ -42,6 +42,7 @@ static const struct user_driver_funcs waylanddrv_funcs =
+     .pKbdLayerDescriptor = WAYLAND_KbdLayerDescriptor,
+     .pReleaseKbdTables = WAYLAND_ReleaseKbdTables,
+     .pSetCursor = WAYLAND_SetCursor,
++    .pSetCursorPos = WAYLAND_SetCursorPos,
+     .pSetWindowText = WAYLAND_SetWindowText,
+     .pSysCommand = WAYLAND_SysCommand,
+     .pUpdateDisplayDevices = WAYLAND_UpdateDisplayDevices,
+-- 
+GitLab
+

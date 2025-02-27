@@ -1,0 +1,208 @@
+From 4c3ce85f7762108ddf3b430cf701f2d1de991ade Mon Sep 17 00:00:00 2001
+From: Sebastian Lackner <sebastian@fds-team.de>
+Date: Tue, 24 Jan 2017 12:37:46 +0100
+Subject: [PATCH] winex11: Fix alpha blending in X11DRV_UpdateLayeredWindow.
+
+Based on a patch by Dmitry Timoshkov.
+
+Signed-off-by: Dmitry Timoshkov <dmitry@baikal.ru>
+---
+ dlls/win32u/driver.c      |  6 +++---
+ dlls/win32u/window.c      |  9 ++++++---
+ dlls/winemac.drv/macdrv.h |  2 +-
+ dlls/winemac.drv/window.c |  2 +-
+ dlls/winex11.drv/window.c | 23 +++++++++++++----------
+ dlls/winex11.drv/x11drv.h |  2 +-
+ include/wine/gdi_driver.h |  2 +-
+ 7 files changed, 26 insertions(+), 20 deletions(-)
+
+diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
+index 22e48fa6782..acc319d6a77 100644
+--- a/dlls/win32u/driver.c
++++ b/dlls/win32u/driver.c
+@@ -862,7 +862,7 @@ static LRESULT nulldrv_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam, cons
+     return -1;
+ }
+ 
+-static void nulldrv_UpdateLayeredWindow( HWND hwnd, UINT flags )
++static void nulldrv_UpdateLayeredWindow( HWND hwnd, const BLENDFUNCTION *blend, UINT flags )
+ {
+ }
+ 
+@@ -1221,9 +1221,9 @@ static void loaderdrv_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
+     load_driver()->pSetWindowRgn( hwnd, hrgn, redraw );
+ }
+ 
+-static void loaderdrv_UpdateLayeredWindow( HWND hwnd, UINT flags )
++static void loaderdrv_UpdateLayeredWindow( HWND hwnd, const BLENDFUNCTION *blend, UINT flags )
+ {
+-    load_driver()->pUpdateLayeredWindow( hwnd, flags );
++    load_driver()->pUpdateLayeredWindow( hwnd, blend, flags );
+ }
+ 
+ static UINT loaderdrv_VulkanInit( UINT version, void *vulkan_handle, const struct vulkan_driver_funcs **driver_funcs )
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 1cea6d25a4b..717e8ef62dd 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2481,7 +2481,11 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+     apply_window_pos( hwnd, 0, swp_flags, surface, &new_rects, NULL );
+     if (!surface) return FALSE;
+ 
+-    if (!hdc_src || surface == &dummy_surface) ret = TRUE;
++    if (!hdc_src || surface == &dummy_surface)
++    {
++        user_driver->pUpdateLayeredWindow( hwnd, blend, flags );
++        ret = TRUE;
++    }
+     else
+     {
+         BLENDFUNCTION src_blend = { AC_SRC_OVER, 0, 255, 0 };
+@@ -2502,7 +2506,6 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+         if (pts_src) OffsetRect( &src_rect, pts_src->x, pts_src->y );
+         NtGdiTransformPoints( hdc_src, (POINT *)&src_rect, (POINT *)&src_rect, 2, NtGdiDPtoLP );
+ 
+-        if (flags & ULW_ALPHA) src_blend = *blend;
+         ret = NtGdiAlphaBlend( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+                                hdc_src, src_rect.left, src_rect.top, src_rect.right - src_rect.left, src_rect.bottom - src_rect.top,
+                                *(DWORD *)&src_blend, 0 );
+@@ -2514,7 +2517,7 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+         if (!(flags & ULW_COLORKEY)) key = CLR_INVALID;
+         window_surface_set_layered( surface, key, -1, 0xff000000 );
+ 
+-        user_driver->pUpdateLayeredWindow( hwnd, flags );
++        user_driver->pUpdateLayeredWindow( hwnd, blend, flags );
+         window_surface_flush( surface );
+     }
+ 
+diff --git a/dlls/winemac.drv/macdrv.h b/dlls/winemac.drv/macdrv.h
+index 4457a7e186c..c4bc05c1566 100644
+--- a/dlls/winemac.drv/macdrv.h
++++ b/dlls/winemac.drv/macdrv.h
+@@ -145,7 +145,7 @@ extern void macdrv_SetLayeredWindowAttributes(HWND hwnd, COLORREF key, BYTE alph
+ extern void macdrv_SetWindowText(HWND hwnd, LPCWSTR text);
+ extern UINT macdrv_ShowWindow(HWND hwnd, INT cmd, RECT *rect, UINT swp);
+ extern LRESULT macdrv_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT *pos);
+-extern void macdrv_UpdateLayeredWindow(HWND hwnd, UINT flags);
++extern void macdrv_UpdateLayeredWindow(HWND hwnd, const BLENDFUNCTION *blend, UINT flags);
+ extern LRESULT macdrv_WindowMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+ extern BOOL macdrv_WindowPosChanging(HWND hwnd, UINT swp_flags, BOOL shaped, const struct window_rects *rects);
+ extern BOOL macdrv_GetWindowStyleMasks(HWND hwnd, UINT style, UINT ex_style, UINT *style_mask, UINT *ex_style_mask);
+diff --git a/dlls/winemac.drv/window.c b/dlls/winemac.drv/window.c
+index 115820ec376..28a5d89fcad 100644
+--- a/dlls/winemac.drv/window.c
++++ b/dlls/winemac.drv/window.c
+@@ -1627,7 +1627,7 @@ done:
+ /***********************************************************************
+  *              UpdateLayeredWindow   (MACDRV.@)
+  */
+-void macdrv_UpdateLayeredWindow(HWND hwnd, UINT flags)
++void macdrv_UpdateLayeredWindow(HWND hwnd, const BLENDFUNCTION *blend, UINT flags)
+ {
+     struct macdrv_win_data *data;
+ 
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 7ae1d8ef66a..3d254b78fa6 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -573,13 +573,11 @@ static void sync_window_region( struct x11drv_win_data *data, HRGN win_region )
+ 
+ 
+ /***********************************************************************
+- *              sync_window_opacity
++ *              set_window_opacity
+  */
+-static void sync_window_opacity( Display *display, Window win, BYTE alpha, DWORD flags )
++static void set_window_opacity( Display *display, Window win, BYTE alpha )
+ {
+-    unsigned long opacity = 0xffffffff;
+-
+-    if (flags & LWA_ALPHA) opacity = (0xffffffff / 0xff) * alpha;
++    unsigned long opacity = (0xffffffff / 0xff) * alpha;
+ 
+     if (opacity == 0xffffffff)
+         XDeleteProperty( display, win, x11drv_atom(_NET_WM_WINDOW_OPACITY) );
+@@ -2160,7 +2158,7 @@ static void create_whole_window( struct x11drv_win_data *data )
+ 
+     /* set the window opacity */
+     if (!NtUserGetLayeredWindowAttributes( data->hwnd, &key, &alpha, &layered_flags )) layered_flags = 0;
+-    sync_window_opacity( data->display, data->whole_window, alpha, layered_flags );
++    set_window_opacity( data->display, data->whole_window, (layered_flags & LWA_ALPHA) ? alpha : 0xff );
+ 
+     XFlush( data->display );  /* make sure the window exists before we start painting to it */
+ 
+@@ -2288,7 +2286,7 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+     {
+         data->layered = FALSE;
+         set_window_visual( data, &default_visual, FALSE );
+-        sync_window_opacity( data->display, data->whole_window, 0, 0 );
++        set_window_opacity( data->display, data->whole_window, 0xff );
+     }
+ done:
+     release_win_data( data );
+@@ -3168,7 +3166,7 @@ void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWO
+         set_window_visual( data, &default_visual, FALSE );
+ 
+         if (data->whole_window)
+-            sync_window_opacity( data->display, data->whole_window, alpha, flags );
++            set_window_opacity( data->display, data->whole_window, (flags & LWA_ALPHA) ? alpha : 0xff );
+ 
+         data->layered = TRUE;
+         if (data->desired_state.wm_state == WithdrawnState)  /* mapping is delayed until attributes are set */
+@@ -3190,7 +3188,7 @@ void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWO
+         Window win = X11DRV_get_whole_window( hwnd );
+         if (win)
+         {
+-            sync_window_opacity( gdi_display, win, alpha, flags );
++            set_window_opacity( gdi_display, win, (flags & LWA_ALPHA) ? alpha : 0xff );
+             if (flags & LWA_COLORKEY)
+                 FIXME( "LWA_COLORKEY not supported on foreign process window %p\n", hwnd );
+         }
+@@ -3201,12 +3199,17 @@ void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWO
+ /***********************************************************************
+  *              UpdateLayeredWindow   (X11DRV.@)
+  */
+-void X11DRV_UpdateLayeredWindow( HWND hwnd, UINT flags )
++void X11DRV_UpdateLayeredWindow( HWND hwnd, const BLENDFUNCTION *blend, UINT flags )
+ {
+     struct x11drv_win_data *data;
+     BOOL mapped;
+ 
+     if (!(data = get_win_data( hwnd ))) return;
++
++    if (data->whole_window)
++        set_window_opacity( data->display, data->whole_window,
++                            (flags & ULW_ALPHA) ? blend->SourceConstantAlpha : 0xff );
++
+     mapped = data->desired_state.wm_state != WithdrawnState;
+     release_win_data( data );
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 8e383ae4c48..85ab1bf6f4f 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -239,7 +239,7 @@ extern UINT X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp );
+ extern LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT *pos );
+ extern LRESULT X11DRV_ClipboardWindowProc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp );
+ extern void X11DRV_UpdateClipboard(void);
+-extern void X11DRV_UpdateLayeredWindow( HWND hwnd, UINT flags );
++extern void X11DRV_UpdateLayeredWindow( HWND hwnd, const BLENDFUNCTION *blend, UINT flags );
+ extern LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp );
+ extern BOOL X11DRV_WindowPosChanging( HWND hwnd, UINT swp_flags, BOOL shaped, const struct window_rects *rects );
+ extern BOOL X11DRV_GetWindowStyleMasks( HWND hwnd, UINT style, UINT ex_style, UINT *style_mask, UINT *ex_style_mask );
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index 51a095fd2b0..cf278715803 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -381,7 +381,7 @@ struct user_driver_funcs
+     void    (*pSetWindowText)(HWND,LPCWSTR);
+     UINT    (*pShowWindow)(HWND,INT,RECT*,UINT);
+     LRESULT (*pSysCommand)(HWND,WPARAM,LPARAM,const POINT*);
+-    void    (*pUpdateLayeredWindow)(HWND,UINT);
++    void    (*pUpdateLayeredWindow)(HWND,const BLENDFUNCTION *,UINT);
+     LRESULT (*pWindowMessage)(HWND,UINT,WPARAM,LPARAM);
+     BOOL    (*pWindowPosChanging)(HWND,UINT,BOOL,const struct window_rects *);
+     BOOL    (*pGetWindowStyleMasks)(HWND,UINT,UINT,UINT*,UINT*);
+-- 
+GitLab
+

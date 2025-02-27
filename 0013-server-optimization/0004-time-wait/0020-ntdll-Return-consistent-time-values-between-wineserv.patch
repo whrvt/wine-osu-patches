@@ -1,0 +1,27 @@
+From d0ab5d8e0034ed11b838b909780d72ac2107a735 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 23 Feb 2025 20:05:39 -0800
+Subject: [PATCH] ntdll: Return consistent time values between wineserver and
+ ntdll.
+
+This isn't rounded on the wineserver side.
+---
+ dlls/ntdll/unix/sync.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index eedb0f76bad..39e6dd4c1d0 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2857,7 +2857,7 @@ NTSTATUS WINAPI NtQuerySystemTime( LARGE_INTEGER *time )
+     struct timespec ts;
+     if (!clock_gettime( CLOCK_REALTIME, &ts ))
+     {
+-        time->QuadPart = ticks_from_time_t( ts.tv_sec ) + (ts.tv_nsec + 50) / 100;
++        time->QuadPart = ticks_from_time_t( ts.tv_sec ) + ts.tv_nsec / 100;
+     }
+     else
+ #endif /* HAVE_CLOCK_GETTIME */
+-- 
+2.48.1
+

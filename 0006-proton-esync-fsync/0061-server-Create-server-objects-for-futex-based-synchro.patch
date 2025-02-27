@@ -102,7 +102,7 @@ index 00000000000..5f36e988803
 +    {
 +        static const struct timespec zero;
 +        futex_wait_multiple( NULL, 0, &zero );
-+        do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
++        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
 +    }
 +
 +    return do_fsync_cached;
@@ -387,6 +387,18 @@ index d5026dce3d9..2243d97dcfe 100644
 +    obj_handle_t handle;        /* handle to the object */
 +    unsigned int shm_idx;       /* this object's index into the shm section */
 +@END
+diff --git a/server/esync.c b/server/esync.c
+index 5324c29245f..fa73a4651ee 100644
+--- a/server/esync.c
++++ b/server/esync.c
+@@ -43,6 +43,7 @@
+ #include "request.h"
+ #include "file.h"
+ #include "esync.h"
++#include "fsync.h"
+ 
+ int do_esync(void)
+ {
 -- 
 2.47.0
 

@@ -82,7 +82,7 @@ index 00000000000..35b4833fd4c
 +    static int do_esync_cached = -1;
 +
 +    if (do_esync_cached == -1)
-+        do_esync_cached = getenv("WINEESYNC") && atoi(getenv("WINEESYNC"));
++        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync();
 +
 +    return do_esync_cached;
 +#else
@@ -406,15 +406,7 @@ diff --git a/server/protocol.def b/server/protocol.def
 index e86d3414247..03bc0aeb11e 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -3867,7 +3867,6 @@ struct handle_info
-     obj_handle_t handle;       /* process handle */
- @END
- 
--
- /* Iterate thread list for process */
- @REQ(get_next_thread)
-     obj_handle_t process;      /* process handle */
-@@ -3879,6 +3878,29 @@ struct handle_info
+@@ -3879,6 +3879,29 @@ struct handle_info
      obj_handle_t handle;       /* next thread handle */
  @END
  
@@ -444,11 +436,6 @@ index e86d3414247..03bc0aeb11e 100644
  
  /* Setup keyboard auto-repeat */
  @REQ(set_keyboard_repeat)
-@@ -3888,3 +3910,4 @@ struct handle_info
- @REPLY
-     int enable;                /* previous state of auto-repeat enable */
- @END
-+
 -- 
 2.43.0
 

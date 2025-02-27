@@ -49,7 +49,7 @@ index c386b748430..dc974a7e4d1 100644
 @@ -172,8 +161,6 @@ int do_fsync(void)
      {
          syscall( __NR_futex_waitv, NULL, 0, 0, NULL, 0 );
-         do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
+         do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
 -        if (getenv("WINEFSYNC_SPINCOUNT"))
 -            spincount = atoi(getenv("WINEFSYNC_SPINCOUNT"));
      }

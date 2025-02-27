@@ -39,7 +39,7 @@ index d3d4a3943e7..2e633c51792 100644
 @@ -90,6 +101,8 @@ int do_fsync(void)
          static const struct timespec zero;
          futex_wait_multiple( NULL, 0, &zero );
-         do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
+         do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
 +        if (getenv("WINEFSYNC_SPINCOUNT"))
 +            spincount = atoi(getenv("WINEFSYNC_SPINCOUNT"));
      }

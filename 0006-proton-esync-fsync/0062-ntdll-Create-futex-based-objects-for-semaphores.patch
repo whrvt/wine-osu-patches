@@ -110,7 +110,7 @@ index 00000000000..c1530300e18
 +    {
 +        static const struct timespec zero;
 +        futex_wait_multiple( NULL, 0, &zero );
-+        do_fsync_cached = getenv("WINEFSYNC") && atoi(getenv("WINEFSYNC")) && errno != ENOSYS;
++        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC")));
 +    }
 +
 +    return do_fsync_cached;
@@ -390,6 +390,18 @@ index 3a9fc76c2e4..08ee792d0ec 100644
 +
      if (do_esync())
          return esync_create_semaphore( handle, access, attr, initial, max );
+ 
+diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
+index a8e3712884f..245f158881e 100644
+--- a/dlls/ntdll/unix/esync.c
++++ b/dlls/ntdll/unix/esync.c
+@@ -51,6 +51,7 @@
+ 
+ #include "unix_private.h"
+ #include "esync.h"
++#include "fsync.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(esync);
  
 -- 
 2.47.0
