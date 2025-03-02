@@ -1,8 +1,8 @@
 # Patchset context
 
-wine commit: [wine-32a81ee2](https://gitlab.winehq.org/wine/wine/-/tree/32a81ee2135c67e393e49cce60ef8ebfbaefb531)
+wine commit: [wine-d17225a8](https://gitlab.winehq.org/wine/wine/-/tree/d17225a89cfb45988a89f60803756e7df4e68cc5)
 
-staging commit: [staging-35465516](https://gitlab.winehq.org/wine/wine-staging/-/tree/35465516857e3ad7c058364b66d520f2651e4c7e)
+staging commit: [staging-6f8931b3](https://gitlab.winehq.org/wine/wine-staging/-/tree/6f8931b39ab09c8217d8e94a379fea56ee8a0094)
 
 Staging exclude flags: `-W setupapi-DiskSpaceList -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
@@ -32,10 +32,6 @@ Also, silence pcm.c underrun errors.
 ### Type
 
 `boolean`
-
-### Valid values
-
-`0`
 
 ## STAGING_AUDIO_DURATION
 
@@ -91,6 +87,25 @@ server: Create server objects for futex-based synchronization objects.
 
 `numeric`
 
+## WINENTSYNC
+
+Patch: [0038-server-ntdll-Add-a-do_ntsync-helper.patch](0007-ntsync/0038-server-ntdll-Add-a-do_ntsync-helper.patch)
+
+### Commit message
+
+```
+server, ntdll: Add a do_ntsync helper.
+Also add WINENTSYNC=0 as a shorthand for WINE_DISABLE_FAST_SYNC=1.
+```
+
+### Description
+
+lightweight permission check, full get_linux_device breaks when done at early startup
+
+### Type
+
+`numeric`
+
 ## WINE_ALERT_SIMULATE_SCHED_QUANTUM
 
 Patch: [0137-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch](0006-proton-esync-fsync/0137-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch)
@@ -107,10 +122,6 @@ CW-Bug-Id: #21194
 
 `boolean`
 
-### Valid values
-
-`1`
-
 ## WINE_CUSTOM_FPS
 
 Patch: [winex11-Custom-frame-limiter-for-OpenGL.patch](9000-misc-additions/winex11-Custom-frame-limiter-for-OpenGL.patch)
@@ -125,10 +136,6 @@ winex11: Custom frame limiter for OpenGL
 
 `boolean`
 
-### Valid values
-
-`0`
-
 ## WINE_CUSTOM_FPS_BUSYTHRESH
 
 Patch: [winex11-Custom-frame-limiter-for-OpenGL.patch](9000-misc-additions/winex11-Custom-frame-limiter-for-OpenGL.patch)
@@ -136,24 +143,6 @@ Patch: [winex11-Custom-frame-limiter-for-OpenGL.patch](9000-misc-additions/winex
 ### Type
 
 `boolean`
-
-### Valid values
-
-`0`
-
-## WINE_DISABLE_FAST_SYNC
-
-Patch: [0028-server-Allow-disabling-in-process-synchronization-support.patch](0007-ntsync/0028-server-Allow-disabling-in-process-synchronization-support.patch)
-
-### Commit message
-
-```
-server: Allow disabling in-process synchronization support.
-```
-
-### Type
-
-`numeric`
 
 ## WINE_DISABLE_IME
 
@@ -229,10 +218,6 @@ CW-Bug-Id: #20155
 ### Type
 
 `boolean`
-
-### Valid values
-
-`1`
 
 ## WINE_INSTALL_ROOT_DEVICES
 
