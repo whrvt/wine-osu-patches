@@ -1,0 +1,77 @@
+From d6ffaf1bb6a57de5e3589e37c431c5177a5f3fe5 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 27 Feb 2025 18:00:23 -0800
+Subject: [PATCH] HACK: winewayland: Set EGL surfaces to be opaque.
+
+---
+ dlls/winewayland.drv/opengl.c          | 11 +++++++++++
+ dlls/winewayland.drv/wayland_surface.c |  2 +-
+ dlls/winewayland.drv/waylanddrv.h      |  1 +
+ 3 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index ad8b20cfb01..41a045a4346 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -231,6 +231,15 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, int for
+     }
+ 
+     gl->double_buffered = is_onscreen_format(format);
++    if (gl->double_buffered && gl->client->wl_surface)
++    {
++        gl->client->opaque = TRUE;
++        TRACE("setting hwnd=%p wl_surface=%p opaque\n", gl->hwnd, gl->client->wl_surface);
++        struct wl_region *region = wl_compositor_create_region(process_wayland.wl_compositor);
++        wl_region_add(region, 0, 0, INT32_MAX, INT32_MAX);
++        wl_surface_set_opaque_region(gl->client->wl_surface, region);
++        wl_region_destroy(region);
++    }
+ 
+     TRACE("hwnd=%p egl_surface=%p\n", gl->hwnd, gl->surface);
+ 
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index b8b673f398a..8638eb0d030 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -259,7 +259,12 @@ static void wayland_update_gl_drawable(HWND hwnd, struct wayland_gl_drawable *ne
+ 
+     pthread_mutex_lock(&gl_object_mutex);
+ 
+-    if ((old = find_drawable(hwnd, 0))) list_remove(&old->entry);
++    if ((old = find_drawable(hwnd, 0)))
++    {
++        if (old->client->opaque)
++            wl_surface_set_opaque_region(old->client->wl_surface, NULL);
++        list_remove(&old->entry);
++    }
+     if (new) list_add_head(&gl_drawables, &new->entry);
+     if (old && new)
+     {
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 018e4422512..9ad15428d51 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -903,7 +903,7 @@ struct wayland_client_surface *wayland_client_surface_create(HWND hwnd)
+     }
+     client->ref = 1;
+     client->hwnd = hwnd;
+-
++    client->opaque = FALSE;
+     client->wl_surface =
+         wl_compositor_create_surface(process_wayland.wl_compositor);
+     if (!client->wl_surface)
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 6da624eaf8f..0b8e1694e11 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -218,6 +218,7 @@ struct wayland_client_surface
+     LONG ref;
+     HWND hwnd;
+     HWND toplevel;
++    BOOL opaque;
+     struct wl_surface *wl_surface;
+     struct wl_subsurface *wl_subsurface;
+     struct wp_viewport *wp_viewport;
+-- 
+2.48.1
+

@@ -1,0 +1,64 @@
+From a3ed85a57cc48a1b106be11dd3e6361d3a4bc4a3 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 26 Feb 2025 21:59:07 -0800
+Subject: [PATCH] server: Load epoll_pwait2 dynamically if it's not available
+ at build time.
+
+An extension to https://gitlab.winehq.org/wine/wine/-/merge_requests/7392 to
+enable the use of epoll_pwait2 for e.g. SLR SDK builds.
+---
+ server/fd.c | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/server/fd.c b/server/fd.c
+index ed4cf3fab3c..7f8dfcd9e2a 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -638,6 +638,22 @@ static inline void remove_epoll_user( struct fd *fd, int user )
+     }
+ }
+ 
++__attribute__((weak)) int epoll_pwait2( int, struct epoll_event *, int, const struct timespec *, const sigset_t * );
++
++static int epw2_trmpln( int epfd, struct epoll_event *events, int maxevents, int _,
++                        const struct timespec *timeout )
++{
++    return epoll_pwait2( epfd, events, maxevents, timeout, NULL );
++}
++
++static int ew_trmpln( int epfd, struct epoll_event *events, int maxevents, int timeout_ms,
++                      const struct timespec *_ )
++{
++    return epoll_wait( epfd, events, maxevents, timeout_ms );
++}
++
++static int (*epoll_wait_redir)( int, struct epoll_event *, int, int, const struct timespec * );
++
+ static inline void main_loop_epoll(void)
+ {
+     int i, ret, timeout;
+@@ -651,6 +667,8 @@ static inline void main_loop_epoll(void)
+ 
+     if (epoll_fd == -1) return;
+ 
++    epoll_wait_redir = epoll_pwait2 ? epw2_trmpln : ew_trmpln;
++
+     while (active_users)
+     {
+         timeout = get_next_timeout( &ts );
+@@ -658,11 +676,7 @@ static inline void main_loop_epoll(void)
+         if (!active_users) break;  /* last user removed by a timeout */
+         if (epoll_fd == -1) break;  /* an error occurred with epoll */
+ 
+-#ifdef HAVE_EPOLL_PWAIT2
+-        ret = epoll_pwait2( epoll_fd, events, ARRAY_SIZE( events ), timeout == -1 ? NULL : &ts, NULL );
+-#else
+-        ret = epoll_wait( epoll_fd, events, ARRAY_SIZE( events ), timeout );
+-#endif
++        ret = epoll_wait_redir( epoll_fd, events, ARRAY_SIZE( events ), timeout, timeout == -1 ? NULL : &ts );
+ 
+         set_current_time();
+ 
+-- 
+2.48.1
+

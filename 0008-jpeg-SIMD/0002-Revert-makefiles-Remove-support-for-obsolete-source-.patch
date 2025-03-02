@@ -327,7 +327,7 @@ index f3f9329fe63..1f4d3ad6d01 100755
 +            push @{${$make}{"=SOURCES"}}, $name;
 +            next;
          }
--        elsif ($name !~ /\.(c|in|inl|l|m|mc|po|rc|rh|sfd|svg|x|y)$/)
+-        elsif ($name !~ /\.(S|c|in|inl|l|m|mc|po|rc|rh|sfd|svg|x|y)$/)
 +        elsif ($dir ne "loader")  # loader dir contains misc files
          {
 -            next unless $dir eq "loader";  # loader dir contains misc files
