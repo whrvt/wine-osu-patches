@@ -253,7 +253,7 @@ index 5afe6c34fb3..9ee13307a13 100644
      { "wglSwapIntervalEXT", "WGL_EXT_swap_control" },
  };
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index 93f362b7f40..3372ab2df8b 100644
+index 93f362b7f40..8f9d1d50043 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -1000,6 +1000,15 @@ NTSTATUS wgl_wglGetProcAddress( void *args )
@@ -297,7 +297,7 @@ index 93f362b7f40..3372ab2df8b 100644
 +    {
 +        .teb = get_teb64(params32->teb),
 +        .hdc = ULongToPtr(params32->hdc),
-+        .ctx = ULongToPtr(params32->ctx)
++        .ctx = get_teb64(params32->teb)->glContext
 +    };
 +    NTSTATUS status;
 +    status = ext_wglSwapBuffers( &params );
@@ -485,7 +485,7 @@ index a83ec8fecc3..74d4b6390e2 100644
      }
  
 diff --git a/dlls/wined3d/swapchain.c b/dlls/wined3d/swapchain.c
-index c0721067bd1..09497e63389 100644
+index 4e71f75884c..f7ee0ec781b 100644
 --- a/dlls/wined3d/swapchain.c
 +++ b/dlls/wined3d/swapchain.c
 @@ -625,7 +625,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
@@ -598,7 +598,7 @@ index ec97c224e99..b5b45f578bd 100644
  
  struct opengl_funcs *get_glx_driver( UINT version )
 diff --git a/include/wine/wgl_driver.h b/include/wine/wgl_driver.h
-index b4bc5abf658..a8a7fc272cd 100644
+index b4bc5abf658..4cedd8c3135 100644
 --- a/include/wine/wgl_driver.h
 +++ b/include/wine/wgl_driver.h
 @@ -7,7 +7,7 @@
