@@ -318,6 +318,21 @@ add WINE_WAYLAND_DISPLAY_INDEX
 
 `numeric`
 
+## WINE_WAYLAND_OPAQUE_SURFACE_HACK
+
+Patch: [0100-HACK-winewayland-Set-EGL-surfaces-to-be-opaque.patch](0009-windowing-system-integration/0001-misc/0100-HACK-winewayland-Set-EGL-surfaces-to-be-opaque.patch)
+
+### Commit message
+
+```
+HACK: winewayland: Set EGL surfaces to be opaque.
+Extremely WIP/hacky, needs "WINE_WAYLAND_OPAQUE_SURFACE_HACK=1" to enable.
+```
+
+### Type
+
+`numeric`
+
 ## XDG_CACHE_HOME
 
 Patch: [ps0341-appwiz.cpl-Try-getting-the-cache-directory-from-an.patch](0013-server-optimization/0001-misc/ps0341-appwiz.cpl-Try-getting-the-cache-directory-from-an.patch)
