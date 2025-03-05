@@ -133,7 +133,7 @@ jobs:
 
       - name: Initial system update
         if: steps.should_run.outputs.run == 'true'
-        run: pacman -Syu --noconfirm ccache git nodejs npm clang mold llvm-libs llvm lld polly mingw-w64-binutils mingw-w64-gcc mingw-w64-crt mingw-w64-headers mingw-w64-winpthreads lib32-llvm-libs
+        run: pacman -Syu --noconfirm ccache git nodejs npm gcc gcc-libs lib32-gcc-libs clang mold llvm-libs llvm lld polly mingw-w64-binutils mingw-w64-gcc mingw-w64-crt mingw-w64-headers mingw-w64-winpthreads lib32-llvm-libs
 
       - name: Get build metadata
         if: steps.should_run.outputs.run == 'true'
@@ -297,17 +297,6 @@ jobs:
           EOF
 
           echo -e "\n[bin]\nPreBuildCommand = customizepkg --modify" >> /etc/paru.conf
-
-      - name: Install llvm-mingw-w64-toolchain-msvcrt-bin
-        if: steps.should_run.outputs.run == 'true'
-        run: |
-          sudo -u builder bash << EOF
-          if ! paru -Qiq llvm-mingw-w64-toolchain-msvcrt-bin 1>/dev/null; then
-            paru -S --noconfirm llvm-mingw-w64-toolchain-msvcrt-bin
-          else
-            echo "llvm-mingw-w64-toolchain-msvcrt-bin already installed, skipping build"
-          fi
-          EOF
 
       - name: Build packages with compiler configuration
         if: steps.should_run.outputs.run == 'true'

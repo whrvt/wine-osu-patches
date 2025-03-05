@@ -169,16 +169,6 @@ jobs:
 
         echo -e "\n[bin]\nPreBuildCommand = customizepkg --modify" >> /etc/paru.conf
 
-    - name: Install llvm-mingw-w64-toolchain-msvcrt-bin
-      run: |
-        sudo -u builder bash << EOF
-        if ! paru -Qiq llvm-mingw-w64-toolchain-msvcrt-bin 1>/dev/null; then
-          paru -S --noconfirm llvm-mingw-w64-toolchain-msvcrt-bin
-        else
-          echo "llvm-mingw-w64-toolchain-msvcrt-bin already installed, skipping build"
-        fi
-        EOF
-
     - name: Build AUR packages
       run: |
         sudo -u builder bash << EOF

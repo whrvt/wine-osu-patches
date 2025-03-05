@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-d17225a8](https://gitlab.winehq.org/wine/wine/-/tree/d17225a89cfb45988a89f60803756e7df4e68cc5)
+wine commit: [wine-0530ef6f](https://gitlab.winehq.org/wine/wine/-/tree/0530ef6facaca32f2342cb0a4d15f3cce8023b6d)
 
-staging commit: [staging-6f8931b3](https://gitlab.winehq.org/wine/wine-staging/-/tree/6f8931b39ab09c8217d8e94a379fea56ee8a0094)
+staging commit: [staging-0682c264](https://gitlab.winehq.org/wine/wine-staging/-/tree/0682c264964498dae7934cbc6aeac5f1dcd52807)
 
-Staging exclude flags: `-W setupapi-DiskSpaceList -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
+Staging exclude flags: `-W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
 # Environment variables
 
@@ -312,21 +312,6 @@ Patch: [add-WINE_WAYLAND_DISPLAY_INDEX.patch](9000-misc-additions/add-WINE_WAYLA
 
 ```
 add WINE_WAYLAND_DISPLAY_INDEX
-```
-
-### Type
-
-`numeric`
-
-## WINE_WAYLAND_OPAQUE_SURFACE_HACK
-
-Patch: [0100-HACK-winewayland-Set-EGL-surfaces-to-be-opaque.patch](0009-windowing-system-integration/0001-misc/0100-HACK-winewayland-Set-EGL-surfaces-to-be-opaque.patch)
-
-### Commit message
-
-```
-HACK: winewayland: Set EGL surfaces to be opaque.
-Extremely WIP/hacky, needs "WINE_WAYLAND_OPAQUE_SURFACE_HACK=1" to enable.
 ```
 
 ### Type

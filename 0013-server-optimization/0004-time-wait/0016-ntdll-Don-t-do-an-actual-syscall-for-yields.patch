@@ -18,7 +18,7 @@ index 12e1777262a..e7b23a0df97 100644
  {
 -    return (NtYieldExecution() != STATUS_NO_YIELD_PERFORMED);
 +    UINT i;
-+    for (i=0;i<5;++i) YieldProcessor();
++    for (i=0;i<20;++i) YieldProcessor();
 +    return STATUS_SUCCESS;
  }
  
