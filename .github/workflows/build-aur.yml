@@ -84,7 +84,7 @@ jobs:
 
     - name: Initial system update and Node.js installation
       run: |
-        pacman -Syu --noconfirm ccache git nodejs npm
+        pacman -Syu --noconfirm ccache git nodejs npm gcc gcc-libs lib32-gcc-libs clang mold llvm-libs llvm lld polly mingw-w64-binutils mingw-w64-gcc mingw-w64-crt mingw-w64-headers mingw-w64-winpthreads lib32-llvm-libs
 
     - name: Import GPG Key
       uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5
