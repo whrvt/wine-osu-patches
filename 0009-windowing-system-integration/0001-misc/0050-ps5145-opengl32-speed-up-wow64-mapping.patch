@@ -21,32 +21,32 @@ index 453a9824046..b1e0e961e2e 100644
 +static void gl_buffer_sub_data( TEB *teb, GLenum target, GLintptr offset, GLsizeiptr size, const void *data )
 +{
 +    const struct opengl_funcs *funcs = teb->glTable;
-+    typeof(*funcs->ext.p_glBufferSubData) *func;
-+    if (!(func = funcs->ext.p_glBufferSubData)) func = (void *)funcs->wgl.p_wglGetProcAddress( "glBufferSubData" );
++    typeof(*funcs->p_glBufferSubData) *func;
++    if (!(func = funcs->p_glBufferSubData)) func = (void *)funcs->p_wglGetProcAddress( "glBufferSubData" );
 +    if (func) func( target, offset, size, data );
 +}
 +
 +static void gl_named_buffer_sub_data( TEB *teb, GLint buffer, GLintptr offset, GLsizeiptr size, const void *data )
 +{
 +    const struct opengl_funcs *funcs = teb->glTable;
-+    typeof(*funcs->ext.p_glNamedBufferSubData) *func;
-+    if (!(func = funcs->ext.p_glNamedBufferSubData)) func = (void *)funcs->wgl.p_wglGetProcAddress( "glNamedBufferSubData" );
++    typeof(*funcs->p_glNamedBufferSubData) *func;
++    if (!(func = funcs->p_glNamedBufferSubData)) func = (void *)funcs->p_wglGetProcAddress( "glNamedBufferSubData" );
 +    if (func) func( buffer, offset, size, data );
 +}
 +
 +static void gl_get_buffer_sub_data( TEB *teb, GLenum target, GLintptr offset, GLsizeiptr size, void *data )
 +{
 +    const struct opengl_funcs *funcs = teb->glTable;
-+    typeof(*funcs->ext.p_glGetBufferSubData) *func;
-+    if (!(func = funcs->ext.p_glGetBufferSubData)) func = (void *)funcs->wgl.p_wglGetProcAddress( "glGetBufferSubData" );
++    typeof(*funcs->p_glGetBufferSubData) *func;
++    if (!(func = funcs->p_glGetBufferSubData)) func = (void *)funcs->p_wglGetProcAddress( "glGetBufferSubData" );
 +    if (func) func( target, offset, size, data );
 +}
 +
 +static void gl_get_named_buffer_sub_data( TEB *teb, GLint buffer, GLintptr offset, GLsizeiptr size, void *data )
 +{
 +    const struct opengl_funcs *funcs = teb->glTable;
-+    typeof(*funcs->ext.p_glGetNamedBufferSubData) *func;
-+    if (!(func = funcs->ext.p_glGetNamedBufferSubData)) func = (void *)funcs->wgl.p_wglGetProcAddress( "glGetNamedBufferSubData" );
++    typeof(*funcs->p_glGetNamedBufferSubData) *func;
++    if (!(func = funcs->p_glGetNamedBufferSubData)) func = (void *)funcs->p_wglGetProcAddress( "glGetNamedBufferSubData" );
 +    if (func) func( buffer, offset, size, data );
 +}
 +

@@ -1,0 +1,409 @@
+From ea61e081974631d9d28150596bbbc1182c9e344a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 6 Mar 2025 13:33:50 +0100
+Subject: [PATCH] server: Move the window full handle to the shared memory.
+
+---
+ server/protocol.def |   2 +-
+ server/window.c     | 124 ++++++++++++++++++++++----------------------
+ 2 files changed, 64 insertions(+), 62 deletions(-)
+
+diff --git a/server/protocol.def b/server/protocol.def
+index 44e952ecc91..2d6c712d8dc 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1009,7 +1009,7 @@ typedef volatile struct
+ 
+ typedef volatile struct
+ {
+-    int                  placeholder;
++    user_handle_t        handle;           /* full handle for this window */
+ } window_shm_t;
+ 
+ typedef volatile union
+diff --git a/server/window.c b/server/window.c
+index 1fe681b5d56..9357536aebf 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -61,7 +61,6 @@ struct window
+     struct list      children;        /* list of children in Z-order */
+     struct list      unlinked;        /* list of children not linked in the Z-order list */
+     struct list      entry;           /* entry in parent's children list */
+-    user_handle_t    handle;          /* full handle for this window */
+     struct thread   *thread;          /* thread owning the window */
+     struct desktop  *desktop;         /* desktop that the window belongs to */
+     struct window_class *class;       /* window class */
+@@ -157,14 +156,14 @@ static void window_dump( struct object *obj, int verbose )
+ {
+     struct window *win = (struct window *)obj;
+     assert( obj->ops == &window_ops );
+-    fprintf( stderr, "window %p handle %x\n", win, win->handle );
++    fprintf( stderr, "window %p handle %x\n", win, win->shared->handle );
+ }
+ 
+ static void window_destroy( struct object *obj )
+ {
+     struct window *win = (struct window *)obj;
+ 
+-    assert( !win->handle );
++    assert( !win->shared->handle );
+ 
+     if (win->parent)
+     {
+@@ -375,7 +374,7 @@ static int link_window( struct window *win, struct window *previous )
+             {
+                 struct window *next = LIST_ENTRY( entry, struct window, entry );
+                 if (!(next->ex_style & WS_EX_TOPMOST)) break;
+-                if (next->handle == win->owner)  /* keep it above owner */
++                if (next->shared->handle == win->owner)  /* keep it above owner */
+                 {
+                     win->ex_style |= WS_EX_TOPMOST;
+                     break;
+@@ -565,7 +564,7 @@ static void detach_window_thread( struct window *win )
+     {
+         if (win->update_region) inc_queue_paint_count( thread, -1 );
+         if (win->paint_flags & PAINT_INTERNAL) inc_queue_paint_count( thread, -1 );
+-        queue_cleanup_window( thread, win->handle );
++        queue_cleanup_window( thread, win->shared->handle );
+     }
+     assert( thread->desktop_users > 0 );
+     thread->desktop_users--;
+@@ -597,7 +596,7 @@ void post_desktop_message( struct desktop *desktop, unsigned int message,
+                            lparam_t wparam, lparam_t lparam )
+ {
+     struct window *win = desktop->top_window;
+-    if (win && win->thread) post_message( win->handle, message, wparam, lparam );
++    if (win && win->thread) post_message( win->shared->handle, message, wparam, lparam );
+ }
+ 
+ /* create a new window structure (note: the window is not linked in the window tree) */
+@@ -608,6 +607,7 @@ static struct window *create_window( struct window *parent, struct window *owner
+     struct window *win = NULL;
+     struct desktop *desktop;
+     struct window_class *class;
++    user_handle_t handle = 0;
+ 
+     if (!(desktop = get_thread_desktop( current, DESKTOP_CREATEWINDOW ))) return NULL;
+ 
+@@ -640,7 +640,7 @@ static struct window *create_window( struct window *parent, struct window *owner
+ 
+     if (!(win = alloc_object( &window_ops ))) goto failed;
+     win->parent         = parent ? (struct window *)grab_object( parent ) : NULL;
+-    win->owner          = owner ? owner->handle : 0;
++    win->owner          = owner ? owner->shared->handle : 0;
+     win->thread         = current;
+     win->desktop        = desktop;
+     win->class          = class;
+@@ -672,9 +672,12 @@ static struct window *create_window( struct window *parent, struct window *owner
+     list_init( &win->unlinked );
+ 
+     if (!(win->shared = alloc_shared_object())) goto failed;
++    if (!(handle = alloc_user_handle( win, USER_WINDOW ))) goto failed;
++    win->last_active = win->shared->handle;
++
+     SHARED_WRITE_BEGIN( win->shared, window_shm_t )
+     {
+-        shared->placeholder = 0;
++        shared->handle = handle;
+     }
+     SHARED_WRITE_END;
+ 
+@@ -684,8 +687,6 @@ static struct window *create_window( struct window *parent, struct window *owner
+         memset( win->extra_bytes, 0, extra_bytes );
+         win->nb_extra_bytes = extra_bytes;
+     }
+-    if (!(win->handle = alloc_user_handle( win, USER_WINDOW ))) goto failed;
+-    win->last_active = win->handle;
+ 
+     /* if parent belongs to a different thread and the window isn't */
+     /* top-level, attach the two threads */
+@@ -720,15 +721,8 @@ static struct window *create_window( struct window *parent, struct window *owner
+     return win;
+ 
+ failed:
+-    if (win)
+-    {
+-        if (win->handle)
+-        {
+-            free_user_handle( win->handle );
+-            win->handle = 0;
+-        }
+-        release_object( win );
+-    }
++    if (win) release_object( win );
++    if (handle) free_user_handle( handle );
+     release_object( desktop );
+     release_class( class );
+     return NULL;
+@@ -793,7 +787,7 @@ int make_window_active( user_handle_t window )
+     owner = win;
+     while (owner)
+     {
+-        owner->last_active = win->handle;
++        owner->last_active = win->shared->handle;
+         owner = get_user_object( owner->owner, USER_WINDOW );
+     }
+     return 1;
+@@ -922,7 +916,7 @@ static void append_window_to_list( struct window *win, struct thread *thread, at
+ {
+     if (thread && win->thread != thread) return;
+     if (atom && get_class_atom( win->class ) != atom) return;
+-    if (*count < max_count) handles[*count] = win->handle;
++    if (*count < max_count) handles[*count] = win->shared->handle;
+     (*count)++;
+ }
+ 
+@@ -1011,7 +1005,7 @@ static int get_window_children_from_point( struct window *parent, int x, int y,
+         }
+ 
+         /* now add window to the array */
+-        if (!add_handle_to_array( array, ptr->handle )) return 0;
++        if (!add_handle_to_array( array, ptr->shared->handle )) return 0;
+     }
+     return 1;
+ }
+@@ -1030,9 +1024,9 @@ user_handle_t shallow_window_from_point( struct desktop *desktop, int x, int y )
+         int x_child = x, y_child = y;
+ 
+         if (!is_point_in_window( ptr, &x_child, &y_child, 0 )) continue;  /* skip it */
+-        return ptr->handle;
++        return ptr->shared->handle;
+     }
+-    return desktop->top_window->handle;
++    return desktop->top_window->shared->handle;
+ }
+ 
+ /* return thread of top-most window containing point (in absolute raw coords) */
+@@ -1072,7 +1066,7 @@ static int all_windows_from_point( struct window *top, int x, int y, unsigned in
+         if (!get_window_children_from_point( top, x, y, array )) return 0;
+     }
+     /* now add window to the array */
+-    if (!add_handle_to_array( array, top->handle )) return 0;
++    if (!add_handle_to_array( array, top->shared->handle )) return 0;
+     return 1;
+ }
+ 
+@@ -1137,13 +1131,13 @@ user_handle_t find_window_to_repaint( user_handle_t parent, struct thread *threa
+     {
+         /* check that it is a child of the specified parent */
+         for (ptr = win; ptr; ptr = ptr->parent)
+-            if (ptr->handle == parent) break;
++            if (ptr->shared->handle == parent) break;
+         /* otherwise don't return any window, we don't repaint a child before its parent */
+         if (!ptr) win = NULL;
+     }
+     if (!win) return 0;
+     win->paint_flags &= ~PAINT_INTERNAL;
+-    return win->handle;
++    return win->shared->handle;
+ }
+ 
+ 
+@@ -2106,8 +2100,9 @@ static void set_window_region( struct window *win, struct region *region, int re
+ void free_window_handle( struct window *win )
+ {
+     struct window *child, *next;
++    user_handle_t handle;
+ 
+-    assert( win->handle );
++    assert( win->shared->handle );
+ 
+     /* hide the window */
+     if (is_visible(win))
+@@ -2127,19 +2122,19 @@ void free_window_handle( struct window *win )
+     /* destroy all children */
+     LIST_FOR_EACH_ENTRY_SAFE( child, next, &win->children, struct window, entry )
+     {
+-        if (!child->handle) continue;
++        if (!child->shared->handle) continue;
+         if (!win->thread || !child->thread || win->thread == child->thread)
+             free_window_handle( child );
+         else
+-            send_notify_message( child->handle, WM_WINE_DESTROYWINDOW, 0, 0 );
++            send_notify_message( child->shared->handle, WM_WINE_DESTROYWINDOW, 0, 0 );
+     }
+     LIST_FOR_EACH_ENTRY_SAFE( child, next, &win->children, struct window, entry )
+     {
+-        if (!child->handle) continue;
++        if (!child->shared->handle) continue;
+         if (!win->thread || !child->thread || win->thread == child->thread)
+             free_window_handle( child );
+         else
+-            send_notify_message( child->handle, WM_WINE_DESTROYWINDOW, 0, 0 );
++            send_notify_message( child->shared->handle, WM_WINE_DESTROYWINDOW, 0, 0 );
+     }
+ 
+     /* reset global window pointers, if the corresponding window is destroyed */
+@@ -2147,8 +2142,8 @@ void free_window_handle( struct window *win )
+     if (win == win->desktop->shell_listview) win->desktop->shell_listview = NULL;
+     if (win == win->desktop->progman_window) win->desktop->progman_window = NULL;
+     if (win == win->desktop->taskman_window) win->desktop->taskman_window = NULL;
+-    free_hotkeys( win->desktop, win->handle );
+-    cleanup_clipboard_window( win->desktop, win->handle );
++    free_hotkeys( win->desktop, win->shared->handle );
++    cleanup_clipboard_window( win->desktop, win->shared->handle );
+     destroy_properties( win );
+     if (is_desktop_window(win))
+     {
+@@ -2159,14 +2154,21 @@ void free_window_handle( struct window *win )
+     }
+     else if (is_desktop_window( win->parent ))
+     {
+-        post_message( win->parent->handle, WM_PARENTNOTIFY, WM_DESTROY, win->handle );
++        post_message( win->parent->shared->handle, WM_PARENTNOTIFY, WM_DESTROY, win->shared->handle );
+     }
+ 
+     detach_window_thread( win );
+ 
+     if (win->parent) set_parent_window( win, NULL );
+-    free_user_handle( win->handle );
+-    win->handle = 0;
++
++    SHARED_WRITE_BEGIN( win->shared, window_shm_t )
++    {
++        handle = win->shared->handle;
++        shared->handle = 0;
++    }
++    SHARED_WRITE_END;
++    free_user_handle( handle );
++
+     release_object( win );
+ }
+ 
+@@ -2217,8 +2219,8 @@ DECL_HANDLER(create_window)
+     win->ex_style = req->ex_style;
+ 
+     reply->locator     = get_shared_object_locator( win->shared );
+-    reply->handle      = win->handle;
+-    reply->parent      = win->parent ? win->parent->handle : 0;
++    reply->handle      = win->shared->handle;
++    reply->parent      = win->parent ? win->parent->shared->handle : 0;
+     reply->owner       = win->owner;
+     reply->extra       = win->nb_extra_bytes;
+     reply->dpi_context = win->dpi_context;
+@@ -2239,8 +2241,8 @@ DECL_HANDLER(set_parent)
+         set_error( STATUS_INVALID_PARAMETER );
+         return;
+     }
+-    reply->old_parent  = win->parent->handle;
+-    reply->full_parent = parent ? parent->handle : 0;
++    reply->old_parent  = win->parent->shared->handle;
++    reply->full_parent = parent ? parent->shared->handle : 0;
+     set_parent_window( win, parent );
+     reply->dpi_context = win->dpi_context;
+ }
+@@ -2295,12 +2297,12 @@ DECL_HANDLER(get_desktop_window)
+ 
+     if ((win = desktop->top_window))
+     {
+-        reply->top_window = win->handle;
++        reply->top_window = win->shared->handle;
+         reply->top_locator = get_shared_object_locator( win->shared );
+     }
+     if ((win = desktop->msg_window))
+     {
+-        reply->msg_window = win->handle;
++        reply->msg_window = win->shared->handle;
+         reply->msg_locator = get_shared_object_locator( win->shared );
+     }
+     release_object( desktop );
+@@ -2332,7 +2334,7 @@ DECL_HANDLER(set_window_owner)
+     }
+ 
+     reply->prev_owner = win->owner;
+-    reply->full_owner = win->owner = owner ? owner->handle : 0;
++    reply->full_owner = win->owner = owner ? owner->shared->handle : 0;
+ }
+ 
+ 
+@@ -2343,8 +2345,8 @@ DECL_HANDLER(get_window_info)
+ 
+     if (!win) return;
+ 
+-    reply->full_handle = win->handle;
+-    reply->last_active = win->handle;
++    reply->full_handle = win->shared->handle;
++    reply->last_active = win->shared->handle;
+     reply->is_unicode  = win->is_unicode;
+     reply->dpi_context = win->dpi_context;
+ 
+@@ -2424,7 +2426,7 @@ DECL_HANDLER(get_window_parents)
+     if (len && ((data = set_reply_data_size( len ))))
+     {
+         for (ptr = win->parent; ptr && len; ptr = ptr->parent, len -= sizeof(*data))
+-            *data++ = ptr->handle;
++            *data++ = ptr->shared->handle;
+     }
+ }
+ 
+@@ -2566,18 +2568,18 @@ DECL_HANDLER(get_window_tree)
+     if (win->parent)
+     {
+         struct window *parent = win->parent;
+-        reply->parent = parent->handle;
++        reply->parent = parent->shared->handle;
+         reply->owner  = win->owner;
+         if (win->is_linked)
+         {
+-            if ((ptr = get_next_window( win ))) reply->next_sibling = ptr->handle;
+-            if ((ptr = get_prev_window( win ))) reply->prev_sibling = ptr->handle;
++            if ((ptr = get_next_window( win ))) reply->next_sibling = ptr->shared->handle;
++            if ((ptr = get_prev_window( win ))) reply->prev_sibling = ptr->shared->handle;
+         }
+-        if ((ptr = get_first_child( parent ))) reply->first_sibling = ptr->handle;
+-        if ((ptr = get_last_child( parent ))) reply->last_sibling = ptr->handle;
++        if ((ptr = get_first_child( parent ))) reply->first_sibling = ptr->shared->handle;
++        if ((ptr = get_last_child( parent ))) reply->last_sibling = ptr->shared->handle;
+     }
+-    if ((ptr = get_first_child( win ))) reply->first_child = ptr->handle;
+-    if ((ptr = get_last_child( win ))) reply->last_child = ptr->handle;
++    if ((ptr = get_first_child( win ))) reply->first_child = ptr->shared->handle;
++    if ((ptr = get_last_child( win ))) reply->last_child = ptr->shared->handle;
+ }
+ 
+ 
+@@ -2668,7 +2670,7 @@ DECL_HANDLER(set_window_pos)
+     reply->new_ex_style = win->ex_style;
+ 
+     top = get_top_clipping_window( win );
+-    if (is_visible( top ) && (top->paint_flags & PAINT_HAS_SURFACE)) reply->surface_win = top->handle;
++    if (is_visible( top ) && (top->paint_flags & PAINT_HAS_SURFACE)) reply->surface_win = top->shared->handle;
+ }
+ 
+ 
+@@ -2793,7 +2795,7 @@ DECL_HANDLER(get_visible_region)
+         data = get_region_data_and_free( region, get_reply_max_size(), &reply->total_size );
+         if (data) set_reply_data_ptr( data, reply->total_size );
+     }
+-    reply->top_win  = top->handle;
++    reply->top_win  = top->shared->handle;
+     reply->top_rect = top->surface_rect;
+ 
+     if (!is_desktop_window(win))
+@@ -2908,7 +2910,7 @@ DECL_HANDLER(get_update_region)
+     }
+ 
+     reply->flags = get_window_update_flags( win, from_child, flags, &win );
+-    reply->child = win->handle;
++    reply->child = win->shared->handle;
+ 
+     if (flags & UPDATE_NOREGION) return;
+ 
+@@ -3127,10 +3129,10 @@ DECL_HANDLER(set_desktop_shell_windows)
+     new_progman_window = desktop->progman_window;
+     new_taskman_window = desktop->taskman_window;
+ 
+-    reply->old_shell_window   = new_shell_window ? new_shell_window->handle : 0;
+-    reply->old_shell_listview = new_shell_listview ? new_shell_listview->handle : 0;
+-    reply->old_progman_window = new_progman_window ? new_progman_window->handle : 0;
+-    reply->old_taskman_window = new_taskman_window ? new_taskman_window->handle : 0;
++    reply->old_shell_window   = new_shell_window ? new_shell_window->shared->handle : 0;
++    reply->old_shell_listview = new_shell_listview ? new_shell_listview->shared->handle : 0;
++    reply->old_progman_window = new_progman_window ? new_progman_window->shared->handle : 0;
++    reply->old_taskman_window = new_taskman_window ? new_taskman_window->shared->handle : 0;
+ 
+     if (req->flags & SET_DESKTOP_SHELL_WINDOWS)
+     {
+-- 
+GitLab
+

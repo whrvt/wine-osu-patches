@@ -1,0 +1,53 @@
+From c5b94d7cd87d05762dd520db308ea93471ff1921 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 6 Mar 2025 16:05:37 -0600
+Subject: [PATCH] ntdll: Do not fail NtCreateUserProcess() if requested access
+ doesn't have PROCESS_CREATE_THREAD.
+
+---
+ dlls/ntdll/unix/process.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 533940280e6..f734d515c94 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -719,7 +719,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
+ {
+     unsigned int status;
+     BOOL success = FALSE;
+-    HANDLE file_handle, process_info = 0, process_handle = 0, thread_handle = 0;
++    HANDLE file_handle, process_info = 0, process_handle = 0, thread_handle = 0, temp_handle;
+     struct object_attributes *objattr;
+     data_size_t attr_len;
+     char *winedebug = NULL;
+@@ -894,9 +894,17 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
+ 
+     if ((status = alloc_object_attributes( thread_attr, &objattr, &attr_len ))) goto done;
+ 
++    if (process_access & (MAXIMUM_ALLOWED | PROCESS_CREATE_THREAD)) temp_handle = process_handle;
++    else
++    {
++        if ((status = NtDuplicateObject( GetCurrentProcess(), process_handle, GetCurrentProcess(), &temp_handle,
++                                         MAXIMUM_ALLOWED, 0, 0 )))
++            goto done;
++    }
++
+     SERVER_START_REQ( new_thread )
+     {
+-        req->process    = wine_server_obj_handle( process_handle );
++        req->process    = wine_server_obj_handle( temp_handle );
+         req->access     = thread_access;
+         req->flags      = thread_flags;
+         req->request_fd = -1;
+@@ -909,6 +917,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
+     }
+     SERVER_END_REQ;
+     free( objattr );
++    if (temp_handle != process_handle) NtClose( temp_handle );
+     if (status) goto done;
+ 
+     /* create the child process */
+-- 
+GitLab
+

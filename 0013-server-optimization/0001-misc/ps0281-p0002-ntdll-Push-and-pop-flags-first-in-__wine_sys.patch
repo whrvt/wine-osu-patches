@@ -1,0 +1,54 @@
+From 071567ef70ff6b769b6ff3401a77925148821314 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 28 Sep 2021 10:53:36 +0200
+Subject: [PATCH 2/4] ntdll: Push and pop flags first in
+ __wine_syscall_dispatcher.
+
+So that we don't unnecessarily overwrite the return address.
+---
+ dlls/ntdll/unix/signal_i386.c   | 4 ++--
+ dlls/ntdll/unix/signal_x86_64.c | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
+index 12815810133..372b8754f4a 100644
+--- a/dlls/ntdll/unix/signal_i386.c
++++ b/dlls/ntdll/unix/signal_i386.c
+@@ -2623,13 +2623,13 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
+ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
+                    "movl %fs:0x1f8,%ecx\n\t"       /* x86_thread_data()->syscall_frame */
+                    "movw $0,0x02(%ecx)\n\t"        /* frame->restore_flags */
+-                   "popl 0x08(%ecx)\n\t"           /* frame->eip */
+-                   __ASM_CFI(".cfi_adjust_cfa_offset -4\n\t")
+                    __ASM_CFI_REG_IS_AT1(eip, ecx, 0x08)
+                    "pushfl\n\t"
+                    __ASM_CFI(".cfi_adjust_cfa_offset 4\n\t")
+                    "popl 0x04(%ecx)\n\t"           /* frame->eflags */
+                    __ASM_CFI(".cfi_adjust_cfa_offset -4\n\t")
++                   "popl 0x08(%ecx)\n\t"           /* frame->eip */
++                   __ASM_CFI(".cfi_adjust_cfa_offset -4\n\t")
+                    __ASM_GLOBL(__ASM_NAME("__wine_syscall_dispatcher_prolog_end")) "\n"
+                    __ASM_NAME("__wine_syscall_dispatcher_prolog_end") ":\n\t"
+                    "movl %esp,0x0c(%ecx)\n\t"      /* frame->esp */
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2854,13 +2854,13 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
+ #else
+                    "movq %gs:0x328,%rcx\n\t"       /* amd64_thread_data()->syscall_frame */
+ #endif
+-                   "popq 0x70(%rcx)\n\t"           /* frame->rip */
+                    __ASM_CFI(".cfi_adjust_cfa_offset -8\n\t")
+                    __ASM_CFI_REG_IS_AT2(rip, rcx, 0xf0,0x00)
+                    "pushfq\n\t"
+                    __ASM_CFI(".cfi_adjust_cfa_offset 8\n\t")
+                    "popq 0x80(%rcx)\n\t"
+                    __ASM_CFI(".cfi_adjust_cfa_offset -8\n\t")
++                   "popq 0x70(%rcx)\n\t"           /* frame->rip */
+                    "movl $0,0xb4(%rcx)\n\t"        /* frame->restore_flags */
+                    ".globl " __ASM_NAME("__wine_syscall_dispatcher_prolog_end") "\n"
+                    __ASM_NAME("__wine_syscall_dispatcher_prolog_end") ":\n\t"
+-- 
+0.0.0
+

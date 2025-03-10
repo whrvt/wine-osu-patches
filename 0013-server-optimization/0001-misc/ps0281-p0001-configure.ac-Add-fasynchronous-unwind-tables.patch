@@ -1,0 +1,27 @@
+From bd9eeb0897b05f44cf9a9b51cde9d553033658ea Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 28 Sep 2021 10:49:53 +0200
+Subject: [PATCH 1/4] configure.ac: Add -fasynchronous-unwind-tables to
+ CROSSLDFLAGS.
+
+When available. Otherwise the output_cfi calls in winebuild, in the
+syscall thunks for instance, are just no-op.
+---
+ configure.ac | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/configure.ac b/configure.ac
+index 11111111111..11111111111 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2048,6 +2048,7 @@ then
+    DLLFLAGS="$DLLFLAGS -fasynchronous-unwind-tables"
+    LDDLLFLAGS="$LDDLLFLAGS -fasynchronous-unwind-tables"
+    UNIXDLLFLAGS="$UNIXDLLFLAGS -fasynchronous-unwind-tables"
++   CROSSLDFLAGS="$CROSSLDFLAGS -fasynchronous-unwind-tables"
+ elif test $HOST_ARCH = x86_64
+ then
+    WINE_WARNING([building 64-bit Wine without support for CFI directives; exception handling will not work properly.])
+-- 
+0.0.0
+

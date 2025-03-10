@@ -1,0 +1,37 @@
+From ada04aedbbf6489d395441aa5893e9d1f8ac2d7f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sun, 8 Sep 2024 15:12:20 +0200
+Subject: [PATCH] server: Remove unused get_window_info atom reply parameter.
+
+---
+ server/protocol.def | 1 -
+ server/window.c     | 1 -
+ 2 files changed, 2 deletions(-)
+
+diff --git a/server/protocol.def b/server/protocol.def
+index 4f712b4e4e6..cc658915da0 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -2573,7 +2573,6 @@ enum message_type
+     user_handle_t  last_active; /* last active popup */
+     process_id_t   pid;         /* process owning the window */
+     thread_id_t    tid;         /* thread owning the window */
+-    atom_t         atom;        /* class atom */
+     int            is_unicode;  /* ANSI or unicode */
+     unsigned int   dpi_context; /* window DPI context */
+ @END
+diff --git a/server/window.c b/server/window.c
+index f7f9d5e517f..afd4564e206 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -2331,7 +2331,6 @@ DECL_HANDLER(get_window_info)
+     {
+         reply->tid  = get_thread_id( win->thread );
+         reply->pid  = get_process_id( win->thread->process );
+-        reply->atom = win->class ? get_class_atom( win->class ) : DESKTOP_ATOM;
+     }
+ }
+ 
+-- 
+GitLab
+

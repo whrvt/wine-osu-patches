@@ -17,8 +17,8 @@ index 12e1777262a..e7b23a0df97 100644
  BOOL WINAPI DECLSPEC_HOTPATCH SwitchToThread(void)
  {
 -    return (NtYieldExecution() != STATUS_NO_YIELD_PERFORMED);
-+    UINT i;
-+    for (i=0;i<5;++i) YieldProcessor();
++    NtFlushProcessWriteBuffers();
++    for (UINT i=0;i<5;++i) YieldProcessor();
 +    return STATUS_SUCCESS;
  }
  
@@ -44,7 +44,7 @@ index 405b0c99b13..eedb0f76bad 100644
 -    if (!ret && u1.ru_nvcsw == u2.ru_nvcsw && u1.ru_nivcsw == u2.ru_nivcsw) return STATUS_NO_YIELD_PERFORMED;
 -#endif
 +    int i;
-+    for (i=0;i<5;++i) YieldProcessor();
++    for (i=0;i<3;++i) YieldProcessor();
      return STATUS_SUCCESS;
 -#else
 -    return STATUS_NO_YIELD_PERFORMED;

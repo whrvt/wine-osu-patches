@@ -1,0 +1,69 @@
+From a6c624fb63c04e31ad208535287767f4b72e5129 Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Fri, 7 Mar 2025 14:56:59 +0100
+Subject: [PATCH] server, ntdll: Move last thread information to
+ get_thread_info flags.
+
+---
+ dlls/ntdll/unix/thread.c | 2 +-
+ server/protocol.def      | 2 +-
+ server/thread.c          | 3 ++-
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index b8e6ba65854..9a852f90332 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -2153,7 +2153,7 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
+             status = wine_server_call( req );
+             if (status == STATUS_SUCCESS)
+             {
+-                ULONG last = reply->last;
++                ULONG last = !!(reply->flags & GET_THREAD_INFO_FLAG_LAST);
+                 if (data) memcpy( data, &last, sizeof(last) );
+                 if (ret_len) *ret_len = sizeof(last);
+             }
+diff --git a/server/protocol.def b/server/protocol.def
+index 4d2ea609bbc..eaf4a0b9d52 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1220,7 +1220,6 @@ struct obj_locator
+     affinity_t   affinity;      /* thread affinity mask */
+     int          exit_code;     /* thread exit code */
+     int          priority;      /* thread priority level */
+-    int          last;          /* last thread in process */
+     int          suspend_count; /* thread suspend count */
+     unsigned int flags;         /* GET_THREAD_INFO_FLAG_ flags */
+     data_size_t  desc_len;      /* description length in bytes */
+@@ -1228,6 +1227,7 @@ struct obj_locator
+ @END
+ #define GET_THREAD_INFO_FLAG_DBG_HIDDEN 0x01
+ #define GET_THREAD_INFO_FLAG_TERMINATED 0x02
++#define GET_THREAD_INFO_FLAG_LAST       0x04
+ 
+ 
+ /* Retrieve information about thread times */
+diff --git a/server/thread.c b/server/thread.c
+index 7add956af78..cc91252cd6d 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -1717,7 +1717,6 @@ DECL_HANDLER(get_thread_info)
+         reply->exit_code      = (thread->state == TERMINATED) ? thread->exit_code : STATUS_PENDING;
+         reply->priority       = thread->base_priority;
+         reply->affinity       = thread->affinity;
+-        reply->last           = thread->process->running_threads == 1;
+         reply->suspend_count  = thread->suspend;
+         reply->desc_len       = thread->desc_len;
+         reply->flags          = 0;
+@@ -1725,6 +1724,8 @@ DECL_HANDLER(get_thread_info)
+             reply->flags |= GET_THREAD_INFO_FLAG_DBG_HIDDEN;
+         if (thread->state == TERMINATED)
+             reply->flags |= GET_THREAD_INFO_FLAG_TERMINATED;
++        if (thread->process->running_threads == 1)
++            reply->flags |= GET_THREAD_INFO_FLAG_LAST;
+ 
+         if (thread->desc && get_reply_max_size())
+         {
+-- 
+GitLab
+

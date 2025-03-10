@@ -57807,18 +57807,24 @@ diff --git a/tools/make_makefiles b/tools/make_makefiles
 index 11111111111..11111111111 100755
 --- a/tools/make_makefiles
 +++ b/tools/make_makefiles
-@@ -41,6 +41,12 @@ my %modules16 =
- my %ignored_source_files = (
-     "dlls/wineps.drv/afm2c.c" => 1,
-     "dlls/wineps.drv/mkagl.c" => 1,
+@@ -76,9 +76,17 @@ foreach $arch (@archs)
+ undef $arch;
+ undef $var;
+ 
++my %deleted_files = (
 +    "libs/jpeg/jccolext.c" => 1,
 +    "libs/jpeg/jdcol565.c" => 1,
 +    "libs/jpeg/jdcolext.c" => 1,
 +    "libs/jpeg/jdmrg565.c" => 1,
 +    "libs/jpeg/jdmrgext.c" => 1,
 +    "libs/jpeg/jstdhuff.c" => 1,
- );
++);
++
+ my (@makefiles, %makefiles);
+ my @nls_files;
+-my %deleted_files;
  
- my @source_vars = (
+ sub dirname($)
+ {
 
 

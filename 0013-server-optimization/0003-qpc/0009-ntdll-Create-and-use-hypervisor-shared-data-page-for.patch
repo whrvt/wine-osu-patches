@@ -324,7 +324,7 @@ index 11111111111..11111111111 100644
  
 +struct hypervisor_shared_data *hypervisor_shared_data = NULL;
  struct _KUSER_SHARED_DATA *user_shared_data = NULL;
- static const int user_shared_data_timeout = 16;
+ static const timeout_t user_shared_data_timeout = 16 * 10000;
  
 +/* 128-bit multiply a by b and return the high 64 bits, same as __umulh */
 +static UINT64 multiply_tsc(UINT64 a, UINT64 b)
