@@ -1,0 +1,60 @@
+From abc58580c60834a8bd650ca58c23542bbfa7883f Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Thu, 6 Mar 2025 16:30:32 +0100
+Subject: [PATCH] server: Implement setting thread priority directly.
+
+---
+ server/protocol.def | 14 ++++++++------
+ server/thread.c     |  5 +++++
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/server/protocol.def b/server/protocol.def
+index 39e74724cb6..4d2ea609bbc 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1245,18 +1245,20 @@ struct obj_locator
+ @REQ(set_thread_info)
+     obj_handle_t handle;       /* thread handle */
+     int          mask;         /* setting mask (see below) */
++    int          priority;     /* NT thread priority */
+     int          base_priority;/* base priority class */
+     affinity_t   affinity;     /* affinity mask */
+     client_ptr_t entry_point;  /* thread entry point */
+     obj_handle_t token;        /* impersonation token */
+     VARARG(desc,unicode_str);  /* description string */
+ @END
+-#define SET_THREAD_INFO_BASE_PRIORITY   0x01
+-#define SET_THREAD_INFO_AFFINITY        0x02
+-#define SET_THREAD_INFO_TOKEN           0x04
+-#define SET_THREAD_INFO_ENTRYPOINT      0x08
+-#define SET_THREAD_INFO_DESCRIPTION     0x10
+-#define SET_THREAD_INFO_DBG_HIDDEN      0x20
++#define SET_THREAD_INFO_PRIORITY        0x01
++#define SET_THREAD_INFO_BASE_PRIORITY   0x02
++#define SET_THREAD_INFO_AFFINITY        0x04
++#define SET_THREAD_INFO_TOKEN           0x08
++#define SET_THREAD_INFO_ENTRYPOINT      0x10
++#define SET_THREAD_INFO_DESCRIPTION     0x20
++#define SET_THREAD_INFO_DBG_HIDDEN      0x40
+ 
+ 
+ /* Suspend a thread */
+diff --git a/server/thread.c b/server/thread.c
+index 05280e406c7..7add956af78 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -831,6 +831,11 @@ unsigned int set_thread_base_priority( struct thread *thread, int base_priority
+ static void set_thread_info( struct thread *thread,
+                              const struct set_thread_info_request *req )
+ {
++    if (req->mask & SET_THREAD_INFO_PRIORITY)
++    {
++        unsigned int status = set_thread_priority( thread, req->priority );
++        if (status) set_error( status );
++    }
+     if (req->mask & SET_THREAD_INFO_BASE_PRIORITY)
+     {
+         unsigned int status = set_thread_base_priority( thread, req->base_priority );
+-- 
+GitLab
+

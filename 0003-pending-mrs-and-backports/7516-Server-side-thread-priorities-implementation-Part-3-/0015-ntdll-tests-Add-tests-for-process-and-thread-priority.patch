@@ -1,0 +1,187 @@
+From 3d701bab2d19a6c16fff479b85b780da473bf8c3 Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Fri, 7 Mar 2025 19:55:26 +0100
+Subject: [PATCH] ntdll/tests: Add tests for process and thread priority.
+
+---
+ dlls/ntdll/tests/info.c | 157 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 157 insertions(+)
+
+diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
+index ff7fbad49d4..73a6ef0c152 100644
+--- a/dlls/ntdll/tests/info.c
++++ b/dlls/ntdll/tests/info.c
+@@ -3263,6 +3263,162 @@ static void test_affinity(void)
+         "Unexpected thread affinity\n" );
+ }
+ 
++static void test_priority(void)
++{
++    NTSTATUS status;
++    DWORD proc_priority;
++    int thread_base_priority, expected_nt_priority;
++    ULONG nt_thread_priority;
++    THREAD_BASIC_INFORMATION tbi;
++    PROCESS_PRIORITY_CLASS ppc;
++    HANDLE process_handle = GetCurrentProcess();
++    HANDLE thread_handle  = GetCurrentThread();
++    BOOL ret;
++
++    typedef struct _PROCESS_BASIC_INFORMATION_PRIVATE {
++        NTSTATUS  ExitStatus;
++        PEB      *PebBaseAddress;
++        ULONG_PTR AffinityMask;
++        LONG      BasePriority;
++        ULONG_PTR UniqueProcessId;
++        ULONG_PTR InheritedFromUniqueProcessId;
++    } PROCESS_BASIC_INFORMATION_PRIVATE;
++
++    PROCESS_BASIC_INFORMATION_PRIVATE pbi;
++
++    /* Change process priority class to HIGH_PRIORITY_CLASS and test */
++    ret = SetPriorityClass(process_handle, HIGH_PRIORITY_CLASS);
++    ok(ret, "SetPriorityClass to HIGH_PRIORITY_CLASS failed: %u\n", GetLastError());
++    proc_priority = GetPriorityClass(process_handle);
++    ok(proc_priority == HIGH_PRIORITY_CLASS,
++       "Expected HIGH_PRIORITY_CLASS, got %u\n", proc_priority);
++    status = pNtQueryInformationProcess( process_handle, ProcessPriorityClass, &ppc,
++        sizeof(ppc), NULL );
++    ok(status == STATUS_SUCCESS,
++        "NtQueryInformationProcess failed: %08x\n", status);
++    ok(ppc.PriorityClass == PROCESS_PRIORITY_CLASS_HIGH,
++        "Expected PROCESS_PRIORITY_CLASS_HIGH, got %u\n", proc_priority);
++
++    /* Restore process priority back to normal */
++    ret = SetPriorityClass(process_handle, NORMAL_PRIORITY_CLASS);
++    ok(ret, "Restore SetPriorityClass failed: %u\n", GetLastError());
++    proc_priority = GetPriorityClass(process_handle);
++    ok(proc_priority == NORMAL_PRIORITY_CLASS,
++       "Expected NORMAL_PRIORITY_CLASS after restore, got %u\n", proc_priority);
++    status = pNtQueryInformationProcess( process_handle, ProcessPriorityClass, &ppc,
++        sizeof(ppc), NULL );
++    ok(status == STATUS_SUCCESS,
++        "NtQueryInformationProcess failed: %08x\n", status);
++    ok(ppc.PriorityClass == PROCESS_PRIORITY_CLASS_NORMAL,
++        "Expected PROCESS_PRIORITY_CLASS_NORMAL, got %u\n", proc_priority);
++
++    /* Before checking any thread priorities, disable priority boosting
++     * in order to make the tests reliable. */
++    SetThreadPriorityBoost(thread_handle, TRUE);
++
++    /* Test thread priority:
++     * Compare the value from GetThreadPriority (thread priority level)
++     * with the BasePriority from NtQueryInformationThread. */
++    thread_base_priority = GetThreadPriority(thread_handle);
++    ok(thread_base_priority != THREAD_PRIORITY_ERROR_RETURN,
++       "GetThreadPriority returned error\n");
++
++    status = pNtQueryInformationThread(thread_handle, ThreadBasicInformation,
++                                       &tbi, sizeof(tbi), NULL);
++    ok(status == STATUS_SUCCESS,
++       "NtQueryInformationThread failed: %08x\n", status);
++    ok(thread_base_priority == (int)tbi.BasePriority,
++       "Thread priority mismatch: Win32 API returned %d, NT BasePriority is %d\n",
++       thread_base_priority, (int)tbi.BasePriority);
++
++    /* Change the thread priority to THREAD_PRIORITY_HIGHEST and compare with
++     * underlying NT priority, which should be now the NORMAL_PRIORITY_CLASS
++     * base value (8) + THREAD_PRIORITY_HIGHEST (+2) = 10 (without boost). */
++    ret = SetThreadPriority(thread_handle, THREAD_PRIORITY_HIGHEST);
++    ok(ret, "SetThreadPriority(THREAD_PRIORITY_HIGHEST) failed: %u\n", GetLastError());
++    thread_base_priority = GetThreadPriority(thread_handle);
++    ok(thread_base_priority == THREAD_PRIORITY_HIGHEST,
++       "Expected THREAD_PRIORITY_HIGHEST (%d), got %d\n",
++       THREAD_PRIORITY_HIGHEST, thread_base_priority);
++
++    status = pNtQueryInformationThread(thread_handle, ThreadBasicInformation,
++                                       &tbi, sizeof(tbi), NULL);
++    ok(status == STATUS_SUCCESS,
++       "NtQueryInformationThread failed after setting priority: %08x\n", status);
++    ok(thread_base_priority == (int)tbi.BasePriority,
++       "After setting, API priority (%d) does not match NT BasePriority (%d)\n",
++       thread_base_priority, (int)tbi.BasePriority);
++    status = pNtQueryInformationProcess(process_handle, (PROCESSINFOCLASS)ProcessBasicInformation, &pbi,
++       sizeof(pbi), NULL);
++    expected_nt_priority = pbi.BasePriority + THREAD_PRIORITY_HIGHEST;
++    ok(expected_nt_priority == (int)tbi.Priority,
++       "After setting, effective NT priority (%d) does not match expected priority %d.\n",
++       (int)tbi.Priority, expected_nt_priority);
++
++    /* Test setting the thread priority to THREAD_PRIORITY_LOWEST now, but using
++     * pNtSetInformationThread, also testing NT priority directly afterwards. */
++    nt_thread_priority = THREAD_PRIORITY_LOWEST;
++    status = pNtSetInformationThread(thread_handle, ThreadBasePriority,
++        &nt_thread_priority, sizeof(ULONG));
++    ok(status == STATUS_SUCCESS,
++       "NtSetInformationThread(ThreadBasePriority) failed: %08x\n", status);
++    /* Effective thread priority should be now NORMAL_PRIORITY_CLASS base
++     * value (8) + THREAD_PRIORITY_LOWEST (-2) = 6. */
++    status = pNtQueryInformationThread(thread_handle, ThreadBasicInformation,
++        &tbi, sizeof(tbi), NULL);
++    ok(status == STATUS_SUCCESS,
++        "NtQueryInformationThread failed after setting priority: %08x\n", status);
++    ok(nt_thread_priority == tbi.BasePriority,
++        "After setting, BasePriority (%d) does not match set BasePriority (%d)\n",
++        nt_thread_priority, (int)tbi.BasePriority);
++    expected_nt_priority = pbi.BasePriority + THREAD_PRIORITY_LOWEST;
++    ok(expected_nt_priority == (int)tbi.Priority,
++        "After setting, effective NT priority (%d) does not match expected priority %d.\n",
++        (int)tbi.Priority, expected_nt_priority);
++    /* Now set NT thread priority directly to 12, a value normally impossible to
++     * reach in NORMAL_PRIORITY_CLASS without boost. */
++    nt_thread_priority = 12;
++    status = pNtSetInformationThread(thread_handle, ThreadPriority,
++        &nt_thread_priority, sizeof(ULONG));
++    ok(status == STATUS_SUCCESS,
++       "NtSetInformationThread(ThreadPriority) failed: %08x\n", status);
++    /* Effective thread priority should be now 12, BasePriority should be
++     * unchanged. */
++    status = pNtQueryInformationThread(thread_handle, ThreadBasicInformation,
++        &tbi, sizeof(tbi), NULL);
++    ok(status == STATUS_SUCCESS,
++        "NtQueryInformationThread failed after setting priority: %08x\n", status);
++    ok(THREAD_PRIORITY_LOWEST == tbi.BasePriority,
++        "After setting, BasePriority (%d) does not match set BasePriority THREAD_PRIORITY_LOWEST.\n",
++        (int)tbi.BasePriority);
++    ok(nt_thread_priority == (int)tbi.Priority,
++        "After setting, effective NT priority (%d) does not match expected priority %d.\n",
++        (int)tbi.Priority, nt_thread_priority);
++    /* Setting an out of range priority above HIGH_PRIORITY (31) or LOW_PRIORITY (0)
++     * and lower fails. */
++    nt_thread_priority = 42;
++    status = pNtSetInformationThread(thread_handle, ThreadPriority,
++        &nt_thread_priority, sizeof(ULONG));
++    ok(status == STATUS_INVALID_PARAMETER,
++       "NtSetInformationThread(ThreadPriority) unexpectedly returned %08x instead of STATUS_INVALID_PARAMETER.\n", status);
++    nt_thread_priority = 0; /* 0 also fails in addition to negative values. */
++    status = pNtSetInformationThread(thread_handle, ThreadPriority,
++        &nt_thread_priority, sizeof(ULONG));
++    ok(status == STATUS_INVALID_PARAMETER,
++       "NtSetInformationThread(ThreadPriority) unexpectedly returned %08x instead of STATUS_INVALID_PARAMETER.\n", status);
++    /* Moving a thread into the realtime band is normally not possible in a non-realtime process. */
++    nt_thread_priority = 24;
++    status = pNtSetInformationThread(thread_handle, ThreadPriority,
++        &nt_thread_priority, sizeof(ULONG));
++    ok(status == STATUS_PRIVILEGE_NOT_HELD,
++       "NtSetInformationThread(ThreadPriority) unexpectedly returned %08x instead of STATUS_PRIVILEGE_NOT_HELD.\n", status);
++
++    /* Restore thread priority and boosting behaviour back to normal */
++    SetThreadPriorityBoost(thread_handle, FALSE);
++    ret = SetThreadPriority(thread_handle, THREAD_PRIORITY_NORMAL);
++    ok(ret, "Restore SetThreadPriority(THREAD_PRIORITY_NORMAL) failed: %u\n", GetLastError());
++}
++
+ static DWORD WINAPI hide_from_debugger_thread(void *arg)
+ {
+     HANDLE stop_event = arg;
+@@ -4176,6 +4332,7 @@ START_TEST(info)
+     test_ThreadIsTerminated();
+ 
+     test_affinity();
++    test_priority();
+     test_debug_object();
+ 
+     /* belongs to its own file */
+-- 
+GitLab
+

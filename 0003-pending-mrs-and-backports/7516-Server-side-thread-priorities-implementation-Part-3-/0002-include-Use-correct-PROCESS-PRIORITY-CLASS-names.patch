@@ -1,0 +1,149 @@
+From 31e56c3e73ea2bef11842dfe9aea588526c7071a Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Fri, 7 Mar 2025 19:03:48 +0100
+Subject: [PATCH] include: Use correct PROCESS_PRIORITY_CLASS_* names.
+
+This matches publicly available windows headers now.
+---
+ dlls/kernel32/tests/loader.c |  2 +-
+ dlls/kernelbase/process.c    | 24 ++++++++++++------------
+ dlls/ntdll/tests/info.c      |  4 ++--
+ include/winternl.h           | 13 +++++++------
+ server/process.c             |  2 +-
+ server/thread.c              |  6 +++---
+ 6 files changed, 26 insertions(+), 25 deletions(-)
+
+diff --git a/dlls/kernel32/tests/loader.c b/dlls/kernel32/tests/loader.c
+index 5eef938ca1f..9082e7212f8 100644
+--- a/dlls/kernel32/tests/loader.c
++++ b/dlls/kernel32/tests/loader.c
+@@ -4092,7 +4092,7 @@ static void test_ExitProcess(void)
+     ret = pNtSetInformationProcess(pi.hProcess, ProcessAffinityMask, &affinity, sizeof(affinity));
+     ok(ret == STATUS_PROCESS_IS_TERMINATING, "expected STATUS_PROCESS_IS_TERMINATING, got %#lx\n", ret);
+     ppc.Foreground = FALSE;
+-    ppc.PriorityClass = PROCESS_PRIOCLASS_BELOW_NORMAL;
++    ppc.PriorityClass = PROCESS_PRIORITY_CLASS_BELOW_NORMAL;
+     ret = pNtSetInformationProcess(pi.hProcess, ProcessPriorityClass, &ppc, sizeof(ppc));
+     ok(ret == STATUS_SUCCESS, "expected STATUS_SUCCESS, got status %#lx\n", ret);
+ 
+diff --git a/dlls/kernelbase/process.c b/dlls/kernelbase/process.c
+index df3447a9014..8d4c68e9a0d 100644
+--- a/dlls/kernelbase/process.c
++++ b/dlls/kernelbase/process.c
+@@ -829,12 +829,12 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetPriorityClass( HANDLE process )
+ 
+     switch (pbi.BasePriority)
+     {
+-    case PROCESS_PRIOCLASS_IDLE: return IDLE_PRIORITY_CLASS;
+-    case PROCESS_PRIOCLASS_BELOW_NORMAL: return BELOW_NORMAL_PRIORITY_CLASS;
+-    case PROCESS_PRIOCLASS_NORMAL: return NORMAL_PRIORITY_CLASS;
+-    case PROCESS_PRIOCLASS_ABOVE_NORMAL: return ABOVE_NORMAL_PRIORITY_CLASS;
+-    case PROCESS_PRIOCLASS_HIGH: return HIGH_PRIORITY_CLASS;
+-    case PROCESS_PRIOCLASS_REALTIME: return REALTIME_PRIORITY_CLASS;
++    case PROCESS_PRIORITY_CLASS_IDLE: return IDLE_PRIORITY_CLASS;
++    case PROCESS_PRIORITY_CLASS_BELOW_NORMAL: return BELOW_NORMAL_PRIORITY_CLASS;
++    case PROCESS_PRIORITY_CLASS_NORMAL: return NORMAL_PRIORITY_CLASS;
++    case PROCESS_PRIORITY_CLASS_ABOVE_NORMAL: return ABOVE_NORMAL_PRIORITY_CLASS;
++    case PROCESS_PRIORITY_CLASS_HIGH: return HIGH_PRIORITY_CLASS;
++    case PROCESS_PRIORITY_CLASS_REALTIME: return REALTIME_PRIORITY_CLASS;
+     default: return 0;
+     }
+ }
+@@ -1198,12 +1198,12 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetPriorityClass( HANDLE process, DWORD class )
+     ppc.Foreground = FALSE;
+     switch (class)
+     {
+-    case IDLE_PRIORITY_CLASS:         ppc.PriorityClass = PROCESS_PRIOCLASS_IDLE; break;
+-    case BELOW_NORMAL_PRIORITY_CLASS: ppc.PriorityClass = PROCESS_PRIOCLASS_BELOW_NORMAL; break;
+-    case NORMAL_PRIORITY_CLASS:       ppc.PriorityClass = PROCESS_PRIOCLASS_NORMAL; break;
+-    case ABOVE_NORMAL_PRIORITY_CLASS: ppc.PriorityClass = PROCESS_PRIOCLASS_ABOVE_NORMAL; break;
+-    case HIGH_PRIORITY_CLASS:         ppc.PriorityClass = PROCESS_PRIOCLASS_HIGH; break;
+-    case REALTIME_PRIORITY_CLASS:     ppc.PriorityClass = PROCESS_PRIOCLASS_REALTIME; break;
++    case IDLE_PRIORITY_CLASS:         ppc.PriorityClass = PROCESS_PRIORITY_CLASS_IDLE; break;
++    case BELOW_NORMAL_PRIORITY_CLASS: ppc.PriorityClass = PROCESS_PRIORITY_CLASS_BELOW_NORMAL; break;
++    case NORMAL_PRIORITY_CLASS:       ppc.PriorityClass = PROCESS_PRIORITY_CLASS_NORMAL; break;
++    case ABOVE_NORMAL_PRIORITY_CLASS: ppc.PriorityClass = PROCESS_PRIORITY_CLASS_ABOVE_NORMAL; break;
++    case HIGH_PRIORITY_CLASS:         ppc.PriorityClass = PROCESS_PRIORITY_CLASS_HIGH; break;
++    case REALTIME_PRIORITY_CLASS:     ppc.PriorityClass = PROCESS_PRIORITY_CLASS_REALTIME; break;
+     default:
+         SetLastError( ERROR_INVALID_PARAMETER );
+         return FALSE;
+diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
+index 5003a5b50c2..ff7fbad49d4 100644
+--- a/dlls/ntdll/tests/info.c
++++ b/dlls/ntdll/tests/info.c
+@@ -2305,8 +2305,8 @@ static void test_query_process_priority(void)
+ 
+     status = NtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, sizeof(priority[0]), &ReturnLength);
+     ok(status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08lx\n", status);
+-    ok(priority[0].PriorityClass == PROCESS_PRIOCLASS_BELOW_NORMAL,
+-       "Expected PROCESS_PRIOCLASS_BELOW_NORMAL, got %u\n", priority[0].PriorityClass);
++    ok(priority[0].PriorityClass == PROCESS_PRIORITY_CLASS_BELOW_NORMAL,
++       "Expected PROCESS_PRIORITY_CLASS_BELOW_NORMAL, got %u\n", priority[0].PriorityClass);
+ 
+     ret = SetPriorityClass(GetCurrentProcess(), orig_priority);
+     ok(ret, "Failed to reset priority class: %lu\n", GetLastError());
+diff --git a/include/winternl.h b/include/winternl.h
+index d6fe4171fd5..4c419bd6949 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -2652,12 +2652,13 @@ typedef struct _PROCESS_BASIC_INFORMATION64 {
+     UINT64    InheritedFromUniqueProcessId;
+ } PROCESS_BASIC_INFORMATION64;
+ 
+-#define PROCESS_PRIOCLASS_IDLE          1
+-#define PROCESS_PRIOCLASS_NORMAL        2
+-#define PROCESS_PRIOCLASS_HIGH          3
+-#define PROCESS_PRIOCLASS_REALTIME      4
+-#define PROCESS_PRIOCLASS_BELOW_NORMAL  5
+-#define PROCESS_PRIOCLASS_ABOVE_NORMAL  6
++#define PROCESS_PRIORITY_CLASS_UNKNOWN      0
++#define PROCESS_PRIORITY_CLASS_IDLE         1
++#define PROCESS_PRIORITY_CLASS_NORMAL       2
++#define PROCESS_PRIORITY_CLASS_HIGH         3
++#define PROCESS_PRIORITY_CLASS_REALTIME     4
++#define PROCESS_PRIORITY_CLASS_BELOW_NORMAL 5
++#define PROCESS_PRIORITY_CLASS_ABOVE_NORMAL 6
+ 
+ typedef struct _PROCESS_PRIORITY_CLASS {
+     BOOLEAN     Foreground;
+diff --git a/server/process.c b/server/process.c
+index c877bb6f7ae..c8c08c834d4 100644
+--- a/server/process.c
++++ b/server/process.c
+@@ -661,7 +661,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
+     process->unix_pid        = -1;
+     process->exit_code       = STILL_ACTIVE;
+     process->running_threads = 0;
+-    process->priority        = PROCESS_PRIOCLASS_NORMAL;
++    process->priority        = PROCESS_PRIORITY_CLASS_NORMAL;
+     process->suspend         = 0;
+     process->is_system       = 0;
+     process->debug_children  = 1;
+diff --git a/server/thread.c b/server/thread.c
+index 5ad060108e3..51c89f029cb 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -775,8 +775,8 @@ static int get_base_priority( int priority_class, int priority )
+     /* offsets taken from https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities */
+     static const int class_offsets[] = { 4, 8, 13, 24, 6, 10 };
+ 
+-    if (priority == THREAD_PRIORITY_IDLE) return (priority_class == PROCESS_PRIOCLASS_REALTIME ? 16 : 1);
+-    if (priority == THREAD_PRIORITY_TIME_CRITICAL) return (priority_class == PROCESS_PRIOCLASS_REALTIME ? 31 : 15);
++    if (priority == THREAD_PRIORITY_IDLE) return (priority_class == PROCESS_PRIORITY_CLASS_REALTIME ? 16 : 1);
++    if (priority == THREAD_PRIORITY_TIME_CRITICAL) return (priority_class == PROCESS_PRIORITY_CLASS_REALTIME ? 31 : 15);
+     if (priority_class >= ARRAY_SIZE(class_offsets)) return 8;
+     return class_offsets[priority_class - 1] + priority;
+ }
+@@ -789,7 +789,7 @@ unsigned int set_thread_priority( struct thread *thread, int priority_class, int
+     int max = THREAD_PRIORITY_HIGHEST;
+     int min = THREAD_PRIORITY_LOWEST;
+ 
+-    if (priority_class == PROCESS_PRIOCLASS_REALTIME)
++    if (priority_class == PROCESS_PRIORITY_CLASS_REALTIME)
+     {
+         max = THREAD_PRIORITY_REALTIME_HIGHEST;
+         min = THREAD_PRIORITY_REALTIME_LOWEST;
+-- 
+GitLab
+
