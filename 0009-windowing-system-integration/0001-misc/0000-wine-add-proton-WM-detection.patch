@@ -1,21 +1,22 @@
-From 39b77c5bea869b8bd7306ada634c9b0db790d2e3 Mon Sep 17 00:00:00 2001
+From 940143e5bc29fef3819a4608fd8d0abacad92835 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
-Date: Wed, 12 Mar 2025 19:54:26 +0100
+Date: Thu, 13 Mar 2025 00:07:58 +0100
 Subject: [PATCH] wine: add proton WM detection
 
-Edit of the original patch from Proton, with the addition of XFCE and Cinnamon (Mutter) detection.
+Edit of the original patch from Proton, with the addition of XFCE, Cinnamon (Mutter)
+and Hyprland detection.
 ---
- dlls/winex11.drv/window.c      | 100 +++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/window.c      | 107 +++++++++++++++++++++++++++++++++
  dlls/winex11.drv/x11drv.h      |   7 +++
  dlls/winex11.drv/x11drv_main.c |   4 ++
- include/ntuser.h               |  21 +++++++
- 4 files changed, 132 insertions(+)
+ include/ntuser.h               |  22 +++++++
+ 4 files changed, 140 insertions(+)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 32c3800..7707dae 100644
+index 615fb9d..4848172 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -251,6 +251,104 @@ void host_window_set_parent( struct host_window *win, Window parent )
+@@ -251,6 +251,111 @@ void host_window_set_parent( struct host_window *win, Window parent )
  }
  
  
@@ -76,6 +77,8 @@ index 32c3800..7707dae 100644
 +                        cached = WINE_WM_X11_KDE;
 +                    else if(strcmp(wm_name, "Xfwm4") == 0)
 +                        cached = WINE_WM_X11_XFCE;
++                    else if(strstr(wm_name, "Hyprland"))
++                        cached = WINE_WM_HYPRLAND;
 +                    else
 +                        cached = WINE_WM_UNKNOWN;
 +
@@ -112,6 +115,11 @@ index 32c3800..7707dae 100644
 +    return detect_wm(display) == WINE_WM_X11_XFCE;
 +}
 +
++BOOL wm_is_hyprland(Display *display)
++{
++    return detect_wm(display) == WINE_WM_HYPRLAND;
++}
++
 +BOOL wm_is_steamcompmgr(Display *display)
 +{
 +    return detect_wm(display) == WINE_WM_X11_STEAMCOMPMGR;
@@ -120,7 +128,7 @@ index 32c3800..7707dae 100644
  /***********************************************************************
   * http://standards.freedesktop.org/startup-notification-spec
   */
-@@ -2347,6 +2445,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
+@@ -2378,6 +2483,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
  {
      unsigned int width, height;
  
@@ -130,10 +138,10 @@ index 32c3800..7707dae 100644
      SERVER_START_REQ( get_window_rectangles )
      {
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index ee5bbe0..c3a8247 100644
+index 91811cf..8305b86 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -472,11 +472,13 @@ enum x11drv_atoms
+@@ -473,11 +473,13 @@ enum x11drv_atoms
      XATOM_TEXT,
      XATOM_TIMESTAMP,
      XATOM_UTF8_STRING,
@@ -147,7 +155,7 @@ index ee5bbe0..c3a8247 100644
      XATOM_WM_STATE,
      XATOM_WM_TAKE_FOCUS,
      XATOM_DndProtocol,
-@@ -487,6 +489,7 @@ enum x11drv_atoms
+@@ -488,6 +490,7 @@ enum x11drv_atoms
      XATOM__NET_STARTUP_INFO_BEGIN,
      XATOM__NET_STARTUP_INFO,
      XATOM__NET_SUPPORTED,
@@ -155,7 +163,7 @@ index ee5bbe0..c3a8247 100644
      XATOM__NET_SYSTEM_TRAY_OPCODE,
      XATOM__NET_SYSTEM_TRAY_S0,
      XATOM__NET_SYSTEM_TRAY_VISUAL,
-@@ -538,6 +541,7 @@ enum x11drv_atoms
+@@ -539,6 +542,7 @@ enum x11drv_atoms
      XATOM_WCF_SYLK,
      XATOM_WCF_TIFF,
      XATOM_WCF_WAVE,
@@ -163,7 +171,7 @@ index ee5bbe0..c3a8247 100644
      XATOM_image_bmp,
      XATOM_image_gif,
      XATOM_image_jpeg,
-@@ -650,6 +654,9 @@ struct x11drv_win_data
+@@ -651,6 +655,9 @@ struct x11drv_win_data
      unsigned long configure_serial;    /* serial of last pending configure request */
  };
  
@@ -208,10 +216,10 @@ index e58d3af..c017485 100644
      "image/gif",
      "image/jpeg",
 diff --git a/include/ntuser.h b/include/ntuser.h
-index 01fdd4b..94e3817 100644
+index 18b8e96..ffa1a46 100644
 --- a/include/ntuser.h
 +++ b/include/ntuser.h
-@@ -1710,4 +1710,25 @@ static inline BOOL NtUserSetRawWindowPos( HWND hwnd, RECT rect, UINT flags, BOOL
+@@ -1618,4 +1618,26 @@ static inline BOOL NtUserSetRawWindowPos( HWND hwnd, RECT rect, UINT flags, BOOL
      return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SetRawWindowPos );
  }
  
@@ -222,7 +230,8 @@ index 01fdd4b..94e3817 100644
 +#define WINE_WM_X11_MUTTER       1
 +#define WINE_WM_X11_STEAMCOMPMGR 2
 +#define WINE_WM_X11_KDE          3
-+#define WINE_WM_X11_XFCE          4
++#define WINE_WM_X11_XFCE         4
++#define WINE_WM_HYPRLAND         5
 +
 +static inline LONG_PTR __wine_get_window_manager(void)
 +{
