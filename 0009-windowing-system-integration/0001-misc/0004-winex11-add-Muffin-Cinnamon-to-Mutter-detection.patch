@@ -1,4 +1,4 @@
-From bc6994c90e89f969661bba90fed97c2c86b00f36 Mon Sep 17 00:00:00 2001
+From 158f7b412572cfb7a17b477163c00dd385a4baa6 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 4 Mar 2025 15:43:59 +0000
 Subject: [PATCH] winex11: add Muffin (Cinnamon) to Mutter detection
@@ -6,23 +6,19 @@ Subject: [PATCH] winex11: add Muffin (Cinnamon) to Mutter detection
 Without this addition, every Mutter-specific workaround will fail to apply to Cinnamon's
 compositor Muffin, which is nothing but a Mutter fork.
 ---
- dlls/winex11.drv/window.c | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ dlls/winex11.drv/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index d78e8f60bd8..bc95d002a1e 100644
+index 53505162033..0e66dde0b9a 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -163,7 +163,8 @@ static int detect_wm(Display *dpy)
+@@ -163,7 +163,7 @@ static int detect_wm(Display *dpy)
                      TRACE("Got WM name %s\n", wm_name);
  
                      if((strcmp(wm_name, "GNOME Shell") == 0) ||
 -                            (strcmp(wm_name, "Mutter") == 0))
-+                            (strcmp(wm_name, "Mutter") == 0) ||
-+                            (strcmp(wm_name, "Mutter (Muffin)" == 0)))
++                            strstr(wm_name, "Mutter"))
                          cached = WINE_WM_X11_MUTTER;
                      else if(strcmp(wm_name, "steamcompmgr") == 0)
                          cached = WINE_WM_X11_STEAMCOMPMGR;
--- 
-2.48.1
-
