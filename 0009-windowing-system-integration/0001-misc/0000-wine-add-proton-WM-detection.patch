@@ -1,8 +1,21 @@
+From 39b77c5bea869b8bd7306ada634c9b0db790d2e3 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 12 Mar 2025 19:54:26 +0100
+Subject: [PATCH] wine: add proton WM detection
+
+Edit of the original patch from Proton, with the addition of XFCE and Cinnamon (Mutter) detection.
+---
+ dlls/winex11.drv/window.c      | 100 +++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h      |   7 +++
+ dlls/winex11.drv/x11drv_main.c |   4 ++
+ include/ntuser.h               |  21 +++++++
+ 4 files changed, 132 insertions(+)
+
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index a693884e0c1..a7ae9799f01 100644
+index 32c3800..7707dae 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -245,6 +245,97 @@ void host_window_set_parent( struct host_window *win, Window parent )
+@@ -251,6 +251,104 @@ void host_window_set_parent( struct host_window *win, Window parent )
  }
  
  
@@ -55,12 +68,14 @@ index a693884e0c1..a7ae9799f01 100644
 +                    TRACE("Got WM name %s\n", wm_name);
 +
 +                    if((strcmp(wm_name, "GNOME Shell") == 0) ||
-+                            (strcmp(wm_name, "Mutter") == 0))
++                            strstr(wm_name, "Mutter"))
 +                        cached = WINE_WM_X11_MUTTER;
 +                    else if(strcmp(wm_name, "steamcompmgr") == 0)
 +                        cached = WINE_WM_X11_STEAMCOMPMGR;
 +                    else if(strcmp(wm_name, "KWin") == 0)
 +                        cached = WINE_WM_X11_KDE;
++                    else if(strcmp(wm_name, "Xfwm4") == 0)
++                        cached = WINE_WM_X11_XFCE;
 +                    else
 +                        cached = WINE_WM_UNKNOWN;
 +
@@ -92,6 +107,11 @@ index a693884e0c1..a7ae9799f01 100644
 +    return detect_wm(display) == WINE_WM_X11_KDE;
 +}
 +
++BOOL wm_is_xfce(Display *display)
++{
++    return detect_wm(display) == WINE_WM_X11_XFCE;
++}
++
 +BOOL wm_is_steamcompmgr(Display *display)
 +{
 +    return detect_wm(display) == WINE_WM_X11_STEAMCOMPMGR;
@@ -100,38 +120,7 @@ index a693884e0c1..a7ae9799f01 100644
  /***********************************************************************
   * http://standards.freedesktop.org/startup-notification-spec
   */
-#@@ -1456,6 +1547,7 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
-# {
-#     DWORD style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
-#     DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
-#+    RECT original_rect = {0};
-#     XWindowChanges changes;
-#     unsigned int mask = 0;
-# 
-#@@ -1499,10 +1591,21 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags )
-# 
-#     set_size_hints( data, style );
-#     set_mwm_hints( data, style, ex_style );
-#+    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
-#+     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
-#+    if (wm_is_kde( data->display ) && data->is_fullscreen )
-#+    {
-#+        original_rect = data->rects.visible;
-#+        SetRectEmpty( &data->rects.visible );
-#+    }
-#     update_net_wm_states( data );
-#     data->configure_serial = NextRequest( data->display );
-#     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
-#-
-#+    if (!IsRectEmpty( &original_rect ))
-#+    {
-#+        data->rects.visible = original_rect;
-#+        update_net_wm_states( data );
-#+    }
-#     TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x serial=%lu\n",
-#            data->hwnd, data->whole_window, (int)data->rects.visible.left, (int)data->rects.visible.top,
-#            (int)(data->rects.visible.right - data->rects.visible.left),
-@@ -2042,6 +2145,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
+@@ -2347,6 +2445,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
  {
      unsigned int width, height;
  
@@ -141,10 +130,10 @@ index a693884e0c1..a7ae9799f01 100644
      SERVER_START_REQ( get_window_rectangles )
      {
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 2a326b07a4c..76ed5b9a162 100644
+index ee5bbe0..c3a8247 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -462,11 +462,13 @@ enum x11drv_atoms
+@@ -472,11 +472,13 @@ enum x11drv_atoms
      XATOM_TEXT,
      XATOM_TIMESTAMP,
      XATOM_UTF8_STRING,
@@ -158,7 +147,7 @@ index 2a326b07a4c..76ed5b9a162 100644
      XATOM_WM_STATE,
      XATOM_WM_TAKE_FOCUS,
      XATOM_DndProtocol,
-@@ -477,6 +479,7 @@ enum x11drv_atoms
+@@ -487,6 +489,7 @@ enum x11drv_atoms
      XATOM__NET_STARTUP_INFO_BEGIN,
      XATOM__NET_STARTUP_INFO,
      XATOM__NET_SUPPORTED,
@@ -166,7 +155,7 @@ index 2a326b07a4c..76ed5b9a162 100644
      XATOM__NET_SYSTEM_TRAY_OPCODE,
      XATOM__NET_SYSTEM_TRAY_S0,
      XATOM__NET_SYSTEM_TRAY_VISUAL,
-@@ -528,6 +531,7 @@ enum x11drv_atoms
+@@ -538,6 +541,7 @@ enum x11drv_atoms
      XATOM_WCF_SYLK,
      XATOM_WCF_TIFF,
      XATOM_WCF_WAVE,
@@ -174,8 +163,8 @@ index 2a326b07a4c..76ed5b9a162 100644
      XATOM_image_bmp,
      XATOM_image_gif,
      XATOM_image_jpeg,
-@@ -631,6 +635,9 @@ struct x11drv_win_data
-     unsigned int   icon_size;
+@@ -650,6 +654,9 @@ struct x11drv_win_data
+     unsigned long configure_serial;    /* serial of last pending configure request */
  };
  
 +extern BOOL wm_is_mutter(Display *);
@@ -183,12 +172,12 @@ index 2a326b07a4c..76ed5b9a162 100644
 +
  extern struct x11drv_win_data *get_win_data( HWND hwnd );
  extern void release_win_data( struct x11drv_win_data *data );
- extern Window X11DRV_get_whole_window( HWND hwnd );
+ extern void set_window_parent( struct x11drv_win_data *data, Window parent );
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index 9c00b16386e..16b17abdb65 100644
+index e58d3af..c017485 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-@@ -119,11 +119,13 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -114,11 +114,13 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
      "TEXT",
      "TIMESTAMP",
      "UTF8_STRING",
@@ -202,7 +191,7 @@ index 9c00b16386e..16b17abdb65 100644
      "WM_STATE",
      "WM_TAKE_FOCUS",
      "DndProtocol",
-@@ -134,6 +136,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -129,6 +131,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
      "_NET_STARTUP_INFO_BEGIN",
      "_NET_STARTUP_INFO",
      "_NET_SUPPORTED",
@@ -210,7 +199,7 @@ index 9c00b16386e..16b17abdb65 100644
      "_NET_SYSTEM_TRAY_OPCODE",
      "_NET_SYSTEM_TRAY_S0",
      "_NET_SYSTEM_TRAY_VISUAL",
-@@ -185,6 +188,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -180,6 +183,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
      "WCF_SYLK",
      "WCF_TIFF",
      "WCF_WAVE",
@@ -219,11 +208,11 @@ index 9c00b16386e..16b17abdb65 100644
      "image/gif",
      "image/jpeg",
 diff --git a/include/ntuser.h b/include/ntuser.h
-index ff45ffa2bc8..0f123151210 100644
+index 01fdd4b..94e3817 100644
 --- a/include/ntuser.h
 +++ b/include/ntuser.h
-@@ -1453,4 +1453,24 @@ static inline BOOL NtUserSendHardwareInput( HWND hwnd, UINT flags, const INPUT *
-     return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SendHardwareInput );
+@@ -1710,4 +1710,25 @@ static inline BOOL NtUserSetRawWindowPos( HWND hwnd, RECT rect, UINT flags, BOOL
+     return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SetRawWindowPos );
  }
  
 +/* HACK: We use some WM specific hacks in user32 and we need the user
@@ -233,6 +222,7 @@ index ff45ffa2bc8..0f123151210 100644
 +#define WINE_WM_X11_MUTTER       1
 +#define WINE_WM_X11_STEAMCOMPMGR 2
 +#define WINE_WM_X11_KDE          3
++#define WINE_WM_X11_XFCE          4
 +
 +static inline LONG_PTR __wine_get_window_manager(void)
 +{
@@ -247,3 +237,6 @@ index ff45ffa2bc8..0f123151210 100644
 +}
 +
  #endif /* _NTUSER_ */
+-- 
+2.48.1
+
