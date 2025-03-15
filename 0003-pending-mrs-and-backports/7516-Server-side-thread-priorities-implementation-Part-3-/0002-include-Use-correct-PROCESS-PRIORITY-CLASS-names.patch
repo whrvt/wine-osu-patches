@@ -1,4 +1,4 @@
-From 31e56c3e73ea2bef11842dfe9aea588526c7071a Mon Sep 17 00:00:00 2001
+From 5970fbf73ebac1d0610b650cf02557bb24ceac58 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 19:03:48 +0100
 Subject: [PATCH] include: Use correct PROCESS_PRIORITY_CLASS_* names.

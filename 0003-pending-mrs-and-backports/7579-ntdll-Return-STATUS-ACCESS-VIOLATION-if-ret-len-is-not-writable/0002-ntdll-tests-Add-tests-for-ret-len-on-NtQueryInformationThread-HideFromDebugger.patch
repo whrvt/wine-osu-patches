@@ -1,0 +1,54 @@
+From de426896aaa60445ed122cc9d473a62d870b1450 Mon Sep 17 00:00:00 2001
+From: Dylan Donnell <dylan.donnell@student.griffith.ie>
+Date: Sat, 15 Mar 2025 00:34:23 +0200
+Subject: [PATCH] ntdll/tests: Add tests for ret_len on
+ NtQueryInformationThread HideFromDebugger.
+
+---
+ dlls/ntdll/tests/info.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
+index 5003a5b50c2..d24639b6b68 100644
+--- a/dlls/ntdll/tests/info.c
++++ b/dlls/ntdll/tests/info.c
+@@ -3274,7 +3274,7 @@ static void test_HideFromDebugger(void)
+ {
+     NTSTATUS status;
+     HANDLE thread, stop_event;
+-    ULONG dummy;
++    ULONG dummy, ret_len;
+ 
+     dummy = 0;
+     status = pNtSetInformationThread( GetCurrentThread(), ThreadHideFromDebugger, &dummy, sizeof(ULONG) );
+@@ -3321,6 +3321,27 @@ static void test_HideFromDebugger(void)
+     ok( status == STATUS_SUCCESS, "got %#lx\n", status );
+     ok( dummy == 1, "Expected dummy == 1, got %08lx\n", dummy );
+ 
++    status = NtQueryInformationThread( thread, ThreadHideFromDebugger, &dummy, 1, (ULONG *)1 );
++    ok( status == STATUS_ACCESS_VIOLATION, "Expected STATUS_ACCESS_VIOLATION, got %08lx\n", status );
++
++    status = NtQueryInformationThread( thread, ThreadHideFromDebugger, &dummy, 0, (ULONG *)1 );
++    ok( status == STATUS_ACCESS_VIOLATION, "Expected STATUS_ACCESS_VIOLATION, got %08lx\n", status );
++
++    ret_len = 0xdeadbeef;
++    status = NtQueryInformationThread( thread, ThreadHideFromDebugger, &dummy, 0, &ret_len );
++    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %#lx\n", status );
++    ok( ret_len == 0xdeadbeef, "Expected ret_len == deadbeef, got %08lx\n", ret_len );
++
++    ret_len = 0xdeadbeef;
++    status = NtQueryInformationThread( (HANDLE)0xdeadbeef, ThreadHideFromDebugger, &dummy, 1, &ret_len );
++    ok( status == STATUS_INVALID_HANDLE, "Expected STATUS_INVALID_HANDLE, got %#lx\n", status );
++    ok( ret_len == 0xdeadbeef, "Expected ret_len == deadbeef, got %08lx\n", ret_len );
++
++    ret_len = 0xdeadbeef;
++    status = NtQueryInformationThread( thread, ThreadHideFromDebugger, &dummy, 1, &ret_len );
++    ok( status == STATUS_SUCCESS, "got %#lx\n", status );
++    ok( ret_len == 1, "Expected ret_len == 1, got %08lx\n", ret_len );
++
+     SetEvent( stop_event );
+     WaitForSingleObject( thread, INFINITE );
+     CloseHandle( thread );
+-- 
+GitLab
+

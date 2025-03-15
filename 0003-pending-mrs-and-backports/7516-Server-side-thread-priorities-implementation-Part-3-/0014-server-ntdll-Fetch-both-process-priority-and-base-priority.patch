@@ -1,4 +1,4 @@
-From 65c6697d388a5bebd5c8034211acd32cd04625e2 Mon Sep 17 00:00:00 2001
+From c9280efb0c395122b82949058353ff73844ded2c Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 21:32:21 +0100
 Subject: [PATCH] server, ntdll: Fetch both process priority and base_priority.

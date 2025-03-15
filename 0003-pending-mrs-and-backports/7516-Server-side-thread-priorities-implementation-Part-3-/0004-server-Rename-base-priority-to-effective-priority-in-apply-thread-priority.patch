@@ -1,4 +1,4 @@
-From c985a9d880a3f8a1343f367beb5d95985bd8cd0b Mon Sep 17 00:00:00 2001
+From 74dcee3c1be4ce11c47c44b098441cf340a9d03d Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 11:57:34 +0100
 Subject: [PATCH] server: Rename base_priority to effective_priority in
@@ -10,7 +10,7 @@ This also uses the correct NT thread priority constants where possible.
  1 file changed, 23 insertions(+), 20 deletions(-)
 
 diff --git a/server/thread.c b/server/thread.c
-index 27abe882eb4..c3bbd98640b 100644
+index 27abe882eb4..513230e8c85 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -247,14 +247,14 @@ void init_threading(void)
@@ -85,7 +85,7 @@ index 27abe882eb4..c3bbd98640b 100644
           * pthread API. */
          struct thread_time_constraint_policy thread_time_constraint_policy;
 -        int realtime_priority = base_priority - THREAD_BASE_PRIORITY_LOWRT;
-+        int realtime_priority = effective_priority - LOW_REALTIME_PRIORITY - 1;
++        int realtime_priority = effective_priority - LOW_REALTIME_PRIORITY + 1;
          unsigned int max_constraint = mach_ticks_per_second / 2;
          unsigned int max_computation = max_constraint / 10;
          /* unfortunately we can't give a hint for the periodicity of calculations */

@@ -1,4 +1,4 @@
-From bf9a7e8c276e95381a0af392d2b1d848af522ea8 Mon Sep 17 00:00:00 2001
+From f72dfe6a15800dffd233cf6f468d1d4e77eea0c2 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 11:35:19 +0100
 Subject: [PATCH] server: Infer process priority class in set_thread_priority.

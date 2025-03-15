@@ -1,4 +1,4 @@
-From 561d0621ffff9e05b31e924e03cdedee83998971 Mon Sep 17 00:00:00 2001
+From 642c73c77643b02962b8b3bd580b7544f33798ac Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 16:36:03 +0100
 Subject: [PATCH] ntdll: Implement ThreadPriority class in

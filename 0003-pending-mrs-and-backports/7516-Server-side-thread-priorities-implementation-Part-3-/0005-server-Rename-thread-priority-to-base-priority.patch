@@ -1,4 +1,4 @@
-From d877f90567d07fad53481d17b2dec1432fcf4d55 Mon Sep 17 00:00:00 2001
+From e38fbcf584c98f32c497b945607bf36bbfaf0d6b Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 13:37:03 +0100
 Subject: [PATCH] server: Rename thread priority to base_priority.
@@ -83,7 +83,7 @@ index 4f712b4e4e6..39e74724cb6 100644
  
  /* Suspend a thread */
 diff --git a/server/thread.c b/server/thread.c
-index c3bbd98640b..d7a2e35a19d 100644
+index 513230e8c85..d1acace4980 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -298,7 +298,7 @@ static void apply_thread_priority( struct thread *thread, int effective_priority

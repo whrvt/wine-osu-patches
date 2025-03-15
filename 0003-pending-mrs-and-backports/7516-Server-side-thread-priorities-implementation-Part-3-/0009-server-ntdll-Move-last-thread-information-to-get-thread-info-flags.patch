@@ -1,4 +1,4 @@
-From a6c624fb63c04e31ad208535287767f4b72e5129 Mon Sep 17 00:00:00 2001
+From 973f63e9e9defbe6c5f247acfd92f7741a9d150e Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 14:56:59 +0100
 Subject: [PATCH] server, ntdll: Move last thread information to
@@ -44,7 +44,7 @@ index 4d2ea609bbc..eaf4a0b9d52 100644
  
  /* Retrieve information about thread times */
 diff --git a/server/thread.c b/server/thread.c
-index 7add956af78..cc91252cd6d 100644
+index 644e3e05198..898a650348c 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -1717,7 +1717,6 @@ DECL_HANDLER(get_thread_info)

@@ -1,4 +1,4 @@
-From ce9ab8275f850fbc33572320d0486d5043df6833 Mon Sep 17 00:00:00 2001
+From 5378af47b690028206027cd0983e316a10d31db3 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 13:47:15 +0100
 Subject: [PATCH] include: Add thread priority constants.

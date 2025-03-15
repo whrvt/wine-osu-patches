@@ -1,4 +1,4 @@
-From f2570e2a5ac3d61fedc84d6dd4dc541438b2e607 Mon Sep 17 00:00:00 2001
+From 2a1815bd35a18c7a58beb5780f2ba044ded6e55e Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 15:04:10 +0100
 Subject: [PATCH] server, ntdll: Fetch both thread priority and base_priority.
@@ -51,7 +51,7 @@ index eaf4a0b9d52..e672cd0d759 100644
      unsigned int flags;         /* GET_THREAD_INFO_FLAG_ flags */
      data_size_t  desc_len;      /* description length in bytes */
 diff --git a/server/thread.c b/server/thread.c
-index cc91252cd6d..9d833028a49 100644
+index 898a650348c..6494d0f17ed 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -1715,7 +1715,8 @@ DECL_HANDLER(get_thread_info)

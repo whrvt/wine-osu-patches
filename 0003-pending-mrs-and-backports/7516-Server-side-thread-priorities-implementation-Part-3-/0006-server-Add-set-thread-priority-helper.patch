@@ -1,4 +1,4 @@
-From c1a736a5a55fe1cffc73808459a9d928119aa904 Mon Sep 17 00:00:00 2001
+From f5e840360a115d2e83a9c38511d515e2f87cd8ac Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 14:03:48 +0100
 Subject: [PATCH] server: Add set_thread_priority helper.
@@ -9,7 +9,7 @@ Subject: [PATCH] server: Add set_thread_priority helper.
  2 files changed, 24 insertions(+), 7 deletions(-)
 
 diff --git a/server/thread.c b/server/thread.c
-index d7a2e35a19d..05280e406c7 100644
+index d1acace4980..500e248a8a7 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -404,6 +404,7 @@ static inline void init_thread_structure( struct thread *thread )
