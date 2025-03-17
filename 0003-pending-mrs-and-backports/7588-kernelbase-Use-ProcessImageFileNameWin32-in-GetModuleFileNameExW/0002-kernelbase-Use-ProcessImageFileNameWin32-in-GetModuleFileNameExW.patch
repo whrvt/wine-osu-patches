@@ -1,0 +1,131 @@
+From 8bc871bf21366d6f19001dfd30ae07a2c8def60c Mon Sep 17 00:00:00 2001
+From: Jacek Caban <jacek@codeweavers.com>
+Date: Sat, 15 Mar 2025 23:24:09 +0100
+Subject: [PATCH] kernelbase: Use ProcessImageFileNameWin32 in
+ GetModuleFileNameExW.
+
+Allows retrieving the process image name even if the process has not yet completed loader initialization.
+
+Fixes LLDB versions newer than 15.
+
+LLVM-Issue: https://github.com/llvm/llvm-project/issues/131319
+---
+ dlls/kernelbase/debug.c       | 50 ++++++++++++++++++++++++-----------
+ dlls/psapi/tests/psapi_main.c | 25 ++++++++++++++++--
+ 2 files changed, 57 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
+index 5e3b46f11e7..7143a69c367 100644
+--- a/dlls/kernelbase/debug.c
++++ b/dlls/kernelbase/debug.c
+@@ -1501,29 +1501,47 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetModuleFileNameExW( HANDLE process, HMODULE mod
+ 
+     if (!size) return 0;
+ 
+-    if (!IsWow64Process( process, &wow64 )) return 0;
+-
+-    if (is_win64 && wow64)
++    if (module)
+     {
+-        LDR_DATA_TABLE_ENTRY32 ldr_module32;
++        if (!IsWow64Process( process, &wow64 )) return 0;
+ 
+-        if (get_ldr_module32( process, module, &ldr_module32 ))
++        if (is_win64 && wow64)
+         {
+-            len = ldr_module32.FullDllName.Length / sizeof(WCHAR);
+-            if (ReadProcessMemory( process, (void *)(DWORD_PTR)ldr_module32.FullDllName.Buffer,
+-                                   name, min( len, size ) * sizeof(WCHAR), NULL ))
+-                found = TRUE;
++            LDR_DATA_TABLE_ENTRY32 ldr_module32;
++
++            if (get_ldr_module32( process, module, &ldr_module32 ))
++            {
++                len = ldr_module32.FullDllName.Length / sizeof(WCHAR);
++                if (ReadProcessMemory( process, (void *)(DWORD_PTR)ldr_module32.FullDllName.Buffer,
++                                       name, min( len, size ) * sizeof(WCHAR), NULL ))
++                    found = TRUE;
++            }
++        }
++        if (!found)
++        {
++            LDR_DATA_TABLE_ENTRY ldr_module;
++
++            if (!get_ldr_module(process, module, &ldr_module)) return 0;
++            len = ldr_module.FullDllName.Length / sizeof(WCHAR);
++            if (!ReadProcessMemory( process, ldr_module.FullDllName.Buffer,
++                                    name, min( len, size ) * sizeof(WCHAR), NULL ))
++                return 0;
+         }
+     }
+-    if (!found)
++    else
+     {
+-        LDR_DATA_TABLE_ENTRY ldr_module;
++        BYTE buffer[sizeof(UNICODE_STRING) + MAX_PATH*sizeof(WCHAR)];  /* this buffer should be enough */
++        void *dynamic_buffer = NULL;
++        UNICODE_STRING *result;
++        NTSTATUS status;
+ 
+-        if (!get_ldr_module(process, module, &ldr_module)) return 0;
+-        len = ldr_module.FullDllName.Length / sizeof(WCHAR);
+-        if (!ReadProcessMemory( process, ldr_module.FullDllName.Buffer,
+-                                name, min( len, size ) * sizeof(WCHAR), NULL ))
+-            return 0;
++        status = get_process_image_file_name( process, buffer, sizeof(buffer), &dynamic_buffer, &result );
++        if (!status)
++        {
++            len = result->Length / sizeof(WCHAR);
++            memcpy( name, result->Buffer, min( len, size - 1 ) * sizeof(WCHAR) );
++            HeapFree( GetProcessHeap(), 0, dynamic_buffer );
++        }
+     }
+ 
+     if (len < size)
+diff --git a/dlls/psapi/tests/psapi_main.c b/dlls/psapi/tests/psapi_main.c
+index 92529447afa..797c41a0a6b 100644
+--- a/dlls/psapi/tests/psapi_main.c
++++ b/dlls/psapi/tests/psapi_main.c
+@@ -991,9 +991,11 @@ static void test_GetProcessImageFileName(void)
+ static void test_GetModuleFileNameEx(void)
+ {
+     HMODULE hMod = GetModuleHandleA(NULL);
++    STARTUPINFOW si = { sizeof(si) };
++    PROCESS_INFORMATION pi;
+     char szModExPath[MAX_PATH+1], szModPath[MAX_PATH+1];
+-    WCHAR buffer[MAX_PATH];
+-    DWORD ret;
++    WCHAR buffer[MAX_PATH], buffer2[MAX_PATH];
++    DWORD ret, size, size2;
+ 
+     SetLastError(0xdeadbeef);
+     ret = GetModuleFileNameExA(NULL, hMod, szModExPath, sizeof(szModExPath));
+@@ -1051,6 +1053,25 @@ static void test_GetModuleFileNameEx(void)
+         ok(GetLastError() == 0xdeadbeef, "got error %ld\n", GetLastError());
+         ok( buffer[0] == 0xcc, "buffer modified %s\n", wine_dbgstr_w(buffer) );
+     }
++
++    /* Verify that retrieving the main process image file name works on a suspended process,
++     * where the loader has not yet had a chance to initialize the PEB. */
++    wcscpy(buffer, L"C:\\windows\\system32\\msinfo32.exe");
++    ret = CreateProcessW(NULL, buffer, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi);
++    ok(ret, "CreateProcessW failed: %lu\n", GetLastError());
++
++    size = GetModuleFileNameExW(pi.hProcess, NULL, buffer, ARRAYSIZE(buffer));
++    ok(size, "GetModuleFileNameExW failed: %lu\n", GetLastError());
++    ok(size == wcslen(buffer), "unexpected size %lu\n", size);
++
++    size2 = ARRAYSIZE(buffer2);
++    ret = QueryFullProcessImageNameW(pi.hProcess, 0, buffer2, &size2);
++    ok(size == size2, "got size %lu, expected %lu\n", size, size2);
++    ok(!wcscmp(buffer, buffer2), "unexpected image name %s, expected %s\n", debugstr_w(buffer), debugstr_w(buffer2));
++
++    TerminateProcess(pi.hProcess, 0);
++    CloseHandle(pi.hThread);
++    CloseHandle(pi.hProcess);
+ }
+ 
+ static void test_GetModuleBaseName(void)
+-- 
+GitLab
+

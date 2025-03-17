@@ -1,0 +1,28 @@
+From 0c7da45551a685e0856706d2c3c3fd83b5fe6e5b Mon Sep 17 00:00:00 2001
+From: Kun Yang <yangkun@uniontech.com>
+Date: Mon, 17 Mar 2025 10:58:30 +0800
+Subject: [PATCH] msvcrt: Add _IONBF flag check in _filbuf to avoid dead loop
+ in application which sets the flag.
+
+Signed-off-by: Kun Yang <yangkun@uniontech.com>
+Change-Id: Ia68e11ccb0aa563eeb73a2f5cb93afcd328e1937
+---
+ dlls/msvcrt/file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/msvcrt/file.c b/dlls/msvcrt/file.c
+index dda12a70194..38b422b2fab 100644
+--- a/dlls/msvcrt/file.c
++++ b/dlls/msvcrt/file.c
+@@ -3834,7 +3834,7 @@ int CDECL _filbuf(FILE* file)
+             return EOF;
+     }
+ 
+-    if(!(file->_flag & (_IOMYBUF | MSVCRT__USERBUF))) {
++    if(!(file->_flag & (MSVCRT__NOBUF | _IOMYBUF | MSVCRT__USERBUF))) {
+         int r;
+         if ((r = _read(file->_file,&c,1)) != 1) {
+             file->_flag |= (r == 0) ? _IOEOF : _IOERR;
+-- 
+GitLab
+

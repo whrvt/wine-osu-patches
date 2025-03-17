@@ -1,0 +1,56 @@
+From 8a7b2f4144cb109b13b804cfa76af1249dd62b28 Mon Sep 17 00:00:00 2001
+From: Mohamad Al-Jaf <mohamadaljaf@gmail.com>
+Date: Sat, 15 Mar 2025 19:31:33 -0400
+Subject: [PATCH] wintypes: Implement IBuffer::get_Capacity().
+
+---
+ dlls/wintypes/buffer.c         | 8 ++++++--
+ dlls/wintypes/tests/wintypes.c | 4 ----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/wintypes/buffer.c b/dlls/wintypes/buffer.c
+index a80397bfd5d..2e2e4ceced0 100644
+--- a/dlls/wintypes/buffer.c
++++ b/dlls/wintypes/buffer.c
+@@ -195,8 +195,12 @@ static HRESULT WINAPI buffer_GetTrustLevel( IBuffer *iface, TrustLevel *trust_le
+ 
+ static HRESULT WINAPI buffer_get_Capacity( IBuffer *iface, UINT32 *value )
+ {
+-    FIXME( "iface %p, value %p stub!\n", iface, value );
+-    return E_NOTIMPL;
++    struct buffer *impl = impl_from_IBuffer( iface );
++
++    TRACE( "iface %p, value %p\n", iface, value );
++
++    *value = impl->capacity;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI buffer_get_Length( IBuffer *iface, UINT32 *value )
+diff --git a/dlls/wintypes/tests/wintypes.c b/dlls/wintypes/tests/wintypes.c
+index f759744e754..53ef796d539 100644
+--- a/dlls/wintypes/tests/wintypes.c
++++ b/dlls/wintypes/tests/wintypes.c
+@@ -200,9 +200,7 @@ static void test_IBufferStatics(void)
+ 
+     capacity = 0xdeadbeef;
+     hr = IBuffer_get_Capacity(buffer, &capacity);
+-    todo_wine
+     ok(hr == S_OK, "IBuffer_get_Capacity failed, hr %#lx.\n", hr);
+-    todo_wine
+     ok(capacity == 0, "IBuffer_get_Capacity returned capacity %u.\n", capacity);
+ 
+     if (0) /* Crash on Windows */
+@@ -237,9 +235,7 @@ static void test_IBufferStatics(void)
+ 
+     capacity = 0;
+     hr = IBuffer_get_Capacity(buffer, &capacity);
+-    todo_wine
+     ok(hr == S_OK, "IBuffer_get_Capacity failed, hr %#lx.\n", hr);
+-    todo_wine
+     ok(capacity == 0xdeadbeef, "IBuffer_get_Capacity returned capacity %u.\n", capacity);
+ 
+     length = 0xdeadbeef;
+-- 
+GitLab
+

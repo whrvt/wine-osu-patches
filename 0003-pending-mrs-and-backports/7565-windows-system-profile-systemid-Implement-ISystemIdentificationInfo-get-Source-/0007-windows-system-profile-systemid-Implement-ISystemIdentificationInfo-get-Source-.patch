@@ -1,0 +1,51 @@
+From cc88cfb261516276947df5df06ca7998e29a549c Mon Sep 17 00:00:00 2001
+From: Mohamad Al-Jaf <mohamadaljaf@gmail.com>
+Date: Mon, 12 Feb 2024 01:23:59 -0500
+Subject: [PATCH] windows.system.profile.systemid: Implement
+ ISystemIdentificationInfo::get_Source().
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=55759
+---
+ dlls/windows.system.profile.systemid/main.c           | 10 ++++++++--
+ dlls/windows.system.profile.systemid/tests/systemid.c |  2 --
+ 2 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/windows.system.profile.systemid/main.c b/dlls/windows.system.profile.systemid/main.c
+index edd607d547a..5cef5982580 100644
+--- a/dlls/windows.system.profile.systemid/main.c
++++ b/dlls/windows.system.profile.systemid/main.c
+@@ -192,8 +192,14 @@ static HRESULT WINAPI system_identification_info_get_Id( ISystemIdentificationIn
+ 
+ static HRESULT WINAPI system_identification_info_get_Source( ISystemIdentificationInfo *iface, SystemIdentificationSource *value )
+ {
+-    FIXME( "iface %p, value %p stub!\n", iface, value );
+-    return E_NOTIMPL;
++    struct system_identification_info *impl = impl_from_ISystemIdentificationInfo( iface );
++
++    TRACE( "iface %p, value %p\n", iface, value );
++
++    if (!value) return E_INVALIDARG;
++
++    *value = impl->system_id_source;
++    return S_OK;
+ }
+ 
+ static const struct ISystemIdentificationInfoVtbl system_identification_info_vtbl =
+diff --git a/dlls/windows.system.profile.systemid/tests/systemid.c b/dlls/windows.system.profile.systemid/tests/systemid.c
+index 35e50c1ed03..b34eae43994 100644
+--- a/dlls/windows.system.profile.systemid/tests/systemid.c
++++ b/dlls/windows.system.profile.systemid/tests/systemid.c
+@@ -80,10 +80,8 @@ static void test_SystemIdentification_Statics(void)
+     check_interface( system_id_info, &IID_IAgileObject, FALSE );
+ 
+     hr = ISystemIdentificationInfo_get_Source( system_id_info, NULL );
+-    todo_wine
+     ok( hr == E_INVALIDARG, "got hr %#lx.\n", hr );
+     hr = ISystemIdentificationInfo_get_Source( system_id_info, &system_id_source );
+-    todo_wine
+     ok( hr == S_OK, "got hr %#lx.\n", hr );
+     todo_wine
+     ok( system_id_source == SystemIdentificationSource_Uefi, "ISystemIdentificationInfo_get_Source returned %u.\n", system_id_source );
+-- 
+GitLab
+

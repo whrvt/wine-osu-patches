@@ -136,7 +136,7 @@ index 046b447aafd..06c56373de9 100644
  
 -static const REFERENCE_TIME def_period = 100000;
 -static const REFERENCE_TIME min_period = 50000;
-+REFERENCE_TIME def_period = 1000;
++REFERENCE_TIME def_period = 26670; /* 128 quant */
 +REFERENCE_TIME min_period = 500;
  
  static const WCHAR drv_keyW[] = {'S','o','f','t','w','a','r','e','\\',

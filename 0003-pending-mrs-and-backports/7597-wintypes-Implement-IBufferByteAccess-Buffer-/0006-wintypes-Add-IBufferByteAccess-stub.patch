@@ -1,0 +1,145 @@
+From cf57042961c9bb44de3906175bfe39d8c5bbc1f5 Mon Sep 17 00:00:00 2001
+From: Mohamad Al-Jaf <mohamadaljaf@gmail.com>
+Date: Sun, 16 Mar 2025 17:09:38 -0400
+Subject: [PATCH] wintypes: Add IBufferByteAccess stub.
+
+---
+ dlls/wintypes/buffer.c         | 49 ++++++++++++++++++++++++++++++++++
+ dlls/wintypes/tests/wintypes.c | 12 +++++++++
+ 2 files changed, 61 insertions(+)
+
+diff --git a/dlls/wintypes/buffer.c b/dlls/wintypes/buffer.c
+index 437bb1d526d..07b9484f6e5 100644
+--- a/dlls/wintypes/buffer.c
++++ b/dlls/wintypes/buffer.c
+@@ -20,6 +20,8 @@
+ #include <stdint.h>
+ 
+ #include "private.h"
++#include "initguid.h"
++#include "robuffer.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wintypes);
+ 
+@@ -119,6 +121,7 @@ static const struct IActivationFactoryVtbl factory_vtbl =
+ struct buffer
+ {
+     IBuffer IBuffer_iface;
++    IBufferByteAccess IBufferByteAccess_iface;
+     LONG ref;
+ 
+     UINT32 capacity;
+@@ -147,6 +150,13 @@ static HRESULT WINAPI buffer_QueryInterface( IBuffer *iface, REFIID iid, void **
+         return S_OK;
+     }
+ 
++    if (IsEqualGUID( iid, &IID_IBufferByteAccess ))
++    {
++        *out = &impl->IBufferByteAccess_iface;
++        IInspectable_AddRef( *out );
++        return S_OK;
++    }
++
+     FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( iid ) );
+     *out = NULL;
+     return E_NOINTERFACE;
+@@ -240,6 +250,44 @@ static const struct IBufferVtbl buffer_vtbl =
+     buffer_put_Length,
+ };
+ 
++static inline struct buffer *impl_from_IBufferByteAccess( IBufferByteAccess *iface )
++{
++    return CONTAINING_RECORD( iface, struct buffer, IBufferByteAccess_iface );
++}
++
++static HRESULT WINAPI buffer_byte_access_QueryInterface( IBufferByteAccess *iface, REFIID iid, void **out )
++{
++    struct buffer *impl = impl_from_IBufferByteAccess( iface );
++    return IBuffer_QueryInterface( &impl->IBuffer_iface, iid, out );
++}
++
++static ULONG WINAPI buffer_byte_access_AddRef( IBufferByteAccess *iface )
++{
++    struct buffer *impl = impl_from_IBufferByteAccess( iface );
++    return IBuffer_AddRef( &impl->IBuffer_iface );
++}
++
++static ULONG WINAPI buffer_byte_access_Release( IBufferByteAccess *iface )
++{
++    struct buffer *impl = impl_from_IBufferByteAccess( iface );
++    return IBuffer_Release( &impl->IBuffer_iface );
++}
++
++static HRESULT WINAPI buffer_byte_access_Buffer( IBufferByteAccess *iface, byte **value )
++{
++    FIXME( "iface %p, value %p stub!\n", iface, value );
++    return E_NOTIMPL;
++}
++
++static const struct IBufferByteAccessVtbl buffer_byte_access_vtbl =
++{
++    buffer_byte_access_QueryInterface,
++    buffer_byte_access_AddRef,
++    buffer_byte_access_Release,
++    /* IBufferByteAccess methods */
++    buffer_byte_access_Buffer,
++};
++
+ DEFINE_IINSPECTABLE( buffer_factory_statics, IBufferFactory, struct buffer_factory_statics, IActivationFactory_iface )
+ 
+ static UINT32 get_max_capacity(void)
+@@ -268,6 +316,7 @@ static HRESULT WINAPI buffer_factory_statics_Create( IBufferFactory *iface, UINT
+     if (capacity > get_max_capacity() || !(impl = calloc( 1, sizeof( *impl ) ))) return E_OUTOFMEMORY;
+ 
+     impl->IBuffer_iface.lpVtbl = &buffer_vtbl;
++    impl->IBufferByteAccess_iface.lpVtbl = &buffer_byte_access_vtbl;
+     impl->ref = 1;
+     impl->capacity = capacity;
+     impl->length = 0;
+diff --git a/dlls/wintypes/tests/wintypes.c b/dlls/wintypes/tests/wintypes.c
+index d6f4c2d7006..4f8b2481e37 100644
+--- a/dlls/wintypes/tests/wintypes.c
++++ b/dlls/wintypes/tests/wintypes.c
+@@ -36,6 +36,8 @@
+ #define WIDL_using_Windows_Storage_Streams
+ #include "windows.storage.streams.h"
+ 
++#include "robuffer.h"
++
+ #include "wine/test.h"
+ 
+ static BOOL is_wow64;
+@@ -151,6 +153,7 @@ static UINT32 get_max_capacity(void)
+ static void test_IBufferStatics(void)
+ {
+     static const WCHAR *class_name = L"Windows.Storage.Streams.Buffer";
++    IBufferByteAccess *buffer_byte_access = NULL;
+     UINT32 capacity, max_capacity, length;
+     IBufferFactory *buffer_factory = NULL;
+     IActivationFactory *factory = NULL;
+@@ -177,6 +180,7 @@ static void test_IBufferStatics(void)
+     check_interface(factory, &IID_IUnknown, TRUE);
+     check_interface(factory, &IID_IInspectable, TRUE);
+     check_interface(factory, &IID_IAgileObject, TRUE);
++    check_interface(factory, &IID_IBufferByteAccess, FALSE);
+ 
+     hr = IActivationFactory_QueryInterface(factory, &IID_IBufferFactory, (void **)&buffer_factory);
+     ok(hr == S_OK, "QueryInterface IID_IBufferFactory failed, hr %#lx.\n", hr);
+@@ -217,6 +221,14 @@ static void test_IBufferStatics(void)
+     hr = IBuffer_put_Length(buffer, 1);
+     ok(hr == E_INVALIDARG, "IBuffer_put_Length failed, hr %#lx.\n", hr);
+ 
++    hr = IBuffer_QueryInterface(buffer, &IID_IBufferByteAccess, (void **)&buffer_byte_access);
++    ok(hr == S_OK, "QueryInterface IID_IBufferByteAccess failed, hr %#lx.\n", hr);
++
++    check_interface(buffer_byte_access, &IID_IInspectable, TRUE);
++    check_interface(buffer_byte_access, &IID_IAgileObject, TRUE);
++    check_interface(buffer_byte_access, &IID_IBuffer, TRUE);
++
++    IBufferByteAccess_Release(buffer_byte_access);
+     IBuffer_Release(buffer);
+ 
+     capacity = 0xdeadbeef;
+-- 
+GitLab
+
