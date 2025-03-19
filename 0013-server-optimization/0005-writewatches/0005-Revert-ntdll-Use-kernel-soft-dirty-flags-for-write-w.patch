@@ -174,12 +174,12 @@ index 23c9f723ca9..8354f95a288 100644
      }
 @@ -2281,9 +2247,6 @@
      if (!size) size = view->size;
-     if (anon_mmap_fixed( (char *)view->base + start, size, PROT_NONE, 0 ) != MAP_FAILED)
+     if (anon_mmap_fixed( base, size, PROT_NONE, 0 ) != MAP_FAILED)
      {
 -        if (use_kernel_writewatch && view->protect & VPROT_WRITEWATCH)
 -            madvise( view->base, view->size, MADV_NOHUGEPAGE );
 -
-         set_page_vprot_bits( (char *)view->base + start, size, 0, VPROT_COMMITTED );
+         set_page_vprot_bits( base, size, 0, VPROT_COMMITTED );
          return STATUS_SUCCESS;
      }
 @@ -3390,7 +3353,6 @@

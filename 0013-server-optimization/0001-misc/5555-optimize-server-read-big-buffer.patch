@@ -93,7 +93,7 @@ index 11111111111..11111111111 100644
 +    if (!ptr) return FALSE;
 +
 +    addr = ROUND_ADDR( ptr, page_mask );
-+    size = ROUND_SIZE( ptr, size );
++    size = ROUND_SIZE( ptr, size, page_mask );
 +    for (i = 0; i < size; i += page_size)
 +        if (!(get_unix_prot( get_page_vprot( addr + i ) ) & PROT_WRITE))
 +            return FALSE;

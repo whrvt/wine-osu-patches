@@ -1,0 +1,183 @@
+From da7bf57f14158554dbfb1deb12b963fd7280480c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 19 Mar 2025 10:26:02 +0100
+Subject: [PATCH] hidclass: Avoid leaking input packet from the device thread.
+
+---
+ dlls/hidclass.sys/device.c | 48 +++++++++++---------------------------
+ dlls/hidclass.sys/hid.h    |  3 +++
+ dlls/hidclass.sys/pnp.c    | 29 +++++++++++++++++++++--
+ 3 files changed, 44 insertions(+), 36 deletions(-)
+
+diff --git a/dlls/hidclass.sys/device.c b/dlls/hidclass.sys/device.c
+index a1bd6ff3c24..9f686683cfa 100644
+--- a/dlls/hidclass.sys/device.c
++++ b/dlls/hidclass.sys/device.c
+@@ -294,7 +294,7 @@ static void hid_device_queue_input( struct phys_device *pdo, HID_XFER_PACKET *pa
+     hid_report_decref( last_report );
+ }
+ 
+-static HIDP_REPORT_IDS *find_report_with_type_and_id( HIDP_DEVICE_DESC *desc, UCHAR collection, BYTE type, BYTE id, BOOL any_id )
++HIDP_REPORT_IDS *find_report_with_type_and_id( HIDP_DEVICE_DESC *desc, UCHAR collection, BYTE type, BYTE id, BOOL any_id )
+ {
+     HIDP_REPORT_IDS *report, *reports = desc->ReportIDs;
+     ULONG report_count = desc->ReportIDsLength;
+@@ -315,47 +315,27 @@ DWORD CALLBACK hid_device_thread(void *args)
+ {
+     DEVICE_OBJECT *device = (DEVICE_OBJECT*)args;
+     struct func_device *fdo = fdo_from_DEVICE_OBJECT( device );
+-    ULONG i, input_length = 0, report_id = 0;
+     HIDP_REPORT_IDS *report;
+-    HID_XFER_PACKET *packet;
+-    HIDP_DEVICE_DESC *desc;
+     IO_STATUS_BLOCK io;
+     NTSTATUS status;
+-    BYTE *buffer;
+     IRP *irp;
+ 
+-    for (i = 0; i < fdo->device_desc.CollectionDescLength; i++)
+-    {
+-        HIDP_COLLECTION_DESC *desc = fdo->device_desc.CollectionDesc + i;
+-        input_length = max(input_length, desc->InputLength);
+-    }
+-
+-    packet = malloc( sizeof(*packet) + input_length );
+-    buffer = (BYTE *)(packet + 1);
+-
+-    desc = &fdo->device_desc;
+-    report = find_report_with_type_and_id( desc, 0, HidP_Input, 0, TRUE );
+-    if (!report) WARN("no input report found.\n");
+-    else report_id = report->ReportID;
+-
+     do
+     {
+         LARGE_INTEGER delay = {.QuadPart = (LONGLONG)fdo->poll_interval * -10000};
++        HID_XFER_PACKET packet = *fdo->io_packet;
++        BYTE *buffer = packet.reportBuffer;
+         KEVENT irp_event;
+ 
+-        packet->reportId = buffer[0] = report_id;
+-        packet->reportBuffer = buffer;
+-        packet->reportBufferLen = input_length;
+-
+-        if (!report_id)
++        if (!(packet.reportBuffer[0] = packet.reportId))
+         {
+-            packet->reportBuffer++;
+-            packet->reportBufferLen--;
++            packet.reportBuffer++;
++            packet.reportBufferLen--;
+         }
+ 
+         KeInitializeEvent( &irp_event, NotificationEvent, FALSE );
+-        irp = IoBuildDeviceIoControlRequest( IOCTL_HID_READ_REPORT, device, NULL, 0, packet->reportBuffer,
+-                                             packet->reportBufferLen, TRUE, &irp_event, &io );
++        irp = IoBuildDeviceIoControlRequest( IOCTL_HID_READ_REPORT, device, NULL, 0, packet.reportBuffer,
++                                             packet.reportBufferLen, TRUE, &irp_event, &io );
+         if (IoCallDriver( device, irp ) == STATUS_PENDING)
+         {
+             void *events[2] = {&irp_event, &fdo->halt_event};
+@@ -365,8 +345,8 @@ DWORD CALLBACK hid_device_thread(void *args)
+ 
+         if (io.Status == STATUS_SUCCESS)
+         {
+-            if (!report_id) io.Information++;
+-            if (!(report = find_report_with_type_and_id( desc, 0, HidP_Input, buffer[0], FALSE )))
++            if (!packet.reportId) io.Information++;
++            if (!(report = find_report_with_type_and_id( &fdo->device_desc, 0, HidP_Input, buffer[0], FALSE )))
+                 ERR( "dropping unknown input id %u\n", buffer[0] );
+             else if (!fdo->poll_interval && io.Information < report->InputLength)
+                 ERR( "dropping short report, len %Iu expected %u\n", io.Information, report->InputLength );
+@@ -375,10 +355,10 @@ DWORD CALLBACK hid_device_thread(void *args)
+             else
+             {
+                 struct phys_device *pdo = pdo_from_DEVICE_OBJECT( fdo->child_pdos[report->CollectionNumber - 1] );
+-                packet->reportId = buffer[0];
+-                packet->reportBuffer = buffer;
+-                packet->reportBufferLen = io.Information;
+-                hid_device_queue_input( pdo, packet, !!fdo->poll_interval );
++                packet.reportId = buffer[0];
++                packet.reportBuffer = buffer;
++                packet.reportBufferLen = io.Information;
++                hid_device_queue_input( pdo, &packet, !!fdo->poll_interval );
+             }
+         }
+ 
+diff --git a/dlls/hidclass.sys/hid.h b/dlls/hidclass.sys/hid.h
+index 403102e8d88..7a6dccae336 100644
+--- a/dlls/hidclass.sys/hid.h
++++ b/dlls/hidclass.sys/hid.h
+@@ -62,6 +62,7 @@ struct func_device
+     KEVENT halt_event;
+     HANDLE thread;
+ 
++    HID_XFER_PACKET *io_packet;
+     DEVICE_OBJECT **child_pdos;
+     UINT child_count;
+ };
+@@ -132,6 +133,8 @@ typedef struct _minidriver
+ 
+ void call_minidriver( ULONG code, DEVICE_OBJECT *device, void *in_buff, ULONG in_size,
+                       void *out_buff, ULONG out_size, IO_STATUS_BLOCK *io );
++HIDP_REPORT_IDS *find_report_with_type_and_id( HIDP_DEVICE_DESC *desc, UCHAR collection,
++                                               BYTE type, BYTE id, BOOL any_id );
+ 
+ /* Internal device functions */
+ DWORD CALLBACK hid_device_thread(void *args);
+diff --git a/dlls/hidclass.sys/pnp.c b/dlls/hidclass.sys/pnp.c
+index e4e64a92bbc..c8d11cf43ba 100644
+--- a/dlls/hidclass.sys/pnp.c
++++ b/dlls/hidclass.sys/pnp.c
+@@ -330,6 +330,29 @@ static NTSTATUS create_child_pdos( minidriver *minidriver, DEVICE_OBJECT *device
+     return STATUS_SUCCESS;
+ }
+ 
++static NTSTATUS create_device_thread( DEVICE_OBJECT *device )
++{
++    struct func_device *fdo = fdo_from_DEVICE_OBJECT( device );
++    ULONG i, input_length = 0;
++    HIDP_REPORT_IDS *report;
++
++    for (i = 0; i < fdo->device_desc.CollectionDescLength; i++)
++    {
++        HIDP_COLLECTION_DESC *desc = fdo->device_desc.CollectionDesc + i;
++        input_length = max( input_length, desc->InputLength );
++    }
++
++    if (!(fdo->io_packet = malloc( sizeof(*fdo->io_packet) + input_length ))) return STATUS_NO_MEMORY;
++
++    if (!(report = find_report_with_type_and_id( &fdo->device_desc, 0, HidP_Input, 0, TRUE ))) WARN( "no input report found.\n" );
++    fdo->io_packet->reportId = report ? report->ReportID : 0;
++    fdo->io_packet->reportBuffer = (BYTE *)(fdo->io_packet + 1);
++    fdo->io_packet->reportBufferLen = input_length;
++
++    if (!(fdo->thread = CreateThread( NULL, 0, hid_device_thread, device, 0, NULL ))) return STATUS_UNSUCCESSFUL;
++    return STATUS_SUCCESS;
++}
++
+ static NTSTATUS fdo_pnp(DEVICE_OBJECT *device, IRP *irp)
+ {
+     minidriver *minidriver = find_minidriver(device->DriverObject);
+@@ -373,7 +396,7 @@ static NTSTATUS fdo_pnp(DEVICE_OBJECT *device, IRP *irp)
+             status = minidriver->PNPDispatch( device, irp );
+             if (!status) status = initialize_device( minidriver, device );
+             if (!status) status = create_child_pdos( minidriver, device );
+-            if (!status) fdo->thread = CreateThread( NULL, 0, hid_device_thread, device, 0, NULL );
++            if (!status) status = create_device_thread( device );
+             return status;
+ 
+         case IRP_MN_REMOVE_DEVICE:
+@@ -383,7 +406,9 @@ static NTSTATUS fdo_pnp(DEVICE_OBJECT *device, IRP *irp)
+                 WaitForSingleObject( fdo->thread, INFINITE );
+             }
+ 
+-            status = minidriver->PNPDispatch( device, irp );
++            if ((status = minidriver->PNPDispatch( device, irp ))) return status;
++            free( fdo->io_packet );
++
+             HidP_FreeCollectionDescription( &fdo->device_desc );
+             free( fdo->child_pdos );
+             IoDetachDevice( fdo->base.hid.NextDeviceObject );
+-- 
+GitLab
+

@@ -1,4 +1,4 @@
-From bf9a7e8c276e95381a0af392d2b1d848af522ea8 Mon Sep 17 00:00:00 2001
+From 5313bb8c0a545d3430a203b1bd40853070fc7e18 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 11:35:19 +0100
 Subject: [PATCH] server: Infer process priority class in set_thread_priority.
@@ -23,7 +23,7 @@ index c8c08c834d4..d970e01a4cf 100644
  }
  
 diff --git a/server/thread.c b/server/thread.c
-index 51c89f029cb..27abe882eb4 100644
+index 8ab63b53a81..19558da036c 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -784,8 +784,9 @@ static int get_base_priority( int priority_class, int priority )
@@ -46,7 +46,7 @@ index 51c89f029cb..27abe882eb4 100644
          if (status) set_error( status );
      }
      if (req->mask & SET_THREAD_INFO_AFFINITY)
-@@ -1611,7 +1612,7 @@ DECL_HANDLER(init_first_thread)
+@@ -1617,7 +1618,7 @@ DECL_HANDLER(init_first_thread)
      else
          set_thread_affinity( current, current->affinity );
  
@@ -55,7 +55,7 @@ index 51c89f029cb..27abe882eb4 100644
  
      debug_level = max( debug_level, req->debug_level );
  
-@@ -1642,7 +1643,7 @@ DECL_HANDLER(init_thread)
+@@ -1648,7 +1649,7 @@ DECL_HANDLER(init_thread)
  
      init_thread_context( current );
      generate_debug_event( current, DbgCreateThreadStateChange, &req->entry );

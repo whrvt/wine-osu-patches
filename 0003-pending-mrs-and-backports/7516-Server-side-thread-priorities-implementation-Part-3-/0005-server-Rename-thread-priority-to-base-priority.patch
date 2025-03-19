@@ -1,4 +1,4 @@
-From d877f90567d07fad53481d17b2dec1432fcf4d55 Mon Sep 17 00:00:00 2001
+From e184b597caacd3b987da20da2bdaa58a27430e22 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 13:37:03 +0100
 Subject: [PATCH] server: Rename thread priority to base_priority.
@@ -12,10 +12,10 @@ Subject: [PATCH] server: Rename thread priority to base_priority.
  5 files changed, 32 insertions(+), 32 deletions(-)
 
 diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
-index b64a7dd40af..8a4a53d93a1 100644
+index d3ddcf13963..c2e1ed14f24 100644
 --- a/dlls/ntdll/unix/thread.c
 +++ b/dlls/ntdll/unix/thread.c
-@@ -2371,9 +2371,9 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
+@@ -2377,9 +2377,9 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
          if (length != sizeof(DWORD)) return STATUS_INVALID_PARAMETER;
          SERVER_START_REQ( set_thread_info )
          {
@@ -53,10 +53,10 @@ index d970e01a4cf..b8896a224ff 100644
              thread_info->entry_point = thread->entry_point;
              thread_info->teb = thread->teb;
 diff --git a/server/protocol.def b/server/protocol.def
-index 4f712b4e4e6..39e74724cb6 100644
+index 871c3909e8c..e4790480113 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -1245,18 +1245,18 @@ struct obj_locator
+@@ -1247,18 +1247,18 @@ struct obj_locator
  @REQ(set_thread_info)
      obj_handle_t handle;       /* thread handle */
      int          mask;         /* setting mask (see below) */
@@ -83,10 +83,10 @@ index 4f712b4e4e6..39e74724cb6 100644
  
  /* Suspend a thread */
 diff --git a/server/thread.c b/server/thread.c
-index c3bbd98640b..d7a2e35a19d 100644
+index 3d7cfd53566..46ca1481ef6 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -298,7 +298,7 @@ static void apply_thread_priority( struct thread *thread, int effective_priority
+@@ -299,7 +299,7 @@ static void apply_thread_priority( struct thread *thread, int effective_priority
      thread_extended_policy.timeshare = effective_priority > 14 ? 0 : 1;
      thread_precedence_policy.importance = get_mach_importance( effective_priority );
      /* adapted from the QoS table at xnu/osfmk/kern/thread_policy.c */
@@ -95,7 +95,7 @@ index c3bbd98640b..d7a2e35a19d 100644
      {
      case THREAD_PRIORITY_IDLE: /* THREAD_QOS_MAINTENANCE */
      case THREAD_PRIORITY_LOWEST: /* THREAD_QOS_BACKGROUND */
-@@ -404,7 +404,7 @@ static inline void init_thread_structure( struct thread *thread )
+@@ -405,7 +405,7 @@ static inline void init_thread_structure( struct thread *thread )
      thread->wait_fd         = NULL;
      thread->state           = RUNNING;
      thread->exit_code       = 0;
@@ -104,7 +104,7 @@ index c3bbd98640b..d7a2e35a19d 100644
      thread->suspend         = 0;
      thread->dbg_hidden      = 0;
      thread->desktop_users   = 0;
-@@ -770,24 +770,24 @@ affinity_t get_thread_affinity( struct thread *thread )
+@@ -771,24 +771,24 @@ affinity_t get_thread_affinity( struct thread *thread )
      return mask;
  }
  
@@ -134,7 +134,7 @@ index c3bbd98640b..d7a2e35a19d 100644
  {
      int priority_class = thread->process->priority;
      int max = THREAD_PRIORITY_HIGHEST;
-@@ -798,16 +798,16 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
+@@ -799,16 +799,16 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
          max = THREAD_PRIORITY_REALTIME_HIGHEST;
          min = THREAD_PRIORITY_REALTIME_LOWEST;
      }
@@ -156,7 +156,7 @@ index c3bbd98640b..d7a2e35a19d 100644
  
      return STATUS_SUCCESS;
  }
-@@ -816,9 +816,9 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
+@@ -817,9 +817,9 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
  static void set_thread_info( struct thread *thread,
                               const struct set_thread_info_request *req )
  {
@@ -168,7 +168,7 @@ index c3bbd98640b..d7a2e35a19d 100644
          if (status) set_error( status );
      }
      if (req->mask & SET_THREAD_INFO_AFFINITY)
-@@ -1615,7 +1615,7 @@ DECL_HANDLER(init_first_thread)
+@@ -1622,7 +1622,7 @@ DECL_HANDLER(init_first_thread)
      else
          set_thread_affinity( current, current->affinity );
  
@@ -177,7 +177,7 @@ index c3bbd98640b..d7a2e35a19d 100644
  
      debug_level = max( debug_level, req->debug_level );
  
-@@ -1646,7 +1646,7 @@ DECL_HANDLER(init_thread)
+@@ -1653,7 +1653,7 @@ DECL_HANDLER(init_thread)
  
      init_thread_context( current );
      generate_debug_event( current, DbgCreateThreadStateChange, &req->entry );
@@ -186,7 +186,7 @@ index c3bbd98640b..d7a2e35a19d 100644
      set_thread_affinity( current, current->affinity );
  
      reply->suspend = (current->suspend || current->process->suspend || current->context != NULL);
-@@ -1695,7 +1695,7 @@ DECL_HANDLER(get_thread_info)
+@@ -1702,7 +1702,7 @@ DECL_HANDLER(get_thread_info)
          reply->teb            = thread->teb;
          reply->entry_point    = thread->entry_point;
          reply->exit_code      = (thread->state == TERMINATED) ? thread->exit_code : STATUS_PENDING;

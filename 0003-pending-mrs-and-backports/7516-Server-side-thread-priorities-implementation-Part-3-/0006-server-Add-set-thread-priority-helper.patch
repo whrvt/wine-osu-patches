@@ -1,4 +1,4 @@
-From c1a736a5a55fe1cffc73808459a9d928119aa904 Mon Sep 17 00:00:00 2001
+From 2e8f247a5a8698e21cb7b7155e5ebaa2652ccbef Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 14:03:48 +0100
 Subject: [PATCH] server: Add set_thread_priority helper.
@@ -9,10 +9,10 @@ Subject: [PATCH] server: Add set_thread_priority helper.
  2 files changed, 24 insertions(+), 7 deletions(-)
 
 diff --git a/server/thread.c b/server/thread.c
-index d7a2e35a19d..05280e406c7 100644
+index 46ca1481ef6..24d929123da 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -404,6 +404,7 @@ static inline void init_thread_structure( struct thread *thread )
+@@ -405,6 +405,7 @@ static inline void init_thread_structure( struct thread *thread )
      thread->wait_fd         = NULL;
      thread->state           = RUNNING;
      thread->exit_code       = 0;
@@ -20,7 +20,7 @@ index d7a2e35a19d..05280e406c7 100644
      thread->base_priority   = 0;
      thread->suspend         = 0;
      thread->dbg_hidden      = 0;
-@@ -770,6 +771,25 @@ affinity_t get_thread_affinity( struct thread *thread )
+@@ -771,6 +772,25 @@ affinity_t get_thread_affinity( struct thread *thread )
      return mask;
  }
  
@@ -46,7 +46,7 @@ index d7a2e35a19d..05280e406c7 100644
  static int thread_priority_from_class_and_level( int priority_class, int base_priority )
  {
      /* offsets taken from https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities */
-@@ -804,12 +824,7 @@ unsigned int set_thread_base_priority( struct thread *thread, int base_priority
+@@ -805,12 +825,7 @@ unsigned int set_thread_base_priority( struct thread *thread, int base_priority
          return STATUS_INVALID_PARAMETER;
  
      thread->base_priority = base_priority;

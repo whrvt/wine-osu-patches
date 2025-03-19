@@ -1,0 +1,95 @@
+From e447fa62a86def597f7f88b46c8363b5d65337a2 Mon Sep 17 00:00:00 2001
+From: Alexander Morozov <amorozov@etersoft.ru>
+Date: Sat, 15 Mar 2025 23:05:29 +0300
+Subject: [PATCH] ntoskrnl.exe: Implement MmMapLockedPages.
+
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c        | 12 ++++++++++++
+ dlls/ntoskrnl.exe/ntoskrnl.exe.spec |  2 +-
+ dlls/ntoskrnl.exe/tests/driver.c    | 10 ++++++++++
+ include/ddk/wdm.h                   |  2 ++
+ 4 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 4f2127eb281..a15de6d1b95 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -2953,6 +2953,18 @@ VOID WINAPI MmLockPagableSectionByHandle(PVOID ImageSectionHandle)
+     FIXME("stub %p\n", ImageSectionHandle);
+ }
+ 
++/***********************************************************************
++ *           MmMapLockedPages   (NTOSKRNL.EXE.@)
++ */
++PVOID WINAPI MmMapLockedPages( MDL *mdl, KPROCESSOR_MODE mode )
++{
++    TRACE( "%p %u\n", mdl, mode );
++
++    mdl->MdlFlags |= MDL_MAPPED_TO_SYSTEM_VA;
++    mdl->MappedSystemVa = (char *)mdl->StartVa + mdl->ByteOffset;
++    return mdl->MappedSystemVa;
++}
++
+ /***********************************************************************
+  *           MmMapLockedPagesSpecifyCache  (NTOSKRNL.EXE.@)
+  */
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index fea13ace291..77d387174c7 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -736,7 +736,7 @@
+ @ stub MmLockPagableImageSection
+ @ stdcall MmLockPagableSectionByHandle(ptr)
+ @ stdcall MmMapIoSpace(int64 long long)
+-@ stub MmMapLockedPages
++@ stdcall MmMapLockedPages(ptr long)
+ @ stdcall MmMapLockedPagesSpecifyCache(ptr long long ptr long long)
+ @ stub MmMapLockedPagesWithReservedMapping
+ @ stub MmMapMemoryDumpMdl
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index dd8b2f4ffee..dda8806ba74 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -284,12 +284,22 @@ static void test_mdl_map(void)
+ 
+     MmProbeAndLockPages(mdl, KernelMode, IoReadAccess);
+ 
++    addr = MmMapLockedPages(mdl, KernelMode);
++    ok(addr != NULL, "MmMapLockedPages failed\n");
++    if (addr != NULL)
++        ok(!kmemcmp(addr, buffer, sizeof(buffer)), "Unexpected data in mapped memory\n");
++
++    MmUnmapLockedPages(addr, mdl);
++
+     addr = MmMapLockedPagesSpecifyCache(mdl, KernelMode, MmCached, NULL, FALSE, NormalPagePriority);
+     todo_wine
+     ok(addr != NULL, "MmMapLockedPagesSpecifyCache failed\n");
++    if (addr != NULL)
++        ok(!kmemcmp(addr, buffer, sizeof(buffer)), "Unexpected data in mapped memory\n");
+ 
+     MmUnmapLockedPages(addr, mdl);
+ 
++    MmUnlockPages(mdl);
+     IoFreeMdl(mdl);
+ }
+ 
+diff --git a/include/ddk/wdm.h b/include/ddk/wdm.h
+index 2ea6a81d432..49ceef46558 100644
+--- a/include/ddk/wdm.h
++++ b/include/ddk/wdm.h
+@@ -1859,10 +1859,12 @@ PMDL      WINAPI MmAllocatePagesForMdl(PHYSICAL_ADDRESS,PHYSICAL_ADDRESS,PHYSICA
+ void      WINAPI MmBuildMdlForNonPagedPool(MDL*);
+ NTSTATUS  WINAPI MmCopyVirtualMemory(PEPROCESS,void*,PEPROCESS,void*,SIZE_T,KPROCESSOR_MODE,SIZE_T*);
+ void *    WINAPI MmGetSystemRoutineAddress(UNICODE_STRING*);
++PVOID     WINAPI MmMapLockedPages(MDL*,KPROCESSOR_MODE);
+ PVOID     WINAPI MmMapLockedPagesSpecifyCache(PMDLX,KPROCESSOR_MODE,MEMORY_CACHING_TYPE,PVOID,ULONG,MM_PAGE_PRIORITY);
+ MM_SYSTEMSIZE WINAPI MmQuerySystemSize(void);
+ void      WINAPI MmProbeAndLockPages(PMDLX, KPROCESSOR_MODE, LOCK_OPERATION);
+ void      WINAPI MmUnmapLockedPages(void*, PMDL);
++void      WINAPI MmUnlockPages(PMDLX);
+ 
+ void    FASTCALL ObfReferenceObject(void*);
+ void      WINAPI ObDereferenceObject(void*);
+-- 
+GitLab
+

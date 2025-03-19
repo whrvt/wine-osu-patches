@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-0530ef6f](https://gitlab.winehq.org/wine/wine/-/tree/0530ef6facaca32f2342cb0a4d15f3cce8023b6d)
+wine commit: [wine-e66405a5](https://gitlab.winehq.org/wine/wine/-/tree/e66405a5040ac233ebdc7bdd925919ad63b4dd69)
 
-staging commit: [staging-0682c264](https://gitlab.winehq.org/wine/wine-staging/-/tree/0682c264964498dae7934cbc6aeac5f1dcd52807)
+staging commit: [staging-fa0cd8ea](https://gitlab.winehq.org/wine/wine-staging/-/tree/fa0cd8ead07e8308dae196122b38f95ef031187e)
 
-Staging exclude flags: `-W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
+Staging exclude flags: `-W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization -W winex11-MWM_Decorations`
 
 # Environment variables
 
@@ -202,6 +202,22 @@ cursor clip hack
 ### Type
 
 `numeric`
+
+## WINE_ENABLE_OSU_FOCUS_FIX
+
+Patch: [0002-HACK-win32u-keep-osu-from-taking-focus-when-unfocuse.patch](0009-windowing-system-integration/0001-misc/0002-HACK-win32u-keep-osu-from-taking-focus-when-unfocuse.patch)
+
+### Commit message
+
+```
+HACK: win32u: keep osu! from taking focus when unfocused on certain WMs
+Depends on Proton's WM detection. GNOME and KDE seem to not be affected by this.
+Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
+```
+
+### Description
+
+can also be forced with: WINE_ENABLE_OSU_FOCUS_FIX=1
 
 ## WINE_FSYNC_SIMULATE_SCHED_QUANTUM
 

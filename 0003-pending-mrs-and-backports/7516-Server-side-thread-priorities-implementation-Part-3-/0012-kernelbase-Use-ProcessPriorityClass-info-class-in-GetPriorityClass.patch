@@ -1,4 +1,4 @@
-From f6316445ca41d34afa005f677a3f075357b311b1 Mon Sep 17 00:00:00 2001
+From e0034cc3b42283dd33c8e301a428d2548e267585 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 19:20:09 +0100
 Subject: [PATCH] kernelbase: Use ProcessPriorityClass info class in

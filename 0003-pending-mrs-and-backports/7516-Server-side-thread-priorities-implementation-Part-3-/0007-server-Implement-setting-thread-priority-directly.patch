@@ -1,4 +1,4 @@
-From abc58580c60834a8bd650ca58c23542bbfa7883f Mon Sep 17 00:00:00 2001
+From 112c043e1f2ab9722aa3922e4f101c8658b0a684 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 16:30:32 +0100
 Subject: [PATCH] server: Implement setting thread priority directly.
@@ -9,10 +9,10 @@ Subject: [PATCH] server: Implement setting thread priority directly.
  2 files changed, 13 insertions(+), 6 deletions(-)
 
 diff --git a/server/protocol.def b/server/protocol.def
-index 39e74724cb6..4d2ea609bbc 100644
+index e4790480113..60744d1c6df 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -1245,18 +1245,20 @@ struct obj_locator
+@@ -1247,18 +1247,20 @@ struct obj_locator
  @REQ(set_thread_info)
      obj_handle_t handle;       /* thread handle */
      int          mask;         /* setting mask (see below) */
@@ -40,10 +40,10 @@ index 39e74724cb6..4d2ea609bbc 100644
  
  /* Suspend a thread */
 diff --git a/server/thread.c b/server/thread.c
-index 05280e406c7..7add956af78 100644
+index 24d929123da..5be462b4996 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -831,6 +831,11 @@ unsigned int set_thread_base_priority( struct thread *thread, int base_priority
+@@ -832,6 +832,11 @@ unsigned int set_thread_base_priority( struct thread *thread, int base_priority
  static void set_thread_info( struct thread *thread,
                               const struct set_thread_info_request *req )
  {

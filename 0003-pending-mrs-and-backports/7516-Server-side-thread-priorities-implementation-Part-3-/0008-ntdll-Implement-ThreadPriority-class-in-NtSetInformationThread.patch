@@ -1,4 +1,4 @@
-From 561d0621ffff9e05b31e924e03cdedee83998971 Mon Sep 17 00:00:00 2001
+From e6add0c9d06db6bbf838278f0afa77b2dc5ed263 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 16:36:03 +0100
 Subject: [PATCH] ntdll: Implement ThreadPriority class in
@@ -9,10 +9,10 @@ Subject: [PATCH] ntdll: Implement ThreadPriority class in
  1 file changed, 15 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
-index 8a4a53d93a1..b8e6ba65854 100644
+index c2e1ed14f24..ccb70d6f10b 100644
 --- a/dlls/ntdll/unix/thread.c
 +++ b/dlls/ntdll/unix/thread.c
-@@ -2365,6 +2365,21 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
+@@ -2371,6 +2371,21 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
          return status;
      }
  
@@ -34,7 +34,7 @@ index 8a4a53d93a1..b8e6ba65854 100644
      case ThreadBasePriority:
      {
          const DWORD *pprio = data;
-@@ -2542,7 +2557,6 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
+@@ -2548,7 +2563,6 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
  
      case ThreadBasicInformation:
      case ThreadTimes:

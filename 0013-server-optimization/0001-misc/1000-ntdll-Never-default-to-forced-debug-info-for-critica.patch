@@ -1,0 +1,47 @@
+From ab1ad725415253041a046660092149e7045a4881 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 17 Mar 2025 06:49:37 -0700
+Subject: [PATCH] ntdll: Never default to forced debug info for critical
+ sections.
+
+---
+ dlls/ntdll/sync.c | 11 ++---------
+ 1 file changed, 2 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/ntdll/sync.c b/dlls/ntdll/sync.c
+index 4d2ba062646..223b2eef4f9 100644
+--- a/dlls/ntdll/sync.c
++++ b/dlls/ntdll/sync.c
+@@ -190,19 +190,12 @@ static inline NTSTATUS wait_semaphore( RTL_CRITICAL_SECTION *crit, int timeout )
+     }
+ }
+ 
+-static ULONG crit_sect_default_flags(void)
+-{
+-    if (NtCurrentTeb()->Peb->OSMajorVersion > 6 ||
+-        (NtCurrentTeb()->Peb->OSMajorVersion == 6 && NtCurrentTeb()->Peb->OSMinorVersion >= 2)) return 0;
+-    return RTL_CRITICAL_SECTION_FLAG_FORCE_DEBUG_INFO;
+-}
+-
+ /******************************************************************************
+  *      RtlInitializeCriticalSection   (NTDLL.@)
+  */
+ NTSTATUS WINAPI RtlInitializeCriticalSection( RTL_CRITICAL_SECTION *crit )
+ {
+-    return RtlInitializeCriticalSectionEx( crit, 0, crit_sect_default_flags() );
++    return RtlInitializeCriticalSectionEx( crit, 0, 0 );
+ }
+ 
+ 
+@@ -211,7 +204,7 @@ NTSTATUS WINAPI RtlInitializeCriticalSection( RTL_CRITICAL_SECTION *crit )
+  */
+ NTSTATUS WINAPI RtlInitializeCriticalSectionAndSpinCount( RTL_CRITICAL_SECTION *crit, ULONG spincount )
+ {
+-    return RtlInitializeCriticalSectionEx( crit, spincount, crit_sect_default_flags() );
++    return RtlInitializeCriticalSectionEx( crit, spincount, 0 );
+ }
+ 
+ 
+-- 
+2.48.1
+

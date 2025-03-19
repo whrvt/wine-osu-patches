@@ -1,28 +1,30 @@
-From ce9ab8275f850fbc33572320d0486d5043df6833 Mon Sep 17 00:00:00 2001
+From 37fd52dc2e51ada64caafc77921d568a6b6b1636 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 13:47:15 +0100
 Subject: [PATCH] include: Add thread priority constants.
 
 ---
- include/winnt.h | 5 +++++
- 1 file changed, 5 insertions(+)
+ include/ddk/wdm.h | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
 
-diff --git a/include/winnt.h b/include/winnt.h
-index 722d2c3a542..d9f7b197da7 100644
---- a/include/winnt.h
-+++ b/include/winnt.h
-@@ -5358,6 +5358,11 @@ typedef enum tagSID_NAME_USE {
- #define THREAD_BASE_PRIORITY_MIN   -2
- #define THREAD_BASE_PRIORITY_IDLE  -15
+diff --git a/include/ddk/wdm.h b/include/ddk/wdm.h
+index 2ea6a81d432..88a6fcb943c 100644
+--- a/include/ddk/wdm.h
++++ b/include/ddk/wdm.h
+@@ -40,7 +40,12 @@
+ #define ADDRESS_AND_SIZE_TO_SPAN_PAGES(va, length) \
+     ((BYTE_OFFSET(va) + ((SIZE_T)(length)) + (PAGE_SIZE - 1)) >> PAGE_SHIFT)
  
+-typedef LONG KPRIORITY;
 +#define LOW_PRIORITY 0              /* Lowest thread priority level */
 +#define LOW_REALTIME_PRIORITY 16    /* Lowest realtime priority level */
 +#define HIGH_PRIORITY 31            /* Highest thread priority level */
 +#define MAXIMUM_PRIORITY 32         /* Number of thread priority levels */
 +
- typedef struct _QUOTA_LIMITS {
-     SIZE_T PagedPoolLimit;
-     SIZE_T NonPagedPoolLimit;
++typedef LONG KPRIORITY;            /* Thread priority */
+ 
+ typedef ULONG_PTR KSPIN_LOCK, *PKSPIN_LOCK;
+ 
 -- 
 GitLab
 

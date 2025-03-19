@@ -1,4 +1,4 @@
-From ab892319dfdb181f12dc9f41c6d105b0845d99f2 Mon Sep 17 00:00:00 2001
+From ed1a162015fc3785e82837cd1bba0b8e4dd6172f Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Thu, 6 Mar 2025 17:24:07 +0100
 Subject: [PATCH] kernelbase: Use correct priority in GetThreadPriority.

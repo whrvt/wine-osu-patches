@@ -1,0 +1,107 @@
+From d710fcf3c09658b75438838ba31c246dc1e7a6b8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 19 Mar 2025 10:26:02 +0100
+Subject: [PATCH] hidclass: Wait for the pending IRP after thread shutdown.
+
+---
+ dlls/hidclass.sys/device.c | 26 +++++++++++++-------------
+ dlls/hidclass.sys/hid.h    |  4 ++++
+ dlls/hidclass.sys/pnp.c    |  1 +
+ 3 files changed, 18 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/hidclass.sys/device.c b/dlls/hidclass.sys/device.c
+index 9f686683cfa..c884d4622e0 100644
+--- a/dlls/hidclass.sys/device.c
++++ b/dlls/hidclass.sys/device.c
+@@ -316,16 +316,15 @@ DWORD CALLBACK hid_device_thread(void *args)
+     DEVICE_OBJECT *device = (DEVICE_OBJECT*)args;
+     struct func_device *fdo = fdo_from_DEVICE_OBJECT( device );
+     HIDP_REPORT_IDS *report;
+-    IO_STATUS_BLOCK io;
+     NTSTATUS status;
+-    IRP *irp;
+ 
+     do
+     {
+         LARGE_INTEGER delay = {.QuadPart = (LONGLONG)fdo->poll_interval * -10000};
+         HID_XFER_PACKET packet = *fdo->io_packet;
+         BYTE *buffer = packet.reportBuffer;
+-        KEVENT irp_event;
++        KEVENT *io_event = &fdo->io_event;
++        IO_STATUS_BLOCK *io = &fdo->io;
+ 
+         if (!(packet.reportBuffer[0] = packet.reportId))
+         {
+@@ -333,23 +332,24 @@ DWORD CALLBACK hid_device_thread(void *args)
+             packet.reportBufferLen--;
+         }
+ 
+-        KeInitializeEvent( &irp_event, NotificationEvent, FALSE );
+-        irp = IoBuildDeviceIoControlRequest( IOCTL_HID_READ_REPORT, device, NULL, 0, packet.reportBuffer,
+-                                             packet.reportBufferLen, TRUE, &irp_event, &io );
+-        if (IoCallDriver( device, irp ) == STATUS_PENDING)
++        KeInitializeEvent( io_event, NotificationEvent, FALSE );
++        fdo->io_irp = IoBuildDeviceIoControlRequest( IOCTL_HID_READ_REPORT, device, NULL, 0, packet.reportBuffer,
++                                                     packet.reportBufferLen, TRUE, io_event, io );
++        if (IoCallDriver( device, fdo->io_irp ) == STATUS_PENDING)
+         {
+-            void *events[2] = {&irp_event, &fdo->halt_event};
++            void *events[2] = {io_event, &fdo->halt_event};
+             status = KeWaitForMultipleObjects( 2, events, WaitAny, Executive, KernelMode, FALSE, NULL, NULL );
+             if (status) break;
+         }
++        fdo->io_irp = NULL;
+ 
+-        if (io.Status == STATUS_SUCCESS)
++        if (io->Status == STATUS_SUCCESS)
+         {
+-            if (!packet.reportId) io.Information++;
++            if (!packet.reportId) io->Information++;
+             if (!(report = find_report_with_type_and_id( &fdo->device_desc, 0, HidP_Input, buffer[0], FALSE )))
+                 ERR( "dropping unknown input id %u\n", buffer[0] );
+-            else if (!fdo->poll_interval && io.Information < report->InputLength)
+-                ERR( "dropping short report, len %Iu expected %u\n", io.Information, report->InputLength );
++            else if (!fdo->poll_interval && io->Information < report->InputLength)
++                ERR( "dropping short report, len %Iu expected %u\n", io->Information, report->InputLength );
+             else if (!report->CollectionNumber || report->CollectionNumber > fdo->child_count)
+                 ERR( "dropping report for unknown child %u\n", report->CollectionNumber );
+             else
+@@ -357,7 +357,7 @@ DWORD CALLBACK hid_device_thread(void *args)
+                 struct phys_device *pdo = pdo_from_DEVICE_OBJECT( fdo->child_pdos[report->CollectionNumber - 1] );
+                 packet.reportId = buffer[0];
+                 packet.reportBuffer = buffer;
+-                packet.reportBufferLen = io.Information;
++                packet.reportBufferLen = io->Information;
+                 hid_device_queue_input( pdo, &packet, !!fdo->poll_interval );
+             }
+         }
+diff --git a/dlls/hidclass.sys/hid.h b/dlls/hidclass.sys/hid.h
+index 7a6dccae336..f47402efbd9 100644
+--- a/dlls/hidclass.sys/hid.h
++++ b/dlls/hidclass.sys/hid.h
+@@ -63,6 +63,10 @@ struct func_device
+     HANDLE thread;
+ 
+     HID_XFER_PACKET *io_packet;
++    IO_STATUS_BLOCK io;
++    KEVENT io_event;
++    IRP *io_irp;
++
+     DEVICE_OBJECT **child_pdos;
+     UINT child_count;
+ };
+diff --git a/dlls/hidclass.sys/pnp.c b/dlls/hidclass.sys/pnp.c
+index aa58b8e288c..8356c646f50 100644
+--- a/dlls/hidclass.sys/pnp.c
++++ b/dlls/hidclass.sys/pnp.c
+@@ -407,6 +407,7 @@ static NTSTATUS fdo_pnp(DEVICE_OBJECT *device, IRP *irp)
+             }
+ 
+             if ((status = minidriver->PNPDispatch( device, irp ))) return status;
++            if (fdo->io_irp) KeWaitForSingleObject( &fdo->io_event, Executive, KernelMode, FALSE, NULL );
+             free( fdo->io_packet );
+ 
+             HidP_FreeCollectionDescription( &fdo->device_desc );
+-- 
+GitLab
+

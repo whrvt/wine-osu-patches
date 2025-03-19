@@ -1,4 +1,4 @@
-From 5b262323dd8a62fef9af1ac0abee774e695d5993 Mon Sep 17 00:00:00 2001
+From fbfab9801e78857139b068773cab7bc9c97bd354 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 21:09:52 +0100
 Subject: [PATCH] server: Add process base priority helper.
@@ -56,10 +56,10 @@ index 9238d638f15..4d62745f209 100644
  
  /* console functions */
 diff --git a/server/thread.c b/server/thread.c
-index 9d833028a49..c605b6a2679 100644
+index ef350e08bf2..c4ef68c7ea4 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -792,16 +792,11 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
+@@ -793,16 +793,11 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
  
  static int thread_priority_from_class_and_level( int priority_class, int base_priority )
  {

@@ -1,4 +1,4 @@
-From f2570e2a5ac3d61fedc84d6dd4dc541438b2e607 Mon Sep 17 00:00:00 2001
+From 896ffc2e3c3af50bc1d6f4deb119519f00ecf045 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Fri, 7 Mar 2025 15:04:10 +0100
 Subject: [PATCH] server, ntdll: Fetch both thread priority and base_priority.
@@ -11,7 +11,7 @@ Subject: [PATCH] server, ntdll: Fetch both thread priority and base_priority.
  4 files changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
-index 9a852f90332..d1ee7c3944a 100644
+index c5ff03b648a..2edeb8a571e 100644
 --- a/dlls/ntdll/unix/thread.c
 +++ b/dlls/ntdll/unix/thread.c
 @@ -2061,7 +2061,7 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
@@ -37,10 +37,10 @@ index b8896a224ff..09cfa4406c6 100644
              thread_info->entry_point = thread->entry_point;
              thread_info->teb = thread->teb;
 diff --git a/server/protocol.def b/server/protocol.def
-index eaf4a0b9d52..e672cd0d759 100644
+index 3c7bee633e2..55cffbacca1 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -1219,7 +1219,8 @@ struct obj_locator
+@@ -1221,7 +1221,8 @@ struct obj_locator
      client_ptr_t entry_point;   /* thread entry point */
      affinity_t   affinity;      /* thread affinity mask */
      int          exit_code;     /* thread exit code */
@@ -51,10 +51,10 @@ index eaf4a0b9d52..e672cd0d759 100644
      unsigned int flags;         /* GET_THREAD_INFO_FLAG_ flags */
      data_size_t  desc_len;      /* description length in bytes */
 diff --git a/server/thread.c b/server/thread.c
-index cc91252cd6d..9d833028a49 100644
+index 273558ee060..ef350e08bf2 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -1715,7 +1715,8 @@ DECL_HANDLER(get_thread_info)
+@@ -1722,7 +1722,8 @@ DECL_HANDLER(get_thread_info)
          reply->teb            = thread->teb;
          reply->entry_point    = thread->entry_point;
          reply->exit_code      = (thread->state == TERMINATED) ? thread->exit_code : STATUS_PENDING;

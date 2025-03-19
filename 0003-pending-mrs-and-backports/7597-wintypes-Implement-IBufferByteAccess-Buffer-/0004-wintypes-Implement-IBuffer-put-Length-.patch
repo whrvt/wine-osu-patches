@@ -1,0 +1,66 @@
+From ef9fbbad1dab091529038b2a2a6d19e2a054230b Mon Sep 17 00:00:00 2001
+From: Mohamad Al-Jaf <mohamadaljaf@gmail.com>
+Date: Sat, 15 Mar 2025 19:39:12 -0400
+Subject: [PATCH] wintypes: Implement IBuffer::put_Length().
+
+---
+ dlls/wintypes/buffer.c         | 10 ++++++++--
+ dlls/wintypes/tests/wintypes.c |  4 ----
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/wintypes/buffer.c b/dlls/wintypes/buffer.c
+index e279f7c493d..1c96ee4cc1e 100644
+--- a/dlls/wintypes/buffer.c
++++ b/dlls/wintypes/buffer.c
+@@ -207,8 +207,14 @@ static HRESULT WINAPI buffer_get_Length( IBuffer *iface, UINT32 *value )
+ 
+ static HRESULT WINAPI buffer_put_Length( IBuffer *iface, UINT32 value )
+ {
+-    FIXME( "iface %p, value %u stub!\n", iface, value );
+-    return E_NOTIMPL;
++    struct buffer *impl = impl_from_IBuffer( iface );
++
++    TRACE( "iface %p, value %u\n", iface, value );
++
++    if (value > impl->capacity) return E_INVALIDARG;
++
++    impl->length = value;
++    return S_OK;
+ }
+ 
+ static const struct IBufferVtbl buffer_vtbl =
+diff --git a/dlls/wintypes/tests/wintypes.c b/dlls/wintypes/tests/wintypes.c
+index c8d1c76d8c2..87a975620f9 100644
+--- a/dlls/wintypes/tests/wintypes.c
++++ b/dlls/wintypes/tests/wintypes.c
+@@ -203,7 +203,6 @@ static void test_IBufferStatics(void)
+     ok(length == 0, "IBuffer_get_Length returned length %u.\n", length);
+ 
+     hr = IBuffer_put_Length(buffer, 1);
+-    todo_wine
+     ok(hr == E_INVALIDARG, "IBuffer_put_Length failed, hr %#lx.\n", hr);
+ 
+     IBuffer_Release(buffer);
+@@ -230,7 +229,6 @@ static void test_IBufferStatics(void)
+     ok(length == 0, "IBuffer_get_Length returned length %u.\n", length);
+ 
+     hr = IBuffer_put_Length(buffer, 1);
+-    todo_wine
+     ok(hr == S_OK, "IBuffer_put_Length failed, hr %#lx.\n", hr);
+     length = 0xdeadbeef;
+     hr = IBuffer_get_Length(buffer, &length);
+@@ -240,11 +238,9 @@ static void test_IBufferStatics(void)
+     ok(length == 1, "IBuffer_get_Length returned length %u.\n", length);
+ 
+     hr = IBuffer_put_Length(buffer, 0xdeadbeef + 1);
+-    todo_wine
+     ok(hr == E_INVALIDARG, "IBuffer_put_Length failed, hr %#lx.\n", hr);
+ 
+     hr = IBuffer_put_Length(buffer, 0xdeadbeef);
+-    todo_wine
+     ok(hr == S_OK, "IBuffer_put_Length failed, hr %#lx.\n", hr);
+     length = 0;
+     hr = IBuffer_get_Length(buffer, &length);
+-- 
+GitLab
+
