@@ -1,0 +1,100 @@
+From 2c282e4ebd3310966c715e4e293cfcde0a569275 Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Fri, 7 Mar 2025 15:04:10 +0100
+Subject: [PATCH] server, ntdll: Return the correct base/actual thread
+ priorities.
+
+---
+ dlls/kernelbase/thread.c | 2 +-
+ dlls/ntdll/tests/info.c  | 4 ++--
+ dlls/ntdll/unix/thread.c | 2 +-
+ server/process.c         | 2 +-
+ server/protocol.def      | 3 ++-
+ server/thread.c          | 3 ++-
+ 6 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/kernelbase/thread.c b/dlls/kernelbase/thread.c
+index 82096fd45f3..82ade671d1a 100644
+--- a/dlls/kernelbase/thread.c
++++ b/dlls/kernelbase/thread.c
+@@ -274,7 +274,7 @@ INT WINAPI DECLSPEC_HOTPATCH GetThreadPriority( HANDLE thread )
+     if (!set_ntstatus( NtQueryInformationThread( thread, ThreadBasicInformation,
+                                                  &info, sizeof(info), NULL )))
+         return THREAD_PRIORITY_ERROR_RETURN;
+-    return info.Priority;
++    return info.BasePriority;
+ }
+ 
+ 
+diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
+index 44c5bd6cd1e..8b3202206ce 100644
+--- a/dlls/ntdll/tests/info.c
++++ b/dlls/ntdll/tests/info.c
+@@ -3362,8 +3362,8 @@ static void test_priority(void)
+     ok( status == STATUS_SUCCESS, "NtQueryInformationThread failed after setting priority: %08lx\n", status );
+     ok( THREAD_PRIORITY_LOWEST == tbi.BasePriority, "After setting, BasePriority (%ld) does not match set BasePriority THREAD_PRIORITY_LOWEST.\n",
+         tbi.BasePriority );
+-    todo_wine ok( nt_thread_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %lu.\n",
+-                  tbi.Priority, nt_thread_priority );
++    ok( nt_thread_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %lu.\n",
++        tbi.Priority, nt_thread_priority );
+     /* Changing process priority recalculates all priorities again and
+      * overwrites our custom priority of 12. */
+     ret = SetPriorityClass( GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS );
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index 15f5d3ae568..1dd7faecb14 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -2061,7 +2061,7 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
+                 info.ClientId.UniqueThread  = ULongToHandle(reply->tid);
+                 info.AffinityMask           = reply->affinity & affinity_mask;
+                 info.Priority               = reply->priority;
+-                info.BasePriority           = reply->priority;  /* FIXME */
++                info.BasePriority           = reply->base_priority;
+             }
+         }
+         SERVER_END_REQ;
+diff --git a/server/process.c b/server/process.c
+index 1980e2ca777..12218e82e3d 100644
+--- a/server/process.c
++++ b/server/process.c
+@@ -2014,7 +2014,7 @@ DECL_HANDLER(list_processes)
+             thread_info->start_time = thread->creation_time;
+             thread_info->tid = thread->id;
+             thread_info->base_priority = thread->base_priority;
+-            thread_info->current_priority = thread->base_priority; /* FIXME */
++            thread_info->current_priority = thread->priority;
+             thread_info->unix_tid = thread->unix_tid;
+             thread_info->entry_point = thread->entry_point;
+             thread_info->teb = thread->teb;
+diff --git a/server/protocol.def b/server/protocol.def
+index 006410bdd4a..9c1124a562e 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1221,7 +1221,8 @@ struct obj_locator
+     client_ptr_t entry_point;   /* thread entry point */
+     affinity_t   affinity;      /* thread affinity mask */
+     int          exit_code;     /* thread exit code */
+-    int          priority;      /* thread priority level */
++    int          priority;      /* current thread priority */
++    int          base_priority; /* base priority level (relative to process base priority class) */
+     int          suspend_count; /* thread suspend count */
+     unsigned int flags;         /* GET_THREAD_INFO_FLAG_ flags */
+     data_size_t  desc_len;      /* description length in bytes */
+diff --git a/server/thread.c b/server/thread.c
+index 257d756139d..ce09a791b6e 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -1725,7 +1725,8 @@ DECL_HANDLER(get_thread_info)
+         reply->teb            = thread->teb;
+         reply->entry_point    = thread->entry_point;
+         reply->exit_code      = (thread->state == TERMINATED) ? thread->exit_code : STATUS_PENDING;
+-        reply->priority       = thread->base_priority;
++        reply->priority       = thread->priority;
++        reply->base_priority  = thread->base_priority;
+         reply->affinity       = thread->affinity;
+         reply->suspend_count  = thread->suspend;
+         reply->desc_len       = thread->desc_len;
+-- 
+GitLab
+

@@ -1,0 +1,126 @@
+From 67b16f924d48902a0e3ef1bffc2e511ce1700abb Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Fri, 7 Mar 2025 21:09:52 +0100
+Subject: [PATCH] server, ntdll: Return the correct base/actual process
+ priority.
+
+---
+ dlls/ntdll/tests/info.c   | 12 ++++++------
+ dlls/ntdll/unix/process.c |  4 ++--
+ server/process.c          |  1 +
+ server/process.h          |  1 +
+ server/protocol.def       |  1 +
+ server/thread.c           |  2 +-
+ 6 files changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
+index 8b3202206ce..c95da44b8cf 100644
+--- a/dlls/ntdll/tests/info.c
++++ b/dlls/ntdll/tests/info.c
+@@ -3334,8 +3334,8 @@ static void test_priority(void)
+         thread_base_priority, tbi.BasePriority );
+     status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), NULL );
+     expected_nt_priority = pbi.BasePriority + THREAD_PRIORITY_HIGHEST;
+-    todo_wine ok( expected_nt_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %d.\n",
+-                  tbi.Priority, expected_nt_priority );
++    ok( expected_nt_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %d.\n",
++        tbi.Priority, expected_nt_priority );
+ 
+     /* Test setting the thread priority to THREAD_PRIORITY_LOWEST now, but using
+      * pNtSetInformationThread, also testing NT priority directly afterwards. */
+@@ -3349,8 +3349,8 @@ static void test_priority(void)
+     ok( nt_thread_priority == tbi.BasePriority, "After setting, BasePriority (%ld) does not match set BasePriority (%ld)\n",
+         nt_thread_priority, tbi.BasePriority );
+     expected_nt_priority = pbi.BasePriority + THREAD_PRIORITY_LOWEST;
+-    todo_wine ok( expected_nt_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %d.\n",
+-                  tbi.Priority, expected_nt_priority );
++    ok( expected_nt_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %d.\n",
++        tbi.Priority, expected_nt_priority );
+     /* Now set NT thread priority directly to 12, a value normally impossible to
+      * reach in NORMAL_PRIORITY_CLASS without boost. */
+     nt_thread_priority = 12;
+@@ -3374,8 +3374,8 @@ static void test_priority(void)
+     ok( status == STATUS_SUCCESS, "NtQueryInformationThread failed after setting priority: %08lx\n", status );
+     status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), NULL );
+     expected_nt_priority = pbi.BasePriority + THREAD_PRIORITY_LOWEST;
+-    todo_wine ok( expected_nt_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %d.\n",
+-                  tbi.Priority, expected_nt_priority );
++    ok( expected_nt_priority == tbi.Priority, "After setting, effective NT priority (%ld) does not match expected priority %d.\n",
++        tbi.Priority, expected_nt_priority );
+     /* Setting an out of range priority above HIGH_PRIORITY (31) or LOW_PRIORITY (0)
+      * and lower fails. */
+     nt_thread_priority = 42;
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 533940280e6..4d5d23c47bb 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1159,7 +1159,7 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
+                             pbi.ExitStatus = reply->exit_code;
+                             pbi.PebBaseAddress = wine_server_get_ptr( reply->peb );
+                             pbi.AffinityMask = reply->affinity & affinity_mask;
+-                            pbi.BasePriority = reply->priority;
++                            pbi.BasePriority = reply->base_priority;
+                             pbi.UniqueProcessId = reply->pid;
+                             pbi.InheritedFromUniqueProcessId = reply->ppid;
+                             if (is_old_wow64())
+@@ -1653,7 +1653,7 @@ NTSTATUS WINAPI NtWow64QueryInformationProcess64( HANDLE handle, PROCESSINFOCLAS
+                             pbi.ExitStatus = reply->exit_code;
+                             pbi.PebBaseAddress = (ULONG)wine_server_get_ptr( reply->peb );
+                             pbi.AffinityMask = reply->affinity & affinity_mask;
+-                            pbi.BasePriority = reply->priority;
++                            pbi.BasePriority = reply->base_priority;
+                             pbi.UniqueProcessId = reply->pid;
+                             pbi.InheritedFromUniqueProcessId = reply->ppid;
+                         }
+diff --git a/server/process.c b/server/process.c
+index 12218e82e3d..b161e3394ba 100644
+--- a/server/process.c
++++ b/server/process.c
+@@ -1512,6 +1512,7 @@ DECL_HANDLER(get_process_info)
+         reply->ppid             = process->parent_id;
+         reply->exit_code        = process->exit_code;
+         reply->priority         = process->priority;
++        reply->base_priority    = priority_from_class_and_level( process->priority, THREAD_PRIORITY_NORMAL );
+         reply->affinity         = process->affinity;
+         reply->peb              = process->peb;
+         reply->start_time       = process->start_time;
+diff --git a/server/process.h b/server/process.h
+index 9238d638f15..e49529b06fa 100644
+--- a/server/process.h
++++ b/server/process.h
+@@ -116,6 +116,7 @@ extern void kill_process( struct process *process, int violent_death );
+ extern void kill_console_processes( struct thread *renderer, int exit_code );
+ extern void detach_debugged_processes( struct debug_obj *debug_obj, int exit_code );
+ extern void enum_processes( int (*cb)(struct process*, void*), void *user);
++extern int priority_from_class_and_level( int priority_class, int priority_level );
+ extern void set_process_priority( struct process *process, int priority );
+ 
+ /* console functions */
+diff --git a/server/protocol.def b/server/protocol.def
+index 9c1124a562e..5e3889d7750 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1158,6 +1158,7 @@ struct obj_locator
+     unsigned int session_id;       /* process session id */
+     int          exit_code;        /* process exit code */
+     int          priority;         /* priority class */
++    unsigned short base_priority;  /* process base priority */
+     unsigned short machine;        /* process architecture */
+     VARARG(image,pe_image_info);   /* image info for main exe */
+ @END
+diff --git a/server/thread.c b/server/thread.c
+index ce09a791b6e..27a40ce38ad 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -787,7 +787,7 @@ unsigned int set_thread_priority( struct thread *thread, int priority )
+     return STATUS_SUCCESS;
+ }
+ 
+-static int priority_from_class_and_level( int priority_class, int priority_level )
++int priority_from_class_and_level( int priority_class, int priority_level )
+ {
+     /* offsets taken from https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities */
+     static const int class_offsets[] = { 4, 8, 13, 24, 6, 10 };
+-- 
+GitLab
+

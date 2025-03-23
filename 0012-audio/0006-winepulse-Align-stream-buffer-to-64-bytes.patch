@@ -1,7 +1,7 @@
 From 60b82ecd172eefb26a0bcdd589b8b5a411642f9c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Feb 2025 09:26:03 -0800
-Subject: [PATCH] winepulse: Align stream buffer to 64 bytes.
+Subject: [PATCH 6/8] winepulse: Align stream buffer to 64 bytes.
 
 ---
  dlls/winepulse.drv/pulse.c | 3 ++-

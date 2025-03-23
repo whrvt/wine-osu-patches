@@ -1,0 +1,26 @@
+From 479555aa334310e1478b32468b02bfb9e4d83d9f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Aida=20Jonikien=C4=97?= <aidas957@gmail.com>
+Date: Sun, 23 Mar 2025 12:30:32 +0200
+Subject: [PATCH] winegcc: Don't call strendswith() with a NULL output_name.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=58006
+---
+ tools/winegcc/winegcc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/winegcc/winegcc.c b/tools/winegcc/winegcc.c
+index 0e9ad6bcab2..70ee06f32d4 100644
+--- a/tools/winegcc/winegcc.c
++++ b/tools/winegcc/winegcc.c
+@@ -2037,7 +2037,7 @@ int main(int argc, char **argv)
+ 
+     is_pe = is_pe_target( target );
+     if (is_pe) use_msvcrt = true;
+-    if (strendswith( output_name, ".fake" )) fake_module = true;
++    if (output_name && strendswith( output_name, ".fake" )) fake_module = true;
+ 
+     if (!section_align) section_align = "0x1000";
+     if (!file_align) file_align = section_align;
+-- 
+GitLab
+

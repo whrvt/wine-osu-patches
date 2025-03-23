@@ -201,24 +201,24 @@
      HWND     last_focus;           /* last window that had focus */
      XIM      xim;                  /* input method */
      HWND     last_xic_hwnd;        /* last xic window */
-@@ -490,7 +488,6 @@
-     XATOM__ICC_PROFILE,
-     XATOM__KDE_NET_WM_STATE_SKIP_SWITCHER,
-     XATOM__MOTIF_WM_HINTS,
--    XATOM__NET_ACTIVE_WINDOW,
-     XATOM__NET_STARTUP_INFO_BEGIN,
-     XATOM__NET_STARTUP_INFO,
-     XATOM__NET_SUPPORTED,
---- b/dlls/winex11.drv/x11drv_main.c
-+++ a/dlls/winex11.drv/x11drv_main.c
-@@ -154,7 +154,6 @@
-     "_ICC_PROFILE",
-     "_KDE_NET_WM_STATE_SKIP_SWITCHER",
-     "_MOTIF_WM_HINTS",
--    "_NET_ACTIVE_WINDOW",
-     "_NET_STARTUP_INFO_BEGIN",
-     "_NET_STARTUP_INFO",
-     "_NET_SUPPORTED",
+# @@ -490,7 +488,6 @@
+#      XATOM__ICC_PROFILE,
+#      XATOM__KDE_NET_WM_STATE_SKIP_SWITCHER,
+#      XATOM__MOTIF_WM_HINTS,
+# -    XATOM__NET_ACTIVE_WINDOW,
+#      XATOM__NET_STARTUP_INFO_BEGIN,
+#      XATOM__NET_STARTUP_INFO,
+#      XATOM__NET_SUPPORTED,
+# --- b/dlls/winex11.drv/x11drv_main.c
+# +++ a/dlls/winex11.drv/x11drv_main.c
+# @@ -154,7 +154,6 @@
+#      "_ICC_PROFILE",
+#      "_KDE_NET_WM_STATE_SKIP_SWITCHER",
+#      "_MOTIF_WM_HINTS",
+# -    "_NET_ACTIVE_WINDOW",
+#      "_NET_STARTUP_INFO_BEGIN",
+#      "_NET_STARTUP_INFO",
+#      "_NET_SUPPORTED",
 --- b/include/wine/gdi_driver.h
 +++ a/include/wine/gdi_driver.h
 @@ -316,7 +316,6 @@
