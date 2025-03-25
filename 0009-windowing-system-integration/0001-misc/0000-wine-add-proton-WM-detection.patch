@@ -1,22 +1,22 @@
-From 2976cd54c4c46f368ee7c5a4f62b723b6cf538dd Mon Sep 17 00:00:00 2001
+From 940143e5bc29fef3819a4608fd8d0abacad92835 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
-Date: Mon, 24 Mar 2025 16:33:49 +0000
+Date: Thu, 13 Mar 2025 00:07:58 +0100
 Subject: [PATCH] wine: add proton WM detection
 
-Edit of the original patch from Proton, with the addition of XFCE, Cinnamon (Mutter),
-Openbox and Hyprland detection.
+Edit of the original patch from Proton, with the addition of XFCE, Cinnamon (Mutter)
+and Hyprland detection.
 ---
- dlls/winex11.drv/window.c      | 114 +++++++++++++++++++++++++++++++++
- dlls/winex11.drv/x11drv.h      |   7 ++
+ dlls/winex11.drv/window.c      | 107 +++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h      |   7 +++
  dlls/winex11.drv/x11drv_main.c |   4 ++
- include/ntuser.h               |  23 +++++++
- 4 files changed, 148 insertions(+)
+ include/ntuser.h               |  22 +++++++
+ 4 files changed, 140 insertions(+)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 0e617d4..d0c6989 100644
+index 615fb9d..4848172 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -251,6 +251,118 @@ void host_window_set_parent( struct host_window *win, Window parent )
+@@ -251,6 +251,111 @@ void host_window_set_parent( struct host_window *win, Window parent )
  }
  
  
@@ -77,8 +77,6 @@ index 0e617d4..d0c6989 100644
 +                        cached = WINE_WM_X11_KDE;
 +                    else if(strcmp(wm_name, "Xfwm4") == 0)
 +                        cached = WINE_WM_X11_XFCE;
-+                    else if(strcmp(wm_name, "Openbox") == 0)
-+                        cached = WINE_WM_X11_OPENBOX;
 +                    else if(strstr(wm_name, "Hyprland"))
 +                        cached = WINE_WM_HYPRLAND;
 +                    else
@@ -117,11 +115,6 @@ index 0e617d4..d0c6989 100644
 +    return detect_wm(display) == WINE_WM_X11_XFCE;
 +}
 +
-+BOOL wm_is_openbox(Display *display)
-+{
-+    return detect_wm(display) == WINE_WM_X11_OPENBOX;
-+}
-+
 +BOOL wm_is_hyprland(Display *display)
 +{
 +    return detect_wm(display) == WINE_WM_HYPRLAND;
@@ -135,7 +128,7 @@ index 0e617d4..d0c6989 100644
  /***********************************************************************
   * http://standards.freedesktop.org/startup-notification-spec
   */
-@@ -2365,6 +2477,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
+@@ -2378,6 +2483,8 @@ void X11DRV_SetDesktopWindow( HWND hwnd )
  {
      unsigned int width, height;
  
@@ -145,7 +138,7 @@ index 0e617d4..d0c6989 100644
      SERVER_START_REQ( get_window_rectangles )
      {
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index b6255c2..41f6ee8 100644
+index 91811cf..8305b86 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -473,11 +473,13 @@ enum x11drv_atoms
@@ -178,7 +171,7 @@ index b6255c2..41f6ee8 100644
      XATOM_image_bmp,
      XATOM_image_gif,
      XATOM_image_jpeg,
-@@ -650,6 +654,9 @@ struct x11drv_win_data
+@@ -651,6 +655,9 @@ struct x11drv_win_data
      unsigned long configure_serial;    /* serial of last pending configure request */
  };
  
@@ -223,10 +216,10 @@ index e58d3af..c017485 100644
      "image/gif",
      "image/jpeg",
 diff --git a/include/ntuser.h b/include/ntuser.h
-index 749a56f..c2e6130 100644
+index 18b8e96..ffa1a46 100644
 --- a/include/ntuser.h
 +++ b/include/ntuser.h
-@@ -1619,4 +1619,27 @@ static inline BOOL NtUserSetRawWindowPos( HWND hwnd, RECT rect, UINT flags, BOOL
+@@ -1618,4 +1618,26 @@ static inline BOOL NtUserSetRawWindowPos( HWND hwnd, RECT rect, UINT flags, BOOL
      return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SetRawWindowPos );
  }
  
@@ -238,8 +231,7 @@ index 749a56f..c2e6130 100644
 +#define WINE_WM_X11_STEAMCOMPMGR 2
 +#define WINE_WM_X11_KDE          3
 +#define WINE_WM_X11_XFCE         4
-+#define WINE_WM_X11_OPENBOX      5
-+#define WINE_WM_HYPRLAND         6
++#define WINE_WM_HYPRLAND         5
 +
 +static inline LONG_PTR __wine_get_window_manager(void)
 +{
@@ -255,5 +247,5 @@ index 749a56f..c2e6130 100644
 +
  #endif /* _NTUSER_ */
 -- 
-2.49.0
+2.48.1
 

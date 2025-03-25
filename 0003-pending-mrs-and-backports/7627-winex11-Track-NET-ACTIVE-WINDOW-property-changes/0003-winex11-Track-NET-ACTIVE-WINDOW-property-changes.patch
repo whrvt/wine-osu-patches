@@ -151,14 +151,14 @@ index 7425385ce84..c83c8aadece 100644
  };
  
  extern struct x11drv_thread_data *x11drv_init_thread_data(void);
-# @@ -485,6 +495,7 @@ enum x11drv_atoms
-#      XATOM__ICC_PROFILE,
-#      XATOM__KDE_NET_WM_STATE_SKIP_SWITCHER,
-#      XATOM__MOTIF_WM_HINTS,
-# +    XATOM__NET_ACTIVE_WINDOW,
-#      XATOM__NET_STARTUP_INFO_BEGIN,
-#      XATOM__NET_STARTUP_INFO,
-#      XATOM__NET_SUPPORTED,
+@@ -485,6 +495,7 @@ enum x11drv_atoms
+     XATOM__ICC_PROFILE,
+     XATOM__KDE_NET_WM_STATE_SKIP_SWITCHER,
+     XATOM__MOTIF_WM_HINTS,
++    XATOM__NET_ACTIVE_WINDOW,
+     XATOM__NET_STARTUP_INFO_BEGIN,
+     XATOM__NET_STARTUP_INFO,
+     XATOM__NET_SUPPORTED,
 @@ -667,8 +678,10 @@ extern BOOL window_has_pending_wm_state( HWND hwnd, UINT state );
  extern void window_wm_state_notify( struct x11drv_win_data *data, unsigned long serial, UINT value );
  extern void window_net_wm_state_notify( struct x11drv_win_data *data, unsigned long serial, UINT value );
@@ -175,14 +175,14 @@ diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
 index 6baff60481e..fba19699f00 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-# @@ -126,6 +126,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
-#      "_ICC_PROFILE",
-#      "_KDE_NET_WM_STATE_SKIP_SWITCHER",
-#      "_MOTIF_WM_HINTS",
-# +    "_NET_ACTIVE_WINDOW",
-#      "_NET_STARTUP_INFO_BEGIN",
-#      "_NET_STARTUP_INFO",
-#      "_NET_SUPPORTED",
+@@ -126,6 +126,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+     "_ICC_PROFILE",
+     "_KDE_NET_WM_STATE_SKIP_SWITCHER",
+     "_MOTIF_WM_HINTS",
++    "_NET_ACTIVE_WINDOW",
+     "_NET_STARTUP_INFO_BEGIN",
+     "_NET_STARTUP_INFO",
+     "_NET_SUPPORTED",
 @@ -756,6 +757,7 @@ struct x11drv_thread_data *x11drv_init_thread_data(void)
      if (use_xim) xim_thread_attach( data );
      x11drv_xinput2_init( data );
