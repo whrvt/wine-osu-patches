@@ -1,0 +1,129 @@
+From aee62adff42cdf30400245de95dce3ee7616585b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 3 Mar 2025 15:04:04 +0100
+Subject: [PATCH] win32u: Implement opt-in WGL_(ARB|EXT)_extensions_string
+ support.
+
+---
+ dlls/win32u/opengl.c         | 71 ++++++++++++++++++++++++++++++++++++
+ include/wine/opengl_driver.h |  1 +
+ 2 files changed, 72 insertions(+)
+
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index ca0023ebe67..d0affa80495 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -23,6 +23,7 @@
+ 
+ #include "config.h"
+ 
++#include <assert.h>
+ #include <pthread.h>
+ #include <dlfcn.h>
+ 
+@@ -38,6 +39,50 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wgl);
+ 
++static struct opengl_funcs *get_dc_funcs( HDC hdc, void *null_funcs );
++
++static BOOL has_extension( const char *list, const char *ext )
++{
++    size_t len = strlen( ext );
++    const char *cur = list;
++
++    while (cur && (cur = strstr( cur, ext )))
++    {
++        if ((!cur[len] || cur[len] == ' ') && (cur == list || cur[-1] == ' ')) return TRUE;
++        cur = strchr( cur, ' ' );
++    }
++
++    return FALSE;
++}
++
++static void dump_extensions( const char *list )
++{
++    const char *start, *end, *ptr;
++
++    for (start = end = ptr = list; ptr; ptr = strchr( ptr + 1, ' ' ))
++    {
++        if (ptr - start <= 128) end = ptr;
++        else
++        {
++            TRACE( "%.*s\n", (int)(end - start), start );
++            start = end + 1;
++        }
++    }
++
++    TRACE( "%s\n", start );
++}
++
++static void register_extension( char *list, size_t size, const char *name )
++{
++    if (!has_extension( list, name ))
++    {
++        size_t len = strlen( list );
++        assert( size - len >= strlen( name ) + 1 );
++        if (*list) strcat( list + len, " " );
++        strcat( list + len, name );
++    }
++}
++
+ #ifdef SONAME_LIBOSMESA
+ 
+ #define OSMESA_COLOR_INDEX  GL_COLOR_INDEX
+@@ -355,6 +400,20 @@ static struct opengl_funcs *osmesa_get_wgl_driver(void)
+ static const struct opengl_driver_funcs nulldrv_funcs;
+ static const struct opengl_driver_funcs *driver_funcs = &nulldrv_funcs;
+ 
++static char wgl_extensions[4096];
++
++static const char *win32u_wglGetExtensionsStringARB( HDC hdc )
++{
++    if (TRACE_ON(wgl)) dump_extensions( wgl_extensions );
++    return wgl_extensions;
++}
++
++static const char *win32u_wglGetExtensionsStringEXT(void)
++{
++    if (TRACE_ON(wgl)) dump_extensions( wgl_extensions );
++    return wgl_extensions;
++}
++
+ static struct opengl_funcs *display_funcs;
+ static struct opengl_funcs *memory_funcs;
+ 
+@@ -373,6 +432,18 @@ static void display_funcs_init(void)
+         ERR( "Failed to initialize the driver opengl functions, status %#x\n", status );
+         return;
+     }
++    if (!display_funcs) return;
++
++    if (driver_funcs->p_init_wgl_extensions)
++    {
++        strcpy( wgl_extensions, driver_funcs->p_init_wgl_extensions() );
++
++        register_extension( wgl_extensions, ARRAY_SIZE(wgl_extensions), "WGL_ARB_extensions_string" );
++        display_funcs->p_wglGetExtensionsStringARB = win32u_wglGetExtensionsStringARB;
++
++        register_extension( wgl_extensions, ARRAY_SIZE(wgl_extensions), "WGL_EXT_extensions_string" );
++        display_funcs->p_wglGetExtensionsStringEXT = win32u_wglGetExtensionsStringEXT;
++    }
+ }
+ 
+ static struct opengl_funcs *get_dc_funcs( HDC hdc, void *null_funcs )
+diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
+index 34c83d6f40f..d8b2336aadd 100644
+--- a/include/wine/opengl_driver.h
++++ b/include/wine/opengl_driver.h
+@@ -113,6 +113,7 @@ struct opengl_funcs
+ /* interface between win32u and the user drivers */
+ struct opengl_driver_funcs
+ {
++    const char *(*p_init_wgl_extensions)(void);
+ };
+ 
+ #endif /* WINE_UNIX_LIB */
+-- 
+GitLab
+

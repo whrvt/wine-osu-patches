@@ -1,0 +1,55 @@
+From 8d34ef0d80d9c8bdad355d2e9f21380f5993e36a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 6 Mar 2025 15:56:52 +0100
+Subject: [PATCH] win32u: Add a nulldrv init_wgl_extensions implementation.
+
+---
+ dlls/win32u/opengl.c | 23 ++++++++++++++---------
+ 1 file changed, 14 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index d0affa80495..c3245945446 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -397,7 +397,15 @@ static struct opengl_funcs *osmesa_get_wgl_driver(void)
+ 
+ #endif  /* SONAME_LIBOSMESA */
+ 
+-static const struct opengl_driver_funcs nulldrv_funcs;
++static const char *nulldrv_init_wgl_extensions(void)
++{
++    return "";
++}
++
++static const struct opengl_driver_funcs nulldrv_funcs =
++{
++    .p_init_wgl_extensions = nulldrv_init_wgl_extensions,
++};
+ static const struct opengl_driver_funcs *driver_funcs = &nulldrv_funcs;
+ 
+ static char wgl_extensions[4096];
+@@ -434,16 +442,13 @@ static void display_funcs_init(void)
+     }
+     if (!display_funcs) return;
+ 
+-    if (driver_funcs->p_init_wgl_extensions)
+-    {
+-        strcpy( wgl_extensions, driver_funcs->p_init_wgl_extensions() );
++    strcpy( wgl_extensions, driver_funcs->p_init_wgl_extensions() );
+ 
+-        register_extension( wgl_extensions, ARRAY_SIZE(wgl_extensions), "WGL_ARB_extensions_string" );
+-        display_funcs->p_wglGetExtensionsStringARB = win32u_wglGetExtensionsStringARB;
++    register_extension( wgl_extensions, ARRAY_SIZE(wgl_extensions), "WGL_ARB_extensions_string" );
++    display_funcs->p_wglGetExtensionsStringARB = win32u_wglGetExtensionsStringARB;
+ 
+-        register_extension( wgl_extensions, ARRAY_SIZE(wgl_extensions), "WGL_EXT_extensions_string" );
+-        display_funcs->p_wglGetExtensionsStringEXT = win32u_wglGetExtensionsStringEXT;
+-    }
++    register_extension( wgl_extensions, ARRAY_SIZE(wgl_extensions), "WGL_EXT_extensions_string" );
++    display_funcs->p_wglGetExtensionsStringEXT = win32u_wglGetExtensionsStringEXT;
+ }
+ 
+ static struct opengl_funcs *get_dc_funcs( HDC hdc, void *null_funcs )
+-- 
+GitLab
+

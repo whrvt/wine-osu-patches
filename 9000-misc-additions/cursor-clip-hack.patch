@@ -122,14 +122,14 @@ index c20ba170285..6c778f5566a 100644
      RECT rect;
      UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
      if (NtUserGetClipCursor(&rect)) NtUserClipCursor(&rect);
-@@ -884,6 +885,7 @@ void WAYLAND_SetCursor(HWND hwnd, HCURSOR hcursor)
+@@ -1096,6 +1095,7 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
   */
  BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
  {
 +    if (use_cursor_clip_hack()) return TRUE;
      struct wayland_pointer *pointer = &process_wayland.pointer;
+     HWND hwnd;
      struct wl_surface *wl_surface = NULL;
-     struct wayland_surface *surface = NULL;
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
 index 7da73d6bba0..0d9472022e6 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
