@@ -1,0 +1,45 @@
+From 272a6efbdca6f123a470bf6a99bbfc75b3694136 Mon Sep 17 00:00:00 2001
+From: Bartosz Kosiorek <gang65@poczta.onet.pl>
+Date: Sun, 23 Mar 2025 17:32:31 +0100
+Subject: [PATCH] gdiplus/test: add tests for GdipGetPathWorldBounds with
+ single point
+
+---
+ dlls/gdiplus/tests/graphicspath.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/dlls/gdiplus/tests/graphicspath.c b/dlls/gdiplus/tests/graphicspath.c
+index 81b4b40eed4..4640d6bbee6 100644
+--- a/dlls/gdiplus/tests/graphicspath.c
++++ b/dlls/gdiplus/tests/graphicspath.c
+@@ -586,6 +586,7 @@ static void test_worldbounds(void)
+     expectf(266.8, bounds.Width);
+     expectf(289.6, bounds.Height);
+ 
++    /* Bounds from path without any points */
+     GdipCreatePath(FillModeAlternate, &path);
+     status = GdipGetPathWorldBounds(path, &bounds, matrix, pen);
+     expect(Ok, status);
+@@ -596,6 +597,19 @@ static void test_worldbounds(void)
+     expectf(0.0, bounds.Width);
+     expectf(0.0, bounds.Height);
+ 
++    /* Bounds from path with single point */
++    GdipCreatePath(FillModeAlternate, &path);
++    GdipAddPathLine2(path, &(line2_points[0]), 1);
++    status = GdipGetPathWorldBounds(path, &bounds, matrix, pen);
++    expect(Ok, status);
++    GdipDeletePath(path);
++
++    todo_wine expectf(10.40, bounds.X);
++    todo_wine expectf(10.20, bounds.Y);
++    todo_wine expectf(0.0, bounds.Width);
++    todo_wine expectf(0.0, bounds.Height);
++
++    /* Bounds from path with two points */
+     GdipCreatePath(FillModeAlternate, &path);
+     GdipAddPathLine2(path, &(line2_points[0]), 2);
+     status = GdipGetPathWorldBounds(path, &bounds, matrix, pen);
+-- 
+GitLab
+

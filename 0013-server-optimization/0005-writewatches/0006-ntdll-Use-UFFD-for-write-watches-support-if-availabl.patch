@@ -311,8 +311,8 @@ diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index 8354f95a288..55c05c15784 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -70,6 +70,10 @@
- # include <mach/vm_map.h>
+@@ -72,6 +72,10 @@
+ #undef host_page_size
  #endif
  
 +#include <linux/userfaultfd.h>
@@ -322,7 +322,7 @@ index 8354f95a288..55c05c15784 100644
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
  #include "windef.h"
-@@ -214,6 +218,9 @@ static BYTE **pages_vprot;
+@@ -221,6 +225,9 @@ static BYTE **pages_vprot;
  static BYTE *pages_vprot;
  #endif
  
@@ -330,9 +330,9 @@ index 8354f95a288..55c05c15784 100644
 +static int uffd_fd, pagemap_fd;
 +
  static struct file_view *view_block_start, *view_block_end, *next_free_view;
- #ifdef _WIN64
- static const size_t view_block_size = 0x200000;
-@@ -270,6 +277,127 @@ void *anon_mmap_alloc( size_t size, int prot )
+ static const size_t view_block_size = 0x100000;
+ static void *preload_reserve_start;
+@@ -265,6 +272,127 @@ void *anon_mmap_alloc( size_t size, int prot )
      return mmap( NULL, size, prot, MAP_PRIVATE | MAP_ANON, -1, 0 );
  }
  
@@ -460,7 +460,7 @@ index 8354f95a288..55c05c15784 100644
  
  static void mmap_add_reserved_area( void *addr, SIZE_T size )
  {
-@@ -1163,7 +1291,7 @@ static int get_unix_prot( BYTE vprot )
+@@ -1195,7 +1323,7 @@ static int get_unix_prot( BYTE vprot )
          if (vprot & VPROT_WRITE) prot |= PROT_WRITE | PROT_READ;
          if (vprot & VPROT_WRITECOPY) prot |= PROT_WRITE | PROT_READ;
          if (vprot & VPROT_EXEC) prot |= PROT_EXEC | PROT_READ;
@@ -469,7 +469,7 @@ index 8354f95a288..55c05c15784 100644
      }
      if (!prot) prot = PROT_NONE;
      return prot;
-@@ -1539,6 +1667,8 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
+@@ -1695,6 +1823,8 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
          TRACE( "forcing exec permission on %p-%p\n", base, (char *)base + size - 1 );
          mprotect( base, size, unix_prot | PROT_EXEC );
      }
@@ -478,7 +478,7 @@ index 8354f95a288..55c05c15784 100644
      return STATUS_SUCCESS;
  }
  
-@@ -1656,7 +1786,7 @@ static void mprotect_range( void *base, size_t size, BYTE set, BYTE clear )
+@@ -1816,7 +1946,7 @@ static int mprotect_range( void *base, size_t size, BYTE set, BYTE clear )
   */
  static BOOL set_vprot( struct file_view *view, void *base, size_t size, BYTE vprot )
  {
@@ -487,7 +487,7 @@ index 8354f95a288..55c05c15784 100644
      {
          /* each page may need different protections depending on write watch flag */
          set_page_vprot_bits( base, size, vprot & ~VPROT_WRITEWATCH, ~vprot & ~VPROT_WRITEWATCH );
-@@ -1734,8 +1864,12 @@ static void update_write_watches( void *base, size_t size, size_t accessed_size
+@@ -1894,8 +2024,12 @@ static void update_write_watches( void *base, size_t size, size_t accessed_size
   */
  static void reset_write_watches( void *base, SIZE_T size )
  {
@@ -502,7 +502,7 @@ index 8354f95a288..55c05c15784 100644
  }
  
  
-@@ -2068,7 +2202,11 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
+@@ -2089,7 +2223,11 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
  
          view->protect = vprot | VPROT_PLACEHOLDER;
          set_vprot( view, base, size, vprot );
@@ -515,15 +515,15 @@ index 8354f95a288..55c05c15784 100644
          *view_ret = view;
          return STATUS_SUCCESS;
      }
-@@ -2248,6 +2386,7 @@ static NTSTATUS decommit_pages( struct file_view *view, char *base, size_t size )
-     if (anon_mmap_fixed( base, size, PROT_NONE, 0 ) != MAP_FAILED)
-     {
-         set_page_vprot_bits( base, size, 0, VPROT_COMMITTED );
-+        kernel_writewatch_register_range( view, base, size );
-         return STATUS_SUCCESS;
-     }
-     return STATUS_NO_MEMORY;
-@@ -3353,6 +3492,7 @@ void virtual_init(void)
+@@ -2308,6 +2446,7 @@ static NTSTATUS decommit_pages( struct file_view *view, char *base, size_t size
+     else host_end = ROUND_ADDR( base + size, host_page_mask );
+ 
+     if (host_start < host_end) anon_mmap_fixed( host_start, host_end - host_start, PROT_NONE, 0 );
++    kernel_writewatch_register_range( view, host_start, host_end - host_start );
+     set_page_vprot_bits( base, size, 0, VPROT_COMMITTED );
+     return STATUS_SUCCESS;
+ }
+@@ -3462,6 +3601,7 @@ void virtual_init(void)
      size_t size;
      int i;
      pthread_mutexattr_t attr;
@@ -531,7 +531,7 @@ index 8354f95a288..55c05c15784 100644
  
      pthread_mutexattr_init( &attr );
      pthread_mutexattr_settype( &attr, PTHREAD_MUTEX_RECURSIVE );
-@@ -3366,6 +3506,12 @@ void virtual_init(void)
+@@ -3481,6 +3621,12 @@ void virtual_init(void)
      host_addr_space_limit = address_space_limit;
  #endif
  
@@ -544,7 +544,7 @@ index 8354f95a288..55c05c15784 100644
      if (preload_info && *preload_info)
          for (i = 0; (*preload_info)[i].size; i++)
              mmap_add_reserved_area( (*preload_info)[i].addr, (*preload_info)[i].size );
-@@ -4127,7 +4273,7 @@ NTSTATUS virtual_handle_fault( EXCEPTION_RECORD *rec, void *stack )
+@@ -4338,7 +4484,7 @@ NTSTATUS virtual_handle_fault( EXCEPTION_RECORD *rec, void *stack )
          }
          else ret = grow_thread_stack( page, &stack_info );
      }
@@ -553,10 +553,10 @@ index 8354f95a288..55c05c15784 100644
      {
          if (vprot & VPROT_WRITEWATCH)
          {
-@@ -4221,11 +4367,11 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
-     for (i = 0; i < size; i += page_size)
+@@ -4432,11 +4578,11 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
+     for (i = 0; i < size; i += host_page_size)
      {
-         BYTE vprot = get_page_vprot( addr + i );
+         BYTE vprot = get_host_page_vprot( addr + i );
 -        if (vprot & VPROT_WRITEWATCH) *has_write_watch = TRUE;
 +        if (!use_kernel_writewatch && vprot & VPROT_WRITEWATCH) *has_write_watch = TRUE;
          if (!(get_unix_prot( vprot & ~VPROT_WRITEWATCH ) & PROT_WRITE))
@@ -567,7 +567,7 @@ index 8354f95a288..55c05c15784 100644
          mprotect_range( addr, size, 0, VPROT_WRITEWATCH );  /* temporarily enable write access */
      return STATUS_SUCCESS;
  }
-@@ -4267,7 +4413,7 @@ ssize_t virtual_locked_read( int fd, void *addr, size_t size )
+@@ -4478,7 +4624,7 @@ ssize_t virtual_locked_read( int fd, void *addr, size_t size )
      int err = EFAULT;
  
      ssize_t ret = read( fd, addr, size );
@@ -576,7 +576,7 @@ index 8354f95a288..55c05c15784 100644
  
      server_enter_uninterrupted_section( &virtual_mutex, &sigset );
      if (!check_write_access( addr, size, &has_write_watch ))
-@@ -4292,7 +4438,7 @@ ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
+@@ -4503,7 +4649,7 @@ ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
      int err = EFAULT;
  
      ssize_t ret = pread( fd, addr, size, offset );
@@ -585,7 +585,7 @@ index 8354f95a288..55c05c15784 100644
  
      server_enter_uninterrupted_section( &virtual_mutex, &sigset );
      if (!check_write_access( addr, size, &has_write_watch ))
-@@ -4318,7 +4464,7 @@ ssize_t virtual_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
+@@ -4529,7 +4675,7 @@ ssize_t virtual_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
      int err = EFAULT;
  
      ssize_t ret = recvmsg( fd, hdr, flags );
@@ -594,7 +594,7 @@ index 8354f95a288..55c05c15784 100644
  
      server_enter_uninterrupted_section( &virtual_mutex, &sigset );
      for (i = 0; i < hdr->msg_iovlen; i++)
-@@ -6151,6 +6297,13 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
+@@ -6383,6 +6529,13 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
          char *addr = base;
          char *end = addr + size;
  
@@ -608,7 +608,7 @@ index 8354f95a288..55c05c15784 100644
          while (pos < *count && addr < end)
          {
              if (!(get_page_vprot( addr ) & VPROT_WRITEWATCH)) addresses[pos++] = addr;
-@@ -6162,6 +6315,7 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
+@@ -6394,6 +6547,7 @@ NTSTATUS WINAPI NtGetWriteWatch( HANDLE process, ULONG flags, PVOID base, SIZE_T
      }
      else status = STATUS_INVALID_PARAMETER;
  
@@ -616,57 +616,3 @@ index 8354f95a288..55c05c15784 100644
      server_leave_uninterrupted_section( &virtual_mutex, &sigset );
      return status;
  }
-diff --git a/dlls/ws2_32/tests/sock.c b/dlls/ws2_32/tests/sock.c
-index a6ac748754d..c61e91ba708 100644
---- a/dlls/ws2_32/tests/sock.c
-+++ b/dlls/ws2_32/tests/sock.c
-@@ -7972,6 +7972,7 @@ static void test_write_watch(void)
-     ok( count == 9 || !count /* Win 11 */, "wrong count %Iu\n", count );
-     ok( !base[0], "data set\n" );
- 
-+    base[0x1000] = 1;
-     send(src, "test message", sizeof("test message"), 0);
- 
-     ret = GetOverlappedResult( (HANDLE)dest, &ov, &bytesReturned, TRUE );
-@@ -7980,10 +7981,19 @@ static void test_write_watch(void)
-     ok( !memcmp( base, "test ", 5 ), "wrong data %s\n", base );
-     ok( !memcmp( base + 0x4000, "message", 8 ), "wrong data %s\n", base + 0x4000 );
- 
-+    count = 64;
-+    ret = pGetWriteWatch( 0, base, size, results, &count, &pagesize );
-+    ok( !ret, " GetWriteWatch failed %lu\n", GetLastError() );
-+    todo_wine_if( count == 3 ) ok( count == 1, "wrong count %Iu\n", count );
-+    todo_wine_if( count == 3 ) ok( results[0] == base + 0x1000, "got page %Iu.\n", ((char *)results[0] - base) / 0x1000 );
-+
-+    base[0x2000] = 1;
-     count = 64;
-     ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
-     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
--    ok( count == 0, "wrong count %Iu\n", count );
-+    todo_wine_if( count == 4 ) ok( count == 2, "wrong count %Iu\n", count );
-+    todo_wine_if( count == 4 ) ok( results[0] == base + 0x1000, "got page %Iu.\n", ((char *)results[0] - base) / 0x1000 );
-+    todo_wine_if( count == 4 ) ok( results[1] == base + 0x2000, "got page %Iu.\n", ((char *)results[1] - base) / 0x1000 );
- 
-     memset( base, 0, size );
-     count = 64;
-@@ -8014,7 +8024,7 @@ static void test_write_watch(void)
-     count = 64;
-     ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
-     ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
--    ok( count == 0, "wrong count %Iu\n", count );
-+    todo_wine_if( count == 2 ) ok( count == 0, "wrong count %Iu\n", count );
- 
-     memset( base, 0, size );
-     count = 64;
-@@ -8043,7 +8053,7 @@ static void test_write_watch(void)
-         count = 64;
-         ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
-         ok( !ret, "GetWriteWatch failed %lu\n", GetLastError() );
--        ok( count == 0, "wrong count %Iu\n", count );
-+        todo_wine_if( count == 1 ) ok( count == 0, "wrong count %Iu\n", count );
-     }
-     WSACloseEvent( event );
-     closesocket( dest );
--- 
-2.45.2
-

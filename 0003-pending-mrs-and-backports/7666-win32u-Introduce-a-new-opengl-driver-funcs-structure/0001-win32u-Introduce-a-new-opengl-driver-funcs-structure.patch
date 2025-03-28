@@ -1,0 +1,509 @@
+From 794f630f72b13c8da8b5edc5a47db27938d26ca1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 3 Mar 2025 15:34:01 +0100
+Subject: [PATCH] win32u: Introduce a new opengl_driver_funcs structure.
+
+---
+ dlls/win32u/driver.c                   |  8 ++++----
+ dlls/win32u/opengl.c                   | 12 +++++++++++-
+ dlls/wineandroid.drv/android.h         |  2 +-
+ dlls/wineandroid.drv/init.c            |  2 +-
+ dlls/wineandroid.drv/opengl.c          | 15 +++++++++------
+ dlls/winemac.drv/gdi.c                 |  2 +-
+ dlls/winemac.drv/macdrv.h              |  2 +-
+ dlls/winemac.drv/opengl.c              | 15 ++++++++-------
+ dlls/winewayland.drv/opengl.c          | 19 +++++++++++--------
+ dlls/winewayland.drv/waylanddrv.h      |  2 +-
+ dlls/winewayland.drv/waylanddrv_main.c |  2 +-
+ dlls/winex11.drv/init.c                |  2 +-
+ dlls/winex11.drv/opengl.c              | 21 ++++++++++++---------
+ dlls/winex11.drv/x11drv.h              |  2 +-
+ include/wine/gdi_driver.h              |  5 +++--
+ include/wine/opengl_driver.h           |  8 +++++++-
+ 16 files changed, 73 insertions(+), 46 deletions(-)
+
+diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
+index 5edac6a0c8a..94dc8ceae44 100644
+--- a/dlls/win32u/driver.c
++++ b/dlls/win32u/driver.c
+@@ -911,9 +911,9 @@ static UINT nulldrv_VulkanInit( UINT version, void *vulkan_handle, const struct
+     return STATUS_NOT_IMPLEMENTED;
+ }
+ 
+-static struct opengl_funcs *nulldrv_wine_get_wgl_driver( UINT version )
++static UINT nulldrv_OpenGLInit( UINT version, struct opengl_funcs **opengl_funcs, const struct opengl_driver_funcs **driver_funcs )
+ {
+-    return (void *)-1;
++    return STATUS_NOT_IMPLEMENTED;
+ }
+ 
+ static void nulldrv_ThreadDetach( void )
+@@ -1302,7 +1302,7 @@ static const struct user_driver_funcs lazy_load_driver =
+     /* vulkan support */
+     loaderdrv_VulkanInit,
+     /* opengl support */
+-    nulldrv_wine_get_wgl_driver,
++    nulldrv_OpenGLInit,
+     /* thread management */
+     nulldrv_ThreadDetach,
+ };
+@@ -1396,7 +1396,7 @@ void __wine_set_user_driver( const struct user_driver_funcs *funcs, UINT version
+     SET_USER_FUNC(WindowPosChanged);
+     SET_USER_FUNC(SystemParametersInfo);
+     SET_USER_FUNC(VulkanInit);
+-    SET_USER_FUNC(wine_get_wgl_driver);
++    SET_USER_FUNC(OpenGLInit);
+     SET_USER_FUNC(ThreadDetach);
+ #undef SET_USER_FUNC
+ 
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index a65f6567dc7..ca0023ebe67 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -352,6 +352,9 @@ static struct opengl_funcs *osmesa_get_wgl_driver(void)
+ 
+ #endif  /* SONAME_LIBOSMESA */
+ 
++static const struct opengl_driver_funcs nulldrv_funcs;
++static const struct opengl_driver_funcs *driver_funcs = &nulldrv_funcs;
++
+ static struct opengl_funcs *display_funcs;
+ static struct opengl_funcs *memory_funcs;
+ 
+@@ -362,7 +365,14 @@ static void memory_funcs_init(void)
+ 
+ static void display_funcs_init(void)
+ {
+-    display_funcs = user_driver->pwine_get_wgl_driver( WINE_OPENGL_DRIVER_VERSION );
++    UINT status;
++
++    if ((status = user_driver->pOpenGLInit( WINE_OPENGL_DRIVER_VERSION, &display_funcs, &driver_funcs )) &&
++        status != STATUS_NOT_IMPLEMENTED)
++    {
++        ERR( "Failed to initialize the driver opengl functions, status %#x\n", status );
++        return;
++    }
+ }
+ 
+ static struct opengl_funcs *get_dc_funcs( HDC hdc, void *null_funcs )
+diff --git a/dlls/wineandroid.drv/android.h b/dlls/wineandroid.drv/android.h
+index e3b5467ced1..d744202e6c9 100644
+--- a/dlls/wineandroid.drv/android.h
++++ b/dlls/wineandroid.drv/android.h
+@@ -56,7 +56,7 @@ DECL_FUNCPTR( ANativeWindow_release );
+ extern pthread_mutex_t drawable_mutex;
+ extern void update_gl_drawable( HWND hwnd );
+ extern void destroy_gl_drawable( HWND hwnd );
+-extern struct opengl_funcs *ANDROID_wine_get_wgl_driver( UINT version );
++extern UINT ANDROID_OpenGLInit( UINT version, struct opengl_funcs **opengl_funcs, const struct opengl_driver_funcs **driver_funcs );
+ 
+ 
+ /**************************************************************************
+diff --git a/dlls/wineandroid.drv/init.c b/dlls/wineandroid.drv/init.c
+index 1211ccd102b..cb640268c34 100644
+--- a/dlls/wineandroid.drv/init.c
++++ b/dlls/wineandroid.drv/init.c
+@@ -319,7 +319,7 @@ static const struct user_driver_funcs android_drv_funcs =
+     .pWindowPosChanging = ANDROID_WindowPosChanging,
+     .pCreateWindowSurface = ANDROID_CreateWindowSurface,
+     .pWindowPosChanged = ANDROID_WindowPosChanged,
+-    .pwine_get_wgl_driver = ANDROID_wine_get_wgl_driver,
++    .pOpenGLInit = ANDROID_OpenGLInit,
+ };
+ 
+ 
+diff --git a/dlls/wineandroid.drv/opengl.c b/dlls/wineandroid.drv/opengl.c
+index fdd4ceddd73..0cfa45c77f1 100644
+--- a/dlls/wineandroid.drv/opengl.c
++++ b/dlls/wineandroid.drv/opengl.c
+@@ -39,6 +39,8 @@
+ #include <EGL/egl.h>
+ #endif
+ 
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
+ #include "android.h"
+ #include "winternl.h"
+ 
+@@ -956,9 +958,9 @@ static void init_extensions(void)
+ }
+ 
+ /**********************************************************************
+- *           ANDROID_wine_get_wgl_driver
++ *           ANDROID_OpenGLInit
+  */
+-struct opengl_funcs *ANDROID_wine_get_wgl_driver( UINT version )
++UINT ANDROID_OpenGLInit( UINT version, struct opengl_funcs **funcs, const struct opengl_driver_funcs **driver_funcs )
+ {
+     EGLConfig *configs;
+     EGLint major, minor, count, i, pass;
+@@ -966,17 +968,17 @@ struct opengl_funcs *ANDROID_wine_get_wgl_driver( UINT version )
+     if (version != WINE_OPENGL_DRIVER_VERSION)
+     {
+         ERR( "version mismatch, opengl32 wants %u but driver has %u\n", version, WINE_OPENGL_DRIVER_VERSION );
+-        return NULL;
++        return STATUS_INVALID_PARAMETER;
+     }
+     if (!(egl_handle = dlopen( SONAME_LIBEGL, RTLD_NOW|RTLD_GLOBAL )))
+     {
+         ERR( "failed to load %s: %s\n", SONAME_LIBEGL, dlerror() );
+-        return NULL;
++        return STATUS_NOT_SUPPORTED;
+     }
+     if (!(opengl_handle = dlopen( SONAME_LIBGLESV2, RTLD_NOW|RTLD_GLOBAL )))
+     {
+         ERR( "failed to load %s: %s\n", SONAME_LIBGLESV2, dlerror() );
+-        return NULL;
++        return STATUS_NOT_SUPPORTED;
+     }
+ 
+ #define LOAD_FUNCPTR(func) do { \
+@@ -1043,7 +1045,8 @@ struct opengl_funcs *ANDROID_wine_get_wgl_driver( UINT version )
+     }
+ 
+     init_extensions();
+-    return &egl_funcs;
++    *funcs = &egl_funcs;
++    return STATUS_SUCCESS;
+ }
+ 
+ 
+diff --git a/dlls/winemac.drv/gdi.c b/dlls/winemac.drv/gdi.c
+index 4921fc2f170..f74236c7b0c 100644
+--- a/dlls/winemac.drv/gdi.c
++++ b/dlls/winemac.drv/gdi.c
+@@ -310,7 +310,7 @@ static const struct user_driver_funcs macdrv_funcs =
+     .pGetWindowStyleMasks = macdrv_GetWindowStyleMasks,
+     .pCreateWindowSurface = macdrv_CreateWindowSurface,
+     .pVulkanInit = macdrv_VulkanInit,
+-    .pwine_get_wgl_driver = macdrv_wine_get_wgl_driver,
++    .pOpenGLInit = macdrv_OpenGLInit,
+ };
+ 
+ 
+diff --git a/dlls/winemac.drv/macdrv.h b/dlls/winemac.drv/macdrv.h
+index 4673d69654a..c42c3fd1634 100644
+--- a/dlls/winemac.drv/macdrv.h
++++ b/dlls/winemac.drv/macdrv.h
+@@ -241,7 +241,7 @@ extern BOOL macdrv_SystemParametersInfo(UINT action, UINT int_param, void *ptr_p
+ extern BOOL query_pasteboard_data(HWND hwnd, CFStringRef type);
+ extern void macdrv_lost_pasteboard_ownership(HWND hwnd);
+ 
+-extern struct opengl_funcs *macdrv_wine_get_wgl_driver(UINT version);
++extern UINT macdrv_OpenGLInit(UINT version, struct opengl_funcs **opengl_funcs, const struct opengl_driver_funcs **driver_funcs);
+ extern UINT macdrv_VulkanInit(UINT version, void *vulkan_handle, const struct vulkan_driver_funcs **driver_funcs);
+ extern void sync_gl_view(struct macdrv_win_data* data, const struct window_rects *old_rects);
+ 
+diff --git a/dlls/winemac.drv/opengl.c b/dlls/winemac.drv/opengl.c
+index 13a64bda372..0c64d459ad9 100644
+--- a/dlls/winemac.drv/opengl.c
++++ b/dlls/winemac.drv/opengl.c
+@@ -4165,23 +4165,23 @@ static void load_extensions(void)
+ 
+ 
+ /**********************************************************************
+- *              macdrv_wine_get_wgl_driver
++ *              macdrv_OpenGLInit
+  */
+-struct opengl_funcs *macdrv_wine_get_wgl_driver(UINT version)
++UINT macdrv_OpenGLInit(UINT version, struct opengl_funcs **funcs, const struct opengl_driver_funcs **driver_funcs)
+ {
+     TRACE("()\n");
+ 
+     if (version != WINE_OPENGL_DRIVER_VERSION)
+     {
+         ERR("version mismatch, opengl32 wants %u but macdrv has %u\n", version, WINE_OPENGL_DRIVER_VERSION);
+-        return NULL;
++        return STATUS_INVALID_PARAMETER;
+     }
+ 
+     dc_pbuffers = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
+     if (!dc_pbuffers)
+     {
+         WARN("CFDictionaryCreateMutable failed\n");
+-        return NULL;
++        return STATUS_NOT_SUPPORTED;
+     }
+ 
+     opengl_handle = dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL", RTLD_LAZY|RTLD_LOCAL|RTLD_NOLOAD);
+@@ -4189,7 +4189,7 @@ struct opengl_funcs *macdrv_wine_get_wgl_driver(UINT version)
+     {
+         ERR("Failed to load OpenGL: %s\n", dlerror());
+         ERR("OpenGL support is disabled.\n");
+-        return NULL;
++        return STATUS_NOT_SUPPORTED;
+     }
+ 
+ #define USE_GL_FUNC(func) \
+@@ -4230,12 +4230,13 @@ struct opengl_funcs *macdrv_wine_get_wgl_driver(UINT version)
+     if (!init_pixel_formats())
+         goto failed;
+ 
+-    return &opengl_funcs;
++    *funcs = &opengl_funcs;
++    return STATUS_SUCCESS;
+ 
+ failed:
+     dlclose(opengl_handle);
+     opengl_handle = NULL;
+-    return NULL;
++    return STATUS_NOT_SUPPORTED;
+ }
+ 
+ 
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index 501b17550d2..fcf13ae81d7 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -29,6 +29,8 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
+ #include "waylanddrv.h"
+ #include "wine/debug.h"
+ 
+@@ -1311,9 +1313,9 @@ static BOOL init_egl_configs(void)
+ }
+ 
+ /**********************************************************************
+- *           WAYLAND_wine_get_wgl_driver
++ *           WAYLAND_OpenGLInit
+  */
+-struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version)
++UINT WAYLAND_OpenGLInit(UINT version, struct opengl_funcs **funcs, const struct opengl_driver_funcs **driver_funcs)
+ {
+     EGLint egl_version[2];
+     const char *egl_client_exts, *egl_exts;
+@@ -1322,13 +1324,13 @@ struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version)
+     {
+         ERR("Version mismatch, opengl32 wants %u but driver has %u\n",
+             version, WINE_OPENGL_DRIVER_VERSION);
+-        return NULL;
++        return STATUS_INVALID_PARAMETER;
+     }
+ 
+     if (!(egl_handle = dlopen(SONAME_LIBEGL, RTLD_NOW|RTLD_GLOBAL)))
+     {
+         ERR("Failed to load %s: %s\n", SONAME_LIBEGL, dlerror());
+-        return NULL;
++        return STATUS_NOT_SUPPORTED;
+     }
+ 
+ #define LOAD_FUNCPTR_DLSYM(func) \
+@@ -1404,12 +1406,13 @@ struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version)
+ 
+     if (!init_opengl_funcs()) goto err;
+     if (!init_egl_configs()) goto err;
+-    return &opengl_funcs;
++    *funcs = &opengl_funcs;
++    return STATUS_SUCCESS;
+ 
+ err:
+     dlclose(egl_handle);
+     egl_handle = NULL;
+-    return NULL;
++    return STATUS_NOT_SUPPORTED;
+ }
+ 
+ static struct opengl_funcs opengl_funcs =
+@@ -1449,9 +1452,9 @@ void wayland_resize_gl_drawable(HWND hwnd)
+ 
+ #else /* No GL */
+ 
+-struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version)
++UINT WAYLAND_OpenGLInit(UINT version, struct opengl_funcs **funcs, const struct opengl_driver_funcs **driver_funcs)
+ {
+-    return NULL;
++    return STATUS_NOT_IMPLEMENTED;
+ }
+ 
+ void wayland_destroy_gl_drawable(HWND hwnd)
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 065d4d31873..47bf6ea1f21 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -439,6 +439,6 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UIN
+ BOOL WAYLAND_WindowPosChanging(HWND hwnd, UINT swp_flags, BOOL shaped, const struct window_rects *rects);
+ BOOL WAYLAND_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface);
+ UINT WAYLAND_VulkanInit(UINT version, void *vulkan_handle, const struct vulkan_driver_funcs **driver_funcs);
+-struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version);
++UINT WAYLAND_OpenGLInit(UINT version, struct opengl_funcs **opengl_funcs, const struct opengl_driver_funcs **driver_funcs);
+ 
+ #endif /* __WINE_WAYLANDDRV_H */
+diff --git a/dlls/winewayland.drv/waylanddrv_main.c b/dlls/winewayland.drv/waylanddrv_main.c
+index dba519b1df1..8e310963ef3 100644
+--- a/dlls/winewayland.drv/waylanddrv_main.c
++++ b/dlls/winewayland.drv/waylanddrv_main.c
+@@ -52,7 +52,7 @@ static const struct user_driver_funcs waylanddrv_funcs =
+     .pWindowPosChanging = WAYLAND_WindowPosChanging,
+     .pCreateWindowSurface = WAYLAND_CreateWindowSurface,
+     .pVulkanInit = WAYLAND_VulkanInit,
+-    .pwine_get_wgl_driver = WAYLAND_wine_get_wgl_driver,
++    .pOpenGLInit = WAYLAND_OpenGLInit,
+ };
+ 
+ static void wayland_init_process_name(void)
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 70da9b8c094..5f13de49d24 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -467,7 +467,7 @@ static const struct user_driver_funcs x11drv_funcs =
+     .pWindowPosChanged = X11DRV_WindowPosChanged,
+     .pSystemParametersInfo = X11DRV_SystemParametersInfo,
+     .pVulkanInit = X11DRV_VulkanInit,
+-    .pwine_get_wgl_driver = X11DRV_wine_get_wgl_driver,
++    .pOpenGLInit = X11DRV_OpenGLInit,
+     .pThreadDetach = X11DRV_ThreadDetach,
+ };
+ 
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 4524e7c46fa..9d5b0ff3504 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -38,6 +38,8 @@
+ #include <sys/un.h>
+ #endif
+ 
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
+ #include "x11drv.h"
+ #include "xcomposite.h"
+ #include "winternl.h"
+@@ -536,16 +538,16 @@ done:
+ static void *opengl_handle;
+ 
+ /**********************************************************************
+- *           X11DRV_wine_get_wgl_driver
++ *           X11DRV_OpenglInit
+  */
+-struct opengl_funcs *X11DRV_wine_get_wgl_driver(UINT version)
++UINT X11DRV_OpenGLInit( UINT version, struct opengl_funcs **funcs, const struct opengl_driver_funcs **driver_funcs )
+ {
+     int error_base, event_base;
+ 
+     if (version != WINE_OPENGL_DRIVER_VERSION)
+     {
+         ERR( "version mismatch, opengl32 wants %u but driver has %u\n", version, WINE_OPENGL_DRIVER_VERSION );
+-        return NULL;
++        return STATUS_INVALID_PARAMETER;
+     }
+ 
+     /* No need to load any other libraries as according to the ABI, libGL should be self-sufficient
+@@ -555,7 +557,7 @@ struct opengl_funcs *X11DRV_wine_get_wgl_driver(UINT version)
+     {
+         ERR( "Failed to load libGL: %s\n", dlerror() );
+         ERR( "OpenGL support is disabled.\n");
+-        return NULL;
++        return STATUS_NOT_SUPPORTED;
+     }
+ 
+ #define USE_GL_FUNC(func) \
+@@ -724,12 +726,13 @@ struct opengl_funcs *X11DRV_wine_get_wgl_driver(UINT version)
+     X11DRV_WineGL_LoadExtensions();
+     init_pixel_formats( gdi_display );
+ 
+-    return &opengl_funcs;
++    *funcs = &opengl_funcs;
++    return STATUS_SUCCESS;
+ 
+ failed:
+     dlclose(opengl_handle);
+     opengl_handle = NULL;
+-    return NULL;
++    return STATUS_NOT_SUPPORTED;
+ }
+ 
+ static const char *debugstr_fbconfig( GLXFBConfig fbconfig )
+@@ -2905,11 +2908,11 @@ static struct opengl_funcs opengl_funcs =
+ #else  /* no OpenGL includes */
+ 
+ /**********************************************************************
+- *           X11DRV_wine_get_wgl_driver
++ *           X11DRV_OpenglInit
+  */
+-struct opengl_funcs *X11DRV_wine_get_wgl_driver(UINT version)
++UINT X11DRV_OpenGLInit( UINT version, struct opengl_funcs **funcs, const struct opengl_driver_funcs **driver_funcs )
+ {
+-    return NULL;
++    return STATUS_NOT_IMPLEMENTED;
+ }
+ 
+ void sync_gl_drawable( HWND hwnd, BOOL known_child )
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index b6255c2a880..921008cb211 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -282,7 +282,7 @@ extern BOOL client_side_with_render;
+ extern BOOL shape_layered_windows;
+ extern const struct gdi_dc_funcs *X11DRV_XRender_Init(void);
+ 
+-extern struct opengl_funcs *X11DRV_wine_get_wgl_driver( UINT version );
++extern UINT X11DRV_OpenGLInit( UINT, struct opengl_funcs **, const struct opengl_driver_funcs ** );
+ extern UINT X11DRV_VulkanInit( UINT, void *, const struct vulkan_driver_funcs ** );
+ 
+ extern struct format_entry *import_xdnd_selection( Display *display, Window win, Atom selection,
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index efee8d1af4d..85f1676623b 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -219,7 +219,7 @@ struct gdi_dc_funcs
+ };
+ 
+ /* increment this when you change the DC function table */
+-#define WINE_GDI_DRIVER_VERSION 103
++#define WINE_GDI_DRIVER_VERSION 104
+ 
+ #define GDI_PRIORITY_NULL_DRV        0  /* null driver */
+ #define GDI_PRIORITY_FONT_DRV      100  /* any font driver */
+@@ -320,6 +320,7 @@ struct gdi_device_manager
+ #define WINE_DM_UNSUPPORTED 0x80000000
+ 
+ struct vulkan_driver_funcs;
++struct opengl_driver_funcs;
+ 
+ struct user_driver_funcs
+ {
+@@ -394,7 +395,7 @@ struct user_driver_funcs
+     /* vulkan support */
+     UINT    (*pVulkanInit)(UINT,void *,const struct vulkan_driver_funcs **);
+     /* opengl support */
+-    struct opengl_funcs * (*pwine_get_wgl_driver)(UINT);
++    UINT    (*pOpenGLInit)(UINT,struct opengl_funcs **,const struct opengl_driver_funcs **);
+     /* thread management */
+     void    (*pThreadDetach)(void);
+ };
+diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
+index c5540e379ad..34c83d6f40f 100644
+--- a/include/wine/opengl_driver.h
++++ b/include/wine/opengl_driver.h
+@@ -61,11 +61,12 @@ struct wgl_pixel_format
+ #ifdef WINE_UNIX_LIB
+ 
+ /* Wine internal opengl driver version, needs to be bumped upon opengl_funcs changes. */
+-#define WINE_OPENGL_DRIVER_VERSION 30
++#define WINE_OPENGL_DRIVER_VERSION 31
+ 
+ struct wgl_context;
+ struct wgl_pbuffer;
+ 
++/* interface between opengl32 and win32u */
+ struct opengl_funcs
+ {
+     BOOL       (*p_wglCopyContext)( struct wgl_context * hglrcSrc, struct wgl_context * hglrcDst, UINT mask );
+@@ -109,6 +110,11 @@ struct opengl_funcs
+ #undef USE_GL_FUNC
+ };
+ 
++/* interface between win32u and the user drivers */
++struct opengl_driver_funcs
++{
++};
++
+ #endif /* WINE_UNIX_LIB */
+ 
+ #endif /* __WINE_OPENGL_DRIVER_H */
+-- 
+GitLab
+

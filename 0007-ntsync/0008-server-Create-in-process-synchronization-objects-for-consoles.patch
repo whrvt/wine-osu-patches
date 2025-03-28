@@ -13,9 +13,9 @@ index fcd70f21dd0..d5c672126c0 100644
 --- a/server/console.c
 +++ b/server/console.c
 @@ -63,6 +63,7 @@ struct console
-     struct fd                   *fd;            /* for bare console, attached input fd */
-     struct async_queue           ioctl_q;       /* ioctl queue */
-     struct async_queue           read_q;        /* read queue */
+     struct list                  screen_buffers;/* attached screen buffers */
+     struct list                  inputs;        /* attached console inputs */
+     struct list                  outputs;       /* attached console outputs */
 +    struct inproc_sync          *inproc_sync;   /* in-process synchronization object */
  };
  
@@ -93,9 +93,9 @@ index fcd70f21dd0..d5c672126c0 100644
      console->fd            = NULL;
      console->last_id       = 0;
 +    console->inproc_sync     = NULL;
-     init_async_queue( &console->ioctl_q );
-     init_async_queue( &console->read_q );
- 
+     list_init( &console->screen_buffers );
+     list_init( &console->inputs );
+     list_init( &console->outputs );
 @@ -795,6 +801,8 @@ static void console_destroy( struct object *obj )
      free_async_queue( &console->read_q );
      if (console->fd)
@@ -189,9 +189,9 @@ index fcd70f21dd0..d5c672126c0 100644
          server->console->signaled = 1;
          wake_up( &server->console->obj, 0 );
 +        set_inproc_event( server->console->inproc_sync );
-     }
- 
-     if (req->read)
+         LIST_FOR_EACH_ENTRY( screen_buffer, &server->console->screen_buffers, struct screen_buffer, entry )
+             wake_up( &screen_buffer->obj, 0 );
+         LIST_FOR_EACH_ENTRY( input, &server->console->inputs, struct console_input, entry )
 -- 
 2.47.1
 
