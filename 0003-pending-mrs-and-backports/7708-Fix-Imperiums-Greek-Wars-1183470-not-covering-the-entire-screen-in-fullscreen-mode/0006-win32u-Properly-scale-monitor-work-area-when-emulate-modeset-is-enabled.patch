@@ -1,0 +1,74 @@
+From 96877730c8dff65ffc2245f2c55915ccf6961372 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Tue, 1 Apr 2025 12:00:09 +0800
+Subject: [PATCH] win32u: Properly scale monitor work area when emulate_modeset
+ is enabled.
+
+---
+ dlls/win32u/sysparams.c | 48 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index e33ff6e60e5..81b5e9a4288 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -1911,9 +1911,55 @@ static void monitor_get_info( struct monitor *monitor, MONITORINFO *info, UINT d
+     UINT x, y;
+ 
+     info->rcMonitor = monitor_get_rect( monitor, dpi, MDT_DEFAULT );
+-    info->rcWork = map_dpi_rect( monitor->rc_work, monitor_get_dpi( monitor, MDT_DEFAULT, &x, &y ), dpi );
+     info->dwFlags = is_monitor_primary( monitor ) ? MONITORINFOF_PRIMARY : 0;
+ 
++    if (emulate_modeset)
++    {
++        UINT left_edge, top_edge, right_edge, bottom_edge;
++        struct source *source;
++        UINT num, den;
++        RECT rect;
++
++        if (!(source = monitor->source))
++        {
++            SetRect( &rect, 0, 0, 1024, 768 );
++            info->rcWork = map_dpi_rect( rect, monitor_get_dpi( monitor, MDT_DEFAULT, &x, &y ), dpi );
++        }
++        else if (!(source->state_flags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
++        {
++            SetRectEmpty( &info->rcWork );
++        }
++        else
++        {
++            /* Taskbar size at each side, always non-negative */
++            left_edge = monitor->rc_work.left - source->physical.dmPosition.x;
++            top_edge = monitor->rc_work.top - source->physical.dmPosition.y;
++            right_edge = source->physical.dmPosition.x + source->physical.dmPelsWidth - monitor->rc_work.right;
++            bottom_edge = source->physical.dmPosition.y + source->physical.dmPelsHeight - monitor->rc_work.bottom;
++
++            /* Scale down the area occupied by taskbar. For example, if the height of the taskbar
++             * is 100 on 3840x2160. Then changing to emulated 1920x1080 should report a taskbar of
++             * height 50 because the taskbar height is constant from the perspective of the host
++             * system */
++            monitor_virt_to_raw_ratio( monitor, &den, &num );
++            left_edge = muldiv( left_edge, num, den );
++            top_edge = muldiv( top_edge, num, den );
++            right_edge = muldiv( right_edge, num, den );
++            bottom_edge = muldiv( bottom_edge, num, den );
++
++            rect = monitor_get_rect( monitor, 0, MDT_EFFECTIVE_DPI );
++            rect.left += left_edge;
++            rect.top += top_edge;
++            rect.right -= right_edge;
++            rect.bottom -= bottom_edge;
++            info->rcWork = map_dpi_rect( rect, monitor_get_dpi( monitor, MDT_DEFAULT, &x, &y ), dpi );
++        }
++    }
++    else
++    {
++        info->rcWork = map_dpi_rect( monitor->rc_work, monitor_get_dpi( monitor, MDT_DEFAULT, &x, &y ), dpi );
++    }
++
+     if (info->cbSize >= sizeof(MONITORINFOEXW))
+     {
+         char buffer[CCHDEVICENAME];
+-- 
+GitLab
+

@@ -1,0 +1,305 @@
+From 8f288bfc2abc2d4d10fac385eb71ea9e78e514ec Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 29 Mar 2025 09:32:27 +0100
+Subject: [PATCH] winex11: Use _NET_ACTIVE_WINDOW to request/track window
+ activation.
+
+When supported, instead of tracking window focus only.
+---
+ dlls/winex11.drv/event.c    | 32 ++++++++------
+ dlls/winex11.drv/keyboard.c |  2 +-
+ dlls/winex11.drv/mouse.c    |  2 +-
+ dlls/winex11.drv/window.c   | 86 ++++++++++++++++++++++++++++++++-----
+ dlls/winex11.drv/x11drv.h   |  4 +-
+ 5 files changed, 101 insertions(+), 25 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 7c6bd39884e..f9aa4b3f66b 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -650,23 +650,25 @@ static void set_input_focus( struct x11drv_win_data *data )
+ /**********************************************************************
+  *              set_focus
+  */
+-static void set_focus( Display *display, HWND hwnd, Time time )
++static void set_focus( Display *display, HWND focus, Time time )
+ {
+-    HWND focus;
+     Window win;
+     GUITHREADINFO threadinfo;
+ 
+-    TRACE( "setting foreground window to %p\n", hwnd );
+-    NtUserSetForegroundWindow( hwnd );
++    TRACE( "setting foreground window to %p\n", focus );
+ 
+-    threadinfo.cbSize = sizeof(threadinfo);
+-    NtUserGetGUIThreadInfo( 0, &threadinfo );
+-    focus = threadinfo.hwndFocus;
+-    if (!focus) focus = threadinfo.hwndActive;
+-    if (focus) focus = NtUserGetAncestor( focus, GA_ROOT );
+-    win = X11DRV_get_whole_window(focus);
++    if (!is_net_supported( x11drv_atom(_NET_ACTIVE_WINDOW) ))
++    {
++        NtUserSetForegroundWindow( focus );
++
++        threadinfo.cbSize = sizeof(threadinfo);
++        NtUserGetGUIThreadInfo( 0, &threadinfo );
++        focus = threadinfo.hwndFocus;
++        if (!focus) focus = threadinfo.hwndActive;
++        if (focus) focus = NtUserGetAncestor( focus, GA_ROOT );
++    }
+ 
+-    if (win)
++    if ((win = X11DRV_get_whole_window( focus )))
+     {
+         TRACE( "setting focus to %p (%lx) time=%ld\n", focus, win, time );
+         XSetInputFocus( display, win, RevertToParent, time );
+@@ -909,7 +911,7 @@ static void focus_out( Display *display , HWND hwnd )
+     /* don't reset the foreground window, if the window which is
+        getting the focus is a Wine window */
+ 
+-    if (!is_current_process_focused())
++    if (!is_net_supported( x11drv_atom(_NET_ACTIVE_WINDOW) ) && !is_current_process_focused())
+     {
+         /* Abey : 6-Oct-99. Check again if the focus out window is the
+            Foreground window, because in most cases the messages sent
+@@ -1222,12 +1224,15 @@ static void handle_wm_state_notify( HWND hwnd, XPropertyEvent *event )
+ {
+     struct x11drv_win_data *data;
+     UINT value = 0;
++    BOOL activate;
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+     if (event->state == PropertyNewValue) value = get_window_wm_state( event->display, event->window );
+     window_wm_state_notify( data, event->serial, value, event->time );
++    activate = value == NormalState && !data->wm_state_serial && data->current_state.activate;
+     release_win_data( data );
+ 
++    if (hwnd == NtUserGetForegroundWindow() && activate) set_net_active_window( hwnd, 0 );
+     NtUserPostMessage( hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0 );
+ }
+ 
+@@ -1304,6 +1309,9 @@ static BOOL X11DRV_PropertyNotify( HWND hwnd, XEvent *xev )
+ void X11DRV_ActivateWindow( HWND hwnd, HWND previous )
+ {
+     struct x11drv_win_data *data;
++
++    set_net_active_window( hwnd, previous );
++
+     if (!(data = get_win_data( hwnd ))) return;
+     if (!data->managed || data->embedder) set_input_focus( data );
+     release_win_data( data );
+diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
+index 8a5ef62f57d..091c507bdc9 100644
+--- a/dlls/winex11.drv/keyboard.c
++++ b/dlls/winex11.drv/keyboard.c
+@@ -1343,7 +1343,7 @@ BOOL X11DRV_KeyEvent( HWND hwnd, XEvent *xev )
+ 
+     if (event->type == KeyPress && (data = get_win_data( hwnd )))
+     {
+-        window_set_user_time( data, event->time );
++        window_set_user_time( data, event->time, FALSE );
+         release_win_data( data );
+     }
+ 
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index b4693c1fb82..4a74c18672a 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -1550,7 +1550,7 @@ BOOL X11DRV_ButtonPress( HWND hwnd, XEvent *xev )
+ 
+     if ((data = get_win_data( hwnd )))
+     {
+-        window_set_user_time( data, event->time );
++        window_set_user_time( data, event->time, FALSE );
+         release_win_data( data );
+     }
+ 
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index d4222161ba4..a733d566d4f 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -266,7 +266,7 @@ static void remove_startup_notification( struct x11drv_win_data *data )
+         return;
+ 
+     if (!(id = getenv( "DESKTOP_STARTUP_ID" )) || !id[0]) return;
+-    if ((src = strstr( id, "_TIME" ))) window_set_user_time( data, atol( src + 5 ) );
++    if ((src = strstr( id, "_TIME" ))) window_set_user_time( data, atol( src + 5 ), FALSE );
+ 
+     pos = snprintf(message, sizeof(message), "remove: ID=");
+     message[pos++] = '"';
+@@ -1114,15 +1114,20 @@ Window init_clip_window(void)
+ /***********************************************************************
+  *     window_set_user_time
+  */
+-void window_set_user_time( struct x11drv_win_data *data, Time time )
++void window_set_user_time( struct x11drv_win_data *data, Time time, BOOL init )
+ {
+-    if (data->user_time == time) return;
++    if (init && data->managed) NtUserSetProp( data->hwnd, focus_time_prop, (HANDLE)time );
++    else if (!init && !time) time = 1; /* time == 0 has reserved semantics */
++
++    if (init && !data->user_time == !time) return;
++    if (!init && data->user_time == time) return;
+     data->user_time = time;
+ 
+     TRACE( "window %p/%lx, requesting _NET_WM_USER_TIME %ld serial %lu\n", data->hwnd, data->whole_window,
+            data->user_time, NextRequest( data->display ) );
+-    XChangeProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_USER_TIME), XA_CARDINAL,
+-                     32, PropModeReplace, (unsigned char *)&time, 1 );
++    if (init && time) XDeleteProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_USER_TIME) );
++    else XChangeProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_USER_TIME), XA_CARDINAL,
++                          32, PropModeReplace, (unsigned char *)&time, 1 );
+ }
+ 
+ /* Update _NET_WM_FULLSCREEN_MONITORS when _NET_WM_STATE_FULLSCREEN is set to support fullscreen
+@@ -1396,6 +1401,7 @@ static void set_xembed_flags( struct x11drv_win_data *data, unsigned long flags
+ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, BOOL activate )
+ {
+     UINT old_state = data->pending_state.wm_state;
++    HWND foreground = NtUserGetForegroundWindow();
+ 
+     data->desired_state.wm_state = new_state;
+     data->desired_state.activate = activate;
+@@ -1434,7 +1440,12 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
+         break;
+     }
+ 
+-    if (new_state == NormalState && data->managed) NtUserSetProp( data->hwnd, focus_time_prop, (HANDLE)-1 );
++    if (new_state == NormalState)
++    {
++        /* try forcing activation if the window is supposed to be foreground or if it is fullscreen */
++        if (data->hwnd == foreground || data->is_fullscreen) activate = TRUE;
++        window_set_user_time( data, activate ? -1 : 0, TRUE );
++    }
+ 
+     data->pending_state.wm_state = new_state;
+     data->pending_state.activate = activate;
+@@ -1604,11 +1615,22 @@ static UINT window_update_client_config( struct x11drv_win_data *data )
+  */
+ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect, HWND *foreground )
+ {
++    struct x11drv_thread_data *thread_data = x11drv_thread_data();
+     struct x11drv_win_data *data;
++    HWND old_foreground;
+ 
+     *state_cmd = *config_cmd = 0;
+     *foreground = 0;
+ 
++    if (!(old_foreground = NtUserGetForegroundWindow())) old_foreground = NtUserGetDesktopWindow();
++    if (NtUserGetWindowThread( old_foreground, NULL ) == GetCurrentThreadId() &&
++        !window_has_pending_wm_state( old_foreground, NormalState ) &&
++        !thread_data->net_active_window_serial)
++    {
++        *foreground = hwnd_from_window( thread_data->display, thread_data->current_state.net_active_window );
++        if (*foreground == old_foreground) *foreground = 0;
++    }
++
+     if ((data = get_win_data( hwnd )))
+     {
+         *state_cmd = window_update_client_state( data );
+@@ -1760,6 +1782,50 @@ void net_active_window_init( struct x11drv_thread_data *data )
+     data->current_state.net_active_window = window;
+ }
+ 
++static BOOL window_set_pending_activate( HWND hwnd )
++{
++    struct x11drv_win_data *data;
++    BOOL pending;
++
++    if (!(data = get_win_data( hwnd ))) return FALSE;
++    if ((pending = !!data->wm_state_serial)) data->pending_state.activate = TRUE;
++    release_win_data( data );
++
++    return pending;
++}
++
++void set_net_active_window( HWND hwnd, HWND previous )
++{
++    struct x11drv_thread_data *data = x11drv_thread_data();
++    Window window;
++    XEvent xev;
++
++    if (!is_net_supported( x11drv_atom(_NET_ACTIVE_WINDOW) )) return;
++    if (!(window = X11DRV_get_whole_window( hwnd ))) return;
++    if (data->pending_state.net_active_window == window) return;
++    if (window_set_pending_activate( hwnd )) return;
++
++    xev.xclient.type = ClientMessage;
++    xev.xclient.window = window;
++    xev.xclient.message_type = x11drv_atom(_NET_ACTIVE_WINDOW);
++    xev.xclient.serial = 0;
++    xev.xclient.display = data->display;
++    xev.xclient.send_event = True;
++    xev.xclient.format = 32;
++    xev.xclient.data.l[0] = 2; /* source: pager */
++    xev.xclient.data.l[1] = 0; /* timestamp */
++    xev.xclient.data.l[2] = X11DRV_get_whole_window( previous ); /* current active */
++    xev.xclient.data.l[3] = 0;
++    xev.xclient.data.l[4] = 0;
++
++    data->pending_state.net_active_window = window;
++    data->net_active_window_serial = NextRequest( data->display );
++    TRACE( "requesting _NET_ACTIVE_WINDOW %p/%lx serial %lu\n", hwnd, window, data->net_active_window_serial );
++    XSendEvent( data->display, DefaultRootWindow( data->display ), False,
++                SubstructureRedirectMask | SubstructureNotifyMask, &xev );
++    XFlush( data->display );
++}
++
+ BOOL window_has_pending_wm_state( HWND hwnd, UINT state )
+ {
+     struct x11drv_win_data *data;
+@@ -3283,9 +3349,9 @@ LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
+ 
+ 
+ /***********************************************************************
+- *              is_netwm_supported
++ *              is_net_supported
+  */
+-static BOOL is_netwm_supported( Atom atom )
++BOOL is_net_supported( Atom atom )
+ {
+     struct x11drv_thread_data *data = x11drv_thread_data();
+     BOOL supported;
+@@ -3377,7 +3443,7 @@ LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT
+ 
+     if (NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_MAXIMIZE) goto failed;
+ 
+-    if (!is_netwm_supported( x11drv_atom(_NET_WM_MOVERESIZE) ))
++    if (!is_net_supported( x11drv_atom(_NET_WM_MOVERESIZE) ))
+     {
+         TRACE( "_NET_WM_MOVERESIZE not supported\n" );
+         goto failed;
+@@ -3434,7 +3500,7 @@ void net_supported_init( struct x11drv_thread_data *data )
+     for (i = 0; i < NB_NET_WM_STATES; i++)
+     {
+         Atom atom = X11DRV_Atoms[net_wm_state_atoms[i] - FIRST_XATOM];
+-        if (is_netwm_supported( atom )) data->net_wm_state_mask |= (1 << i);
++        if (is_net_supported( atom )) data->net_wm_state_mask |= (1 << i);
+     }
+ }
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 1fc3dc02611..c2abf72fae1 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -680,13 +680,15 @@ extern void window_wm_state_notify( struct x11drv_win_data *data, unsigned long
+ extern void window_net_wm_state_notify( struct x11drv_win_data *data, unsigned long serial, UINT value );
+ extern void window_configure_notify( struct x11drv_win_data *data, unsigned long serial, const RECT *rect );
+ 
++extern void set_net_active_window( HWND hwnd, HWND previous );
+ extern Window get_net_active_window( Display *display );
+ extern void net_active_window_notify( unsigned long serial, Window window, Time time );
+ extern void net_active_window_init( struct x11drv_thread_data *data );
+ extern void net_supported_init( struct x11drv_thread_data *data );
++extern BOOL is_net_supported( Atom atom );
+ 
+ extern Window init_clip_window(void);
+-extern void window_set_user_time( struct x11drv_win_data *data, Time time );
++extern void window_set_user_time( struct x11drv_win_data *data, Time time, BOOL init );
+ extern UINT get_window_net_wm_state( Display *display, Window window );
+ extern void make_window_embedded( struct x11drv_win_data *data );
+ extern Window create_client_window( HWND hwnd, const XVisualInfo *visual, Colormap colormap );
+-- 
+GitLab
+

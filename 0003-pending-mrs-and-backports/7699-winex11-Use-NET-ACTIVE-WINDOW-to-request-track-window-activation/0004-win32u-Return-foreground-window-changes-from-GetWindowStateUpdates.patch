@@ -1,0 +1,126 @@
+From 8b6cc16bcb174220458a3a7de8bce4a7417753d1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 19 Feb 2025 10:54:08 +0100
+Subject: [PATCH] win32u: Return foreground window changes from
+ GetWindowStateUpdates.
+
+---
+ dlls/win32u/driver.c      |  2 +-
+ dlls/win32u/message.c     |  7 +++++--
+ dlls/winex11.drv/window.c | 16 ++++++++++------
+ dlls/winex11.drv/x11drv.h |  2 +-
+ include/wine/gdi_driver.h |  2 +-
+ 5 files changed, 18 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
+index 5edac6a0c8a..118fe47357e 100644
+--- a/dlls/win32u/driver.c
++++ b/dlls/win32u/driver.c
+@@ -881,7 +881,7 @@ static BOOL nulldrv_GetWindowStyleMasks( HWND hwnd, UINT style, UINT ex_style, U
+     return FALSE;
+ }
+ 
+-static BOOL nulldrv_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect )
++static BOOL nulldrv_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect, HWND *foreground )
+ {
+     return FALSE;
+ }
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 5a5c26d9947..8047e01cb61 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2177,15 +2177,18 @@ static LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPAR
+     {
+         UINT state_cmd, config_cmd;
+         RECT window_rect;
++        HWND foreground;
+ 
+-        if (!user_driver->pGetWindowStateUpdates( hwnd, &state_cmd, &config_cmd, &window_rect )) return 0;
++        if (!user_driver->pGetWindowStateUpdates( hwnd, &state_cmd, &config_cmd, &window_rect, &foreground )) return 0;
++        if (foreground) NtUserSetForegroundWindow( foreground );
+         if (state_cmd)
+         {
+             if (LOWORD(state_cmd) == SC_RESTORE && HIWORD(state_cmd)) NtUserSetActiveWindow( hwnd );
+             send_message( hwnd, WM_SYSCOMMAND, LOWORD(state_cmd), 0 );
+ 
+             /* state change might have changed the window config already, check again */
+-            user_driver->pGetWindowStateUpdates( hwnd, &state_cmd, &config_cmd, &window_rect );
++            user_driver->pGetWindowStateUpdates( hwnd, &state_cmd, &config_cmd, &window_rect, &foreground );
++            if (foreground) NtUserSetForegroundWindow( foreground );
+             if (state_cmd) WARN( "window %p state needs another update, ignoring\n", hwnd );
+         }
+         if (config_cmd)
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 3ea6bb523f4..d4222161ba4 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1602,11 +1602,12 @@ static UINT window_update_client_config( struct x11drv_win_data *data )
+ /***********************************************************************
+  *      GetWindowStateUpdates   (X11DRV.@)
+  */
+-BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect )
++BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect, HWND *foreground )
+ {
+     struct x11drv_win_data *data;
+ 
+     *state_cmd = *config_cmd = 0;
++    *foreground = 0;
+ 
+     if ((data = get_win_data( hwnd )))
+     {
+@@ -1616,9 +1617,9 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd,
+         release_win_data( data );
+     }
+ 
+-    if (!*state_cmd && !*config_cmd) return FALSE;
+-    TRACE( "hwnd %p, returning state_cmd %#x, config_cmd %#x, rect %s\n",
+-           hwnd, *state_cmd, *config_cmd, wine_dbgstr_rect(rect) );
++    if (!*state_cmd && !*config_cmd && !*foreground) return FALSE;
++    TRACE( "hwnd %p, returning state_cmd %#x, config_cmd %#x, rect %s, foreground %p\n",
++           hwnd, *state_cmd, *config_cmd, wine_dbgstr_rect(rect), *foreground );
+     return TRUE;
+ }
+ 
+@@ -1725,8 +1726,11 @@ void net_active_window_notify( unsigned long serial, Window value, Time time )
+ 
+     received = wine_dbg_sprintf( "_NET_ACTIVE_WINDOW %p/%lx serial %lu time %lu", current_hwnd, value, serial, time );
+     expected = *expect_serial ? wine_dbg_sprintf( ", expected %p/%lx serial %lu", pending_hwnd, *pending, *expect_serial ) : "";
+-    handle_state_change( serial, expect_serial, sizeof(value), &value, desired, pending,
+-                         current, expected, "", received, NULL );
++    if (!handle_state_change( serial, expect_serial, sizeof(value), &value, desired, pending,
++                              current, expected, "", received, NULL ))
++        return;
++
++    NtUserPostMessage( NtUserGetForegroundWindow(), WM_WINE_WINDOW_STATE_CHANGED, 0, 0 );
+ }
+ 
+ Window get_net_active_window( Display *display )
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 43c60ab78fd..56842c1b94c 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -243,7 +243,7 @@ extern void X11DRV_UpdateLayeredWindow( HWND hwnd, BYTE alpha, UINT flags );
+ extern LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp );
+ extern BOOL X11DRV_WindowPosChanging( HWND hwnd, UINT swp_flags, BOOL shaped, const struct window_rects *rects );
+ extern BOOL X11DRV_GetWindowStyleMasks( HWND hwnd, UINT style, UINT ex_style, UINT *style_mask, UINT *ex_style_mask );
+-extern BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect );
++extern BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *config_cmd, RECT *rect, HWND *foreground );
+ extern BOOL X11DRV_CreateWindowSurface( HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface );
+ extern void X11DRV_MoveWindowBits( HWND hwnd, const struct window_rects *old_rects,
+                                    const struct window_rects *new_rects, const RECT *valid_rects );
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index efee8d1af4d..226ff0107fe 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -385,7 +385,7 @@ struct user_driver_funcs
+     LRESULT (*pWindowMessage)(HWND,UINT,WPARAM,LPARAM);
+     BOOL    (*pWindowPosChanging)(HWND,UINT,BOOL,const struct window_rects *);
+     BOOL    (*pGetWindowStyleMasks)(HWND,UINT,UINT,UINT*,UINT*);
+-    BOOL    (*pGetWindowStateUpdates)(HWND,UINT*,UINT*,RECT*);
++    BOOL    (*pGetWindowStateUpdates)(HWND,UINT*,UINT*,RECT*,HWND*);
+     BOOL    (*pCreateWindowSurface)(HWND,BOOL,const RECT *,struct window_surface**);
+     void    (*pMoveWindowBits)(HWND,const struct window_rects *,const struct window_rects *,const RECT *);
+     void    (*pWindowPosChanged)(HWND,HWND,HWND,UINT,BOOL,const struct window_rects*,struct window_surface*);
+-- 
+GitLab
+

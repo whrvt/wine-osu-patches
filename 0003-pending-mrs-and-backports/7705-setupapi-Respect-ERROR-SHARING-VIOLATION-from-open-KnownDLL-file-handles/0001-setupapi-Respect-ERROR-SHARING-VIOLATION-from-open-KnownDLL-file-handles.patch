@@ -1,0 +1,32 @@
+From 92e096349f079cd35fcd4d2b80038e444848528f Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 31 Mar 2025 18:56:51 -0700
+Subject: [PATCH] setupapi: Respect ERROR_SHARING_VIOLATION from open KnownDLL
+ file handles.
+
+create_dest_file was unaware of the FILE_SHARE_READ | FILE_SHARE_DELETE share
+mode that these SessionMgr entries are opened with. This avoids noisy
+(error=80) messages during prefix creation/update.
+
+Fixes: 81ea1e7a20c9cd0698c0416282d9ad7c0109e865
+---
+ dlls/setupapi/fakedll.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/setupapi/fakedll.c b/dlls/setupapi/fakedll.c
+index b1f56b00619..bd3dfc95d38 100644
+--- a/dlls/setupapi/fakedll.c
++++ b/dlls/setupapi/fakedll.c
+@@ -505,7 +505,8 @@ static HANDLE create_dest_file( const WCHAR *name, BOOL delete )
+         SetFilePointer( h, 0, NULL, FILE_BEGIN );
+         SetEndOfFile( h );
+     }
+-    else if (!delete)
++    else if (!(GetLastError() == ERROR_SHARING_VIOLATION /* SessionMgr KnownDLLs entry */
++             || delete))
+     {
+         if (GetLastError() == ERROR_PATH_NOT_FOUND) create_directories( name );
+ 
+-- 
+GitLab
+

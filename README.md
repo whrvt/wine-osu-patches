@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-215a1043](https://gitlab.winehq.org/wine/wine/-/tree/215a1043a5c56a44ba48eb9ada86047c7a81da22)
+wine commit: [wine-8e2aea62](https://gitlab.winehq.org/wine/wine/-/tree/8e2aea6290e823d2f5023e2bff5c2fec0880a65d)
 
-staging commit: [staging-d88d44f1](https://gitlab.winehq.org/wine/wine-staging/-/tree/d88d44f1d9d94cb11aff9e2f0ce37d0d67fe1e95)
+staging commit: [staging-5b64f435](https://gitlab.winehq.org/wine/wine-staging/-/tree/5b64f435e92f270c4792ae3788dbb167c7dc629c)
 
-Staging exclude flags: `-W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization -W user32-alttab-focus -W winex11-WM_WINDOWPOSCHANGING -W winex11-Window_Style -W winex11.drv-Query_server_position -W winex11-_NET_ACTIVE_WINDOW`
+Staging exclude flags: `-W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization -W user32-recursive-activation -W user32-alttab-focus -W winex11-Window_Style -W winex11.drv-Query_server_position`
 
 # Environment variables
 

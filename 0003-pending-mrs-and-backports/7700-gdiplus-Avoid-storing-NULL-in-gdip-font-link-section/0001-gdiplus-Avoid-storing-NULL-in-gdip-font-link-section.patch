@@ -1,0 +1,50 @@
+From 051fbb19a1a07e7934f13e4a332ae6470ccd48f3 Mon Sep 17 00:00:00 2001
+From: Eric Tian <thxdaemon@gmail.com>
+Date: Mon, 31 Mar 2025 18:46:04 +0800
+Subject: [PATCH] gdiplus: Avoid storing NULL in gdip_font_link_section.
+
+In generate_font_link_info, because the return value of
+GdipCreateFontFromDC is not checked, section->font might be set to NULL.
+GdipMeasureString calls gdip_format_string, which then calls
+generate_font_link_info and font_link_get_text_extent_point. In
+font_link_get_text_extent_point, the font from gdip_font_link_section is also
+not checked for NULL, which may cause a crash.
+
+Therefore, in generate_font_link_info, when GdipCreateFontFromDC fails,
+store (GpFont *)base_font (as with IMLangFontLink_MapFont failure) to ensure
+the font in gdip_font_link_section is valid.
+---
+ dlls/gdiplus/graphics.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/gdiplus/graphics.c b/dlls/gdiplus/graphics.c
+index f6d79fb8356..7e23d705a38 100644
+--- a/dlls/gdiplus/graphics.c
++++ b/dlls/gdiplus/graphics.c
+@@ -5362,6 +5362,7 @@ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD
+     DWORD string_codepages;
+     WORD *glyph_indices;
+     HRESULT hr;
++    GpStatus stat;
+ 
+     list_init(&info->font_link_info.sections);
+     info->font_link_info.base_font = base_font;
+@@ -5400,10 +5401,13 @@ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD
+             if (SUCCEEDED(hr))
+             {
+                 old_font = SelectObject(info->hdc, map_hfont);
+-                GdipCreateFontFromDC(info->hdc, &gpfont);
++                stat = GdipCreateFontFromDC(info->hdc, &gpfont);
+                 SelectObject(info->hdc, old_font);
+                 IMLangFontLink_ReleaseFont(iMLFL, map_hfont);
+-                section->font = gpfont;
++                if (stat == Ok)
++                    section->font = gpfont;
++                else
++                    section->font = (GpFont *)base_font;
+             }
+             else
+                 section->font = (GpFont *)base_font;
+-- 
+GitLab
+

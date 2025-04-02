@@ -1,0 +1,185 @@
+From a08b5bd3f15170ff69eb00bb64358f4bfb85930f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 8 Mar 2025 19:11:29 +0100
+Subject: [PATCH] server: Allocate a session shared memory header structure.
+
+---
+ dlls/win32u/class.c          |  5 +++++
+ dlls/win32u/gdiobj.c         |  2 --
+ dlls/win32u/ntgdi_private.h  |  2 --
+ dlls/win32u/win32u_private.h |  3 +++
+ dlls/win32u/winstation.c     | 12 ++++++++++++
+ server/file.h                |  1 +
+ server/mapping.c             |  6 ++++--
+ server/protocol.def          |  5 +++++
+ 8 files changed, 30 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
+index ea0d7efe74b..8c5f2819a67 100644
+--- a/dlls/win32u/class.c
++++ b/dlls/win32u/class.c
+@@ -36,6 +36,8 @@
+ WINE_DEFAULT_DEBUG_CHANNEL(class);
+ WINE_DECLARE_DEBUG_CHANNEL(win);
+ 
++SYSTEM_BASIC_INFORMATION system_info;
++
+ #define MAX_WINPROCS  4096
+ #define WINPROC_PROC16  ((void *)1)  /* placeholder for 16-bit window procs */
+ 
+@@ -248,6 +250,9 @@ DLGPROC get_dialog_proc( DLGPROC ret, BOOL ansi )
+ 
+ static void init_user(void)
+ {
++    NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
++
++    shared_session_init();
+     gdi_init();
+     sysparams_init();
+     winstation_init();
+diff --git a/dlls/win32u/gdiobj.c b/dlls/win32u/gdiobj.c
+index fec99243aa2..f49b1c49464 100644
+--- a/dlls/win32u/gdiobj.c
++++ b/dlls/win32u/gdiobj.c
+@@ -48,7 +48,6 @@ static GDI_SHARED_MEMORY *gdi_shared;
+ static GDI_HANDLE_ENTRY *next_free;
+ static GDI_HANDLE_ENTRY *next_unused;
+ static LONG debug_count;
+-SYSTEM_BASIC_INFORMATION system_info;
+ 
+ static inline HGDIOBJ entry_to_handle( GDI_HANDLE_ENTRY *entry )
+ {
+@@ -1040,7 +1039,6 @@ void gdi_init(void)
+     pthread_mutex_init( &gdi_lock, &attr );
+     pthread_mutexattr_destroy( &attr );
+ 
+-    NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
+     init_gdi_shared();
+     if (!gdi_shared) return;
+ 
+diff --git a/dlls/win32u/ntgdi_private.h b/dlls/win32u/ntgdi_private.h
+index 99ebb127d68..136921a211c 100644
+--- a/dlls/win32u/ntgdi_private.h
++++ b/dlls/win32u/ntgdi_private.h
+@@ -641,6 +641,4 @@ extern void free_heap_bits( struct gdi_image_bits *bits );
+ 
+ void set_gdi_client_ptr( HGDIOBJ handle, void *ptr );
+ 
+-extern SYSTEM_BASIC_INFORMATION system_info;
+-
+ #endif /* __WINE_NTGDI_PRIVATE_H */
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index b4738ed6b16..2530e68793f 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -219,6 +219,7 @@ struct object_lock
+  * The data read from the objects may be transient and no logic should be executed based
+  * on it, within the loop, or after, unless the function has returned STATUS_SUCCESS.
+  */
++extern const session_shm_t *shared_session;
+ extern NTSTATUS get_shared_desktop( struct object_lock *lock, const desktop_shm_t **desktop_shm );
+ extern NTSTATUS get_shared_queue( struct object_lock *lock, const queue_shm_t **queue_shm );
+ extern NTSTATUS get_shared_input( UINT tid, struct object_lock *lock, const input_shm_t **input_shm );
+@@ -279,6 +280,8 @@ static inline void release_win_ptr( struct tagWND *ptr )
+     user_unlock();
+ }
+ 
++extern SYSTEM_BASIC_INFORMATION system_info;
++extern void shared_session_init(void);
+ extern void gdi_init(void);
+ extern void winstation_init(void);
+ extern void sysparams_init(void);
+diff --git a/dlls/win32u/winstation.c b/dlls/win32u/winstation.c
+index b350b706454..14472b85bce 100644
+--- a/dlls/win32u/winstation.c
++++ b/dlls/win32u/winstation.c
+@@ -71,6 +71,7 @@ struct session_block
+ 
+ static pthread_mutex_t session_lock = PTHREAD_MUTEX_INITIALIZER;
+ static struct list session_blocks = LIST_INIT(session_blocks);
++const session_shm_t *shared_session;
+ 
+ static struct session_thread_data *get_session_thread_data(void)
+ {
+@@ -195,6 +196,17 @@ static const shared_object_t *find_shared_session_object( struct obj_locator loc
+     return NULL;
+ }
+ 
++void shared_session_init(void)
++{
++    struct session_block *block;
++    UINT status;
++
++    if ((status = find_shared_session_block( 0, sizeof(*shared_session), &block )))
++        ERR( "Failed to map initial shared session block, status %#x\n", status );
++    else
++        shared_session = (const session_shm_t *)block->data;
++}
++
+ NTSTATUS get_shared_desktop( struct object_lock *lock, const desktop_shm_t **desktop_shm )
+ {
+     struct session_thread_data *data = get_session_thread_data();
+diff --git a/server/file.h b/server/file.h
+index 59b73c0245c..64ca61e155f 100644
+--- a/server/file.h
++++ b/server/file.h
+@@ -193,6 +193,7 @@ extern struct mapping *create_session_mapping( struct object *root, const struct
+                                                unsigned int attr, const struct security_descriptor *sd );
+ extern void set_session_mapping( struct mapping *mapping );
+ 
++extern const session_shm_t *shared_session;
+ extern const volatile void *alloc_shared_object(void);
+ extern void free_shared_object( const volatile void *object_shm );
+ extern void invalidate_shared_object( const volatile void *object_shm );
+diff --git a/server/mapping.c b/server/mapping.c
+index 6f6b846a903..b913dfc0c45 100644
+--- a/server/mapping.c
++++ b/server/mapping.c
+@@ -248,6 +248,7 @@ struct session
+     object_id_t last_object_id;
+ };
+ 
++const session_shm_t *shared_session;
+ static struct mapping *session_mapping;
+ static struct session session =
+ {
+@@ -1305,7 +1306,7 @@ struct mapping *create_session_mapping( struct object *root, const struct unicod
+                                         unsigned int attr, const struct security_descriptor *sd )
+ {
+     static const unsigned int access = FILE_READ_DATA | FILE_WRITE_DATA;
+-    size_t size = max( sizeof(shared_object_t) * 512, 0x10000 );
++    size_t size = max( sizeof(*shared_session) + sizeof(object_shm_t) * 512, 0x10000 );
+ 
+     return create_mapping( root, name, attr, size, SEC_COMMIT, 0, access, sd );
+ }
+@@ -1326,9 +1327,10 @@ void set_session_mapping( struct mapping *mapping )
+ 
+     block->data = tmp;
+     block->offset = 0;
+-    block->used_size = 0;
++    block->used_size = sizeof(*shared_session);
+     block->block_size = size;
+ 
++    shared_session = tmp;
+     session_mapping = mapping;
+     list_add_tail( &session.blocks, &block->entry );
+ }
+diff --git a/server/protocol.def b/server/protocol.def
+index ea5398c8be7..7ae26b7c48d 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1023,6 +1023,11 @@ typedef volatile struct
+     object_shm_t         shm;              /* object shared data */
+ } shared_object_t;
+ 
++typedef volatile struct
++{
++    unsigned __int64 placeholder;
++} session_shm_t;
++
+ struct obj_locator
+ {
+     object_id_t          id;               /* object unique id, object data is valid if != 0 */
+-- 
+GitLab
+
