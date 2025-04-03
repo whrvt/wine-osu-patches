@@ -1,4 +1,4 @@
-From ff5029255ffd4ff6df966213dd5e46ad6c6435a1 Mon Sep 17 00:00:00 2001
+From 2bbf2f7816c1f1a69d093bcd6d860ee8d104a318 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sat, 8 Mar 2025 19:11:29 +0100
 Subject: [PATCH] server: Move the user object handle table to the shared
@@ -8,12 +8,12 @@ Subject: [PATCH] server: Move the user object handle table to the shared
  dlls/win32u/window.c |  11 ++-
  include/ntuser.h     |  19 ++++++
  server/protocol.def  |   2 +-
- server/user.c        | 159 +++++++++++++++++++++++++------------------
+ server/user.c        | 158 +++++++++++++++++++++++++------------------
  server/user.h        |   2 -
- 5 files changed, 119 insertions(+), 74 deletions(-)
+ 5 files changed, 119 insertions(+), 73 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 8482d0ef567..7f4f64b2dd7 100644
+index 72f241a753f..4d011639a92 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -34,10 +34,9 @@
@@ -65,7 +65,7 @@ index 8482d0ef567..7f4f64b2dd7 100644
  }
  
 diff --git a/include/ntuser.h b/include/ntuser.h
-index 749a56f3c9e..a94d9ad3171 100644
+index 848e5a4a651..dd8f6059d35 100644
 --- a/include/ntuser.h
 +++ b/include/ntuser.h
 @@ -46,6 +46,25 @@ typedef enum MONITOR_DPI_TYPE
@@ -95,7 +95,7 @@ index 749a56f3c9e..a94d9ad3171 100644
     All of these functions must live inside user32.dll. Overwatch 2's
     KiUserCallbackDispatcher hook verifies this and prevents the callback from
 diff --git a/server/protocol.def b/server/protocol.def
-index 7ae26b7c48d..aab0ad6d242 100644
+index 0e1e530327f..c2a97125464 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
 @@ -1025,7 +1025,7 @@ typedef volatile struct
@@ -108,10 +108,10 @@ index 7ae26b7c48d..aab0ad6d242 100644
  
  struct obj_locator
 diff --git a/server/user.c b/server/user.c
-index 22d72c669e7..77c6d88f21a 100644
+index 22d72c669e7..a2f2a302551 100644
 --- a/server/user.c
 +++ b/server/user.c
-@@ -18,101 +18,124 @@
+@@ -18,101 +18,125 @@
   * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
   */
  
@@ -239,7 +239,7 @@ index 22d72c669e7..77c6d88f21a 100644
  }
  
 -static inline void *free_user_entry( struct user_handle *ptr )
-+static void free_user_entry( user_entry_t *entry )
++static void free_user_entry( const user_entry_t *entry_const )
  {
 -    void *ret;
 -    ret = ptr->ptr;
@@ -248,6 +248,7 @@ index 22d72c669e7..77c6d88f21a 100644
 -    freelist  = ptr;
 -    return ret;
 +    const user_entry_t *handles = shared_session->user_entries;
++    user_entry_t *entry = (user_entry_t *)entry_const;
 +    size_t index = entry - handles;
 +
 +    WriteRelease64( &entry->uniq, MAKELONG(0, entry->generation) );
@@ -289,7 +290,7 @@ index 22d72c669e7..77c6d88f21a 100644
  
      if (handle >> 16) return handle;
      if (!(entry = handle_to_entry( handle ))) return handle;
-@@ -122,30 +145,34 @@ user_handle_t get_user_full_handle( user_handle_t handle )
+@@ -122,30 +146,34 @@ user_handle_t get_user_full_handle( user_handle_t handle )
  /* same as get_user_object plus set the handle to the full 32-bit value */
  void *get_user_object_handle( user_handle_t *handle, unsigned short type )
  {
@@ -317,7 +318,7 @@ index 22d72c669e7..77c6d88f21a 100644
 -    return free_user_entry( entry );
 +
 +    ret = set_server_object( entry, NULL );
-+    free_user_entry( (user_entry_t *)entry );
++    free_user_entry( entry );
 +    return ret;
  }
  
@@ -329,7 +330,7 @@ index 22d72c669e7..77c6d88f21a 100644
  
      if (!*handle) entry = handles;
      else
-@@ -159,7 +186,7 @@ void *next_user_handle( user_handle_t *handle, unsigned short type )
+@@ -159,7 +187,7 @@ void *next_user_handle( user_handle_t *handle, unsigned short type )
          if (!type || entry->type == type)
          {
              *handle = entry_to_handle( entry );
@@ -338,7 +339,7 @@ index 22d72c669e7..77c6d88f21a 100644
          }
          entry++;
      }
-@@ -169,18 +196,20 @@ void *next_user_handle( user_handle_t *handle, unsigned short type )
+@@ -169,18 +197,20 @@ void *next_user_handle( user_handle_t *handle, unsigned short type )
  /* free client-side user handles managed by the process */
  void free_process_user_handles( struct process *process )
  {
@@ -358,11 +359,11 @@ index 22d72c669e7..77c6d88f21a 100644
          case NTUSER_OBJ_ACCEL:
          case NTUSER_OBJ_IMC:
 -            if (handles[i].ptr == process) free_user_entry( &handles[i] );
-+            if (entry->pid == pid) free_user_entry( (user_entry_t *)entry );
++            if (entry->pid == pid) free_user_entry( entry );
              break;
          case NTUSER_OBJ_HOOK:
          case NTUSER_OBJ_WINDOW:
-@@ -193,17 +222,17 @@ void free_process_user_handles( struct process *process )
+@@ -193,14 +223,14 @@ void free_process_user_handles( struct process *process )
  /* allocate an arbitrary user handle */
  DECL_HANDLER(alloc_user_handle)
  {
@@ -378,11 +379,7 @@ index 22d72c669e7..77c6d88f21a 100644
 +    const user_entry_t *entry;
  
      if ((entry = handle_to_entry( req->handle )) && entry->type == req->type)
--        free_user_entry( entry );
-+        free_user_entry( (user_entry_t *)entry );
-     else
-         set_error( STATUS_INVALID_HANDLE );
- }
+         free_user_entry( entry );
 diff --git a/server/user.h b/server/user.h
 index b103fcd5652..df74b792af8 100644
 --- a/server/user.h

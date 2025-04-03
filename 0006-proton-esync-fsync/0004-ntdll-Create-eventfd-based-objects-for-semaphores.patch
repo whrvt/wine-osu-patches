@@ -91,7 +91,7 @@ index 00000000000..7be4e03fa34
 +    if (do_esync_cached == -1)
 +        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync();
 +
-+    return do_esync_cached;
++    return !!do_esync_cached;
 +#else
 +    static int once;
 +    if (!once++)

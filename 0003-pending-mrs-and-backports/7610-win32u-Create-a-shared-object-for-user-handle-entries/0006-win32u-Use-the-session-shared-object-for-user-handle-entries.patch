@@ -1,4 +1,4 @@
-From ac5bc07d36cbd1956414c06d1e65fdfc9e917b2e Mon Sep 17 00:00:00 2001
+From 68376483a97d17a163723c75730c58ed2baab725 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 24 Mar 2025 13:12:20 +0100
 Subject: [PATCH] win32u: Use the session shared object for user handle
@@ -29,7 +29,7 @@ index 2530e68793f..7ccd2067dbb 100644
   * is returned, lock must be initialized with OBJECT_LOCK_INIT.
   *
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index bc856b92499..95c0d287503 100644
+index e65fb9bebfc..4f54eb66c6d 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -35,8 +35,9 @@

@@ -35,7 +35,7 @@ index 60173ba6513..fbfbf9fda0f 100644
 + */
 +LONG WINAPI AppPolicyGetClrCompat(HANDLE token, AppPolicyClrCompat *policy)
 +{
-+    FIXME("%p, %p\n", token, policy);
++    WARN("%p, %p\n", token, policy);
 +
 +    if(policy)
 +        *policy = AppPolicyClrCompat_ClassicDesktop;

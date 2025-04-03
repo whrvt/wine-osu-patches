@@ -1,0 +1,43 @@
+From 18b660a94e97d1a32909544870e09fc6abaf33df Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 3 Apr 2025 15:29:38 +0800
+Subject: [PATCH] winex11.drv: Update _NET_WM_FULLSCREEN_MONITORS after a
+ window has been mapped.
+
+This fixes a regression from 6dc9f5e1, which made calling update_net_wm_fullscreen_monitors() before
+a window is mapped. Thus after a window gets mapped and managed by window managers, _NET_WM_FULLSCREEN_MONITORS
+may not be set and so windows covering multiple monitors don't function as expected.
+
+Partially fix Project CARS 3 (958400) fails to enter triple screen mode.
+---
+ dlls/winex11.drv/window.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index a733d566d4f..1fe96f03897 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1432,7 +1432,6 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
+         set_wm_hints( data );
+         update_net_wm_states( data );
+         sync_window_style( data );
+-        update_net_wm_fullscreen_monitors( data );
+         break;
+     case MAKELONG(IconicState, NormalState):
+     case MAKELONG(NormalState, IconicState):
+@@ -1459,7 +1458,11 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
+     case MAKELONG(WithdrawnState, NormalState):
+     case MAKELONG(IconicState, NormalState):
+         if (data->embedded) set_xembed_flags( data, XEMBED_MAPPED );
+-        else XMapWindow( data->display, data->whole_window );
++        else
++        {
++            XMapWindow( data->display, data->whole_window );
++            update_net_wm_fullscreen_monitors( data );
++        }
+         break;
+     case MAKELONG(NormalState, WithdrawnState):
+     case MAKELONG(IconicState, WithdrawnState):
+-- 
+GitLab
+

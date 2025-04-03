@@ -1,0 +1,228 @@
+From 89f599223cb70e0794688ae55813242bdd4f0d19 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 2 Apr 2025 18:20:16 -0600
+Subject: [PATCH] cfgmgr32: Implement
+ CM_Get_Device_Interface_List[_Size][_Ex]A().
+
+---
+ dlls/cfgmgr32/cfgmgr32.spec    |  4 +-
+ dlls/cfgmgr32/tests/cfgmgr32.c | 23 ++++++++-
+ dlls/setupapi/devinst.c        | 93 ++++++++++++++++++++++++++++++++++
+ dlls/setupapi/setupapi.spec    |  4 +-
+ dlls/setupapi/stubs.c          | 20 --------
+ 5 files changed, 119 insertions(+), 25 deletions(-)
+
+diff --git a/dlls/cfgmgr32/cfgmgr32.spec b/dlls/cfgmgr32/cfgmgr32.spec
+index 99d14ee7c50..6d493144455 100644
+--- a/dlls/cfgmgr32/cfgmgr32.spec
++++ b/dlls/cfgmgr32/cfgmgr32.spec
+@@ -83,9 +83,9 @@
+ @ stdcall CM_Get_Device_Interface_AliasW(wstr ptr ptr ptr long) setupapi.CM_Get_Device_Interface_AliasW
+ @ stub CM_Get_Device_Interface_Alias_ExA
+ @ stub CM_Get_Device_Interface_Alias_ExW
+-@ stub CM_Get_Device_Interface_ListA
++@ stdcall CM_Get_Device_Interface_ListA(ptr ptr ptr long long) setupapi.CM_Get_Device_Interface_ListA
+ @ stdcall CM_Get_Device_Interface_ListW(ptr ptr ptr long long) setupapi.CM_Get_Device_Interface_ListW
+-@ stub CM_Get_Device_Interface_List_ExA
++@ stdcall CM_Get_Device_Interface_List_ExA(ptr ptr ptr long long ptr) setupapi.CM_Get_Device_Interface_List_ExA
+ @ stdcall CM_Get_Device_Interface_List_ExW(ptr ptr ptr long long ptr) setupapi.CM_Get_Device_Interface_List_ExW
+ @ stdcall CM_Get_Device_Interface_List_SizeA(ptr ptr str long) setupapi.CM_Get_Device_Interface_List_SizeA
+ @ stdcall CM_Get_Device_Interface_List_SizeW(ptr ptr wstr long) setupapi.CM_Get_Device_Interface_List_SizeW
+diff --git a/dlls/cfgmgr32/tests/cfgmgr32.c b/dlls/cfgmgr32/tests/cfgmgr32.c
+index 4c9737a7bec..ab8d183df00 100644
+--- a/dlls/cfgmgr32/tests/cfgmgr32.c
++++ b/dlls/cfgmgr32/tests/cfgmgr32.c
+@@ -370,10 +370,11 @@ static void test_CM_Get_Device_Interface_List(void)
+     SP_DEVICE_INTERFACE_DETAIL_DATA_W *iface_data;
+     SP_DEVINFO_DATA device = { sizeof(device) };
+     unsigned int count, count2;
++    char *buffera, *pa;
+     WCHAR *buffer, *p;
++    ULONG size, size2;
+     CONFIGRET ret;
+     HDEVINFO set;
+-    ULONG size;
+     GUID guid;
+     BOOL bret;
+ 
+@@ -386,6 +387,26 @@ static void test_CM_Get_Device_Interface_List(void)
+     ret = CM_Get_Device_Interface_ListW( &guid, NULL, buffer, size, CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
+     ok(!ret, "got %#lx.\n", ret);
+ 
++    ret = CM_Get_Device_Interface_List_SizeA(&size2, &guid, NULL, CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
++    ok(!ret, "got %#lx.\n", ret);
++    ok(size2 == size, "got %lu, %lu.\n", size, size2);
++    buffera = malloc(size2 * sizeof(*buffera));
++    ret = CM_Get_Device_Interface_ListA(&guid, NULL, buffera, size2, CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
++    ok(!ret, "got %#lx.\n", ret);
++    p = malloc(size2 * sizeof(*p));
++    memset(p, 0xcc, size2 * sizeof(*p));
++    pa = buffera;
++    *p = 0;
++    while (*pa)
++    {
++        MultiByteToWideChar(CP_ACP, 0, pa, -1, p + (pa - buffera), size2 - (pa - buffera));
++        pa += strlen(pa) + 1;
++    }
++    p[pa - buffera] = 0;
++    ok(!memcmp(p, buffer, size * sizeof(*p)), "results differ, %s, %s.\n", debugstr_wn(p, size), debugstr_wn(buffer, size));
++    free(p);
++    free(buffera);
++
+     iface_data = (SP_DEVICE_INTERFACE_DETAIL_DATA_W *)iface_detail_buffer;
+ 
+     count = 0;
+diff --git a/dlls/setupapi/devinst.c b/dlls/setupapi/devinst.c
+index 366892d2b53..9b6b49aeb93 100644
+--- a/dlls/setupapi/devinst.c
++++ b/dlls/setupapi/devinst.c
+@@ -4700,6 +4700,99 @@ CONFIGRET WINAPI CM_Get_Device_Interface_ListW(LPGUID class, DEVINSTID_W id, PZZ
+     return get_device_interface_list(class, id, buffer, &len, flags);
+ }
+ 
++/***********************************************************************
++ *      CM_Get_Device_Interface_List_SizeA (SETUPAPI.@)
++ */
++CONFIGRET WINAPI CM_Get_Device_Interface_List_SizeA(PULONG len, LPGUID class, DEVINSTID_A id,
++        ULONG flags)
++{
++    return CM_Get_Device_Interface_List_Size_ExA(len, class, id, flags, NULL);
++}
++
++/***********************************************************************
++ *      CM_Get_Device_Interface_List_Size_ExA (SETUPAPI.@)
++ */
++CONFIGRET WINAPI CM_Get_Device_Interface_List_Size_ExA(PULONG len, LPGUID class, DEVINSTID_A id,
++                                                       ULONG flags, HMACHINE machine)
++{
++    WCHAR *wid = NULL;
++    unsigned int slen;
++    CONFIGRET ret;
++
++    TRACE("%p %s %s 0x%08lx %p\n", len, debugstr_guid(class), debugstr_a(id), flags, machine);
++
++    if (machine)
++        FIXME("machine %p.\n", machine);
++
++    if (id)
++    {
++        slen = strlen(id) + 1;
++        if (!(wid = malloc(slen * sizeof(*wid))))
++            return CR_OUT_OF_MEMORY;
++        MultiByteToWideChar(CP_ACP, 0, id, slen, wid, slen);
++    }
++    ret = CM_Get_Device_Interface_List_SizeW(len, class, wid, flags);
++    free(wid);
++    return ret;
++}
++
++/***********************************************************************
++ *      CM_Get_Device_Interface_List_ExA (SETUPAPI.@)
++ */
++CONFIGRET WINAPI CM_Get_Device_Interface_List_ExA(LPGUID class, DEVINSTID_A id, PZZSTR buffer, ULONG len, ULONG flags,
++        HMACHINE machine)
++{
++    WCHAR *wbuffer, *wid = NULL, *p;
++    unsigned int slen;
++    CONFIGRET ret;
++
++    TRACE("%s %s %p %lu 0x%08lx %p\n", debugstr_guid(class), debugstr_a(id), buffer, len, flags, machine);
++
++    if (machine)
++        FIXME("machine %p.\n", machine);
++
++    if (!buffer || !len)
++        return CR_INVALID_POINTER;
++
++    if (!(wbuffer = malloc(len * sizeof(*wbuffer))))
++        return CR_OUT_OF_MEMORY;
++
++    if (id)
++    {
++        slen = strlen(id) + 1;
++        if (!(wid = malloc(slen * sizeof(*wid))))
++        {
++            free(wbuffer);
++            return CR_OUT_OF_MEMORY;
++        }
++        MultiByteToWideChar(CP_ACP, 0, id, slen, wid, slen);
++    }
++
++    if (!(ret = CM_Get_Device_Interface_List_ExW(class, wid, wbuffer, len, flags, machine)))
++    {
++        p = wbuffer;
++        while (*p)
++        {
++            slen = wcslen(p) + 1;
++            WideCharToMultiByte(CP_ACP, 0, p, slen, buffer, slen, NULL, NULL);
++            p += slen;
++            buffer += slen;
++        }
++        *buffer = 0;
++    }
++    free(wid);
++    free(wbuffer);
++    return ret;
++}
++
++/***********************************************************************
++ *      CM_Get_Device_Interface_ListA (SETUPAPI.@)
++ */
++CONFIGRET WINAPI CM_Get_Device_Interface_ListA(LPGUID class, DEVINSTID_A id, PZZSTR buffer, ULONG len, ULONG flags)
++{
++    return CM_Get_Device_Interface_List_ExA(class, id, buffer, len, flags, NULL);
++}
++
+ /***********************************************************************
+  *      SetupDiGetINFClassA (SETUPAPI.@)
+  */
+diff --git a/dlls/setupapi/setupapi.spec b/dlls/setupapi/setupapi.spec
+index e38946587c2..d5beb4e1ab7 100644
+--- a/dlls/setupapi/setupapi.spec
++++ b/dlls/setupapi/setupapi.spec
+@@ -93,9 +93,9 @@
+ @ stdcall CM_Get_Device_Interface_AliasW(wstr ptr ptr ptr long)
+ @ stub CM_Get_Device_Interface_Alias_ExA
+ @ stub CM_Get_Device_Interface_Alias_ExW
+-@ stub CM_Get_Device_Interface_ListA
++@ stdcall CM_Get_Device_Interface_ListA(ptr ptr ptr long long)
+ @ stdcall CM_Get_Device_Interface_ListW(ptr ptr ptr long long)
+-@ stub CM_Get_Device_Interface_List_ExA
++@ stdcall CM_Get_Device_Interface_List_ExA(ptr ptr ptr long long ptr)
+ @ stdcall CM_Get_Device_Interface_List_ExW(ptr ptr ptr long long ptr)
+ @ stdcall CM_Get_Device_Interface_List_SizeA(ptr ptr str long)
+ @ stdcall CM_Get_Device_Interface_List_SizeW(ptr ptr wstr long)
+diff --git a/dlls/setupapi/stubs.c b/dlls/setupapi/stubs.c
+index 96ecc778a9d..44c81a1fd97 100644
+--- a/dlls/setupapi/stubs.c
++++ b/dlls/setupapi/stubs.c
+@@ -267,26 +267,6 @@ BOOL WINAPI SetupDiGetClassImageIndex(PSP_CLASSIMAGELIST_DATA ClassImageListData
+     return FALSE;
+ }
+ 
+-/***********************************************************************
+- *      CM_Get_Device_Interface_List_SizeA (SETUPAPI.@)
+- */
+-CONFIGRET WINAPI CM_Get_Device_Interface_List_SizeA(PULONG len, LPGUID class, DEVINSTID_A id,
+-                                                    ULONG flags)
+-{
+-    FIXME("%p %p %s 0x%08lx: stub\n", len, class, debugstr_a(id), flags);
+-    return CR_FAILURE;
+-}
+-
+-/***********************************************************************
+- *      CM_Get_Device_Interface_List_Size_ExA (SETUPAPI.@)
+- */
+-CONFIGRET WINAPI CM_Get_Device_Interface_List_Size_ExA(PULONG len, LPGUID class, DEVINSTID_A id,
+-                                                       ULONG flags, HMACHINE machine)
+-{
+-    FIXME("%p %p %s 0x%08lx %p: stub\n", len, class, debugstr_a(id), flags, machine);
+-    return CR_FAILURE;
+-}
+-
+ /***********************************************************************
+  *      CM_Get_Device_Interface_AliasA (SETUPAPI.@)
+  */
+-- 
+GitLab
+

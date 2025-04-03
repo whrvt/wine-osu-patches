@@ -148,9 +148,9 @@ index 617b0143b6d..5c9c9e4e923 100644
          }
          memcpy( pointers[i], (void *)dir->StartAddressOfRawData, size );
 @@ -3963,8 +3992,8 @@ void WINAPI LdrShutdownThread(void)
-         if (NtCurrentTeb()->Instrumentation[0])
-             ((TEB *)NtCurrentTeb()->Instrumentation[0])->ThreadLocalStoragePointer = NULL;
- #endif
+     {
+         NtCurrentTeb()->ThreadLocalStoragePointer = NULL;
+         --tls_thread_count;
 -        for (i = 0; i < tls_module_count; i++) RtlFreeHeap( GetProcessHeap(), 0, pointers[i] );
 -        RtlFreeHeap( GetProcessHeap(), 0, pointers );
 +        for (i = 0; i < tls_module_count; i++) free_tls_memory( pointers[i] );

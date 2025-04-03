@@ -1,4 +1,4 @@
-From f2fde3af87a2d1b84862b6d41ac3ab5fbfc0c5f2 Mon Sep 17 00:00:00 2001
+From 15147b08b228c9c0dbf2758db4b79c141f18a4f7 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 18 Mar 2025 20:50:09 +0100
 Subject: [PATCH] server: Use NTUSER_OBJ constants for user object types.
@@ -35,7 +35,7 @@ index 2f3bbdf91c0..4dd7d49cb22 100644
  
  static inline UINT win_get_flags( HWND hwnd )
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index c681333aa4a..8482d0ef567 100644
+index 3fb64755ba0..72f241a753f 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -55,12 +55,13 @@ static void *user_handles[NB_USER_HANDLES];
@@ -120,10 +120,10 @@ index ffe7206369e..bf2ad266e76 100644
      {
          set_error( STATUS_INVALID_HANDLE );
 diff --git a/server/protocol.def b/server/protocol.def
-index 36056c00e24..ea5398c8be7 100644
+index 63bb0111473..1a2808d24a6 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -3924,6 +3924,7 @@ struct handle_info
+@@ -3928,6 +3928,7 @@ struct handle_info
  
  /* Allocate an arbitrary user handle */
  @REQ(alloc_user_handle)
@@ -131,7 +131,7 @@ index 36056c00e24..ea5398c8be7 100644
  @REPLY
      user_handle_t  handle;        /* allocated handle */
  @END
-@@ -3931,6 +3932,7 @@ struct handle_info
+@@ -3935,6 +3936,7 @@ struct handle_info
  
  /* Free an arbitrary user handle */
  @REQ(free_user_handle)

@@ -1,4 +1,4 @@
-From aa1f4b9cc6ba7face58c2b6e59bc42af4a9d28ba Mon Sep 17 00:00:00 2001
+From 715d157353a8345cb46cb3fda3ca86a6fe46de24 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 24 Mar 2025 13:11:21 +0100
 Subject: [PATCH] win32u: Use the session shared object to implement is_window.
@@ -8,7 +8,7 @@ Subject: [PATCH] win32u: Use the session shared object to implement is_window.
  1 file changed, 19 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 7f4f64b2dd7..bc856b92499 100644
+index 4d011639a92..e65fb9bebfc 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -77,6 +77,20 @@ HANDLE alloc_user_handle( struct user_object *ptr, unsigned short type )

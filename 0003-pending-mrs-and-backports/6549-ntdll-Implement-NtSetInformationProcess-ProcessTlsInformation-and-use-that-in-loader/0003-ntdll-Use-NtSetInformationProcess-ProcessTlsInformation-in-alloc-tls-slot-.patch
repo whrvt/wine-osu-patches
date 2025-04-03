@@ -33,7 +33,7 @@ index 38516115b38..617b0143b6d 100644
  
      if (!(dir = RtlImageDirectoryEntryToData( mod->DllBase, TRUE, IMAGE_DIRECTORY_ENTRY_TLS, &size )))
          return FALSE;
-@@ -1373,57 +1374,66 @@ static BOOL alloc_tls_slot( LDR_DATA_TABLE_ENTRY *mod )
+@@ -1373,54 +1374,66 @@ static BOOL alloc_tls_slot( LDR_DATA_TABLE_ENTRY *mod )
          tls_dirs = new_ptr;
          tls_module_count = new_count;
      }
@@ -114,9 +114,6 @@ index 38516115b38..617b0143b6d 100644
 -            if (!new) return FALSE;
 -            if (old) memcpy( new, old, old_module_count * sizeof(*new) );
 -            teb->ThreadLocalStoragePointer = new;
--#ifdef __x86_64__  /* macOS-specific hack */
--            if (teb->Instrumentation[0]) ((TEB *)teb->Instrumentation[0])->ThreadLocalStoragePointer = new;
--#endif
 -            TRACE( "thread %04lx tls block %p -> %p\n", HandleToULong(teb->ClientId.UniqueThread), old, new );
 -            /* FIXME: can't free old block here, should be freed at thread exit */
 +            /* FIXME: can't free old Tls vector here, should be freed at thread exit. */
@@ -147,16 +144,16 @@ index 38516115b38..617b0143b6d 100644
      }
 +    ++tls_thread_count;
      NtCurrentTeb()->ThreadLocalStoragePointer = pointers;
- #ifdef __x86_64__  /* macOS-specific hack */
-     if (NtCurrentTeb()->Instrumentation[0])
+     return STATUS_SUCCESS;
+ }
 @@ -3947,6 +3958,7 @@ void WINAPI LdrShutdownThread(void)
      if ((pointers = NtCurrentTeb()->ThreadLocalStoragePointer))
      {
          NtCurrentTeb()->ThreadLocalStoragePointer = NULL;
 +        --tls_thread_count;
- #ifdef __x86_64__  /* macOS-specific hack */
-         if (NtCurrentTeb()->Instrumentation[0])
-             ((TEB *)NtCurrentTeb()->Instrumentation[0])->ThreadLocalStoragePointer = NULL;
+         for (i = 0; i < tls_module_count; i++) RtlFreeHeap( GetProcessHeap(), 0, pointers[i] );
+         RtlFreeHeap( GetProcessHeap(), 0, pointers );
+     }
 -- 
 GitLab
 

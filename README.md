@@ -1,8 +1,8 @@
 # Patchset context
 
-wine commit: [wine-8e2aea62](https://gitlab.winehq.org/wine/wine/-/tree/8e2aea6290e823d2f5023e2bff5c2fec0880a65d)
+wine commit: [wine-e956c4ec](https://gitlab.winehq.org/wine/wine/-/tree/e956c4ec71dd0f41090df3863e6f937963b2b7d9)
 
-staging commit: [staging-5b64f435](https://gitlab.winehq.org/wine/wine-staging/-/tree/5b64f435e92f270c4792ae3788dbb167c7dc629c)
+staging commit: [staging-8924ee42](https://gitlab.winehq.org/wine/wine-staging/-/tree/8924ee42d868d8d2785a8b175507cbd085461e3c)
 
 Staging exclude flags: `-W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization -W user32-recursive-activation -W user32-alttab-focus -W winex11-Window_Style -W winex11.drv-Query_server_position`
 
@@ -143,6 +143,20 @@ Patch: [winex11-Custom-frame-limiter-for-OpenGL.patch](9000-misc-additions/winex
 ### Type
 
 `boolean`
+
+## WINE_DISABLE_FAST_SYNC
+
+Patch: [0028-server-Allow-disabling-in-process-synchronization-support.patch](0007-ntsync/0028-server-Allow-disabling-in-process-synchronization-support.patch)
+
+### Commit message
+
+```
+server: Allow disabling in-process synchronization support.
+```
+
+### Type
+
+`numeric`
 
 ## WINE_DISABLE_IME
 
