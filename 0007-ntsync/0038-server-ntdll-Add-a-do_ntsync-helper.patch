@@ -28,7 +28,7 @@ index 245f158881e..f0629434cc7 100644
 -                          getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) );
 +        do_esync_cached = !(getenv("WINEESYNC") && !atoi(getenv("WINEESYNC"))) && !do_fsync() && !do_ntsync();
  
-     return do_esync_cached;
+     return !!do_esync_cached;
  #else
 diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
 index 254a5c19208..56f915b4ccf 100644
@@ -43,7 +43,7 @@ index 254a5c19208..56f915b4ccf 100644
 +        do_fsync_cached = errno != ENOSYS && !(getenv("WINEFSYNC") && !atoi(getenv("WINEFSYNC"))) && !do_ntsync();
      }
  
-     return do_fsync_cached;
+     return !!do_fsync_cached;
 diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
 index 0116f4f6aa1..479ed0cd786 100644
 --- a/dlls/ntdll/unix/sync.c
@@ -52,12 +52,12 @@ index 0116f4f6aa1..479ed0cd786 100644
      return ret;
  }
  
-+int do_ntsync(void)
++NTSTATUS do_ntsync(void)
 +{
 +    static int do_ntsync_cached = -1;
 +    if (do_ntsync_cached == -1)
 +        do_ntsync_cached = (get_linux_sync_device() >= 0);
-+    return do_ntsync_cached;
++    return !!do_ntsync_cached;
 +}
 +
  #else
@@ -67,7 +67,7 @@ index 0116f4f6aa1..479ed0cd786 100644
      return STATUS_NOT_IMPLEMENTED;
  }
  
-+int do_ntsync(void)
++NTSTATUS do_ntsync(void)
 +{
 +    return 0;
 +}
@@ -83,7 +83,7 @@ index 89d1b05f5c5..8970cbf1be9 100644
  extern void dbg_init(void);
  
  extern void close_inproc_sync_obj( HANDLE handle );
-+extern int do_ntsync(void);
++extern NTSTATUS do_ntsync(void);
  
  extern NTSTATUS call_user_apc_dispatcher( CONTEXT *context_ptr, ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3,
                                            PNTAPCFUNC func, NTSTATUS status );

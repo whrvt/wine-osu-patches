@@ -1,0 +1,77 @@
+From d44a7b780decb7944469959e084f5b0b84bb51a0 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 27 Dec 2024 11:45:15 -0800
+Subject: [PATCH] kernelbase: Add AppPolicyGetClrCompat stub.
+
+---
+ dlls/kernelbase/kernelbase.spec |  2 +-
+ dlls/kernelbase/main.c          | 13 +++++++++++++
+ include/appmodel.h              |  8 ++++++++
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
+index 27f45edcedf..edbe985d10b 100644
+--- a/dlls/kernelbase/kernelbase.spec
++++ b/dlls/kernelbase/kernelbase.spec
+@@ -42,7 +42,7 @@
+ # @ stub AppContainerLookupMoniker
+ # @ stub AppContainerRegisterSid
+ # @ stub AppContainerUnregisterSid
+-# @ stub AppPolicyGetClrCompat
++@ stdcall AppPolicyGetClrCompat(ptr ptr)
+ # @ stub AppPolicyGetCreateFileAccess
+ # @ stub AppPolicyGetLifecycleManagement
+ @ stdcall AppPolicyGetMediaFoundationCodecLoading(ptr ptr)
+diff --git a/dlls/kernelbase/main.c b/dlls/kernelbase/main.c
+index 60173ba6513..fbfbf9fda0f 100644
+--- a/dlls/kernelbase/main.c
++++ b/dlls/kernelbase/main.c
+@@ -81,6 +81,19 @@ INT WINAPI MulDiv( INT a, INT b, INT c )
+     return ret;
+ }
+ 
++/***********************************************************************
++ *          AppPolicyGetClrCompat (KERNELBASE.@)
++ */
++LONG WINAPI AppPolicyGetClrCompat(HANDLE token, AppPolicyClrCompat *policy)
++{
++    WARN("%p, %p\n", token, policy);
++
++    if(policy)
++        *policy = AppPolicyClrCompat_ClassicDesktop;
++
++    return ERROR_SUCCESS;
++}
++
+ /***********************************************************************
+  *          AppPolicyGetMediaFoundationCodecLoading (KERNELBASE.@)
+  */
+diff --git a/include/appmodel.h b/include/appmodel.h
+index 8c219e8080a..5c1d5dbc190 100644
+--- a/include/appmodel.h
++++ b/include/appmodel.h
+@@ -22,6 +22,13 @@
+ extern "C" {
+ #endif
+ 
++typedef enum AppPolicyClrCompat {
++  AppPolicyClrCompat_Other           = 0,
++  AppPolicyClrCompat_ClassicDesktop  = 1,
++  AppPolicyClrCompat_Universal       = 2,
++  AppPolicyClrCompat_PackagedDesktop = 3
++} AppPolicyClrCompat;
++
+ typedef enum AppPolicyMediaFoundationCodecLoading
+ {
+     AppPolicyMediaFoundationCodecLoading_All       = 0,
+@@ -84,6 +91,7 @@ typedef struct PACKAGE_ID
+ }
+ PACKAGE_ID;
+ 
++LONG WINAPI AppPolicyGetClrCompat(HANDLE token, AppPolicyClrCompat *policy);
+ LONG WINAPI AppPolicyGetMediaFoundationCodecLoading(HANDLE token, AppPolicyMediaFoundationCodecLoading *policy);
+ LONG WINAPI AppPolicyGetProcessTerminationMethod(HANDLE token, AppPolicyProcessTerminationMethod *policy);
+ LONG WINAPI AppPolicyGetShowDeveloperDiagnostic(HANDLE token, AppPolicyShowDeveloperDiagnostic *policy);
+-- 
+2.47.1
+

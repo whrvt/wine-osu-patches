@@ -1,0 +1,87 @@
+From c862f7fc1570ceb0d22ae675434ed06903359bf9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Fri, 6 Dec 2024 16:36:58 +0100
+Subject: [PATCH 31/86] imm32/tests: debugstr_w - debugstr_wn
+
+imm32:imm32
+
+ASAN_OPTIONS='verbosity=0:windows_hook_rtl_allocators=1' WINEDLLOVERRIDES="$F=n;*.dll=n" WINEDEBUG= wine64 z:/home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj/dlls/imm32/tests/x86_64-windows/imm32_test.exe imm32
+...
+imm32.c:3214: Test marked todo: unexpected call ImeDestroy
+0024:fixme:imm:ImeEscape himc 0000000000000000, escape 0, data 0000000000000000 stub!
+0024:fixme:imm:ImeEscape himc 0000000000000000, escape 0, data 0000000000000000 stub!
+=================================================================
+==32==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1f7de0 at pc 0x000140082d41 bp 0x7ffffe1f76a0 sp 0x7ffffe1f76e8
+READ of size 2 at 0x7ffffe1f7de0 thread T0
+012c:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x000140082d40 in wine_dbgstr_wn /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30
+    #1 0x000140082d40 in debugstr_w /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:521:65
+    #2 0x0001400422fe in test_ImmEscape /home/bernhard/data/entwicklung/2024/wine\wine/dlls/imm32/tests/imm32.c:4205:74
+    #3 0x00014000c199 in func_imm32 /home/bernhard/data/entwicklung/2024/wine\wine/dlls/imm32/tests/imm32.c:8071:5
+    #4 0x00014009bff3 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #5 0x00014009ba3b in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h
+    #6 0x00014009d96f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #7 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #8 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1f7de0 is located in stack of thread T0 at offset 1056 in frame
+    #0 0x000140040f8f in test_ImmEscape /home/bernhard/data/entwicklung/2024/wine\wine/dlls/imm32/tests/imm32.c:4146
+
+  This frame has 2 object(s):
+    [32, 1056) 'bufferW' (line 4159) <== Memory access at offset 1056 overflows this variable
+    [1184, 1696) 'bufferA' (line 4160)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30 in wine_dbgstr_wn
+Shadow bytes around the buggy address:
+  0x7ffffe1f7b00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f7b80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f7c00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f7c80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f7d00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1f7d80: 00 00 00 00 00 00 00 00 00 00 00 00[f2]f2 f2 f2
+  0x7ffffe1f7e00: f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 00 00 00 00
+  0x7ffffe1f7e80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f7f00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f7f80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f8000: 00 00 00 00 00 00 00 00 00 00 00 00 f3 f3 f3 f3
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==32==ABORTING
+---
+ dlls/imm32/tests/imm32.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/imm32/tests/imm32.c b/dlls/imm32/tests/imm32.c
+index db73463ef49..6e50e614b6b 100644
+--- a/dlls/imm32/tests/imm32.c
++++ b/dlls/imm32/tests/imm32.c
+@@ -4202,7 +4202,7 @@ static void test_ImmEscape( BOOL unicode )
+         }
+         else
+         {
+-            ok( !memcmp( bufferW, "ImeEscape", 10 ), "got bufferW %s\n", debugstr_w(bufferW) );
++            ok( !memcmp( bufferW, "ImeEscape", 10 ), "got bufferW %s\n", debugstr_wn(bufferW, ARRAY_SIZE(bufferW)) );
+             ok_eq( 0xcdcd, bufferW[5], WORD, "%#x" );
+         }
+         CHECK_CALLED( ImeEscape );
+-- 
+2.47.1
+

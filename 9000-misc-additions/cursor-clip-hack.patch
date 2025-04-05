@@ -31,14 +31,14 @@ index 33baed3dc23..b9e00d78cbf 100644
  /* find an existing winproc for a given function and type */
  /* FIXME: probably should do something more clever than a linear search */
  static WINDOWPROC *find_winproc( WNDPROC func, BOOL ansi )
-@@ -248,6 +250,7 @@ DLGPROC get_dialog_proc( DLGPROC ret, BOOL ansi )
- 
- static void init_user(void)
+@@ -248,6 +250,7 @@ static void init_user(void)
  {
+     NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
+ 
 +    cursor_clip_hack = use_cursor_clip_hack();
+     shared_session_init();
      gdi_init();
      sysparams_init();
-     winstation_init();
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
 index d94f0da56a0..12802e99af7 100644
 --- a/dlls/win32u/input.c
@@ -174,19 +174,6 @@ index 604d8e09d0e..14ca7921622 100644
      RECT rect;
      UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
      if (NtUserGetClipCursor(&rect )) NtUserClipCursor(&rect);
-diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index d453a1e34bc..7d97f2c57c8 100644
---- a/dlls/winex11.drv/event.c
-+++ b/dlls/winex11.drv/event.c
-@@ -341,7 +341,7 @@ static void wait_grab_pointer( Display *display )
-     NtUserGetClipCursor( &rect );
-     NtUserClipCursor( NULL );
- 
--    while (XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
-+    while (cursor_clip_hack < 2 && XGrabPointer( display, root_window, False, 0, GrabModeAsync, GrabModeAsync,
-                          None, None, CurrentTime ) != GrabSuccess)
-     {
-         LARGE_INTEGER timeout = {.QuadPart = -10 * (ULONGLONG)10000};
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
 index 3ce093a0c38..7ecca5e4f2f 100644
 --- a/dlls/winex11.drv/mouse.c

@@ -1,0 +1,89 @@
+From f00087b24d33a17502f111079f005085ccbc67b2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Wed, 4 Dec 2024 22:46:55 +0100
+Subject: [PATCH 32/86] kernel32/tests: locale: debugstr_w - debugstr_wn.
+
+kernel32_test.exe locale
+
+ASAN_OPTIONS='verbosity=0:windows_hook_rtl_allocators=1' WINEDLLOVERRIDES="$F=n;*.dll=n" WINEDEBUG= wine64 z:/home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj/dlls/kernel32/tests/x86_64-windows/kernel32_test.exe locale
+...
+=================================================================
+==1628==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1f4090 at pc 0x0001402ca8ce bp 0x7ffffe1f3a80 sp 0x7ffffe1f3ac8
+READ of size 2 at 0x7ffffe1f4090 thread T0
+0670:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x0001402ca8cd in wine_dbgstr_wn /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30
+    #1 0x0001402adb10 in debugstr_w /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:521:65
+    #2 0x0001402adb10 in test_LocaleNameToLCID /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:3256:53
+    #3 0x00014027ae4b in func_locale /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:8699:3
+    #4 0x0001404d7f01 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #5 0x0001404d7f01 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #6 0x0001404d9eef in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #7 0x6fffffa54808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #8 0x6fffffc2fa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1f4090 is located in stack of thread T0 at offset 784 in frame
+    #0 0x0001402a89df in test_LocaleNameToLCID /home/bernhard/data/entwicklung/2024/wine\wine/dlls/kernel32/tests/locale.c:2946
+
+  This frame has 7 object(s):
+    [32, 36) 'lcid' (line 2947)
+    [48, 218) 'buffer' (line 2950)
+    [288, 458) 'expbuff' (line 2951)
+    [528, 784) 'buffer627' (line 3175) <== Memory access at offset 784 overflows this variable
+    [848, 1104) 'expect628' (line 3175)
+    [1168, 1184) 'str' (line 3176)
+    [1200, 1204) 'lcid1012' (line 3271)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/debug.h:262:30 in wine_dbgstr_wn
+Shadow bytes around the buggy address:
+  0x7ffffe1f3e00: 00 00 00 00 00 00 00 00 00 00 00 02 f2 f2 f2 f2
+  0x7ffffe1f3e80: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f3f00: 00 00 00 00 00 00 00 00 00 02 f2 f2 f2 f2 f2 f2
+  0x7ffffe1f3f80: f2 f2 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f4000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1f4080: 00 00[f2]f2 f2 f2 f2 f2 f2 f2 00 00 00 00 00 00
+  0x7ffffe1f4100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f4180: 00 00 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 f2
+  0x7ffffe1f4200: f2 f2 00 00 f2 f2 f8 f3 00 00 00 00 00 00 00 00
+  0x7ffffe1f4280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1f4300: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1628==ABORTING
+---
+ dlls/kernel32/tests/locale.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/kernel32/tests/locale.c b/dlls/kernel32/tests/locale.c
+index 625a2ceac2b..8681736a4cc 100644
+--- a/dlls/kernel32/tests/locale.c
++++ b/dlls/kernel32/tests/locale.c
+@@ -3253,7 +3253,7 @@ static void test_LocaleNameToLCID(void)
+         ok( status == STATUS_BUFFER_TOO_SMALL, "wrong error %lx\n", status );
+         ok( str.Length == 0xbeef, "wrong len %u\n", str.Length );
+         ok( str.MaximumLength == 5 * sizeof(WCHAR), "wrong len %u\n", str.MaximumLength );
+-        ok( buffer[0] == 0xcccc, "wrong name %s\n", debugstr_w(buffer) );
++        ok( buffer[0] == 0xcccc, "wrong name %s\n", debugstr_wn(buffer, ARRAY_SIZE(buffer)) );
+ 
+         memset( &str, 0xcc, sizeof(str) );
+         status = pRtlLcidToLocaleName( MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), &str, 0, 1 );
+-- 
+2.47.1
+

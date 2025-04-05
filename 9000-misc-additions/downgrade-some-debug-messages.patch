@@ -1,16 +1,3 @@
-# diff --git a/dlls/winex11.drv/xinerama.c b/dlls/winex11.drv/xinerama.c
-# index 11111111111..11111111111 100644
-# --- a/dlls/winex11.drv/xinerama.c
-# +++ b/dlls/winex11.drv/xinerama.c
-# @@ -179,7 +179,7 @@ BOOL xinerama_get_fullscreen_monitors( const RECT *rect, long *indices )
-#      }
-#  
-#      if (indices[0] == -1 || indices[1] == -1 || indices[2] == -1 || indices[3] == -1)
-# -        ERR("Failed to get xinerama fullscreen monitor indices.\n");
-# +        WARN("Failed to get xinerama fullscreen monitor indices.\n");
-#      else
-#          ret = TRUE;
-#  
 diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
 index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/env.c
@@ -24,3 +11,32 @@ index 11111111111..11111111111 100644
          break;
      case IMAGE_FILE_MACHINE_AMD64:
          if (main_image_info.Machine == current_machine) break;
+diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
+index 11111111111..11111111111 100644
+--- a/dlls/kernelbase/debug.c
++++ b/dlls/kernelbase/debug.c
+@@ -834,7 +834,7 @@ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerRegisterRuntimeExceptionModule( const
+  */
+ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerSetFlags( DWORD flags )
+ {
+-    FIXME("(%ld) stub\n", flags);
++    WARN("(%ld) stub\n", flags);
+     return S_OK;
+ }
+ 
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index 11111111111..11111111111 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -1708,7 +1708,10 @@ static void process_run_key( HKEY key, const WCHAR *keyname, BOOL delete, BOOL s
+         }
+         if (runCmd( cmdline, NULL, synchronous, FALSE ) == INVALID_RUNCMD_RETURN)
+         {
+-            WINE_ERR( "Error running cmd %s (%lu).\n", wine_dbgstr_w(cmdline), GetLastError() );
++            if (GetLastError() == ERROR_FILE_NOT_FOUND)
++                WINE_WARN( "Error running cmd %s (%lu).\n", wine_dbgstr_w(cmdline), GetLastError() );
++            else
++                WINE_ERR( "Error running cmd %s (%lu).\n", wine_dbgstr_w(cmdline), GetLastError() );
+         }
+         WINE_TRACE( "Done processing cmd %lu.\n", i );
+     }

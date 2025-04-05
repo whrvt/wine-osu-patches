@@ -1,0 +1,22 @@
+Subject: [PATCH] ntdll: Make server_select a memory barrier.
+
+---
+ dlls/ntdll/unix/server.c  | 3 +++
+ 1 files changed, 3 insertions(+)
+
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -739,6 +739,9 @@ unsigned int server_select( const union select_op *select_op, data_size_t size,
+         pthread_sigmask( SIG_BLOCK, &server_block_set, &old_set );
+         for (;;)
+         {
++            /* ensure writes so far are visible to other threads */
++            MemoryBarrier();
++
+             SERVER_START_REQ( select )
+             {
+                 req->flags    = flags;
+-- 
+0.0.0

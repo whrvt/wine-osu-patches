@@ -1,0 +1,93 @@
+From a0f09f48ed63d7ef29d5567e631b2aa74e263f15 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Tue, 10 Dec 2024 11:41:44 +0100
+Subject: [PATCH 83/86] wintrust: Reserve at least sizeof(CRYPT_ATTRIBUTES).
+
+=================================================================
+==664==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f0036560070 at pc 0x6ffff81773cc bp 0x7ffffe1fc3e0 sp 0x7ffffe1fc428
+READ of size 4 at 0x7f0036560070 thread T0
+029c:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff81773cb in SoftpubLoadSignature /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/softpub.c
+    #1 0x6ffff81800b6 in WINTRUST_ExecuteSteps /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/wintrust_main.c:174:15
+    #2 0x6ffff81800b6 in WINTRUST_DefaultVerify /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/wintrust_main.c:289:11
+    #3 0x6ffff817f01c in WinVerifyTrust /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/wintrust_main.c:708:19
+    #4 0x00014003dd45 in call_winverify /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/tests/softpub.c:1611:15
+    #5 0x000140032938 in test_wintrust_digest /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/tests/softpub.c:1709:9
+    #6 0x000140032938 in func_softpub /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/tests/softpub.c:1934:5
+    #7 0x00014003f407 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #8 0x00014003f407 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #9 0x0001400412ef in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #10 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #11 0x6ffffa8afa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7f0036560071 is located 0 bytes after 1-byte region [0x7f0036560070,0x7f0036560071)
+allocated by thread T0 here:
+    #0 0x6ffff84ba3d6 in calloc /home/bernhard/data/entwicklung/2024/llvm-mingw/2024-10-18/llvm-mingw/llvm-project/compiler-rt\lib/asan/asan_malloc_win.cpp:91:3
+    #1 0x6ffff8175f71 in load_secondary_signatures /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/softpub.c:842:19
+    #2 0x6ffff8175f71 in SoftpubLoadSignature /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/softpub.c:909:13
+    #3 0x6ffff81800b6 in WINTRUST_ExecuteSteps /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/wintrust_main.c:174:15
+    #4 0x6ffff81800b6 in WINTRUST_DefaultVerify /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/wintrust_main.c:289:11
+    #5 0x6ffff817f01c in WinVerifyTrust /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/wintrust_main.c:708:19
+    #6 0x00014003dd45 in call_winverify /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/tests/softpub.c:1611:15
+    #7 0x000140032938 in test_wintrust_digest /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/tests/softpub.c:1709:9
+    #8 0x000140032938 in func_softpub /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/tests/softpub.c:1934:5
+    #9 0x00014003f407 in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #10 0x00014003f407 in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #11 0x0001400412ef in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #12 0x6ffffbfd4808 in BaseThreadInitThunk /home/bernhard/data/entwicklung/2024/wine/wine/dlls/kernel32\thread.c:61:5
+    #13 0x6ffffa8afa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/wintrust/softpub.c in SoftpubLoadSignature
+Shadow bytes around the buggy address:
+  0x7f003655fd80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7f003655fe00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7f003655fe80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7f003655ff00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7f003655ff80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7f0036560000: fa fa fd fa fa fa 00 00 fa fa 00 fa fa fa[01]fa
+  0x7f0036560080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f0036560100: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f0036560180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f0036560200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7f0036560280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==664==ABORTING
+029c:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+make: *** [Makefile:446808: dlls/wintrust/tests/x86_64-windows/softpub.ok] Fehler 1
+---
+ dlls/wintrust/softpub.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/wintrust/softpub.c b/dlls/wintrust/softpub.c
+index 609d240a738..0cccac47246 100644
+--- a/dlls/wintrust/softpub.c
++++ b/dlls/wintrust/softpub.c
+@@ -838,6 +838,7 @@ static void load_secondary_signatures(CRYPT_PROVIDER_DATA *data, HCRYPTMSG msg)
+ 
+     if (!CryptMsgGetParam(msg, CMSG_SIGNER_UNAUTH_ATTR_PARAM, 0, NULL, &size))
+         return;
++    size = max(size, sizeof(*attrs));
+ 
+     if (!(attrs = data->psPfns->pfnAlloc(size)))
+     {
+-- 
+2.47.1
+

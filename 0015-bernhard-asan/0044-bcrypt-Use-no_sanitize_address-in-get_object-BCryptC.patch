@@ -1,0 +1,107 @@
+From fd76dfdc1c8d6a5a145f9ef9469ff93d545d9abf Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 16 Dec 2024 17:59:00 +0100
+Subject: [PATCH 44/86] bcrypt: Use no_sanitize_address in
+ get_object/BCryptCloseAlgorithmProvider.
+
+=================================================================
+==664==ERROR: AddressSanitizer: heap-use-after-free on address 0x7ebd152e0640 at pc 0x6ffff85f3d2d bp 0x7ffffe1fd970 sp 0x7ffffe1fd9b8
+READ of size 4 at 0x7ebd152e0640 thread T0
+02a4:fixme:dbghelp:elf_search_auxv can't find symbol in module
+02a4:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007E950AA50B80,symt:0000000000000000) in ctx(00007E950AFC1010,L"bcrypt")
+02a4:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007E950A770B80,symt:0000000000000000) in ctx(00007E950C300D70,L"bcrypt_test")
+    #0 0x6ffff85f3d2c in BCryptDestroyHash Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\bcrypt\bcrypt_main.c:1124
+    #1 0x00014005910d in test_hash+0x328d (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005910d)
+    #2 0x0001400029cc in func_bcrypt+0x19cc (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x1400029cc)
+    #3 0x00014005e773 in run_test+0x163 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005e773)
+    #4 0x00014005e1bb in main+0x4db (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005e1bb)
+    #5 0x0001400600ef in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #6 0x6ffffbdc4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #7 0x6ffffad1fa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+0x7ebd152e0640 is located 0 bytes inside of 432-byte region [0x7ebd152e0640,0x7ebd152e07f0)
+freed by thread T0 here:
+02a4:fixme:dbghelp_dwarf:dwarf2_load_one_entry Unhandled Tag type 0xa at debug_info(abbrev:00007E9505EA0B80,symt:0000000000000000) in ctx(00007E950AEC4A20,L"libclang_rt.asan_dynamic-x86_64")
+    #0 0x6ffff901a041 in free+0x81 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a041)
+    #1 0x6ffff85f3c49 in BCryptDestroyHash Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\bcrypt\bcrypt_main.c:1126
+    #2 0x00014005902a in test_hash+0x31aa (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005902a)
+    #3 0x0001400029cc in func_bcrypt+0x19cc (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x1400029cc)
+    #4 0x00014005e773 in run_test+0x163 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005e773)
+    #5 0x00014005e1bb in main+0x4db (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005e1bb)
+    #6 0x0001400600ef in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #7 0x6ffffbdc4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #8 0x6ffffad1fa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+previously allocated by thread T0 here:
+    #0 0x6ffff901a276 in calloc+0x86 (C:\windows\system32\libclang_rt.asan_dynamic-x86_64.dll+0x18004a276)
+    #1 0x6ffff85f35a5 in hash_create Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\bcrypt\bcrypt_main.c:1036
+    #2 0x6ffff85f349e in BCryptCreateHash Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\bcrypt\bcrypt_main.c:1080
+    #3 0x0001400587e0 in test_hash+0x2960 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x1400587e0)
+    #4 0x0001400029cc in func_bcrypt+0x19cc (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x1400029cc)
+    #5 0x00014005e773 in run_test+0x163 (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005e773)
+    #6 0x00014005e1bb in main+0x4db (Z:\home\bernhard\data\entwicklung\2024\wine\wine-build\build-asan-pe\64\obj\dlls\bcrypt\tests\x86_64-windows\bcrypt_test.exe+0x14005e1bb)
+    #7 0x0001400600ef in mainCRTStartup Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\msvcrt\crt_main.c:58
+    #8 0x6ffffbdc4808 in BaseThreadInitThunk Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\kernel32\thread.c:61
+    #9 0x6ffffad1fa1a  (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+SUMMARY: AddressSanitizer: heap-use-after-free Z:\home\bernhard\data\entwicklung\2024\wine\wine\dlls\bcrypt\bcrypt_main.c:1124 in BCryptDestroyHash
+Shadow bytes around the buggy address:
+  0x7ebd152e0380: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fa fa
+  0x7ebd152e0400: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x7ebd152e0480: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ebd152e0500: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ebd152e0580: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fa fa
+=>0x7ebd152e0600: fa fa fa fa fa fa fa fa[fd]fd fd fd fd fd fd fd
+  0x7ebd152e0680: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ebd152e0700: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7ebd152e0780: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fa fa
+  0x7ebd152e0800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7ebd152e0880: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==664==ABORTING
+make: *** [Makefile:16069: dlls/bcrypt/tests/x86_64-windows/bcrypt.ok] Fehler 1
+---
+ dlls/bcrypt/bcrypt_main.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/bcrypt/bcrypt_main.c b/dlls/bcrypt/bcrypt_main.c
+index 3d88430a07e..2af43afb589 100644
+--- a/dlls/bcrypt/bcrypt_main.c
++++ b/dlls/bcrypt/bcrypt_main.c
+@@ -258,6 +258,7 @@ static inline BOOL is_alg_pseudo_handle( BCRYPT_ALG_HANDLE handle )
+     return (((ULONG_PTR)handle & 1) == 1);
+ }
+ 
++__attribute__((no_sanitize_address))
+ static struct object *get_object( BCRYPT_HANDLE handle, ULONG magic )
+ {
+     ULONG idx;
+@@ -405,6 +406,7 @@ static void destroy_object( struct object *obj )
+     free( obj );
+ }
+ 
++__attribute__((no_sanitize_address))
+ NTSTATUS WINAPI BCryptCloseAlgorithmProvider( BCRYPT_ALG_HANDLE handle, DWORD flags )
+ {
+     struct algorithm *alg = handle;
+-- 
+2.47.1
+

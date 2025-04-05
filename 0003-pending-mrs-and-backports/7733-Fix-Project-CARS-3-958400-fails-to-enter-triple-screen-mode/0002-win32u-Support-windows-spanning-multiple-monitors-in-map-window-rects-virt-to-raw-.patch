@@ -1,0 +1,60 @@
+From 8fe8efe9bdb3fe43c767330636823c35b6b1b348 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Thu, 3 Apr 2025 16:16:05 +0800
+Subject: [PATCH] win32u: Support windows spanning multiple monitors in
+ map_window_rects_virt_to_raw().
+
+Fix a regression from 545073fd, which restricts the visible rect to only one monitor when the
+original virtual visible rect is spanning multiple monitors.
+
+Fix Project CARS 3 (958400) fails to enter triple screen mode.
+---
+ dlls/win32u/sysparams.c | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index e33ff6e60e5..b7b2c1fc004 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -2602,23 +2602,30 @@ RECT map_rect_virt_to_raw( RECT rect, UINT dpi_from )
+ /* map (absolute) window rects from MDT_DEFAULT to MDT_RAW_DPI coordinates */
+ struct window_rects map_window_rects_virt_to_raw( struct window_rects rects, UINT dpi_from )
+ {
++    RECT rect, monitor_rect, virt_visible_rect = rects.visible;
+     struct monitor *monitor;
+-    RECT rect, monitor_rect;
+     BOOL is_fullscreen;
+ 
+     if (!lock_display_devices( FALSE )) return rects;
+     if ((monitor = get_monitor_from_rect( rects.window, MONITOR_DEFAULTTONEAREST, dpi_from, MDT_DEFAULT )))
+     {
+-        /* if the visible rect is fullscreen, make it cover the full raw monitor, regardless of aspect ratio */
+-        monitor_rect = monitor_get_rect( monitor, dpi_from, MDT_DEFAULT );
+-
+-        is_fullscreen = intersect_rect( &rect, &monitor_rect, &rects.visible ) && EqualRect( &rect, &monitor_rect );
+-        if (is_fullscreen) rects.visible = monitor_get_rect( monitor, 0, MDT_RAW_DPI );
+-        else rects.visible = map_monitor_rect( monitor, rects.visible, dpi_from, MDT_DEFAULT, 0, MDT_RAW_DPI );
+-
++        rects.visible = map_monitor_rect( monitor, rects.visible, dpi_from, MDT_DEFAULT, 0, MDT_RAW_DPI );
+         rects.window = map_monitor_rect( monitor, rects.window, dpi_from, MDT_DEFAULT, 0, MDT_RAW_DPI );
+         rects.client = map_monitor_rect( monitor, rects.client, dpi_from, MDT_DEFAULT, 0, MDT_RAW_DPI );
+     }
++    /* if the visible rect is fullscreen, make it cover the full raw monitor, regardless of aspect ratio */
++    LIST_FOR_EACH_ENTRY(monitor, &monitors, struct monitor, entry)
++    {
++        if (!is_monitor_active( monitor ) || monitor->is_clone) continue;
++
++        monitor_rect = monitor_get_rect( monitor, dpi_from, MDT_DEFAULT );
++        is_fullscreen = intersect_rect( &rect, &monitor_rect, &virt_visible_rect ) && EqualRect( &rect, &monitor_rect );
++        if (is_fullscreen)
++        {
++            rect = monitor_get_rect( monitor, 0, MDT_RAW_DPI );
++            union_rect( &rects.visible, &rects.visible, &rect );
++        }
++    }
+     unlock_display_devices();
+ 
+     return rects;
+-- 
+GitLab
+

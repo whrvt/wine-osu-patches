@@ -1,0 +1,25 @@
+From 64a8b0806577eb18758baf041f5813676257da52 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 8 Jan 2025 22:33:17 -0800
+Subject: [PATCH] musl: Use __builtin_expect on Clang MSVC.
+
+---
+ libs/musl/src/internal/libm.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/libs/musl/src/internal/libm.h b/libs/musl/src/internal/libm.h
+index fa3ec4bd607..0dd3a9b2adf 100644
+--- a/libs/musl/src/internal/libm.h
++++ b/libs/musl/src/internal/libm.h
+@@ -92,7 +92,7 @@ static int32_t converttoint(double_t);
+ #endif
+ 
+ /* Helps static branch prediction so hot path can be better optimized.  */
+-#ifdef __GNUC__
++#if defined(__GNUC__) || defined(__clang__)
+ #define predict_true(x) __builtin_expect(!!(x), 1)
+ #define predict_false(x) __builtin_expect(x, 0)
+ #else
+-- 
+2.47.1
+

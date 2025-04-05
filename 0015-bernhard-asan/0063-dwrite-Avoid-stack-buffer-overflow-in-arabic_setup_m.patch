@@ -1,0 +1,98 @@
+From 897efdce6c6e2f35e41b40e55a299c9a13debb0e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Mon, 16 Dec 2024 20:52:57 +0100
+Subject: [PATCH 63/86] dwrite: Avoid stack-buffer-overflow in
+ arabic_setup_masks.
+
+Using action with NONE as index overflows the masks array.
+
+=================================================================
+==1648==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffffe1fb7dc at pc 0x6ffff854f30b bp 0x7ffffe1fb720 sp 0x7ffffe1fb768
+READ of size 4 at 0x7ffffe1fb7dc thread T0
+0694:fixme:file:server_get_file_info Unsupported info class e
+    #0 0x6ffff854f30a in arabic_setup_masks /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/shapers/arabic.c:180:41
+    #1 0x6ffff8531ebd in opentype_layout_set_glyph_masks /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/opentype.c:4847:8
+    #2 0x6ffff8537bd9 in opentype_layout_apply_gsub_features /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/opentype.c:6128:5
+    #3 0x6ffff854d555 in shape_get_glyphs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/shape.c:362:5
+    #4 0x6ffff849a954 in dwritetextanalyzer_GetGlyphs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/analyzer.c:1571:10
+    #5 0x6ffff8509d46 in IDWriteTextAnalyzer2_GetGlyphs /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite_2.h:1915:12
+    #6 0x6ffff8509d46 in layout_shape_get_glyphs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:973:14
+    #7 0x6ffff8509d46 in layout_shape_run /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1134:9
+    #8 0x6ffff8509d46 in layout_compute_runs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1221:13
+    #9 0x6ffff8509d46 in layout_compute /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:1267:10
+    #10 0x6ffff8502d07 in layout_compute_effective_runs /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:2147:10
+    #11 0x6ffff84fa9d1 in dwritetextlayout_Draw /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/layout.c:3576:10
+    #12 0x0001400bccea in IDWriteTextLayout_Draw /home/bernhard/data/entwicklung/2024/wine/wine-build/build-asan-pe/64/obj\include\dwrite.h:4354:12
+    #13 0x0001400bccea in test_Draw /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/tests/layout.c:2326:10
+    #14 0x0001400bccea in func_layout /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/tests/layout.c:7087:5
+    #15 0x00014013a4bc in run_test /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:765:5
+    #16 0x00014013a4bc in main /home/bernhard/data/entwicklung/2024/wine\wine/include/wine/test.h:884:12
+    #17 0x00014013c36f in mainCRTStartup /home/bernhard/data/entwicklung/2024/wine\wine/dlls/msvcrt/crt_main.c:58:11
+    #18 0x6ffffbdc4808 in BaseThreadInitThunk /usr/src/packages/BUILD\dlls/kernel32\thread.c:61:5
+    #19 0x6ffffaeffa1a in RtlUserThreadStart (C:\windows\system32\ntdll.dll+0x17000fa1a)
+
+Address 0x7ffffe1fb7dc is located in stack of thread T0 at offset 60 in frame
+    #0 0x6ffff854ebaf in arabic_setup_masks /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/shapers/arabic.c:145
+
+  This frame has 1 object(s):
+    [32, 60) 'masks' (line 147) <== Memory access at offset 60 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp, SEH and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/bernhard/data/entwicklung/2024/wine\wine/dlls/dwrite/shapers/arabic.c:180:41 in arabic_setup_masks
+Shadow bytes around the buggy address:
+  0x7ffffe1fb500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fb580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fb600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fb680: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fb700: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7ffffe1fb780: 00 00 00 00 f1 f1 f1 f1 00 00 00[04]f3 f3 f3 f3
+  0x7ffffe1fb800: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fb880: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1 f1
+  0x7ffffe1fb900: f8 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fb980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7ffffe1fba00: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 f8 f2 f8 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1648==ABORTING
+make: *** [Makefile:162532: dlls/dwrite/tests/x86_64-windows/layout.ok] Fehler 1
+0694:fixme:kernelbase:AppPolicyGetProcessTerminationMethod FFFFFFFFFFFFFFFA, 00007FFFFEA8FE80
+---
+ dlls/dwrite/shapers/arabic.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/dwrite/shapers/arabic.c b/dlls/dwrite/shapers/arabic.c
+index 92e888d0bd9..ff5fbded3a7 100644
+--- a/dlls/dwrite/shapers/arabic.c
++++ b/dlls/dwrite/shapers/arabic.c
+@@ -176,8 +176,10 @@ static void arabic_setup_masks(struct scriptshaping_context *context,
+     {
+         enum arabic_shaping_action action = arabic_get_shaping_action(context, i);
+         if (action != NONE)
++        {
+             opentype_layout_unsafe_to_break(context, i, i + 1);
+-        context->glyph_infos[i].mask |= masks[action];
++            context->glyph_infos[i].mask |= masks[action];
++        }
+     }
+ }
+ 
+-- 
+2.47.1
+

@@ -1,0 +1,43 @@
+From 1f07f6d16366bfbc3b44c38d73aa428d5425ec83 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 8 May 2024 12:57:36 -0600
+Subject: [PATCH 1535/1562] fixup! ntdll: Use UFFD for write watches support if
+ available.
+
+Open UFFD fd with UFFD_USER_MODE_ONLY.
+
+CW-Bug-Id: #23524
+---
+ dlls/ntdll/unix/uffd_tmp_defs.h | 2 ++
+ dlls/ntdll/unix/virtual.c       | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/uffd_tmp_defs.h b/dlls/ntdll/unix/uffd_tmp_defs.h
+index f79c34c6145..d9f7a286c58 100644
+--- a/dlls/ntdll/unix/uffd_tmp_defs.h
++++ b/dlls/ntdll/unix/uffd_tmp_defs.h
+@@ -1,6 +1,8 @@
+ #ifndef __UFFD_TMP_DEFS__
+ #define __UFFD_TMP_DEFS__
+ 
++#define UFFD_USER_MODE_ONLY 1
++
+ #ifdef __x86_64__
+ #define __NR_userfaultfd 323
+ #else
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 6c1dc3a8b88..62391642d82 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -400,7 +400,7 @@ static void kernel_writewatch_init(void)
+ {
+     struct uffdio_api uffdio_api;
+ 
+-    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK );
++    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK | UFFD_USER_MODE_ONLY );
+     if (uffd_fd == -1)
+     {
+         kernel_writewatch_softdirty_init();
+-- 
+2.45.2
+

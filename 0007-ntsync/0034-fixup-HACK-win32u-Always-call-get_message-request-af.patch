@@ -22,7 +22,7 @@ index a42a7753e21..245f158881e 100644
  WINE_DEFAULT_DEBUG_CHANNEL(esync);
  
 -int do_esync(void)
-+NTSTATUS WINAPI do_esync(void)
++NTSTATUS do_esync(void)
  {
  #ifdef HAVE_SYS_EVENTFD_H
      static int do_esync_cached = -1;
@@ -35,7 +35,7 @@ index 9102cf911aa..8a8e9f88d1b 100644
   */
  
 -extern int do_esync(void);
-+NTSYSAPI NTSTATUS WINAPI do_esync( void );
++extern NTSYSAPI NTSTATUS do_esync( void );
  extern void esync_init(void);
  extern NTSTATUS esync_close( HANDLE handle );
  
@@ -48,7 +48,7 @@ index f92c3bbc6d6..9cd8c3363d8 100644
  }
  
 -int do_fsync(void)
-+NTSTATUS WINAPI do_fsync(void)
++NTSTATUS do_fsync(void)
  {
  #ifdef __linux__
      static int do_fsync_cached = -1;
@@ -61,7 +61,7 @@ index 6005c0fa322..8daf6065f52 100644
   */
  
 -extern int do_fsync(void);
-+NTSYSAPI NTSTATUS WINAPI do_fsync( void );
++extern NTSYSAPI NTSTATUS do_fsync( void );
  extern void fsync_init(void);
  extern NTSTATUS fsync_close( HANDLE handle );
  
