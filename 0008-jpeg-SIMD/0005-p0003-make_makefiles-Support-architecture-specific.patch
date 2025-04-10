@@ -10,11 +10,11 @@ Signed-off-by: Torge Matthies <tmatthies@codeweavers.com>
  1 file changed, 36 insertions(+), 4 deletions(-)
 
 diff --git a/tools/make_makefiles b/tools/make_makefiles
-index 11111111111..11111111111 100755
+index 3b1bbd05b72..da163ba85e2 100755
 --- a/tools/make_makefiles
 +++ b/tools/make_makefiles
-@@ -68,6 +68,26 @@ my @source_vars = (
-     "XTEMPLATE_SRCS"
+@@ -48,6 +48,26 @@ my %deleted_files = (
+     "libs/jpeg/jstdhuff.c" => 1,
  );
  
 +my @archs = (
@@ -40,7 +40,7 @@ index 11111111111..11111111111 100755
  my (@makefiles, %makefiles);
  my @nls_files;
  
-@@ -132,7 +152,7 @@ sub replace_makefile_variables($)
+@@ -112,7 +132,7 @@ sub replace_makefile_variables($)
  {
      my $file = shift;
      my $make = $makefiles{$file};
@@ -49,7 +49,7 @@ index 11111111111..11111111111 100755
      my %replaced;
      my %files;
      my $old;
-@@ -196,7 +216,7 @@ sub replace_makefile_variables($)
+@@ -176,7 +196,7 @@ sub replace_makefile_variables($)
      # if we are using SOURCES, ignore the other variables
      unless ($replaced{"SOURCES"})
      {
@@ -58,16 +58,17 @@ index 11111111111..11111111111 100755
          {
              next if defined $replaced{$var};
              next if $var eq "SOURCES";
-@@ -237,7 +257,7 @@ sub parse_makefile($)
+@@ -213,7 +233,8 @@ sub parse_makefile($)
              $make{$var} = $2;
              next;
          }
--        my $source_vars_regexp = join "|", @source_vars;
+-        if (/^\s*(SOURCES)\s*=\s*(.*)/)
 +        my $source_vars_regexp = join "|", @source_vars_all_archs;
-         if (/^\s*($source_vars_regexp|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
++        if (/^\s*($source_vars_regexp|SOURCES)\s*=\s*(.*)/)
          {
              my $var = $1;
-@@ -366,7 +366,19 @@ sub assign_sources_to_makefiles(@)
+             my @list = split(/\s+/, $2);
+@@ -317,7 +338,19 @@ sub assign_sources_to_makefiles(@)
  
          if ($name =~ /\.(c|in|l|m|mc|po|rc|sfd|svg|y)$/)
          {
@@ -88,5 +89,3 @@ index 11111111111..11111111111 100755
              next;
          }
          elsif ($name =~ /\.h$/ || $name =~ /\.rh$/ || $name =~ /\.inl$/ || $name =~ /\.x$/)
-
-

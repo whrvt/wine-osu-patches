@@ -530,7 +530,7 @@ diff --git a/libs/jpeg/jconfigint.h b/libs/jpeg/jconfigint.h
 index 624166ee451..e2489248012 100644
 --- a/libs/jpeg/jconfigint.h
 +++ b/libs/jpeg/jconfigint.h
-@@ -1,16 +1,16 @@
+@@ -1,16 +1,17 @@
 -/* File modified by Torge Matthies for Wine. */
 +/* File modified by Torge Matthies and William Horvath for Wine. */
  
@@ -547,6 +547,7 @@ index 624166ee451..e2489248012 100644
  #define PACKAGE_NAME "libjpeg-turbo"
 -#define VERSION "2.1.91"
 +#define VERSION "3.0.4"
++#define NO_GETENV
  #define HAVE_INTRIN_H
  #ifdef _WIN64
  #define SIZEOF_SIZE_T 8

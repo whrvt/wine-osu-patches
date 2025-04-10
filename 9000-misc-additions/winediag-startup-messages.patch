@@ -198,7 +198,7 @@ index fd618156731..ceea18c943a 100644
 +    static NTSTATUS result = STATUS_PENDING;
 +    if (result == STATUS_PENDING)
 +    {
-+        result = STATUS_NO_WORK_DONE; /* server */
++        result = abs(STATUS_NO_WORK_DONE); /* server */
 +        if (do_ntsync())
 +            result = 3;
 +        else if (do_fsync())

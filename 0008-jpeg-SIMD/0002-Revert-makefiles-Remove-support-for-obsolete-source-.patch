@@ -257,16 +257,16 @@ index f3f9329fe63..1f4d3ad6d01 100755
      }
      close OLD_FILE;
      update_file($file, $new) if $old ne $new;
-@@ -170,7 +231,8 @@ sub parse_makefile($)
-             $make{$var} = $2;
-             next;
-         }
--        if (/^\s*(SOURCES|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
-+        my $source_vars_regexp = join "|", @source_vars;
-+        if (/^\s*($source_vars_regexp|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
-         {
-             my $var = $1;
-             my @list = split(/\s+/, $2);
+#@@ -170,7 +231,8 @@ sub parse_makefile($)
+#             $make{$var} = $2;
+#             next;
+#         }
+#-        if (/^\s*(SOURCES|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
+#+        my $source_vars_regexp = join "|", @source_vars;
+#+        if (/^\s*($source_vars_regexp|PROGRAMS|EXTRA_TARGETS|EXTRA_OBJS|INSTALL_LIB|INSTALL_DEV)\s*=\s*(.*)/)
+#         {
+#             my $var = $1;
+#             my @list = split(/\s+/, $2);
 @@ -241,19 +303,19 @@ sub get_parent_makefile($)
  }
  

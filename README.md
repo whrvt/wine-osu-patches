@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-e956c4ec](https://gitlab.winehq.org/wine/wine/-/tree/e956c4ec71dd0f41090df3863e6f937963b2b7d9)
+wine commit: [wine-647004cd](https://gitlab.winehq.org/wine/wine/-/tree/647004cd5d7ee93ad8b53abb8939da87be3e25a0)
 
-staging commit: [staging-8924ee42](https://gitlab.winehq.org/wine/wine-staging/-/tree/8924ee42d868d8d2785a8b175507cbd085461e3c)
+staging commit: [staging-aa0c8391](https://gitlab.winehq.org/wine/wine-staging/-/tree/aa0c8391eb7c7cf7e31d850150f6f2527eaffc28)
 
-Staging exclude flags: `-W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization -W user32-recursive-activation -W user32-alttab-focus -W winex11-Window_Style -W winex11.drv-Query_server_position`
+Staging exclude flags: `-W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
 # Environment variables
 
@@ -108,7 +108,7 @@ lightweight permission check, full get_linux_device breaks when done at early st
 
 ## WINE_ALERT_SIMULATE_SCHED_QUANTUM
 
-Patch: [0137-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch](0006-proton-esync-fsync/0137-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch)
+Patch: [0142-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch](0006-proton-esync-fsync/0142-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch)
 
 ### Commit message
 
@@ -166,21 +166,6 @@ Patch: [disable-ime-envvar.patch](9000-misc-additions/disable-ime-envvar.patch)
 
 `boolean`
 
-## WINE_DISABLE_KERNEL_WRITEWATCH
-
-Patch: [0001-ntdll-Use-kernel-soft-dirty-flags-for-write-watches-.patch](0013-server-optimization/0005-writewatches/0001-ntdll-Use-kernel-soft-dirty-flags-for-write-watches-.patch)
-
-### Commit message
-
-```
-ntdll: Use kernel soft dirty flags for write watches support.
-Requires kernel patches to have effect.
-```
-
-### Type
-
-`numeric`
-
 ## WINE_DISABLE_RAWINPUT
 
 Patch: [force-disable-rawinput-envvar.patch](9000-misc-additions/force-disable-rawinput-envvar.patch)
@@ -197,7 +182,13 @@ add an env var to force disable rawinput.
 
 ## WINE_DISABLE_TSC
 
-Patch: [9300-qpc-support-hardcode-with-old-kernel-check.patch](0013-server-optimization/0003-qpc/9300-qpc-support-hardcode-with-old-kernel-check.patch)
+Patch: [9300-configure-ntdll-Check-for-perf-struct-attributes.patch](0013-server-optimization/0003-qpc/9300-configure-ntdll-Check-for-perf-struct-attributes.patch)
+
+### Commit message
+
+```
+configure, ntdll: Check for perf struct attributes.
+```
 
 ### Description
 
@@ -229,10 +220,6 @@ Depends on Proton's WM detection. GNOME and KDE seem to not be affected by this.
 Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
 ```
 
-### Description
-
-can also be forced with: WINE_ENABLE_OSU_FOCUS_FIX=1
-
 ## WINE_FSYNC_SIMULATE_SCHED_QUANTUM
 
 Patch: [0123-fsync-Add-WINE_FSYNC_SIMULATE_SCHED_QUANTUM-config-o.patch](0006-proton-esync-fsync/0123-fsync-Add-WINE_FSYNC_SIMULATE_SCHED_QUANTUM-config-o.patch)
@@ -243,6 +230,21 @@ Patch: [0123-fsync-Add-WINE_FSYNC_SIMULATE_SCHED_QUANTUM-config-o.patch](0006-pr
 fsync: Add WINE_FSYNC_SIMULATE_SCHED_QUANTUM config option.
 And auto enable it for Uplay laucher.
 CW-Bug-Id: #20155
+```
+
+### Type
+
+`boolean`
+
+## WINE_FSYNC_YIELD_TO_WAITERS
+
+Patch: [0147-fsync-Add-WINE_FSYNC_YIELD_TO_WAITERS-option.patch](0006-proton-esync-fsync/0147-fsync-Add-WINE_FSYNC_YIELD_TO_WAITERS-option.patch)
+
+### Commit message
+
+```
+fsync: Add WINE_FSYNC_YIELD_TO_WAITERS option.
+CW-Bug-Id: #22194
 ```
 
 ### Type
@@ -276,7 +278,7 @@ ntdll/loader: add support for overriding IMAGE_FILE_LARGE_ADDRESS_AWARE
 
 ## WINE_NO_PRIV_ELEVATION
 
-Patch: [0147-ntdll-HACK-Add-WINE_NO_PRIV_ELEVATION-option-and-aut.patch](0006-proton-esync-fsync/0147-ntdll-HACK-Add-WINE_NO_PRIV_ELEVATION-option-and-aut.patch)
+Patch: [0157-ntdll-HACK-Add-WINE_NO_PRIV_ELEVATION-option-and-aut.patch](0006-proton-esync-fsync/0157-ntdll-HACK-Add-WINE_NO_PRIV_ELEVATION-option-and-aut.patch)
 
 ### Commit message
 
@@ -304,20 +306,9 @@ But allow disabling it with WINE_PULSE_MEMLOCK=0.
 
 `numeric`
 
-## WINE_RAM_REPORTING_BIAS
-
-Patch: [0004-ntdll-HACK-Add-WINE_RAM_REPORTING_BIAS-option.patch](0013-server-optimization/0005-writewatches/0004-ntdll-HACK-Add-WINE_RAM_REPORTING_BIAS-option.patch)
-
-### Commit message
-
-```
-ntdll: HACK: Add WINE_RAM_REPORTING_BIAS option.
-CW-Bug-Id: #22241
-```
-
 ## WINE_SIMULATE_ASYNC_READ
 
-Patch: [0138-ntdll-HACK-Also-simulate-async-file-read-and-IO-canc.patch](0006-proton-esync-fsync/0138-ntdll-HACK-Also-simulate-async-file-read-and-IO-canc.patch)
+Patch: [0143-ntdll-HACK-Also-simulate-async-file-read-and-IO-canc.patch](0006-proton-esync-fsync/0143-ntdll-HACK-Also-simulate-async-file-read-and-IO-canc.patch)
 
 ### Commit message
 

@@ -8,21 +8,21 @@ Subject: [PATCH] ntdll: Don't do an actual syscall for yields.
  dlls/ntdll/unix/sync.c   | 17 ++---------------
  2 files changed, 5 insertions(+), 16 deletions(-)
 
-diff --git a/dlls/kernelbase/thread.c b/dlls/kernelbase/thread.c
-index 12e1777262a..e7b23a0df97 100644
---- a/dlls/kernelbase/thread.c
-+++ b/dlls/kernelbase/thread.c
-@@ -638,7 +638,9 @@ DWORD WINAPI DECLSPEC_HOTPATCH SuspendThread( HANDLE thread )
-  */
- BOOL WINAPI DECLSPEC_HOTPATCH SwitchToThread(void)
- {
--    return (NtYieldExecution() != STATUS_NO_YIELD_PERFORMED);
-+    NtFlushProcessWriteBuffers();
-+    for (UINT i=0;i<5;++i) YieldProcessor();
-+    return STATUS_SUCCESS;
- }
- 
- 
+#diff --git a/dlls/kernelbase/thread.c b/dlls/kernelbase/thread.c
+#index 12e1777262a..e7b23a0df97 100644
+#--- a/dlls/kernelbase/thread.c
+#+++ b/dlls/kernelbase/thread.c
+#@@ -638,7 +638,9 @@ DWORD WINAPI DECLSPEC_HOTPATCH SuspendThread( HANDLE thread )
+#  */
+# BOOL WINAPI DECLSPEC_HOTPATCH SwitchToThread(void)
+# {
+#-    return (NtYieldExecution() != STATUS_NO_YIELD_PERFORMED);
+#+    NtFlushProcessWriteBuffers();
+#+    for (UINT i=0;i<5;++i) YieldProcessor();
+#+    return STATUS_SUCCESS;
+# }
+# 
+# 
 diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
 index 405b0c99b13..eedb0f76bad 100644
 --- a/dlls/ntdll/unix/sync.c

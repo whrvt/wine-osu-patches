@@ -39,9 +39,9 @@ index 6d5140ab7b3..c51e4e5f34f 100644
      list_init( &process->rawinput_entry );
      process->esync_fd        = -1;
 @@ -807,6 +809,7 @@ static void process_destroy( struct object *obj )
-     free( process->image );
-     if (do_esync()) close( process->esync_fd );
-     if (process->fsync_idx) fsync_free_shm_idx( process->fsync_idx );
+         fsync_cleanup_process_shm_indices( process->id );
+         fsync_free_shm_idx( process->fsync_idx );
+     }
 +    if (process->inproc_sync) release_object( process->inproc_sync );
  }
  
