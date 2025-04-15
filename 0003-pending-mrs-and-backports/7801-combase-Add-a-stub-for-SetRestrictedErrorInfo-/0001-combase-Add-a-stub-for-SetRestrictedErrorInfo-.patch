@@ -1,0 +1,49 @@
+From 75aa511c8f9f9d71c7e7cf3c0936f7c33ae21fdb Mon Sep 17 00:00:00 2001
+From: Nikolay Sivov <nsivov@codeweavers.com>
+Date: Sat, 12 Apr 2025 21:21:49 +0200
+Subject: [PATCH] combase: Add a stub for SetRestrictedErrorInfo().
+
+Foobar 2000 crashes without it.
+
+Signed-off-by: Nikolay Sivov <nsivov@codeweavers.com>
+---
+ dlls/combase/combase.spec | 2 +-
+ dlls/combase/roapi.c      | 9 +++++++++
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/combase/combase.spec b/dlls/combase/combase.spec
+index 4bdc14334e2..ae13be7e6cc 100644
+--- a/dlls/combase/combase.spec
++++ b/dlls/combase/combase.spec
+@@ -319,7 +319,7 @@
+ @ stub RoUnregisterForApartmentShutdown
+ @ stub SetCleanupFlag
+ @ stdcall SetErrorInfo(long ptr)
+-@ stub SetRestrictedErrorInfo
++@ stdcall SetRestrictedErrorInfo(ptr)
+ @ stdcall StringFromCLSID(ptr ptr)
+ @ stdcall StringFromGUID2(ptr ptr long)
+ @ stdcall StringFromIID(ptr ptr) StringFromCLSID
+diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
+index 0f8a9438821..8118758d338 100644
+--- a/dlls/combase/roapi.c
++++ b/dlls/combase/roapi.c
+@@ -480,6 +480,15 @@ HRESULT WINAPI GetRestrictedErrorInfo(IRestrictedErrorInfo **info)
+     return E_NOTIMPL;
+ }
+ 
++/***********************************************************************
++ *      SetRestrictedErrorInfo (combase.@)
++ */
++HRESULT WINAPI SetRestrictedErrorInfo(IRestrictedErrorInfo *info)
++{
++    FIXME( "(%p)\n", info );
++    return E_NOTIMPL;
++}
++
+ /***********************************************************************
+  *      RoOriginateLanguageException (combase.@)
+  */
+-- 
+GitLab
+

@@ -1,0 +1,49 @@
+From 920139e9f9ffdb12f49b7ee5281998fbfbd4f47b Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 14 Apr 2025 18:24:15 -0700
+Subject: [PATCH] wineboot: Complain loudly when TSC cannot be calibrated.
+
+---
+ programs/wineboot/wineboot.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index adda5e1ba14..434660b8547 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -395,20 +395,20 @@ static void initialize_qpc_features( struct _KUSER_SHARED_DATA *data, UINT64 *ts
+ 
+     if (!is_tsc_trusted_by_the_kernel())
+     {
+-        WARN( "Failed to compute TSC frequency, not trusted by the kernel.\n" );
++        ERR( "Failed to compute TSC frequency, not trusted by the kernel.\n" );
+         return;
+     }
+ 
+     if (!data->ProcessorFeatures[PF_RDTSC_INSTRUCTION_AVAILABLE])
+     {
+-        WARN( "Failed to compute TSC frequency, RDTSC instruction not supported.\n" );
++        ERR( "Failed to compute TSC frequency, RDTSC instruction not supported.\n" );
+         return;
+     }
+ 
+     __cpuid( regs, 0x80000000 );
+     if (regs[0] < 0x80000007)
+     {
+-        WARN( "Failed to compute TSC frequency, unable to check invariant TSC.\n" );
++        ERR( "Failed to compute TSC frequency, unable to check invariant TSC.\n" );
+         return;
+     }
+ 
+@@ -416,7 +416,7 @@ static void initialize_qpc_features( struct _KUSER_SHARED_DATA *data, UINT64 *ts
+     __cpuid( regs, 0x80000007 );
+     if (!(regs[3] & (1 << 8)))
+     {
+-        WARN( "Failed to compute TSC frequency, no invariant TSC.\n" );
++        ERR( "Failed to compute TSC frequency, no invariant TSC.\n" );
+         return;
+     }
+     data->QpcBypassEnabled |= SHARED_GLOBAL_FLAGS_QPC_BYPASS_ENABLED;
+-- 
+2.49.0
+
