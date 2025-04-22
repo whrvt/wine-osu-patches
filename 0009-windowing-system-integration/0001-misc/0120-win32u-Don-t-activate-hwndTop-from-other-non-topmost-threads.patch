@@ -1,0 +1,26 @@
+From 7563adfb9e344c731a7e102cca0b39a456c9ab40 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 17 Apr 2025 20:17:27 -0700
+Subject: [PATCH] win32u: Don't activate hwndTop from other non-topmost threads.
+
+A hack that I don't understand really, but it allows osu! to properly lose focus on i3 again.
+---
+ dlls/win32u/input.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 185c9eb7810..acb6c12b399 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2122,7 +2122,7 @@ HWND WINAPI NtUserSetFocus( HWND hwnd )
+         if (call_hooks( WH_CBT, HCBT_SETFOCUS, (WPARAM)hwnd, (LPARAM)previous, 0 )) return 0;
+ 
+         /* activate hwndTop if needed. */
+-        if (!(active = get_active_window()) && !set_foreground_window( hwndTop, FALSE )) return 0;
++        if (!(active = get_active_window()) && (get_window_long(active, GWL_EXSTYLE) & WS_EX_TOPMOST) && !set_foreground_window( hwndTop, FALSE )) return 0;
+         if (hwndTop != active)
+         {
+             if (!set_active_window( hwndTop, NULL, FALSE, FALSE, 0 )) return 0;
+-- 
+2.49.0
+

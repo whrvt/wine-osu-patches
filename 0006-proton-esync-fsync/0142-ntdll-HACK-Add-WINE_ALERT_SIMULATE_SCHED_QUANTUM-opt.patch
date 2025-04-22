@@ -42,34 +42,34 @@ index 8d8c1700937..60488301f16 100644
      switch (sgi ? atoi( sgi ) : -1)
      {
      case 25700: /* Madballs in Babo: Invasion */
-diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
-index f83a81afd9a..ed30388b026 100644
---- a/dlls/ntdll/unix/sync.c
-+++ b/dlls/ntdll/unix/sync.c
-@@ -2706,6 +2706,7 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
- NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEGER *timeout )
- {
-     union tid_alert_entry *entry = get_tid_alert_entry( NtCurrentTeb()->ClientId.UniqueThread );
-+    BOOL waited = FALSE;
- 
-     TRACE( "%p %s\n", address, debugstr_timeout( timeout ) );
- 
-@@ -2741,8 +2742,15 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
-             else
-                 ret = futex_wait( futex, 0, NULL );
- 
-+            if (!timeout || timeout->QuadPart)
-+                waited = TRUE;
-+
-             if (ret == -1 && errno == ETIMEDOUT) return STATUS_TIMEOUT;
-         }
-+
-+        if (alert_simulate_sched_quantum && waited)
-+            usleep(0);
-+
-         return STATUS_ALERTED;
-     }
- #endif
+#diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+#index f83a81afd9a..ed30388b026 100644
+#--- a/dlls/ntdll/unix/sync.c
+#+++ b/dlls/ntdll/unix/sync.c
+#@@ -2706,6 +2706,7 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
+# NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEGER *timeout )
+# {
+#     union tid_alert_entry *entry = get_tid_alert_entry( NtCurrentTeb()->ClientId.UniqueThread );
+#+    BOOL waited = FALSE;
+# 
+#     TRACE( "%p %s\n", address, debugstr_timeout( timeout ) );
+# 
+#@@ -2741,8 +2742,15 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
+#             else
+#                 ret = futex_wait( futex, 0, NULL );
+# 
+#+            if (!timeout || timeout->QuadPart)
+#+                waited = TRUE;
+#+
+#             if (ret == -1 && errno == ETIMEDOUT) return STATUS_TIMEOUT;
+#         }
+#+
+#+        if (alert_simulate_sched_quantum && waited)
+#+            usleep(0);
+#+
+#         return STATUS_ALERTED;
+#     }
+# #endif
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index cc5f1ffc9e0..92668512e90 100644
 --- a/dlls/ntdll/unix/unix_private.h

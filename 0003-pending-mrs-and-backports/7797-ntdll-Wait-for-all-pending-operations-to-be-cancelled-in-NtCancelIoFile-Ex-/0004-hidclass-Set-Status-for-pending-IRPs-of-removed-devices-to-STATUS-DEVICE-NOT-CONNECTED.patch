@@ -1,0 +1,45 @@
+From b2d877352fa8a260ca47f561e03c93f9b74b098a Mon Sep 17 00:00:00 2001
+From: Matteo Bruni <mbruni@codeweavers.com>
+Date: Thu, 20 Feb 2025 14:55:53 +0100
+Subject: [PATCH] hidclass: Set Status for pending IRPs of removed devices to
+ STATUS_DEVICE_NOT_CONNECTED.
+
+Also adjust xinput to handle that.
+---
+ dlls/hidclass.sys/device.c | 2 +-
+ dlls/xinput1_3/main.c      | 6 +++++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/hidclass.sys/device.c b/dlls/hidclass.sys/device.c
+index cb65391e443..852c8ebfbff 100644
+--- a/dlls/hidclass.sys/device.c
++++ b/dlls/hidclass.sys/device.c
+@@ -122,7 +122,7 @@ void hid_queue_remove_pending_irps( struct hid_queue *queue )
+ 
+     while ((irp = hid_queue_pop_irp( queue )))
+     {
+-        irp->IoStatus.Status = STATUS_DELETE_PENDING;
++        irp->IoStatus.Status = STATUS_DEVICE_NOT_CONNECTED;
+         IoCompleteRequest( irp, IO_NO_INCREMENT );
+     }
+ }
+diff --git a/dlls/xinput1_3/main.c b/dlls/xinput1_3/main.c
+index 28f57e93bce..379a1d2f0b8 100644
+--- a/dlls/xinput1_3/main.c
++++ b/dlls/xinput1_3/main.c
+@@ -573,7 +573,11 @@ static void read_controller_state(struct xinput_controller *controller)
+     if (!GetOverlappedResult(controller->device, &controller->hid.read_ovl, &read_len, TRUE))
+     {
+         if (GetLastError() == ERROR_OPERATION_ABORTED) return;
+-        if (GetLastError() == ERROR_ACCESS_DENIED || GetLastError() == ERROR_INVALID_HANDLE) controller_destroy(controller, TRUE);
++        if (GetLastError() == ERROR_ACCESS_DENIED || GetLastError() == ERROR_INVALID_HANDLE ||
++            GetLastError() == ERROR_DEVICE_NOT_CONNECTED)
++        {
++            controller_destroy(controller, TRUE);
++        }
+         else ERR("Failed to read input report, GetOverlappedResult failed with error %lu\n", GetLastError());
+         return;
+     }
+-- 
+GitLab
+

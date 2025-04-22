@@ -1,0 +1,32 @@
+From cef691955d56ba482018b94c0406dc30c6edda82 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 21 Jan 2025 17:07:11 -0800
+Subject: [PATCH] ntdll/tests: Add an exception test for accessing a modified
+ %gs on x86_64.
+
+---
+ dlls/ntdll/tests/exception.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
+index 9b5ca2ca508..7745a762cb5 100644
+--- a/dlls/ntdll/tests/exception.c
++++ b/dlls/ntdll/tests/exception.c
+@@ -2711,6 +2711,14 @@ static const struct exception
+     { { 0xb8, 0x01, 0x00, 0x00, 0x00,          /* mov $0x01, %eax */
+         0xcd, 0x2d, 0xfa, 0xc3 },              /* int $0x2d; cli; ret */
+       8, 0, STATUS_SUCCESS, 0 },
++#if 0 /* Disabled for the same reason as the #if 0 blocks above (gs_base zeroed) */
++    { { 0x66, 0x0f, 0xa8,                      /* push %gs */
++        0x66, 0x0f, 0xa9,                      /* pop  %gs */
++        0x65, 0x48, 0x8b, 0x04, 0x25,          /* movq %gs:0x30,%rax (NtCurrentTeb) */
++        0x30, 0x00, 0x00, 0x00,
++        0xc3 },                                /* ret */
++      8, 0, STATUS_SUCCESS, 0 },
++#endif
+ };
+ 
+ static int got_exception;
+-- 
+GitLab
+
