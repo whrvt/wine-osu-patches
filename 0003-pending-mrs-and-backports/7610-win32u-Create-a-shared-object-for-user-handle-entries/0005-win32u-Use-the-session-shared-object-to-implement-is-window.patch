@@ -1,4 +1,4 @@
-From 715d157353a8345cb46cb3fda3ca86a6fe46de24 Mon Sep 17 00:00:00 2001
+From 2bc23a676ccd06e831221b4323e280c4f4ab234b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 24 Mar 2025 13:11:21 +0100
 Subject: [PATCH] win32u: Use the session shared object to implement is_window.
@@ -8,7 +8,7 @@ Subject: [PATCH] win32u: Use the session shared object to implement is_window.
  1 file changed, 19 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 4d011639a92..e65fb9bebfc 100644
+index 4d011639a92..8ca673f7e62 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -77,6 +77,20 @@ HANDLE alloc_user_handle( struct user_object *ptr, unsigned short type )
@@ -26,7 +26,7 @@ index 4d011639a92..e65fb9bebfc 100644
 +    const volatile struct user_entry *entries = shared_session->user_entries;
 +    WORD index = USER_HANDLE_TO_INDEX( handle );
 +    if (index >= MAX_USER_HANDLES) return FALSE;
-+    return is_valid_entry_uniq( handle, type, ReadAcquire64( (LONG64 *)&entries[index].uniq ));
++    return is_valid_entry_uniq( handle, type, ReadAcquire64( (LONG64 *)&entries[index].uniq ) );
 +}
 +
  /***********************************************************************

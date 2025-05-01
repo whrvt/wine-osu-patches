@@ -1,4 +1,4 @@
-From 15147b08b228c9c0dbf2758db4b79c141f18a4f7 Mon Sep 17 00:00:00 2001
+From 3d34e98a0cf469398fc05058321c8c370a3b6c1e Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 18 Mar 2025 20:50:09 +0100
 Subject: [PATCH] server: Use NTUSER_OBJ constants for user object types.

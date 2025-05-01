@@ -1,4 +1,4 @@
-From 2bbf2f7816c1f1a69d093bcd6d860ee8d104a318 Mon Sep 17 00:00:00 2001
+From db61959bb1818caaa2ee7c1e8a00d5be0c5c8133 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sat, 8 Mar 2025 19:11:29 +0100
 Subject: [PATCH] server: Move the user object handle table to the shared

@@ -1,4 +1,4 @@
-From 68376483a97d17a163723c75730c58ed2baab725 Mon Sep 17 00:00:00 2001
+From 70abc9cf964c7864d9adc75c011d79668b7f7f8d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 24 Mar 2025 13:12:20 +0100
 Subject: [PATCH] win32u: Use the session shared object for user handle
@@ -6,9 +6,9 @@ Subject: [PATCH] win32u: Use the session shared object for user handle
 
 ---
  dlls/win32u/win32u_private.h |  7 ++++
- dlls/win32u/window.c         | 73 +++++++++++++++++++++++++-----------
+ dlls/win32u/window.c         | 74 ++++++++++++++++++++++++++----------
  dlls/win32u/winstation.c     |  7 ----
- 3 files changed, 59 insertions(+), 28 deletions(-)
+ 3 files changed, 60 insertions(+), 28 deletions(-)
 
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
 index 2530e68793f..7ccd2067dbb 100644
@@ -29,7 +29,7 @@ index 2530e68793f..7ccd2067dbb 100644
   * is returned, lock must be initialized with OBJECT_LOCK_INIT.
   *
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index e65fb9bebfc..4f54eb66c6d 100644
+index 8ca673f7e62..7cfe43bec90 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -35,8 +35,9 @@
@@ -52,20 +52,21 @@ index e65fb9bebfc..4f54eb66c6d 100644
      }
      return handle;
  }
-@@ -91,27 +92,56 @@ static BOOL is_valid_entry( HANDLE handle, unsigned short type )
-     return is_valid_entry_uniq( handle, type, ReadAcquire64( (LONG64 *)&entries[index].uniq ));
+@@ -91,27 +92,57 @@ static BOOL is_valid_entry( HANDLE handle, unsigned short type )
+     return is_valid_entry_uniq( handle, type, ReadAcquire64( (LONG64 *)&entries[index].uniq ) );
  }
  
 +static BOOL read_acquire_user_entry( HANDLE handle, unsigned short type, const volatile struct user_entry *src, struct user_entry *dst )
 +{
-+    if (!is_valid_entry_uniq( handle, type, ReadAcquire64( (LONG64 *)&src->uniq ) )) return FALSE;
++    UINT64 uniq = ReadAcquire64( (LONG64 *)&src->uniq );
++    if (!is_valid_entry_uniq( handle, type, uniq )) return FALSE;
 +    dst->offset = src->offset;
 +    dst->tid = src->tid;
 +    dst->pid = src->pid;
 +    dst->padding = src->padding;
 +    __SHARED_READ_FENCE;
 +    dst->uniq = ReadNoFence64( &src->uniq );
-+    return is_valid_entry_uniq( handle, type, dst->uniq );
++    return dst->uniq == uniq;
 +}
 +
 +static BOOL get_user_entry( HANDLE handle, unsigned short type, struct user_entry *entry, HANDLE *full )
@@ -120,7 +121,7 @@ index e65fb9bebfc..4f54eb66c6d 100644
      return ptr;
  }
  
-@@ -122,16 +152,17 @@ void *get_user_handle_ptr( HANDLE handle, unsigned short type )
+@@ -122,16 +153,17 @@ void *get_user_handle_ptr( HANDLE handle, unsigned short type )
   */
  void *next_process_user_handle_ptr( HANDLE *handle, unsigned short type )
  {
@@ -144,7 +145,7 @@ index e65fb9bebfc..4f54eb66c6d 100644
      return NULL;
  }
  
-@@ -142,7 +173,7 @@ static void set_user_handle_ptr( HANDLE handle, struct user_object *ptr )
+@@ -142,7 +174,7 @@ static void set_user_handle_ptr( HANDLE handle, struct user_object *ptr )
  {
      WORD index = USER_HANDLE_TO_INDEX(handle);
      assert( index < MAX_USER_HANDLES );
@@ -153,7 +154,7 @@ index e65fb9bebfc..4f54eb66c6d 100644
  }
  
  /***********************************************************************
-@@ -169,7 +200,7 @@ void *free_user_handle( HANDLE handle, unsigned short type )
+@@ -169,7 +201,7 @@ void *free_user_handle( HANDLE handle, unsigned short type )
              req->type = type;
              req->handle = wine_server_user_handle( handle );
              if (wine_server_call( req )) ptr = NULL;

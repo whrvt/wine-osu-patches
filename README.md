@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-647004cd](https://gitlab.winehq.org/wine/wine/-/tree/647004cd5d7ee93ad8b53abb8939da87be3e25a0)
+wine commit: [wine-aa8621d2](https://gitlab.winehq.org/wine/wine/-/tree/aa8621d2fdb121619f677396733e88176ce6aedc)
 
-staging commit: [staging-aa0c8391](https://gitlab.winehq.org/wine/wine-staging/-/tree/aa0c8391eb7c7cf7e31d850150f6f2527eaffc28)
+staging commit: [staging-42a307df](https://gitlab.winehq.org/wine/wine-staging/-/tree/42a307df6790bdf84f2fd9095a4a4c169a797782)
 
-Staging exclude flags: `-W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
+Staging exclude flags: `-W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
 # Environment variables
 
@@ -216,7 +216,7 @@ Patch: [0002-HACK-win32u-keep-osu-from-taking-focus-when-unfocuse.patch](0009-wi
 
 ```
 HACK: win32u: keep osu! from taking focus when unfocused on certain WMs
-Depends on Proton's WM detection. GNOME and KDE seem to not be affected by this.
+Depends on Proton's WM detection. KDE seems to not be affected by this.
 Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
 ```
 

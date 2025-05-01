@@ -1,0 +1,29 @@
+From e705c38725c6ed8c0209e10f060220d1203bfda3 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Wed, 9 Apr 2025 17:07:20 -0600
+Subject: [PATCH] win32u: Don't inflate rect in expose_window_surface().
+
+---
+ dlls/win32u/window.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index ba931163272..94a2a638a2d 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2214,11 +2214,7 @@ static BOOL expose_window_surface( HWND hwnd, UINT flags, const RECT *rect, UINT
+     rects = win->rects;
+     release_win_ptr( win );
+ 
+-    if (rect)
+-    {
+-        window_rect = map_dpi_rect( *rect, dpi, get_dpi_for_window( hwnd ) );
+-        InflateRect( &window_rect, 1, 1 ); /* compensate rounding errors */
+-    }
++    if (rect) window_rect = map_dpi_rect( *rect, dpi, get_dpi_for_window( hwnd ) );
+ 
+     if (!surface || surface == &dummy_surface)
+     {
+-- 
+GitLab
+

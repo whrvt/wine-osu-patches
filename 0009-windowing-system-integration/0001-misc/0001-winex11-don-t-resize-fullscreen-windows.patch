@@ -18,7 +18,7 @@ index 4848172..040301a 100644
      data->desired_state.rect = *new_rect;
      if (!data->whole_window) return; /* no window, nothing to update */
      if (EqualRect( old_rect, new_rect ) && !above) return; /* rects are the same, no need to be raised, nothing to update */
-+    else if (wm_is_kde(data->display) && EqualRect( old_rect, new_rect ) && data->is_fullscreen) return; /* keep the fullscreen window the same size */
++    else if (wm_is_kde(data->display) && data->is_fullscreen) return; /* keep the fullscreen window the same size */
  
      if (data->pending_state.wm_state == NormalState && data->net_wm_state_serial &&
          !(data->pending_state.net_wm_state & fullscreen_mask) &&

@@ -13,9 +13,9 @@ index 45ae883ddc6..c1564565c0f 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -424,6 +424,7 @@ AC_CHECK_HEADERS(\
- 	link.h \
  	linux/cdrom.h \
  	linux/filter.h \
+ 	linux/fs.h \
 +	linux/futex.h \
  	linux/hdreg.h \
  	linux/hidraw.h \

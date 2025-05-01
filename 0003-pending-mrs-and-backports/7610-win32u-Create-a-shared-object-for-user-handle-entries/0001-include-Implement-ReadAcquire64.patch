@@ -1,4 +1,4 @@
-From 98357f396c4b37eae0dd25ea6c90eca43a2bdd3f Mon Sep 17 00:00:00 2001
+From 21ad03e8f28a207bf498c1215aebf95b3f216497 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Mon, 24 Mar 2025 11:15:42 +0100
 Subject: [PATCH] include: Implement ReadAcquire64.

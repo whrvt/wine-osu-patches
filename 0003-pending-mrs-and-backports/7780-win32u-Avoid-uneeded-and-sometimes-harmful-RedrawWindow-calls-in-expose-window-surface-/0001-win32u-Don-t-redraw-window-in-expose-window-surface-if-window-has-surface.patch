@@ -1,4 +1,4 @@
-From eadd9121191abfde243fbdff43c72397295eea7c Mon Sep 17 00:00:00 2001
+From 97602daa3a6965c845cd0464e1c0a45a61822ad8 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 9 Apr 2025 17:05:43 -0600
 Subject: [PATCH] win32u: Don't redraw window in expose_window_surface() if
@@ -9,7 +9,7 @@ Subject: [PATCH] win32u: Don't redraw window in expose_window_surface() if
  1 file changed, 15 insertions(+), 43 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 15145667ce1..afe68d08d53 100644
+index 33dc0987b34..ba931163272 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -2202,36 +2202,11 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru

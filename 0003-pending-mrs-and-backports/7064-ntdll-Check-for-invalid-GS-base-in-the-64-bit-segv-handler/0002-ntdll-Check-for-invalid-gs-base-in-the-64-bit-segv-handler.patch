@@ -1,24 +1,51 @@
-From bfbe01336d02f9b0a56b4aab9017a7cec50e8366 Mon Sep 17 00:00:00 2001
+From 815407e8417ba14fd06135f76298cef1f3f61a1f Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 22 Dec 2024 04:22:32 -0800
-Subject: [PATCH] ntdll: Check for invalid GS base in the 64-bit segv_handler
- on WoW64.
+Subject: [PATCH] ntdll: Check for invalid gs_base in the 64-bit segv_handler.
 
 Adapted from check_invalid_gs in signal_i386.c. PE-side code can
-manipulate %gs and cause wine_syscall_dispatcher to immediately fault,
-as the syscall_frame is relative to it. Catch this early, and fix up
-up the thread's GS base register with one that matches NtCurrentTeb().
+manipulate %gs and cause the next call to NtCurrentTeb to segfault, as
+the gs_base may be cleared with writes to %gs on x86_64 [1].
 
-Alice: Madness Returns (2011) is one example of game that does this,
-among a few others currently known.
+This would cause a recursive exception loop, as any PE-side code in the
+exception handling chain after the segv_handler would run into the same
+problem. So, catch this early, and manually repair the thread's gs_base
+with the pthread TEB from the Unix side.
+
+The 32-bit game "Alice: Madness Returns" is one example of this problem
+occurring in the real world, when running under WoW64. However, this is
+currently handled in Windows under both WoW64 and native 64-bit, so we should
+handle both architectures as well.
+
+[1]: https://bugs.winehq.org/show_bug.cgi?id=51152
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57444
 ---
+ dlls/ntdll/tests/exception.c    |   2 -
  dlls/ntdll/unix/signal_x86_64.c | 101 ++++++++++++++++++++++++++++++++
- 1 file changed, 101 insertions(+)
+ 2 files changed, 101 insertions(+), 2 deletions(-)
 
+diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
+index 7745a762cb5..f50d47917e8 100644
+--- a/dlls/ntdll/tests/exception.c
++++ b/dlls/ntdll/tests/exception.c
+@@ -2711,14 +2711,12 @@ static const struct exception
+     { { 0xb8, 0x01, 0x00, 0x00, 0x00,          /* mov $0x01, %eax */
+         0xcd, 0x2d, 0xfa, 0xc3 },              /* int $0x2d; cli; ret */
+       8, 0, STATUS_SUCCESS, 0 },
+-#if 0 /* Disabled for the same reason as the #if 0 blocks above (gs_base zeroed) */
+     { { 0x66, 0x0f, 0xa8,                      /* push %gs */
+         0x66, 0x0f, 0xa9,                      /* pop  %gs */
+         0x65, 0x48, 0x8b, 0x04, 0x25,          /* movq %gs:0x30,%rax (NtCurrentTeb) */
+         0x30, 0x00, 0x00, 0x00,
+         0xc3 },                                /* ret */
+       8, 0, STATUS_SUCCESS, 0 },
+-#endif
+ };
+ 
+ static int got_exception;
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index caa85249896..fa2e1f8ba8e 100644
+index caa85249896..46c70adc83b 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
 @@ -1967,6 +1967,102 @@ static BOOL handle_syscall_trap( ucontext_t *sigcontext, siginfo_t *siginfo )
@@ -128,7 +155,7 @@ index caa85249896..fa2e1f8ba8e 100644
              /* send EXCEPTION_EXECUTE_FAULT only if data execution prevention is enabled */
              if (!(flags & MEM_EXECUTE_OPTION_DISABLE)) rec.ExceptionInformation[0] = EXCEPTION_READ_FAULT;
          }
-+        if (is_wow64() && CS_sig(ucontext) == cs64_sel && check_invalid_gsbase( ucontext, &context.c ))
++        if (CS_sig(ucontext) == cs64_sel && check_invalid_gsbase( ucontext, &context.c ))
 +        {
 +            leave_handler( ucontext );
 +            return;

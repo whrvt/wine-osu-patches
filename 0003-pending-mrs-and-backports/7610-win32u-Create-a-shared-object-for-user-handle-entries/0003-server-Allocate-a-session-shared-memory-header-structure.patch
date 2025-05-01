@@ -1,4 +1,4 @@
-From 60c614dc56fea29b7d99c45b029299fc936640ec Mon Sep 17 00:00:00 2001
+From 5c437ef9196744b6e91359b561d0ca6e0261d72a Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sat, 8 Mar 2025 19:11:29 +0100
 Subject: [PATCH] server: Allocate a session shared memory header structure.
