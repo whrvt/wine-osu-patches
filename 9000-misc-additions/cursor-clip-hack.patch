@@ -200,9 +200,9 @@ index 5c5bb8f0602..f63a41c7f41 100644
 +    if (!once++ && cursor_clip_hack)
 +         MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_ENABLE_ABS_TABLET_HACK=0 to disable.\n");
 +
-     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI
-      * there is no way to query it, so we have to store it here.
-      */
+     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI there is no way to query it. */
+     gl->swap_interval = INT_MIN;
+     gl->format = format;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
 index f7c012f7a0d..f3ca4486816 100644
 --- a/dlls/winex11.drv/window.c

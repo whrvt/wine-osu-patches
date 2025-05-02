@@ -1,6 +1,6 @@
 # Patchset context
 
-wine commit: [wine-aa8621d2](https://gitlab.winehq.org/wine/wine/-/tree/aa8621d2fdb121619f677396733e88176ce6aedc)
+wine commit: [wine-71c6c3dd](https://gitlab.winehq.org/wine/wine/-/tree/71c6c3dd6dcfffc040aa5a10a825eeb8e17f6299)
 
 staging commit: [staging-42a307df](https://gitlab.winehq.org/wine/wine-staging/-/tree/42a307df6790bdf84f2fd9095a4a4c169a797782)
 
