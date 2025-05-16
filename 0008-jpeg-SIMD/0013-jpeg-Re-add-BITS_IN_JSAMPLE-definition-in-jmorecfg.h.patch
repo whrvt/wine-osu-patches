@@ -1,0 +1,44 @@
+From 4d9d61eee4967522224f0063f76c124e2ea40253 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 12 May 2025 09:07:11 -0700
+Subject: [PATCH] jpeg: Re-add BITS_IN_JSAMPLE definition in jmorecfg.h.
+
+---
+ libs/jpeg/jmorecfg.h | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/libs/jpeg/jmorecfg.h b/libs/jpeg/jmorecfg.h
+index 89c7842c871..2f16aa2295b 100644
+--- a/libs/jpeg/jmorecfg.h
++++ b/libs/jpeg/jmorecfg.h
+@@ -16,6 +16,27 @@
+  * optimizations.  Most users will not need to touch this file.
+  */
+ 
++/*
++ * Define BITS_IN_JSAMPLE as either
++ *   8   for 8-bit sample values (the usual setting)
++ *   9   for 9-bit sample values
++ *   10  for 10-bit sample values
++ *   11  for 11-bit sample values
++ *   12  for 12-bit sample values
++ * Only 8, 9, 10, 11, and 12 bits sample data precision are supported for
++ * full-feature DCT processing.  Further depths up to 16-bit may be added
++ * later for the lossless modes of operation.
++ * Run-time selection and conversion of data precision will be added later
++ * and are currently not supported, sorry.
++ * Exception:  The transcoding part (jpegtran) supports all settings in a
++ * single instance, since it operates on the level of DCT coefficients and
++ * not sample values.  The DCT coefficients are of the same type (16 bits)
++ * in all cases (see below).
++ */
++
++#ifndef BITS_IN_JSAMPLE
++#define BITS_IN_JSAMPLE  8	/* use 8, 9, 10, 11, or 12 */
++#endif
+ 
+ /*
+  * Maximum number of components (color channels) allowed in JPEG image.
+-- 
+2.49.0
+

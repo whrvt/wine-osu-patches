@@ -1,8 +1,8 @@
 # Patchset context
 
-wine commit: [wine-71c6c3dd](https://gitlab.winehq.org/wine/wine/-/tree/71c6c3dd6dcfffc040aa5a10a825eeb8e17f6299)
+wine commit: [wine-7f833db1](https://gitlab.winehq.org/wine/wine/-/tree/7f833db11ffea4f3f4fa07be31d30559aff9c5fb)
 
-staging commit: [staging-42a307df](https://gitlab.winehq.org/wine/wine-staging/-/tree/42a307df6790bdf84f2fd9095a4a4c169a797782)
+staging commit: [staging-4adf6139](https://gitlab.winehq.org/wine/wine-staging/-/tree/4adf613941e5b9513e6aa90cd72b15a1350a0f05)
 
 Staging exclude flags: `-W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
@@ -275,21 +275,6 @@ ntdll/loader: add support for overriding IMAGE_FILE_LARGE_ADDRESS_AWARE
 ### Type
 
 `numeric`
-
-## WINE_NO_PRIV_ELEVATION
-
-Patch: [0157-ntdll-HACK-Add-WINE_NO_PRIV_ELEVATION-option-and-aut.patch](0006-proton-esync-fsync/0157-ntdll-HACK-Add-WINE_NO_PRIV_ELEVATION-option-and-aut.patch)
-
-### Commit message
-
-```
-ntdll: HACK: Add WINE_NO_PRIV_ELEVATION option and auto enable it for Aquarist - My First Job.
-CW-Bug-Id: #20846
-```
-
-### Type
-
-`boolean`
 
 ## WINE_PULSE_MEMLOCK
 

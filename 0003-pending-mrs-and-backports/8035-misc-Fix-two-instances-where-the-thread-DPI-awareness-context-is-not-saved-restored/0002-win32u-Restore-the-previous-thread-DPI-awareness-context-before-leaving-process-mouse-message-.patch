@@ -1,0 +1,104 @@
+From 7da0e7ed8519c1bd0074d9fdb122f1691e8e1b27 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Wed, 14 May 2025 13:26:11 +1000
+Subject: [PATCH] win32u: Restore the previous thread DPI awareness context
+ before leaving process_mouse_message().
+
+---
+ dlls/win32u/message.c | 24 ++++++++++++++----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index a6fa5c3c0ba..f1e6ca132ce 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2507,8 +2507,9 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     EVENTMSG event;
+     GUITHREADINFO info;
+     MOUSEHOOKSTRUCTEX hook;
+-    BOOL eat_msg;
++    BOOL eat_msg = TRUE;
+     WPARAM wparam;
++    UINT context;
+ 
+     /* find the window to dispatch this mouse message to */
+ 
+@@ -2541,7 +2542,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     }
+ 
+     msg->pt = point_phys_to_win_dpi( msg->hwnd, msg->pt );
+-    set_thread_dpi_awareness_context( get_window_dpi_awareness_context( msg->hwnd ));
++    context = set_thread_dpi_awareness_context( get_window_dpi_awareness_context( msg->hwnd ));
+ 
+     /* FIXME: is this really the right place for this hook? */
+     event.message = msg->message;
+@@ -2551,7 +2552,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     event.paramH  = msg->pt.y;
+     call_hooks( WH_JOURNALRECORD, HC_ACTION, 0, (LPARAM)&event, sizeof(event) );
+ 
+-    if (!check_hwnd_filter( msg, hwnd_filter )) return FALSE;
++    if (!check_hwnd_filter( msg, hwnd_filter )) goto done;
+ 
+     pt = msg->pt;
+     message = msg->message;
+@@ -2606,13 +2607,13 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+                }
+            }
+         }
+-        if (message < first || message > last) return FALSE;
++        if (message < first || message > last) goto done;
+         /* update static double click conditions */
+         if (update) clk_msg = *msg;
+     }
+     else
+     {
+-        if (message < first || message > last) return FALSE;
++        if (message < first || message > last) goto done;
+     }
+     msg->wParam = wparam;
+ 
+@@ -2632,26 +2633,26 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+         hook.mouseData    = msg->wParam;
+         accept_hardware_message( hw_id );
+         call_hooks( WH_CBT, HCBT_CLICKSKIPPED, message, (LPARAM)&hook, sizeof(hook) );
+-        return FALSE;
++        goto done;
+     }
+ 
+     if ((hittest == HTERROR) || (hittest == HTNOWHERE))
+     {
+         send_message( msg->hwnd, WM_SETCURSOR, (WPARAM)msg->hwnd, MAKELONG( hittest, msg->message ));
+         accept_hardware_message( hw_id );
+-        return FALSE;
++        goto done;
+     }
+ 
+     if (remove) accept_hardware_message( hw_id );
+ 
++    eat_msg = FALSE;
++
+     if (!remove || info.hwndCapture)
+     {
+         msg->message = message;
+-        return TRUE;
++        goto done;
+     }
+ 
+-    eat_msg = FALSE;
+-
+     if (msg->message == WM_LBUTTONDOWN ||
+         msg->message == WM_RBUTTONDOWN ||
+         msg->message == WM_MBUTTONDOWN ||
+@@ -2702,6 +2703,9 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     send_message( msg->hwnd, WM_SETCURSOR, (WPARAM)msg->hwnd, MAKELONG( hittest, msg->message ));
+ 
+     msg->message = message;
++
++done:
++    set_thread_dpi_awareness_context( context );
+     return !eat_msg;
+ }
+ 
+-- 
+GitLab
+

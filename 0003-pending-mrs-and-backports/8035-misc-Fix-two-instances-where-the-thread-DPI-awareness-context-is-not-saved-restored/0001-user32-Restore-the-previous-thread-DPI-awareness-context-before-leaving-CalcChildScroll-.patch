@@ -1,0 +1,35 @@
+From e2fc382388a7b341087429b7b0e2f7f3f185a367 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Wed, 14 May 2025 13:23:24 +1000
+Subject: [PATCH] user32: Restore the previous thread DPI awareness context
+ before leaving CalcChildScroll().
+
+---
+ dlls/user32/mdi.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/user32/mdi.c b/dlls/user32/mdi.c
+index 05725a29914..f023eb5e39d 100644
+--- a/dlls/user32/mdi.c
++++ b/dlls/user32/mdi.c
+@@ -1658,7 +1658,7 @@ void WINAPI CalcChildScroll( HWND hwnd, INT scroll )
+             {
+                 HeapFree( GetProcessHeap(), 0, list );
+                 NtUserShowScrollBar( hwnd, SB_BOTH, FALSE );
+-                return;
++                goto done;
+             }
+             if (style & WS_VISIBLE)
+             {
+@@ -1700,6 +1700,8 @@ void WINAPI CalcChildScroll( HWND hwnd, INT scroll )
+                         }
+ 			break;
+     }
++
++done:
+     SetThreadDpiAwarenessContext( context );
+ }
+ 
+-- 
+GitLab
+

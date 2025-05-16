@@ -15,7 +15,7 @@ index c2105caf4d4..1b14d9e036d 100644
 @@ -135,6 +135,7 @@ struct msg_queue
      timeout_t              last_get_msg;    /* time of last get message call */
      int                    keystate_lock;   /* owns an input keystate lock */
-     const queue_shm_t     *shared;          /* queue in session shared memory */
+     queue_shm_t           *shared;          /* queue in session shared memory */
 +    struct inproc_sync    *inproc_sync;     /* in-process synchronization object */
      unsigned int           ignore_post_msg; /* ignore post messages newer than this unique id */
      int                    esync_fd;        /* esync file descriptor (signalled on message) */

@@ -7,6 +7,7 @@ Also add WINENTSYNC=0 as a shorthand for WINE_DISABLE_FAST_SYNC=1.
 ---
  dlls/ntdll/unix/esync.c        |  3 +-
  dlls/ntdll/unix/fsync.c        |  3 +-
+ dlls/ntdll/unix/loader.c       |  7 +++--
  dlls/ntdll/unix/sync.c         | 13 +++++++
  dlls/ntdll/unix/unix_private.h |  1 +
  server/esync.c                 |  3 +-
@@ -14,7 +15,7 @@ Also add WINENTSYNC=0 as a shorthand for WINE_DISABLE_FAST_SYNC=1.
  server/inproc_sync.c           | 64 ++++++++++++++++++++++++----------
  server/main.c                  |  5 +--
  server/object.h                |  1 +
- 9 files changed, 66 insertions(+), 30 deletions(-)
+ 10 files changed, 73 insertions(+), 32 deletions(-)
 
 diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
 index 245f158881e..f0629434cc7 100644
@@ -115,23 +116,44 @@ index 229e3b8aa9c..3d14810e101 100644
      }
  
      return do_fsync_cached;
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index 80b17e17b16..b38e695c258 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -2274,8 +2275,11 @@ static void start_main_thread(void)
+     dbg_init();
+     startup_info_size = server_init_process();
+     hacks_init();
+-    fsync_init();
+-    esync_init();
++    if (!do_ntsync())
++    {
++        fsync_init();
++        esync_init();
++    }
+     virtual_map_user_shared_data();
+     init_cpu_info();
+     init_files();
 diff --git a/server/inproc_sync.c b/server/inproc_sync.c
 index 10a4d0e2538..9562e4fc581 100644
 --- a/server/inproc_sync.c
 +++ b/server/inproc_sync.c
-@@ -126,12 +126,31 @@ static enum server_fd_type inproc_sync_get_fd_type( struct fd *fd )
+@@ -126,12 +126,34 @@ static enum server_fd_type inproc_sync_get_fd_type( struct fd *fd )
      return FD_TYPE_FILE;
  }
  
 +static int get_ntsync_fd(void)
 +{
-+    int fd = open( "/dev/ntsync", O_CLOEXEC | O_RDONLY );
-+    if (fd == -1)
++    static int fd = -2;
++    if (fd == -2)
 +    {
-+        static int once;
-+        file_set_error();
-+        if (!once++) fprintf( stderr, "Cannot open /dev/ntsync: %s\n", strerror( errno ) );
-+        return 0;
++        fd = open( "/dev/ntsync", O_CLOEXEC | O_RDONLY );
++        if (fd == -1)
++        {
++            file_set_error();
++            fprintf( stderr, "Cannot open /dev/ntsync: %s\n", strerror( errno ) );
++            fd = 0;
++        }
 +    }
 +    return fd;
 +}
@@ -186,7 +208,7 @@ index 10a4d0e2538..9562e4fc581 100644
 +    static int do_ntsync_cached = -1;
 +    if (do_ntsync_cached == -1)
 +    {
-+        int temp_fd;
++
 +        do_ntsync_cached = 1;
 +        if ((getenv( "WINE_DISABLE_FAST_SYNC" ) && atoi( getenv( "WINE_DISABLE_FAST_SYNC" ) )) ||
 +            (getenv( "WINENTSYNC" ) && !atoi( getenv( "WINENTSYNC" ) )))
@@ -195,8 +217,8 @@ index 10a4d0e2538..9562e4fc581 100644
 +            do_ntsync_cached = 0;
 +        }
 +        /* lightweight permission check, full get_linux_device breaks when done at early startup */
-+        else if ((temp_fd = get_ntsync_fd())) close( temp_fd );
-+        else do_ntsync_cached = 0;
++        else if (!get_ntsync_fd) do_ntsync_cached = 0;
++
 +    }
 +    return do_ntsync_cached;
 +}
