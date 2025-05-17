@@ -217,7 +217,7 @@ index 10a4d0e2538..9562e4fc581 100644
 +            do_ntsync_cached = 0;
 +        }
 +        /* lightweight permission check, full get_linux_device breaks when done at early startup */
-+        else if (!get_ntsync_fd) do_ntsync_cached = 0;
++        else if (!get_ntsync_fd()) do_ntsync_cached = 0;
 +
 +    }
 +    return do_ntsync_cached;
