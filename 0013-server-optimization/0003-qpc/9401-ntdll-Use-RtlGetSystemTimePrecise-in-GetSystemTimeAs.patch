@@ -1,0 +1,27 @@
+From 8e3eb6fabb912ab1c2ae94e531e04918ffab6e9c Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 10 Apr 2025 09:00:38 -0700
+Subject: [PATCH] ntdll: Use RtlGetSystemTimePrecise in GetSystemTimeAsFileTime
+ as well.
+
+This won't need a syscall with the USD conversion patch.
+---
+ dlls/kernelbase/file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index 9aa0536c7d6..284d61a6f68 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -4101,7 +4101,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetSystemTimeAdjustment( DWORD *adjust, DWORD *inc
+  */
+ void WINAPI DECLSPEC_HOTPATCH GetSystemTimeAsFileTime( FILETIME *time )
+ {
+-    NtQuerySystemTime( (LARGE_INTEGER *)time );
++    ((LARGE_INTEGER *)time)->QuadPart = RtlGetSystemTimePrecise();
+ }
+ 
+ 
+-- 
+2.49.0
+

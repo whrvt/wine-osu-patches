@@ -1,0 +1,598 @@
+From a78d6d3d0a543e72ddcbb9c290c637e107e777f0 Mon Sep 17 00:00:00 2001
+From: Eric Pouech <epouech@codeweavers.com>
+Date: Sun, 18 May 2025 10:10:16 +0200
+Subject: [PATCH] dbghelpi,imagehlp: Don't dupe some exports on 64bit
+ compilation.
+
+For a 32bit DLL, dbghelp exports both the 32bit and the 64bit
+variant of some APIs (eg. StackWalk, SymLoadModule...).
+
+For a 64bit DLL, only the 64bit variant is implemented and
+exported (the two names point to the same address in the export
+table).
+
+This patch:
+- uses the same function for both names (as native does) in .spec file
+  for 64bit architecture
+- removes the 32bit variant from 64bit compilation,
+- adapts also the corresponding import:s in imagehlp from dbghelp.
+
+This mostly fixes 64bit apps, getting eg "StackWalk" address with
+GetProcAddress() and expecting a 64bit code path.
+(reported & tested by Stefan).
+
+Signed-off-by: Eric Pouech <epouech@codeweavers.com>
+---
+ dlls/dbghelp/dbghelp.c      |  8 +++--
+ dlls/dbghelp/dbghelp.spec   | 64 +++++++++++++++++++++++++------------
+ dlls/dbghelp/module.c       | 14 ++++++++
+ dlls/dbghelp/stack.c        |  8 +++++
+ dlls/dbghelp/symbol.c       | 16 ++++++++++
+ dlls/imagehlp/imagehlp.spec | 18 +++++------
+ 6 files changed, 96 insertions(+), 32 deletions(-)
+
+diff --git a/dlls/dbghelp/dbghelp.c b/dlls/dbghelp/dbghelp.c
+index 75881473c2c..a46d052b8c7 100644
+--- a/dlls/dbghelp/dbghelp.c
++++ b/dlls/dbghelp/dbghelp.c
+@@ -764,6 +764,7 @@ BOOL WINAPI SymSetScopeFromInlineContext(HANDLE hProcess, ULONG64 addr, DWORD in
+     }
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		reg_cb64to32 (internal)
+  *
+@@ -809,6 +810,7 @@ static BOOL CALLBACK reg_cb64to32(HANDLE hProcess, ULONG action, ULONG64 data, U
+     }
+     return pcs->reg_cb32(hProcess, action, data32, (PVOID)(DWORD_PTR)user);
+ }
++#endif
+ 
+ /******************************************************************
+  *		pcs_callback (internal)
+@@ -877,17 +879,19 @@ static BOOL sym_register_cb(HANDLE hProcess,
+     return TRUE;
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		SymRegisterCallback (DBGHELP.@)
+  */
+-BOOL WINAPI SymRegisterCallback(HANDLE hProcess, 
++BOOL WINAPI SymRegisterCallback(HANDLE hProcess,
+                                 PSYMBOL_REGISTERED_CALLBACK CallbackFunction,
+                                 PVOID UserContext)
+ {
+-    TRACE("(%p, %p, %p)\n", 
++    TRACE("(%p, %p, %p)\n",
+           hProcess, CallbackFunction, UserContext);
+     return sym_register_cb(hProcess, reg_cb64to32, CallbackFunction, (DWORD_PTR)UserContext, FALSE);
+ }
++#endif
+ 
+ /***********************************************************************
+  *		SymRegisterCallback64 (DBGHELP.@)
+diff --git a/dlls/dbghelp/dbghelp.spec b/dlls/dbghelp/dbghelp.spec
+index a89c2c1d86b..c9ae3bbb73c 100644
+--- a/dlls/dbghelp/dbghelp.spec
++++ b/dlls/dbghelp/dbghelp.spec
+@@ -2,7 +2,8 @@
+ @ stub DbgHelpCreateUserDumpW
+ @ stdcall EnumDirTree(long str str ptr ptr ptr)
+ @ stdcall EnumDirTreeW(long wstr wstr ptr ptr ptr)
+-@ stdcall EnumerateLoadedModules(long ptr ptr)
++@ stdcall -arch=win32 EnumerateLoadedModules(long ptr ptr)
++@ stdcall -arch=win64 EnumerateLoadedModules(long ptr ptr) EnumerateLoadedModules64
+ @ stdcall EnumerateLoadedModules64(long ptr ptr)
+ @ stdcall EnumerateLoadedModulesEx(long ptr ptr) EnumerateLoadedModules64
+ @ stdcall EnumerateLoadedModulesExW(long ptr ptr) EnumerateLoadedModulesW64
+@@ -30,7 +31,8 @@
+ @ stdcall MiniDumpWriteDump(ptr long ptr long ptr ptr ptr)
+ @ stdcall SearchTreeForFile(str str ptr)
+ @ stdcall SearchTreeForFileW(wstr wstr ptr)
+-@ stdcall StackWalk(long long long ptr ptr ptr ptr ptr ptr)
++@ stdcall -arch=win32 StackWalk(long long long ptr ptr ptr ptr ptr ptr)
++@ stdcall -arch=win64 StackWalk(long long long ptr ptr ptr ptr ptr ptr) StackWalk64
+ @ stdcall StackWalk64(long long long ptr ptr ptr ptr ptr ptr)
+ @ stdcall StackWalkEx(long long long ptr ptr ptr ptr ptr ptr long)
+ @ stub SymAddSourceStream
+@@ -60,10 +62,12 @@
+ @ stdcall SymEnumTypesByName(ptr int64 str ptr ptr)
+ @ stdcall SymEnumTypesByNameW(ptr int64 wstr ptr ptr)
+ @ stdcall SymEnumTypesW(ptr int64 ptr ptr)
+-@ stdcall SymEnumerateModules(long ptr ptr)
++@ stdcall -arch=win32 SymEnumerateModules(long ptr ptr)
++@ stdcall -arch=win64 SymEnumerateModules(long ptr ptr) SymEnumerateModules64
+ @ stdcall SymEnumerateModules64(long ptr ptr)
+ @ stdcall SymEnumerateModulesW64(long ptr ptr)
+-@ stdcall SymEnumerateSymbols(long long ptr ptr)
++@ stdcall -arch=win32 SymEnumerateSymbols(long long ptr ptr)
++@ stdcall -arch=win64 SymEnumerateSymbols(long int64 ptr ptr) SymEnumerateSymbols64
+ @ stdcall SymEnumerateSymbols64(long int64 ptr ptr)
+ @ stub SymEnumerateSymbolsW
+ @ stub SymEnumerateSymbolsW64
+@@ -83,31 +87,40 @@
+ @ stdcall SymFromNameW(long wstr ptr)
+ @ stub SymFromToken
+ @ stub SymFromTokenW
+-@ stdcall SymFunctionTableAccess(long long)
++@ stdcall -arch=win32 SymFunctionTableAccess(long long)
++@ stdcall -arch=win64 SymFunctionTableAccess(long int64) SymFunctionTableAccess64
+ @ stdcall SymFunctionTableAccess64(long int64)
+ @ stub SymGetFileLineOffsets64
+ @ stub SymGetHomeDirectory
+ @ stub SymGetHomeDirectoryW
+ @ stdcall SymGetExtendedOption(long)
+-@ stdcall SymGetLineFromAddr(long long ptr ptr)
++@ stdcall -arch=win32 SymGetLineFromAddr(long long ptr ptr)
++@ stdcall -arch=win64 SymGetLineFromAddr(long int64 ptr ptr) SymGetLineFromAddr64
+ @ stdcall SymGetLineFromAddr64(long int64 ptr ptr)
++@ stub SymGetLineFromAddrW
+ @ stdcall SymGetLineFromAddrW64(long int64 ptr ptr)
+ @ stdcall SymGetLineFromInlineContext(long int64 long int64 ptr ptr)
+ @ stdcall SymGetLineFromInlineContextW(long int64 long int64 ptr ptr)
+-@ stdcall SymGetLineFromName(long str str long ptr ptr)
++@ stdcall -arch=win32 SymGetLineFromName(long str str long ptr ptr)
++@ stdcall -arch=win64 SymGetLineFromName(long str str long ptr ptr) SymGetLineFromName64
+ @ stdcall SymGetLineFromName64(long str str long ptr ptr)
+ @ stdcall SymGetLineFromNameW64(long wstr wstr long ptr ptr)
+-@ stdcall SymGetLineNext(long ptr)
++@ stdcall -arch=win32 SymGetLineNext(long ptr)
++@ stdcall -arch=win64 SymGetLineNext(long ptr) SymGetLineNext64
+ @ stdcall SymGetLineNext64(long ptr)
+ @ stdcall SymGetLineNextW64(long ptr)
+-@ stdcall SymGetLinePrev(long ptr)
++@ stdcall -arch=win32 SymGetLinePrev(long ptr)
++@ stdcall -arch=win64 SymGetLinePrev(long ptr) SymGetLinePrev64
+ @ stdcall SymGetLinePrev64(long ptr)
+ @ stdcall SymGetLinePrevW64(long ptr)
+-@ stdcall SymGetModuleBase(long long)
++@ stdcall -arch=win32 SymGetModuleBase(long long)
++@ stdcall -arch=win64 SymGetModuleBase(long int64) SymGetModuleBase64
+ @ stdcall SymGetModuleBase64(long int64)
+-@ stdcall SymGetModuleInfo(long long ptr)
++@ stdcall -arch=win32 SymGetModuleInfo(long ptr ptr)
++@ stdcall -arch=win64 SymGetModuleInfo(long int64 ptr) SymGetModuleInfo64
+ @ stdcall SymGetModuleInfo64(long int64 ptr)
+-@ stdcall SymGetModuleInfoW(long long ptr)
++@ stdcall -arch=win32 SymGetModuleInfoW(long long ptr)
++@ stdcall -arch=win64 SymGetModuleInfoW(long int64 ptr) SymGetModuleInfoW64
+ @ stdcall SymGetModuleInfoW64(long int64 ptr)
+ @ stub SymGetOmapBlockBase
+ @ stdcall SymGetOptions()
+@@ -123,13 +136,17 @@
+ @ stub SymGetSourceFileW
+ @ stub SymGetSourceVarFromToken
+ @ stub SymGetSourceVarFromTokenW
+-@ stdcall SymGetSymFromAddr(long long ptr ptr)
++@ stdcall -arch=win32 SymGetSymFromAddr(long long ptr ptr)
++@ stdcall -arch=win64 SymGetSymFromAddr(long int64 ptr ptr) SymGetSymFromAddr64
+ @ stdcall SymGetSymFromAddr64(long int64 ptr ptr)
+-@ stdcall SymGetSymFromName(long str ptr)
++@ stdcall -arch=win32 SymGetSymFromName(long str ptr)
++@ stdcall -arch=win64 SymGetSymFromName(long str ptr) SymGetSymFromName64
+ @ stdcall SymGetSymFromName64(long str ptr)
+-@ stdcall SymGetSymNext(long ptr)
++@ stdcall -arch=win32 SymGetSymNext(long ptr)
++@ stdcall -arch=win64 SymGetSymNext(long ptr) SymGetSymNext64
+ @ stdcall SymGetSymNext64(long ptr)
+-@ stdcall SymGetSymPrev(long ptr)
++@ stdcall -arch=win32 SymGetSymPrev(long ptr)
++@ stdcall -arch=win64 SymGetSymPrev(long ptr) SymGetSymPrev64
+ @ stdcall SymGetSymPrev64(long ptr)
+ @ stub SymGetSymbolFile
+ @ stub SymGetSymbolFileW
+@@ -140,7 +157,8 @@
+ @ stub SymGetUnwindInfo
+ @ stdcall SymInitialize(long str long)
+ @ stdcall SymInitializeW(long wstr long)
+-@ stdcall SymLoadModule(long long str str long long)
++@ stdcall -arch=win32 SymLoadModule(long long str str long long)
++@ stdcall -arch=win64 SymLoadModule(long long str str int64 long) SymLoadModule64
+ @ stdcall SymLoadModule64(long long str str int64 long)
+ @ stdcall SymLoadModuleEx(long long str str int64 long ptr long)
+ @ stdcall SymLoadModuleExW(long long wstr wstr int64 long ptr long)
+@@ -155,10 +173,12 @@
+ @ stub SymPrevW
+ @ stdcall SymQueryInlineTrace(long int64 long int64 int64 ptr ptr)
+ @ stdcall SymRefreshModuleList(long)
+-@ stdcall SymRegisterCallback(long ptr ptr)
++@ stdcall -arch=win32 SymRegisterCallback(long ptr ptr)
++@ stdcall -arch=win64 SymRegisterCallback(long ptr ptr) SymRegisterCallback64
+ @ stdcall SymRegisterCallback64(long ptr int64)
+ @ stdcall SymRegisterCallbackW64(long ptr int64)
+-@ stdcall SymRegisterFunctionEntryCallback(ptr ptr ptr)
++@ stdcall -arch=win32 SymRegisterFunctionEntryCallback(long ptr ptr)
++@ stdcall -arch=win64 SymRegisterFunctionEntryCallback(long ptr ptr) SymRegisterFunctionEntryCallback64
+ @ stdcall SymRegisterFunctionEntryCallback64(ptr ptr int64)
+ @ stdcall SymSearch(long int64 long long str int64 ptr ptr long)
+ @ stdcall SymSearchW(long int64 long long wstr int64 ptr ptr long)
+@@ -191,9 +211,11 @@
+ @ stub SymSrvStoreSupplementW
+ # @ stub SymSetSymWithAddr64 no longer present ??
+ @ stub SymSetSymWithAddr64
+-@ stdcall SymUnDName(ptr str long)
++@ stdcall -arch=win32 SymUnDName(ptr str long)
++@ stdcall -arch=win64 SymUnDName(ptr str long) SymUnDName64
+ @ stdcall SymUnDName64(ptr str long)
+-@ stdcall SymUnloadModule(long long)
++@ stdcall -arch=win32 SymUnloadModule(long long)
++@ stdcall -arch=win64 SymUnloadModule(long int64) SymUnloadModule64
+ @ stdcall SymUnloadModule64(long int64)
+ @ stdcall UnDecorateSymbolName(str ptr long long)
+ @ stdcall UnDecorateSymbolNameW(wstr ptr long long)
+diff --git a/dlls/dbghelp/module.c b/dlls/dbghelp/module.c
+index c5eafee4db5..258f601bd19 100644
+--- a/dlls/dbghelp/module.c
++++ b/dlls/dbghelp/module.c
+@@ -854,6 +854,7 @@ BOOL image_check_alternate(struct image_file_map* fmap, const struct module* mod
+     return FALSE;
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *			SymLoadModule (DBGHELP.@)
+  */
+@@ -863,6 +864,7 @@ DWORD WINAPI SymLoadModule(HANDLE hProcess, HANDLE hFile, PCSTR ImageName,
+     return SymLoadModuleEx(hProcess, hFile, ImageName, ModuleName, BaseOfDll,
+                            SizeOfDll, NULL, 0);
+ }
++#endif
+ 
+ /***********************************************************************
+  *			SymLoadModuleEx (DBGHELP.@)
+@@ -1079,6 +1081,7 @@ BOOL module_remove(struct process* pcs, struct module* module)
+     return FALSE;
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		SymUnloadModule (DBGHELP.@)
+  *
+@@ -1087,6 +1090,7 @@ BOOL WINAPI SymUnloadModule(HANDLE hProcess, DWORD BaseOfDll)
+ {
+     return SymUnloadModule64(hProcess, BaseOfDll);
+ }
++#endif
+ 
+ /******************************************************************
+  *		SymUnloadModule64 (DBGHELP.@)
+@@ -1105,6 +1109,7 @@ BOOL WINAPI SymUnloadModule64(HANDLE hProcess, DWORD64 BaseOfDll)
+     return TRUE;
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		SymEnumerateModules (DBGHELP.@)
+  *
+@@ -1135,6 +1140,7 @@ BOOL  WINAPI SymEnumerateModules(HANDLE hProcess,
+ 
+     return SymEnumerateModulesW64(hProcess, enum_modW64_32, &x);
+ }
++#endif
+ 
+ /******************************************************************
+  *		SymEnumerateModules64 (DBGHELP.@)
+@@ -1224,6 +1230,7 @@ BOOL  WINAPI EnumerateLoadedModules64(HANDLE hProcess,
+     return EnumerateLoadedModulesW64(hProcess, enum_load_modW64_64, &x);
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		EnumerateLoadedModules (DBGHELP.@)
+  *
+@@ -1254,6 +1261,7 @@ BOOL  WINAPI EnumerateLoadedModules(HANDLE hProcess,
+ 
+     return EnumerateLoadedModulesW64(hProcess, enum_load_modW64_32, &x);
+ }
++#endif
+ 
+ static unsigned int load_and_grow_modules(HANDLE process, HMODULE** hmods, unsigned start, unsigned* alloc, DWORD filter)
+ {
+@@ -1379,6 +1387,7 @@ static void dbghelp_str_WtoA(const WCHAR *src, char *dst, int dst_len)
+     dst[dst_len - 1] = 0;
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		SymGetModuleInfo (DBGHELP.@)
+  *
+@@ -1439,6 +1448,7 @@ BOOL  WINAPI SymGetModuleInfoW(HANDLE hProcess, DWORD dwAddr,
+ 
+     return TRUE;
+ }
++#endif
+ 
+ /******************************************************************
+  *		SymGetModuleInfo64 (DBGHELP.@)
+@@ -1534,6 +1544,7 @@ BOOL  WINAPI SymGetModuleInfoW64(HANDLE hProcess, DWORD64 dwAddr,
+     return TRUE;
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		SymGetModuleBase (DBGHELP.@)
+  */
+@@ -1541,6 +1552,7 @@ DWORD WINAPI SymGetModuleBase(HANDLE hProcess, DWORD dwAddr)
+ {
+     return (DWORD)SymGetModuleBase64(hProcess, dwAddr);
+ }
++#endif
+ 
+ /***********************************************************************
+  *		SymGetModuleBase64 (DBGHELP.@)
+@@ -1614,6 +1626,7 @@ BOOL WINAPI SymRefreshModuleList(HANDLE hProcess)
+     return module_refresh_list(pcs);
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		SymFunctionTableAccess (DBGHELP.@)
+  */
+@@ -1621,6 +1634,7 @@ PVOID WINAPI SymFunctionTableAccess(HANDLE hProcess, DWORD AddrBase)
+ {
+     return SymFunctionTableAccess64(hProcess, AddrBase);
+ }
++#endif
+ 
+ /***********************************************************************
+  *		SymFunctionTableAccess64 (DBGHELP.@)
+diff --git a/dlls/dbghelp/stack.c b/dlls/dbghelp/stack.c
+index 8b573feee77..a0fc0320668 100644
+--- a/dlls/dbghelp/stack.c
++++ b/dlls/dbghelp/stack.c
+@@ -60,6 +60,7 @@ static DWORD64 WINAPI addr_to_linear(HANDLE hProcess, HANDLE hThread, ADDRESS64*
+     return 0;
+ }
+ 
++#ifndef _WIN64
+ static BOOL CALLBACK read_mem(HANDLE hProcess, DWORD addr, void* buffer,
+                               DWORD size, LPDWORD nread)
+ {
+@@ -68,6 +69,7 @@ static BOOL CALLBACK read_mem(HANDLE hProcess, DWORD addr, void* buffer,
+     if (nread) *nread = r;
+     return TRUE;
+ }
++#endif
+ 
+ static BOOL CALLBACK read_mem64(HANDLE hProcess, DWORD64 addr, void* buffer,
+                                 DWORD size, LPDWORD nread)
+@@ -78,12 +80,14 @@ static BOOL CALLBACK read_mem64(HANDLE hProcess, DWORD64 addr, void* buffer,
+     return TRUE;
+ }
+ 
++#ifndef _WIN64
+ static inline void addr_32to64(const ADDRESS* addr32, ADDRESS64* addr64)
+ {
+     addr64->Offset = (ULONG64)addr32->Offset;
+     addr64->Segment = addr32->Segment;
+     addr64->Mode = addr32->Mode;
+ }
++#endif
+ 
+ static inline void addr_64to32(const ADDRESS64* addr64, ADDRESS* addr32)
+ {
+@@ -132,6 +136,7 @@ DWORD64 sw_module_base(struct cpu_stack_walk* csw, DWORD64 addr)
+         return csw->u.s64.f_modl_bas(csw->hProcess, addr);
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		StackWalk (DBGHELP.@)
+  */
+@@ -202,6 +207,7 @@ BOOL WINAPI StackWalk(DWORD MachineType, HANDLE hProcess, HANDLE hThread,
+ 
+     return ret;
+ }
++#endif
+ 
+ 
+ /***********************************************************************
+@@ -340,6 +346,7 @@ BOOL WINAPI StackWalkEx(DWORD MachineType, HANDLE hProcess, HANDLE hThread,
+     return TRUE;
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		SymRegisterFunctionEntryCallback (DBGHELP.@)
+  *
+@@ -352,6 +359,7 @@ BOOL WINAPI SymRegisterFunctionEntryCallback(HANDLE hProc,
+     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+     return FALSE;
+ }
++#endif
+ 
+ /******************************************************************
+  *		SymRegisterFunctionEntryCallback64 (DBGHELP.@)
+diff --git a/dlls/dbghelp/symbol.c b/dlls/dbghelp/symbol.c
+index 7ab11e2f4eb..f051fa793ff 100644
+--- a/dlls/dbghelp/symbol.c
++++ b/dlls/dbghelp/symbol.c
+@@ -1486,6 +1486,7 @@ BOOL WINAPI SymEnumSymbolsW(HANDLE hProcess, ULONG64 BaseOfDll, PCWSTR Mask,
+     return doSymEnumSymbols(hProcess, BaseOfDll, Mask, sym_enumW, &sew);
+ }
+ 
++#ifndef _WIN64
+ struct sym_enumerate
+ {
+     void*                       ctx;
+@@ -1512,6 +1513,7 @@ BOOL WINAPI SymEnumerateSymbols(HANDLE hProcess, DWORD BaseOfDll,
+     
+     return SymEnumSymbols(hProcess, BaseOfDll, NULL, sym_enumerate_cb, &se);
+ }
++#endif
+ 
+ struct sym_enumerate64
+ {
+@@ -1856,6 +1858,7 @@ static void init_lineinfo(struct lineinfo_t* line_info, BOOL unicode)
+     line_info->address = 0;
+ }
+ 
++#ifndef _WIN64
+ static BOOL lineinfo_copy_toA32(const struct lineinfo_t* line_info, IMAGEHLP_LINE* l32)
+ {
+     if (line_info->unicode) return FALSE;
+@@ -1865,6 +1868,7 @@ static BOOL lineinfo_copy_toA32(const struct lineinfo_t* line_info, IMAGEHLP_LIN
+     l32->Address = line_info->address;
+     return TRUE;
+ }
++#endif
+ 
+ static BOOL lineinfo_copy_toA64(const struct lineinfo_t* line_info, IMAGEHLP_LINE64* l64)
+ {
+@@ -2011,6 +2015,7 @@ BOOL WINAPI SymGetSymNext64(HANDLE hProcess, PIMAGEHLP_SYMBOL64 Symbol)
+     return FALSE;
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		SymGetSymNext (DBGHELP.@)
+  */
+@@ -2020,6 +2025,7 @@ BOOL WINAPI SymGetSymNext(HANDLE hProcess, PIMAGEHLP_SYMBOL Symbol)
+     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+     return FALSE;
+ }
++#endif
+ 
+ /***********************************************************************
+  *		SymGetSymPrev64 (DBGHELP.@)
+@@ -2031,6 +2037,7 @@ BOOL WINAPI SymGetSymPrev64(HANDLE hProcess, PIMAGEHLP_SYMBOL64 Symbol)
+     return FALSE;
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		SymGetSymPrev (DBGHELP.@)
+  */
+@@ -2040,7 +2047,9 @@ BOOL WINAPI SymGetSymPrev(HANDLE hProcess, PIMAGEHLP_SYMBOL Symbol)
+     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+     return FALSE;
+ }
++#endif
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		SymGetLineFromAddr (DBGHELP.@)
+  *
+@@ -2057,6 +2066,7 @@ BOOL WINAPI SymGetLineFromAddr(HANDLE hProcess, DWORD dwAddr,
+     if (!get_line_from_addr(hProcess, dwAddr, pdwDisplacement, &line_info)) return FALSE;
+     return lineinfo_copy_toA32(&line_info, Line);
+ }
++#endif
+ 
+ /******************************************************************
+  *		SymGetLineFromAddr64 (DBGHELP.@)
+@@ -2154,6 +2164,7 @@ BOOL WINAPI SymGetLinePrev64(HANDLE hProcess, PIMAGEHLP_LINE64 Line)
+     return lineinfo_copy_toA64(&line_info, Line);
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *             SymGetLinePrev (DBGHELP.@)
+  *
+@@ -2169,6 +2180,7 @@ BOOL WINAPI SymGetLinePrev(HANDLE hProcess, PIMAGEHLP_LINE Line)
+     if (!symt_get_func_line_prev(hProcess, &line_info, Line->Key, Line->Address)) return FALSE;
+     return lineinfo_copy_toA32(&line_info, Line);
+ }
++#endif
+ 
+ /******************************************************************
+  *             SymGetLinePrevW64 (DBGHELP.@)
+@@ -2244,6 +2256,7 @@ BOOL WINAPI SymGetLineNext64(HANDLE hProcess, PIMAGEHLP_LINE64 Line)
+     return lineinfo_copy_toA64(&line_info, Line);
+ }
+ 
++#ifndef _WIN64
+ /******************************************************************
+  *		SymGetLineNext (DBGHELP.@)
+  *
+@@ -2259,6 +2272,7 @@ BOOL WINAPI SymGetLineNext(HANDLE hProcess, PIMAGEHLP_LINE Line)
+     if (!symt_get_func_line_next(hProcess, &line_info, Line->Key, Line->Address)) return FALSE;
+     return lineinfo_copy_toA32(&line_info, Line);
+ }
++#endif
+ 
+ /******************************************************************
+  *		SymGetLineNextW64 (DBGHELP.@)
+@@ -2276,6 +2290,7 @@ BOOL WINAPI SymGetLineNextW64(HANDLE hProcess, PIMAGEHLP_LINEW64 Line)
+     return lineinfo_copy_toW64(&line_info, Line);
+ }
+ 
++#ifndef _WIN64
+ /***********************************************************************
+  *		SymUnDName (DBGHELP.@)
+  */
+@@ -2284,6 +2299,7 @@ BOOL WINAPI SymUnDName(PIMAGEHLP_SYMBOL sym, PSTR UnDecName, DWORD UnDecNameLeng
+     return UnDecorateSymbolName(sym->Name, UnDecName, UnDecNameLength,
+                                 UNDNAME_COMPLETE) != 0;
+ }
++#endif
+ 
+ /***********************************************************************
+  *		SymUnDName64 (DBGHELP.@)
+diff --git a/dlls/imagehlp/imagehlp.spec b/dlls/imagehlp/imagehlp.spec
+index f3ca65907ff..788691c2cd1 100644
+--- a/dlls/imagehlp/imagehlp.spec
++++ b/dlls/imagehlp/imagehlp.spec
+@@ -51,16 +51,16 @@
+ @ stdcall -import SymEnumerateModules64(long ptr ptr)
+ @ stdcall -import SymEnumerateModules(long ptr ptr)
+ @ stdcall -import SymEnumerateSymbols64(long int64 ptr ptr)
+-@ stdcall -import SymEnumerateSymbols(long long ptr ptr)
++@ stdcall -import SymEnumerateSymbols(long ptr ptr ptr)
+ @ stub SymEnumerateSymbolsW64
+ @ stub SymEnumerateSymbolsW
+ @ stdcall -import SymFindFileInPath(long str str ptr long long long ptr ptr ptr)
+ @ stdcall -import SymFromAddr(ptr int64 ptr ptr)
+ @ stdcall -import SymFromName(long str ptr)
+ @ stdcall -import SymFunctionTableAccess64(long int64)
+-@ stdcall -import SymFunctionTableAccess(long long)
++@ stdcall -import SymFunctionTableAccess(long ptr)
+ @ stdcall -import SymGetLineFromAddr64(long int64 ptr ptr)
+-@ stdcall -import SymGetLineFromAddr(long long ptr ptr)
++@ stdcall -import SymGetLineFromAddr(long ptr ptr ptr)
+ @ stub SymGetLineFromName64
+ @ stub SymGetLineFromName
+ @ stdcall -import SymGetLineNext64(long ptr)
+@@ -68,15 +68,15 @@
+ @ stdcall -import SymGetLinePrev64(long ptr)
+ @ stdcall -import SymGetLinePrev(long ptr)
+ @ stdcall -import SymGetModuleBase64(long int64)
+-@ stdcall -import SymGetModuleBase(long long)
++@ stdcall -import SymGetModuleBase(long ptr)
+ @ stdcall -import SymGetModuleInfo64(long int64 ptr)
+-@ stdcall -import SymGetModuleInfo(long long ptr)
++@ stdcall -import SymGetModuleInfo(long ptr ptr)
+ @ stdcall -import SymGetModuleInfoW64(long int64 ptr)
+-@ stdcall -import SymGetModuleInfoW(long long ptr)
++@ stdcall -import SymGetModuleInfoW(long ptr ptr)
+ @ stdcall -import SymGetOptions()
+ @ stdcall -import SymGetSearchPath(long ptr long)
+ @ stdcall -import SymGetSymFromAddr64(long int64 ptr ptr)
+-@ stdcall -import SymGetSymFromAddr(long long ptr ptr)
++@ stdcall -import SymGetSymFromAddr(long ptr ptr ptr)
+ @ stdcall -import SymGetSymFromName64(long str ptr)
+ @ stdcall -import SymGetSymFromName(long str ptr)
+ @ stdcall -import SymGetSymNext64(long ptr)
+@@ -87,7 +87,7 @@
+ @ stdcall -import SymGetTypeInfo(ptr int64 long long ptr)
+ @ stdcall -import SymInitialize(long str long)
+ @ stdcall -import SymLoadModule64(long long str str int64 long)
+-@ stdcall -import SymLoadModule(long long str str long long)
++@ stdcall -import SymLoadModule(long long str str ptr long)
+ @ stdcall -import SymMatchFileName(str str ptr ptr)
+ @ stdcall -import SymMatchString(str str long)
+ @ stdcall -import SymRegisterCallback64(long ptr int64)
+@@ -100,7 +100,7 @@
+ @ stdcall -import SymUnDName64(ptr str long)
+ @ stdcall -import SymUnDName(ptr str long)
+ @ stdcall -import SymUnloadModule64(long int64)
+-@ stdcall -import SymUnloadModule(long long)
++@ stdcall -import SymUnloadModule(long ptr)
+ @ stdcall TouchFileTimes(long ptr)
+ @ stdcall -import UnDecorateSymbolName(str str long long)
+ @ stdcall UnMapAndLoad(ptr)
+-- 
+GitLab
+

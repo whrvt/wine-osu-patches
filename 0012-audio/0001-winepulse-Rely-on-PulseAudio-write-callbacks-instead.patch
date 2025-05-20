@@ -1,7 +1,7 @@
-From 1b43eb67197bc1c461a150db58ff5a6ad48917ab Mon Sep 17 00:00:00 2001
+From d0a1b15d700612aca00f8c18f12a5347e5add393 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
-Subject: [PATCH 1/8] winepulse: Rely on PulseAudio write callbacks instead of a
+Subject: [PATCH 1/7] winepulse: Rely on PulseAudio write callbacks instead of a
  timer loop.
 
 Reverting a patch from Andrew Eikum.
@@ -10,7 +10,7 @@ Reverting a patch from Andrew Eikum.
  1 file changed, 334 insertions(+), 316 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 050609d2cda..2674b913f78 100644
+index 4069fd3c24f..34a22a3143d 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -73,13 +73,10 @@ struct pulse_stream
@@ -995,7 +995,7 @@ index 050609d2cda..2674b913f78 100644
  
  exit:
      pulse_unlock();
-@@ -2643,7 +2661,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+@@ -2651,7 +2669,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      pulse_start,
      pulse_stop,
      pulse_reset,
@@ -1004,7 +1004,7 @@ index 050609d2cda..2674b913f78 100644
      pulse_get_render_buffer,
      pulse_release_render_buffer,
      pulse_get_capture_buffer,
-@@ -3141,7 +3159,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+@@ -3150,7 +3168,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
      pulse_start,
      pulse_stop,
      pulse_reset,
@@ -1014,5 +1014,5 @@ index 050609d2cda..2674b913f78 100644
      pulse_release_render_buffer,
      pulse_wow64_get_capture_buffer,
 -- 
-2.48.1
+2.49.0
 

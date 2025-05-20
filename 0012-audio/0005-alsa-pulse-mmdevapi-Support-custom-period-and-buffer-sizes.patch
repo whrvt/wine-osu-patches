@@ -1,6 +1,7 @@
+From 439d55277e1eb98a1f241ca781b3e4d0d548f9f7 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
-Subject: [PATCH 5/8] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
+Subject: [PATCH 5/7] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
 
 Relevant environment variables are: 
 ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)
@@ -11,11 +12,11 @@ Also, silence pcm.c underrun errors.
 ---
  dlls/mmdevapi/client.c     | 49 ++++++++++++++++++++++++++++++--------
  dlls/winealsa.drv/alsa.c   | 30 ++++++++++++++++-------
- dlls/winepulse.drv/pulse.c | 23 +++++++++++++++++-
- 3 files changed, 82 insertions(+), 20 deletions(-)
+ dlls/winepulse.drv/pulse.c | 25 +++++++++++++++++--
+ 3 files changed, 83 insertions(+), 21 deletions(-)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index d29969b80c5..cb7072e30ac 100644
+index 39cbae27b34..f4259e9d912 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
 @@ -52,6 +52,9 @@ extern struct audio_session_wrapper *session_wrapper_create(struct audio_client
@@ -124,7 +125,7 @@ index d29969b80c5..cb7072e30ac 100644
      return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
  }
 diff --git a/dlls/winealsa.drv/alsa.c b/dlls/winealsa.drv/alsa.c
-index 046b447aafd..06c56373de9 100644
+index 5bd1d71d837..480041418f0 100644
 --- a/dlls/winealsa.drv/alsa.c
 +++ b/dlls/winealsa.drv/alsa.c
 @@ -82,10 +82,10 @@ struct alsa_stream
@@ -199,10 +200,10 @@ index 046b447aafd..06c56373de9 100644
              WARN("Recover failed: %d (%s)\n", ret, snd_strerror(ret));
              return;
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 9e54d88b5ad..6e2e27d87d0 100644
+index 735d16bbdc3..eed8cd6392f 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -744,8 +744,9 @@ static void pulse_probe_settings(int render, const char *pulse_name, WAVEFORMATE
+@@ -747,8 +747,9 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
      pa_channel_map map;
      pa_sample_spec ss;
      pa_buffer_attr attr;
@@ -213,19 +214,21 @@ index 9e54d88b5ad..6e2e27d87d0 100644
  
      if (pulse_name && !pulse_name[0])
          pulse_name = NULL;
-@@ -794,6 +795,12 @@ static void pulse_probe_settings(int render, const char *pulse_name, WAVEFORMATE
-     if (length)
-         *def_period = *min_period = pa_bytes_to_usec(10 * length, &ss);
+@@ -795,7 +796,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+         pa_stream_unref(stream);
  
+     if (length)
+-        *def_period = *min_period = pa_bytes_to_usec(10 * length, &ss);
++        *def_period = 2 * (*min_period = pa_bytes_to_usec(10 * length, &ss)); // make the default period 2x the minimum
++
 +    penv = getenv("STAGING_AUDIO_PERIOD");
 +    if (penv && (periodval = atoi(penv)) >= 0) {
 +        *def_period = *min_period = periodval;
 +        TRACE("Pulse audio period set to %d.\n", periodval);
 +    }
-+
+ 
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
      wfx->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
- 
 @@ -1162,6 +1169,8 @@ static NTSTATUS pulse_create_stream(void *args)
  {
      struct create_stream_params *params = args;
@@ -255,5 +258,5 @@ index 9e54d88b5ad..6e2e27d87d0 100644
      stream->duration = params->duration;
  
 -- 
-2.48.1
+2.49.0
 

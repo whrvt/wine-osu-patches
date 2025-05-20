@@ -1,0 +1,57 @@
+From 5ac764a9eea13e181b64a1b0f7d6557082e3fa6e Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 22 Feb 2025 00:51:42 -0800
+Subject: [PATCH] ntdll: Don't do an actual syscall for yields.
+
+---
+ dlls/kernelbase/thread.c |  4 +++-
+ dlls/ntdll/unix/sync.c   | 17 ++---------------
+ 2 files changed, 5 insertions(+), 16 deletions(-)
+
+#diff --git a/dlls/kernelbase/thread.c b/dlls/kernelbase/thread.c
+#index 12e1777262a..e7b23a0df97 100644
+#--- a/dlls/kernelbase/thread.c
+#+++ b/dlls/kernelbase/thread.c
+#@@ -638,7 +638,9 @@ DWORD WINAPI DECLSPEC_HOTPATCH SuspendThread( HANDLE thread )
+#  */
+# BOOL WINAPI DECLSPEC_HOTPATCH SwitchToThread(void)
+# {
+#-    return (NtYieldExecution() != STATUS_NO_YIELD_PERFORMED);
+#+    NtFlushProcessWriteBuffers();
+#+    for (UINT i=0;i<5;++i) YieldProcessor();
+#+    return STATUS_SUCCESS;
+# }
+# 
+# 
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 405b0c99b13..eedb0f76bad 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -2737,22 +2737,9 @@ NTSTATUS WINAPI NtSignalAndWaitForSingleObject( HANDLE signal, HANDLE wait,
+  */
+ NTSTATUS WINAPI NtYieldExecution(void)
+ {
+-#ifdef HAVE_SCHED_YIELD
+-#ifdef RUSAGE_THREAD
+-    struct rusage u1, u2;
+-    int ret;
+-
+-    ret = getrusage( RUSAGE_THREAD, &u1 );
+-#endif
+-    sched_yield();
+-#ifdef RUSAGE_THREAD
+-    if (!ret) ret = getrusage( RUSAGE_THREAD, &u2 );
+-    if (!ret && u1.ru_nvcsw == u2.ru_nvcsw && u1.ru_nivcsw == u2.ru_nivcsw) return STATUS_NO_YIELD_PERFORMED;
+-#endif
++    int i;
++    for (i=0;i<3;++i) YieldProcessor();
+     return STATUS_SUCCESS;
+-#else
+-    return STATUS_NO_YIELD_PERFORMED;
+-#endif
+ }
+ 
+ 
+-- 
+2.48.1
+

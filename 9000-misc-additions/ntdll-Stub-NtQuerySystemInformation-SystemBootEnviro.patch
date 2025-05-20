@@ -1,0 +1,89 @@
+From ecb411b354ede7a6f98a63ab3f7d4f2f01995cd1 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 4 Mar 2025 11:03:46 -0800
+Subject: [PATCH] ntdll: Stub NtQuerySystemInformation(
+ SystemBootEnvironmentInformation ).
+
+---
+ dlls/ntdll/unix/system.c | 16 ++++++++++++++++
+ dlls/wow64/system.c      |  1 +
+ include/winternl.h       | 24 ++++++++++++++++++++++++
+ 3 files changed, 41 insertions(+)
+
+diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
+index b8fd96529be..38b99b52298 100644
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -3575,6 +3575,22 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+         return ret;
+     }
+ 
++    case SystemBootEnvironmentInformation:  /* 90 */
++    {
++        SYSTEM_BOOT_ENVIRONMENT_INFORMATION *boot_info = info;
++
++        len = sizeof(*boot_info);
++        if (size >= len)
++        {
++            FIXME("SystemBootEnvironmentInformation, size %u, info %p, stub!\n", (int)size, info);
++            boot_info->BootIdentifier = (const GUID){0};
++            boot_info->FirmwareType   = FirmwareTypeUnknown;
++            boot_info->BootFlags      = 0;
++        }
++        else ret = STATUS_INFO_LENGTH_MISMATCH;
++        break;
++    }
++
+     case SystemDynamicTimeZoneInformation:  /* 102 */
+     {
+         RTL_DYNAMIC_TIME_ZONE_INFORMATION tz;
+diff --git a/dlls/wow64/system.c b/dlls/wow64/system.c
+index 0172100e51e..f2f0513f882 100644
+--- a/dlls/wow64/system.c
++++ b/dlls/wow64/system.c
+@@ -327,6 +327,7 @@ NTSTATUS WINAPI wow64_NtQuerySystemInformation( UINT *args )
+     case SystemRecommendedSharedDataAlignment:  /* ULONG */
+     case SystemFirmwareTableInformation:  /* SYSTEM_FIRMWARE_TABLE_INFORMATION */
+     case SystemProcessorIdleCycleTimeInformation:  /* ULONG64[] */
++    case SystemBootEnvironmentInformation: /* SYSTEM_BOOT_ENVIRONMENT_INFORMATION */
+     case SystemDynamicTimeZoneInformation:  /* RTL_DYNAMIC_TIME_ZONE_INFORMATION */
+     case SystemCodeIntegrityInformation:  /* SYSTEM_CODEINTEGRITY_INFORMATION */
+     case SystemKernelDebuggerInformationEx:  /* SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX */
+diff --git a/include/winternl.h b/include/winternl.h
+index 7f62a7960c7..97a5576a1c4 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -110,6 +110,30 @@ typedef struct _RTL_TIME_ZONE_INFORMATION {
+     LONG DaylightBias;
+ } RTL_TIME_ZONE_INFORMATION, *PRTL_TIME_ZONE_INFORMATION;
+ 
++typedef struct _SYSTEM_BOOT_ENVIRONMENT_INFORMATION
++{
++    GUID BootIdentifier;
++    FIRMWARE_TYPE FirmwareType;
++    union
++    {
++        ULONGLONG BootFlags;
++        struct
++        {
++            ULONGLONG DbgMenuOsSelection : 1;
++            ULONGLONG DbgHiberBoot : 1;
++            ULONGLONG DbgSoftBoot : 1;
++            ULONGLONG DbgMeasuredLaunch : 1;
++            ULONGLONG DbgMeasuredLaunchCapable : 1;
++            ULONGLONG DbgSystemHiveReplace : 1;
++            ULONGLONG DbgMeasuredLaunchSmmProtections : 1;
++            ULONGLONG DbgMeasuredLaunchSmmLevel : 7;
++            ULONGLONG DbgBugCheckRecovery : 1;
++            ULONGLONG DbgFASR : 1;
++            ULONGLONG DbgUseCachedBcd : 1;
++        } DUMMYSTRUCTNAME;
++    } DUMMYUNIONNAME;
++} SYSTEM_BOOT_ENVIRONMENT_INFORMATION, *PSYSTEM_BOOT_ENVIRONMENT_INFORMATION;
++
+ typedef struct _RTL_TIME_DYNAMIC_ZONE_INFORMATION
+ {
+     LONG Bias;
+-- 
+2.48.1
+

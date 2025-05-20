@@ -15,9 +15,9 @@ index 434f65cca56..027711da118 100644
 --- a/dlls/ntdll/unix/file.c
 +++ b/dlls/ntdll/unix/file.c
 @@ -121,6 +121,8 @@
+ #include "wine/list.h"
  #include "wine/debug.h"
  #include "unix_private.h"
- #include "ddk/ntifs.h"
 +#include "fsync.h"
 +#include "esync.h"
  

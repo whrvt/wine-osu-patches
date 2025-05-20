@@ -19,7 +19,7 @@ Subject: [PATCH] cursor clip hack
  12 files changed, 73 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
-index ea0d7efe74b..0dc50132084 100644
+index 33baed3dc23..b9e00d78cbf 100644
 --- a/dlls/win32u/class.c
 +++ b/dlls/win32u/class.c
 @@ -85,6 +85,8 @@ static struct list class_list = LIST_INIT( class_list );
@@ -31,14 +31,14 @@ index ea0d7efe74b..0dc50132084 100644
  /* find an existing winproc for a given function and type */
  /* FIXME: probably should do something more clever than a linear search */
  static WINDOWPROC *find_winproc( WNDPROC func, BOOL ansi )
-@@ -248,6 +250,7 @@ DLGPROC get_dialog_proc( DLGPROC ret, BOOL ansi )
- 
- static void init_user(void)
+@@ -248,6 +250,7 @@ static void init_user(void)
  {
+     NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
+ 
 +    cursor_clip_hack = use_cursor_clip_hack();
+     shared_session_init();
      gdi_init();
      sysparams_init();
-     winstation_init();
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
 index d94f0da56a0..12802e99af7 100644
 --- a/dlls/win32u/input.c
@@ -79,14 +79,14 @@ diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
 index 68117bef6c3..d480b54aafa 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
-@@ -110,6 +110,7 @@ extern BOOL get_clip_cursor( RECT *rect, UINT dpi, MONITOR_DPI_TYPE type );
- extern BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset );
- extern BOOL clip_fullscreen_window( HWND hwnd, BOOL reset );
- extern USHORT map_scan_to_kbd_vkey( USHORT scan, HKL layout );
+@@ -88,6 +88,7 @@ extern void unregister_imm_window( HWND hwnd );
+ /* input.c */
+ extern BOOL grab_pointer;
+ extern BOOL grab_fullscreen;
 +extern BOOL cursor_clip_hack;
- 
- /* menu.c */
- extern HMENU create_menu( BOOL is_popup );
+ extern HWND get_active_window(void);
+ extern HWND get_capture(void);
+ extern BOOL get_cursor_pos( POINT *pt );
 @@ -417,4 +418,22 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
      return !IsRectEmpty( dst );
  }
@@ -200,9 +200,9 @@ index 5c5bb8f0602..f63a41c7f41 100644
 +    if (!once++ && cursor_clip_hack)
 +         MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_ENABLE_ABS_TABLET_HACK=0 to disable.\n");
 +
-     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI
-      * there is no way to query it, so we have to store it here.
-      */
+     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI there is no way to query it. */
+     gl->swap_interval = INT_MIN;
+     gl->format = format;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
 index f7c012f7a0d..f3ca4486816 100644
 --- a/dlls/winex11.drv/window.c

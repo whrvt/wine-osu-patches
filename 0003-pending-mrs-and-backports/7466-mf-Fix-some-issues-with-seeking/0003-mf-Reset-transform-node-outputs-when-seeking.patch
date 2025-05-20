@@ -1,0 +1,33 @@
+From 66f19c21c2c412cfdb0408cb16675a52ba36215d Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Mon, 3 Mar 2025 12:27:18 +1000
+Subject: [PATCH] mf: Reset transform node outputs when seeking.
+
+---
+ dlls/mf/session.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/dlls/mf/session.c b/dlls/mf/session.c
+index 876dd6eb95c..7e68c89212e 100644
+--- a/dlls/mf/session.c
++++ b/dlls/mf/session.c
+@@ -1081,6 +1081,16 @@ static void session_reset_transforms(struct media_session *session, BOOL drop)
+             if (drop)
+                 transform_stream_drop_events(stream);
+         }
++
++        if (!drop)
++            continue;
++
++        for (i = 0; i < topo_node->u.transform.output_count; ++i)
++        {
++            struct transform_stream *stream = &topo_node->u.transform.outputs[i];
++            transform_stream_drop_events(stream);
++            stream->requests = 0;
++        }
+     }
+ }
+ 
+-- 
+GitLab
+

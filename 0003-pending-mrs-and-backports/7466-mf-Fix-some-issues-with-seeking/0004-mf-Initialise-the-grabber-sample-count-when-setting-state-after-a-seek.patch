@@ -1,0 +1,30 @@
+From 623fa553c480500316f1d6da07a3704b31a7f5f0 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Fri, 28 Feb 2025 14:03:34 +1000
+Subject: [PATCH] mf: Initialise the grabber sample count when setting state
+ after a seek.
+
+If sample_count is zero in this case, we end up with no samples being
+requested.
+---
+ dlls/mf/samplegrabber.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/dlls/mf/samplegrabber.c b/dlls/mf/samplegrabber.c
+index de599139736..4d54afc1d31 100644
+--- a/dlls/mf/samplegrabber.c
++++ b/dlls/mf/samplegrabber.c
+@@ -1195,6 +1195,10 @@ static HRESULT sample_grabber_set_state(struct sample_grabber *grabber, enum sin
+ 
+             if (state == SINK_STATE_RUNNING && grabber->state != SINK_STATE_RUNNING)
+             {
++                /* Unpause at a position is a seek operation which drops everything pending. */
++                if (grabber->state == SINK_STATE_PAUSED && offset != PRESENTATION_CURRENT_POSITION)
++                    grabber->sample_count = MAX_SAMPLE_QUEUE_LENGTH;
++
+                 /* Every transition to running state sends a bunch requests to build up initial queue. */
+                 for (i = 0; i < grabber->sample_count; ++i)
+                 {
+-- 
+GitLab
+

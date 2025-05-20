@@ -1,0 +1,83 @@
+From 2c381c6176ff88f51ca9065b8458b9bb3ebc0dba Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 19 May 2025 10:22:58 +0200
+Subject: [PATCH] winex11: Trace more window change request serials.
+
+---
+ dlls/winex11.drv/window.c | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 7fd1151bdff..c6ef4ab7d9d 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -506,6 +506,8 @@ static void sync_window_style( struct x11drv_win_data *data )
+         XSetWindowAttributes attr;
+         int mask = get_window_attributes( data, &attr );
+ 
++        TRACE( "window %p/%lx changing attributes mask %#x, serial %lu\n", data->hwnd,
++               data->whole_window, mask, NextRequest( data->display ) );
+         XChangeWindowAttributes( data->display, data->whole_window, mask, &attr );
+         x11drv_xinput2_enable( data->display, data->whole_window );
+     }
+@@ -893,6 +895,9 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
+             size_hints->flags |= PMinSize | PMaxSize;
+         }
+     }
++
++    TRACE( "window %p/%lx requesting WM_NORMAL_HINTS flags %#lx, serial %lu\n", data->hwnd,
++           data->whole_window, size_hints->flags, NextRequest( data->display ) );
+     XSetWMNormalHints( data->display, data->whole_window, size_hints );
+     XFree( size_hints );
+ }
+@@ -935,8 +940,8 @@ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_sty
+         }
+     }
+ 
+-    TRACE( "%p setting mwm hints to %lx,%lx (style %x exstyle %x)\n",
+-           data->hwnd, mwm_hints.decorations, mwm_hints.functions, style, ex_style );
++    TRACE( "window %p/%lx requesting _MOTIF_WM_HINTS %#lx,%#lx (style %#x ex_style %#x) serial %lu\n", data->hwnd,
++           data->whole_window, mwm_hints.decorations, mwm_hints.functions, style, ex_style, NextRequest( data->display ) );
+ 
+     mwm_hints.flags = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS;
+     mwm_hints.input_mode = 0;
+@@ -979,6 +984,8 @@ static void set_style_hints( struct x11drv_win_data *data, DWORD style, DWORD ex
+     else
+         window_type = x11drv_atom(_NET_WM_WINDOW_TYPE_NORMAL);
+ 
++    TRACE( "window %p/%lx requesting _NET_WM_WINDOW_TYPE %#lx, serial %lu\n", data->hwnd,
++           data->whole_window, window_type, NextRequest( data->display ) );
+     XChangeProperty(data->display, data->whole_window, x11drv_atom(_NET_WM_WINDOW_TYPE),
+ 		    XA_ATOM, 32, PropModeReplace, (unsigned char*)&window_type, 1);
+ 
+@@ -994,16 +1001,27 @@ static void set_style_hints( struct x11drv_win_data *data, DWORD style, DWORD ex
+             wm_hints->icon_mask = data->icon_mask;
+             wm_hints->flags |= IconPixmapHint | IconMaskHint;
+         }
++
++        TRACE( "window %p/%lx requesting WM_HINTS flags %#lx, serial %lu\n", data->hwnd,
++               data->whole_window, wm_hints->flags, NextRequest( data->display ) );
+         XSetWMHints( data->display, data->whole_window, wm_hints );
+         XFree( wm_hints );
+     }
+ 
+     if (data->icon_bits)
++    {
++        TRACE( "window %p/%lx requesting _NET_WM_ICON, serial %lu\n", data->hwnd,
++               data->whole_window, NextRequest( data->display ) );
+         XChangeProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_ICON),
+                          XA_CARDINAL, 32, PropModeReplace,
+                          (unsigned char *)data->icon_bits, data->icon_size );
++    }
+     else
++    {
++        TRACE( "window %p/%lx deleting _NET_WM_ICON, serial %lu\n", data->hwnd,
++               data->whole_window, NextRequest( data->display ) );
+         XDeleteProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_ICON) );
++    }
+ 
+ }
+ 
+-- 
+GitLab
+

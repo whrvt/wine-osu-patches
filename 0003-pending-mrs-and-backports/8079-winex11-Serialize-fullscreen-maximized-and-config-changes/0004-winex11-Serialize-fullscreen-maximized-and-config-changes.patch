@@ -1,0 +1,83 @@
+From a4f901223bc8d376bc5d5a2dcf548401f7860088 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 19 May 2025 11:47:53 +0200
+Subject: [PATCH] winex11: Serialize fullscreen/maximized and config changes.
+
+---
+ dlls/winex11.drv/window.c | 36 +++++++++++++++++++++++++++++-------
+ 1 file changed, 29 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 7db2acd2d3a..f957d9b84f3 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1194,6 +1194,24 @@ static void update_net_wm_fullscreen_monitors( struct x11drv_win_data *data )
+     }
+ }
+ 
++/* bits that can trigger spurious ConfigureNotify events */
++static const UINT config_notify_mask = (1 << NET_WM_STATE_MAXIMIZED) | (1 << NET_WM_STATE_FULLSCREEN) |
++                                       (1 << NET_WM_STATE_ABOVE);
++
++static BOOL window_needs_net_wm_state_change_delay( struct x11drv_win_data *data )
++{
++    if (data->pending_state.wm_state != NormalState || !data->configure_serial) return FALSE;
++    /* delay any new _NET_WM_STATE request which might trigger a ConfigureNotify when a config change is pending */
++    return (data->desired_state.net_wm_state ^ data->pending_state.net_wm_state) & config_notify_mask;
++}
++
++static BOOL window_needs_config_change_delay( struct x11drv_win_data *data )
++{
++    if (data->pending_state.wm_state != NormalState || !data->net_wm_state_serial) return FALSE;
++    /* delay any config request when a _NET_WM_STATE change that can trigger a ConfigureNotify is in flight */
++    return (data->pending_state.net_wm_state ^ data->current_state.net_wm_state) & config_notify_mask;
++}
++
+ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_state )
+ {
+     UINT i, count, old_state = data->pending_state.net_wm_state;
+@@ -1205,6 +1223,13 @@ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_stat
+     /* we ignore and override previous _NET_WM_STATE update requests */
+     if (old_state == new_state) return; /* states are the same, nothing to update */
+ 
++    if (window_needs_net_wm_state_change_delay( data ))
++    {
++        /* another maximized/fullscreen NET_WM_STATE update is pending, wait for it to complete as we might have delayed our config request */
++        WARN( "window %p/%lx is updating config, delaying request\n", data->hwnd, data->whole_window );
++        return;
++    }
++
+     if (data->pending_state.wm_state == IconicState) return; /* window is iconic, don't update its state now */
+     if (data->pending_state.wm_state == WithdrawnState)  /* set the _NET_WM_STATE atom directly */
+     {
+@@ -1263,7 +1288,6 @@ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_stat
+ 
+ static void window_set_config( struct x11drv_win_data *data, const RECT *new_rect, BOOL above )
+ {
+-    static const UINT fullscreen_mask = (1 << NET_WM_STATE_MAXIMIZED) | (1 << NET_WM_STATE_FULLSCREEN);
+     UINT style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE ), mask = 0;
+     const RECT *old_rect = &data->pending_state.rect;
+     XWindowChanges changes;
+@@ -1272,15 +1296,13 @@ static void window_set_config( struct x11drv_win_data *data, const RECT *new_rec
+     if (!data->whole_window) return; /* no window, nothing to update */
+     if (EqualRect( old_rect, new_rect ) && !above) return; /* rects are the same, no need to be raised, nothing to update */
+ 
+-    if (data->pending_state.wm_state == NormalState && data->net_wm_state_serial &&
+-        !(data->pending_state.net_wm_state & fullscreen_mask) &&
+-        (data->current_state.net_wm_state & fullscreen_mask))
++    if (window_needs_config_change_delay( data ))
+     {
+         /* Some window managers are sending a ConfigureNotify event with the fullscreen size when
+-         * exiting a fullscreen window, with a serial that we cannot predict. Handling that event
+-         * will override the Win32 window size and make the window fullscreen again.
++         * entering/exiting a maximized/fullscreen window, with a serial that we cannot predict.
++         * Handling that event will override the Win32 window size and make the window fullscreen again.
+          */
+-        WARN( "window %p/%lx is exiting maximize/fullscreen, delaying request\n", data->hwnd, data->whole_window );
++        WARN( "window %p/%lx is updating unsafe _NET_WM_STATE, delaying request\n", data->hwnd, data->whole_window );
+         return;
+     }
+ 
+-- 
+GitLab
+
