@@ -1,0 +1,34 @@
+From e2af55917405f448152121cf43b36446d18ec135 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 26 Nov 2024 19:47:59 +0100
+Subject: [PATCH] winex11: Track pending_state.rect position / size
+ independently.
+
+---
+ dlls/winex11.drv/window.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index f957d9b84f3..42d6a468dac 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1336,10 +1336,14 @@ static void window_set_config( struct x11drv_win_data *data, const RECT *new_rec
+         mask |= CWStackMode;
+     }
+ 
+-    data->pending_state.rect = *new_rect;
++    if (mask & CWX) OffsetRect( &data->pending_state.rect, new_rect->left - old_rect->left, 0 );
++    if (mask & CWY) OffsetRect( &data->pending_state.rect, 0, new_rect->top - old_rect->top );
++    if (mask & CWWidth) data->pending_state.rect.right = data->pending_state.rect.left + new_rect->right - new_rect->left;
++    if (mask & CWHeight) data->pending_state.rect.bottom = data->pending_state.rect.top + new_rect->bottom - new_rect->top;
++
+     data->configure_serial = NextRequest( data->display );
+     TRACE( "window %p/%lx, requesting config %s mask %#x above %u, serial %lu\n", data->hwnd, data->whole_window,
+-           wine_dbgstr_rect(new_rect), mask, above, data->configure_serial );
++           wine_dbgstr_rect(&data->pending_state.rect), mask, above, data->configure_serial );
+     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
+ }
+ 
+-- 
+GitLab
+

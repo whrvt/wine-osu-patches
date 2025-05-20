@@ -1,0 +1,200 @@
+From beb04d14b5769e065cd6db1fea2620965b805e2a Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 20 May 2025 11:31:09 -0700
+Subject: [PATCH] LTO fixup
+
+Co-authored-by: Stelios Tsampas <loathingkernel@gmail.com>
+---
+ dlls/ntdll/unix/signal_arm.c    |  2 +-
+ dlls/ntdll/unix/signal_arm64.c  |  2 +-
+ dlls/ntdll/unix/signal_i386.c   |  2 +-
+ dlls/ntdll/unix/signal_x86_64.c |  2 +-
+ loader/preloader.c              | 13 +++++++++----
+ tools/makedep.c                 | 24 ++++++++++++++++++++++++
+ 6 files changed, 37 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_arm.c b/dlls/ntdll/unix/signal_arm.c
+index c294753f9f6..c736d8965e9 100644
+--- a/dlls/ntdll/unix/signal_arm.c
++++ b/dlls/ntdll/unix/signal_arm.c
+@@ -1112,7 +1112,7 @@ void signal_init_process(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++void __attribute__((retain,used)) init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct arm_thread_data *thread_data = (struct arm_thread_data *)&teb->GdiTebBatch;
+     struct syscall_frame *frame = thread_data->syscall_frame;
+diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
+index f64ab7399ca..ff09dc6cb4b 100644
+--- a/dlls/ntdll/unix/signal_arm64.c
++++ b/dlls/ntdll/unix/signal_arm64.c
+@@ -1436,7 +1436,7 @@ void syscall_dispatcher_return_slowpath(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++void __attribute__((retain,used)) init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct arm64_thread_data *thread_data = (struct arm64_thread_data *)&teb->GdiTebBatch;
+     struct syscall_frame *frame = thread_data->syscall_frame;
+diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
+index ef7d484281b..332f0aaa8bb 100644
+--- a/dlls/ntdll/unix/signal_i386.c
++++ b/dlls/ntdll/unix/signal_i386.c
+@@ -2491,7 +2491,7 @@ void signal_init_process(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++void __attribute__((retain,used)) init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
+     struct syscall_frame *frame = thread_data->syscall_frame;
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 011557e0fb0..d730c0cd8ae 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2787,7 +2787,7 @@ void signal_init_process(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++void __attribute__((retain,used)) init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct amd64_thread_data *thread_data = (struct amd64_thread_data *)&teb->GdiTebBatch;
+     struct syscall_frame *frame = thread_data->syscall_frame;
+diff --git a/loader/preloader.c b/loader/preloader.c
+index d0551bae63a..dc9218ff23f 100644
+--- a/loader/preloader.c
++++ b/loader/preloader.c
+@@ -89,7 +89,9 @@
+ #include "wine/asm.h"
+ #include "main.h"
+ 
++#if !defined(__LLD_LTO__)
+ #pragma GCC visibility push(hidden)
++#endif
+ 
+ /* ELF definitions */
+ #define ELF_PREFERRED_ADDRESS(loader, maplength, mapstartpref) (mapstartpref)
+@@ -181,6 +183,7 @@ void __bb_init_func(void) { return; }
+ 
+ static int thread_data[256];
+ 
++__attribute__((retain,used))
+ struct
+ {
+     /* this is the kernel modify_ldt struct */
+@@ -333,7 +336,7 @@ static inline int wld_prctl( int code, long arg )
+ 
+ #elif defined(__x86_64__)
+ 
+-void *thread_data[256];
++void __attribute__((retain,used)) *thread_data[256];
+ 
+ /*
+  * The _start function is the entry and exit point of this program
+@@ -422,7 +425,7 @@ SYSCALL_NOERR( wld_getegid, 108 /* SYS_getegid */ );
+ 
+ #elif defined(__aarch64__)
+ 
+-void *thread_data[256];
++void __attribute__((retain,used)) *thread_data[256];
+ 
+ /*
+  * The _start function is the entry and exit point of this program
+@@ -529,7 +532,7 @@ SYSCALL_NOERR( wld_getegid, 177 /* SYS_getegid */ );
+ 
+ #elif defined(__arm__)
+ 
+-void *thread_data[256];
++void __attribute__((retain,used)) *thread_data[256];
+ 
+ /*
+  * The _start function is the entry and exit point of this program
+@@ -1395,7 +1398,7 @@ static void set_process_name( int argc, char *argv[] )
+  *  Load the binary and then its ELF interpreter.
+  *  Note, we assume that the binary is a dynamically linked ELF shared object.
+  */
+-void* wld_start( void **stack )
++void* __attribute__((retain,used)) wld_start( void **stack )
+ {
+     long i, *pargc;
+     char **argv, **p;
+@@ -1521,6 +1524,8 @@ void* wld_start( void **stack )
+     return (void *)ld_so_map.l_entry;
+ }
+ 
++#if !defined(__LLD_LTO__)
+ #pragma GCC visibility pop
++#endif
+ 
+ #endif /* __linux__ */
+diff --git a/tools/makedep.c b/tools/makedep.c
+index 1073041f595..d88c9172806 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -473,6 +473,19 @@ static const char *get_base_name( const char *name )
+     return base;
+ }
+ 
++/*******************************************************************
++ *         replace_char
++ */
++char* replace_char(char* str, char find, char replace)
++{
++    char *current_pos;
++    current_pos = strchr(str, find);
++    while (current_pos) {
++        *current_pos = replace;
++        current_pos = strchr(current_pos + 1, find);
++    };
++    return str;
++}
+ 
+ /*******************************************************************
+  *         replace_filename
+@@ -3226,6 +3239,7 @@ static void output_source_one_arch( struct makefile *make, struct incl_file *sou
+                                     unsigned int arch )
+ {
+     const char *obj_name, *var_cc, *var_cflags;
++    char obj2[256] = {0};
+     struct compile_command *cmd;
+     struct strarray cflags = empty_strarray;
+ 
+@@ -3304,6 +3318,11 @@ static void output_source_one_arch( struct makefile *make, struct incl_file *sou
+     output_filenames( defines );
+     output_filenames( cflags );
+     output_filename( var_cflags );
++    strncpy( obj2, obj, sizeof( obj2 ) );
++    obj2[ sizeof( obj2 ) - 1] = '\0';
++    replace_char( obj2, '-', '_' );
++    replace_char( obj2, '.', '_' );
++    output_filename( arch_make_variable( strmake( "%s_CFLAGS", basename( obj2 ) ), arch ));
+     output( "\n" );
+ 
+     if (make->testdll && strendswith( source->name, ".c" ) &&
+@@ -3742,6 +3761,7 @@ static void output_programs( struct makefile *make )
+ {
+     unsigned int i, j;
+     unsigned int arch = 0;  /* programs are always native */
++    char program2[256] = {0};
+ 
+     for (i = 0; i < make->programs.count; i++)
+     {
+@@ -3767,6 +3787,10 @@ static void output_programs( struct makefile *make )
+         output_filenames_obj_dir( make, objs );
+         output_filenames( all_libs );
+         output_filename( "$(LDFLAGS)" );
++        strncpy( program2, program, sizeof( program2 ) );
++        program2[ sizeof( program2 ) - 1] = '\0';
++        replace_char( program2, '-', '_' );
++        output_filename( arch_make_variable( strmake( "%s_LDFLAGS", basename( program2 ) ), arch ));
+         output( "\n" );
+         strarray_add( &make->all_targets[arch], program );
+ 
+-- 
+2.49.0
+

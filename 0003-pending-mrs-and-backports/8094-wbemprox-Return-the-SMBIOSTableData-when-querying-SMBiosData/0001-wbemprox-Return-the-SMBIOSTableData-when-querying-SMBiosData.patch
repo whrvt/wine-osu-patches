@@ -1,0 +1,125 @@
+From ce41e71cb08ddf6db706a466fd0eda9e3dfd55da Mon Sep 17 00:00:00 2001
+From: Louis Lenders <xerox.xerox2000x@gmail.com>
+Date: Tue, 20 May 2025 08:09:52 +0200
+Subject: [PATCH] wbemprox: Return the SMBIOSTableData[] when querying
+ SMBiosData.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=58243
+
+v3: use the RawSMBIOSData.
+---
+ dlls/wbemprox/builtin.c     | 63 ++++++++++++++++++++++++++++++++-----
+ dlls/wbemprox/tests/query.c |  2 +-
+ 2 files changed, 57 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/wbemprox/builtin.c b/dlls/wbemprox/builtin.c
+index 9e5161755a3..1c68e5257ae 100644
+--- a/dlls/wbemprox/builtin.c
++++ b/dlls/wbemprox/builtin.c
+@@ -400,7 +400,7 @@ static const struct column col_quickfixengineering[] =
+ };
+ static const struct column col_rawsmbiostables[] =
+ {
+-    { L"SMBiosData", CIM_UINT8|CIM_FLAG_ARRAY },
++    { L"SMBiosData", CIM_UINT8|CIM_FLAG_ARRAY|COL_FLAG_DYNAMIC },
+ };
+ static const struct column col_service[] =
+ {
+@@ -1155,11 +1155,6 @@ static const struct record_physicalmedia data_physicalmedia[] =
+     { L"WINEHDISK", L"\\\\.\\PHYSICALDRIVE0" }
+ };
+ 
+-static const struct record_rawsmbiostables data_rawsmbiostables[] =
+-{
+-    { 0 },
+-};
+-
+ static const struct record_qualifier data_qualifier[] =
+ {
+     { L"__WIN32_PROCESS_GETOWNER_OUT", L"User", CIM_SINT32, FLAVOR_ID, L"ID", 0 },
+@@ -1660,6 +1655,60 @@ static enum fill_status fill_bios( struct table *table, const struct expr *cond
+     return status;
+ }
+ 
++typedef struct
++{
++    BYTE    Used20CallingMethod;
++    BYTE    MajorVersion;
++    BYTE    MinorVersion;
++    BYTE    Revision;
++    DWORD   Length;
++    BYTE    SMBIOSTableData[];
++} RawSMBIOSData;
++
++static struct array *get_rawbiosdata( char *buf, UINT len )
++{
++    struct array *ret;
++    UINT8 *ptr;
++
++    if (!(ret = malloc( sizeof(*ret) ))) return NULL;
++    if (!(ptr = malloc( len )))
++    {
++        free( ret );
++        return NULL;
++    }
++    memcpy( ptr, buf, len );
++    ret->elem_size = sizeof(*ptr);
++    ret->count     = len;
++    ret->ptr       = ptr;
++    return ret;
++}
++
++static enum fill_status fill_rawbiosdata( struct table *table, const struct expr *cond )
++{
++    struct record_rawsmbiostables *rec;
++    enum fill_status status = FILL_STATUS_UNFILTERED;
++    UINT row = 0, len;
++    RawSMBIOSData *buf;
++
++    if (!resize_table( table, 1, sizeof(*rec) )) return FILL_STATUS_FAILED;
++
++    len = GetSystemFirmwareTable( RSMB, 0, NULL, 0 );
++    if (!(buf = malloc( len ))) return FILL_STATUS_FAILED;
++    GetSystemFirmwareTable( RSMB, 0, buf, len );
++
++    rec = (struct record_rawsmbiostables *)table->data;
++    rec->smbiosdata = get_rawbiosdata( (char *)buf + FIELD_OFFSET( RawSMBIOSData, SMBIOSTableData ), buf->Length );
++
++    if (!match_row( table, row, cond, &status )) free_row_values( table, row );
++    else row++;
++
++    free( buf );
++
++    TRACE("created %u rows\n", row);
++    table->num_rows = row;
++    return status;
++}
++
+ static enum fill_status fill_cdromdrive( struct table *table, const struct expr *cond )
+ {
+     WCHAR drive[3], root[] = L"A:\\";
+@@ -4703,7 +4752,7 @@ static struct table cimv2_builtin_classes[] =
+ 
+ static struct table wmi_builtin_classes[] =
+ {
+-    { L"MSSMBios_RawSMBiosTables", C(col_rawsmbiostables), D(data_rawsmbiostables) },
++    { L"MSSMBios_RawSMBiosTables", C(col_rawsmbiostables), 0, 0, NULL, fill_rawbiosdata },
+ };
+ #undef C
+ #undef D
+diff --git a/dlls/wbemprox/tests/query.c b/dlls/wbemprox/tests/query.c
+index 7a6e0231316..a1686c3ec0f 100644
+--- a/dlls/wbemprox/tests/query.c
++++ b/dlls/wbemprox/tests/query.c
+@@ -2520,7 +2520,7 @@ static void test_MSSMBios_RawSMBiosTables( IWbemLocator *locator )
+     VariantInit( &val );
+     hr = IWbemClassObject_Get( obj, L"SMBiosData", 0, &val, &type, NULL );
+     ok( hr == S_OK, "got %#lx\n", hr );
+-    todo_wine ok( V_VT( &val ) == (VT_UI1 | VT_ARRAY), "got %#x\n", V_VT(&val) );
++    ok( V_VT( &val ) == (VT_UI1 | VT_ARRAY), "got %#x\n", V_VT(&val) );
+     ok( type == (CIM_UINT8 | CIM_FLAG_ARRAY), "got %#lx\n", type );
+ 
+     IWbemClassObject_Release( obj );
+-- 
+GitLab
+

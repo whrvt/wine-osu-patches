@@ -1,14 +1,14 @@
 From b1ac681f88154ef80c82d945746cc9c42be2fae2 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 26 Sep 2024 05:12:47 -0700
-Subject: [PATCH 4/8] winepulse: Specify the buffer to try memlocking.
+Subject: [PATCH 4/7] winepulse: Specify the buffer to try memlocking.
 
 ---
  dlls/winepulse.drv/pulse.c | 20 ++++++++++++++++----
  1 file changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index e4dcb65e233..9e54d88b5ad 100644
+index af231d307df..735d16bbdc3 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -202,11 +202,23 @@ static char *wstr_to_str(const WCHAR *wstr)
@@ -56,6 +56,5 @@ index e4dcb65e233..9e54d88b5ad 100644
  }
  
 -- 
-2.48.1
-
+2.49.0
 

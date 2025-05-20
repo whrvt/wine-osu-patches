@@ -1,14 +1,14 @@
 From a25882f3bcbb9b0f174dd45bd2d0866bf7c0f7a5 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:15:33 -0700
-Subject: [PATCH 2/8] winepulse: Don't unconditionally allocate a tmp buffer.
+Subject: [PATCH 2/7] winepulse: Don't unconditionally allocate a tmp buffer.
 
 ---
  dlls/winepulse.drv/pulse.c | 11 ++++++++---
  1 file changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 2674b913f78..252d7844803 100644
+index 34a22a3143d..ba0c42f1173 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -1196,9 +1196,14 @@ static NTSTATUS pulse_create_stream(void *args)
@@ -30,5 +30,5 @@ index 2674b913f78..252d7844803 100644
          else {
              WARN("Capture device support is unavailable with this version of wine.\n");
 -- 
-2.46.0
+2.49.0
 

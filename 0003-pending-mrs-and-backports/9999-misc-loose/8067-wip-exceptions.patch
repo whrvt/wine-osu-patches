@@ -1,0 +1,26 @@
+diff --git a/configure.ac b/configure.ac
+index 06da342bd4f..77ba9c644ab 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -558,6 +558,7 @@ This is an error since --enable-archs=$wine_arch was requested.])])
+     WINE_TRY_PE_CFLAGS([-Wabsolute-value])
+     WINE_TRY_PE_CFLAGS([-Wenum-enum-conversion],[:],WINE_TRY_PE_CFLAGS([-Wenum-conversion]))
+     WINE_TRY_PE_CFLAGS([-ffunction-sections])
++    WINE_TRY_PE_CFLAGS([-fasync-exceptions])
+ 
+     dnl clang had broken -fms-hotpatch support before version 18 (https://github.com/llvm/llvm-project/pull/77245)
+     WINE_TRY_PE_CFLAGS([-fms-hotpatch -DMIN_CLANG_VERSION=18],
+# superseded by 8096
+#diff --git a/dlls/ntdll/unwind.c b/dlls/ntdll/unwind.c
+#index c11bd9ddb9c..d39fe7d7b26 100644
+#--- a/dlls/ntdll/unwind.c
+#+++ b/dlls/ntdll/unwind.c
+#@@ -2261,7 +2261,7 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec, void *
+#             }
+#             TRACE( "unwinding to target %Ix\n", base + table->ScopeRecord[i].JumpTarget );
+#             RtlUnwindEx( frame, (char *)base + table->ScopeRecord[i].JumpTarget,
+#-                         rec, 0, dispatch->ContextRecord, dispatch->HistoryTable );
+#+                         rec, (void *)(UINT_PTR)rec->ExceptionCode, dispatch->ContextRecord, dispatch->HistoryTable );
+#         }
+#     }
+#     return ExceptionContinueSearch;

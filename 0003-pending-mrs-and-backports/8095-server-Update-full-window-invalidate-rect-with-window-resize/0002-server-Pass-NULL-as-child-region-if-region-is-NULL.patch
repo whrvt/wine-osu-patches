@@ -1,0 +1,25 @@
+From c268cc6690dff1fd26dea7b5c429d2faa9f83862 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 20 May 2025 11:35:50 +0200
+Subject: [PATCH] server: Pass NULL as child region if region is NULL.
+
+---
+ server/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/server/window.c b/server/window.c
+index 914d376a44a..473af1f1ff4 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -1688,7 +1688,7 @@ static void redraw_window( struct window *win, struct region *region, int frame,
+             if (rect_in_region( child_rgn, &child->window_rect ))
+             {
+                 offset_region( child_rgn, -child->client_rect.left, -child->client_rect.top );
+-                redraw_window( child, child_rgn, 1, flags );
++                redraw_window( child, region ? child_rgn : NULL, 1, flags );
+             }
+         }
+         free_region( child_rgn );
+-- 
+GitLab
+
