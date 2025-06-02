@@ -1,5 +1,5 @@
 diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
-index 4cf535e615d..fcd670d8757 100644
+index 8f5a076fc0f..cadbcbcad50 100644
 --- a/programs/wineboot/wineboot.c
 +++ b/programs/wineboot/wineboot.c
 @@ -84,6 +84,8 @@
@@ -11,9 +11,9 @@ index 4cf535e615d..fcd670d8757 100644
  extern BOOL shutdown_close_windows( BOOL force );
  extern BOOL shutdown_all_desktops( BOOL force );
  extern void kill_processes( BOOL kill_desktop );
-@@ -270,18 +272,100 @@ static void initialize_xstate_features(struct _KUSER_SHARED_DATA *data)
-     TRACE("xstate size %lu, compacted %d, optimized %d.\n", xstate->Size, xstate->CompactionEnabled, xstate->OptimizedSave);
- }
+@@ -196,18 +198,100 @@ static DWORD set_reg_value_dword( HKEY hkey, const WCHAR *name, DWORD value )
+ 
+ #if defined(__i386__) || defined(__x86_64__)
  
 +static UINT64 read_tsc_frequency( BOOL has_rdtscp )
 +{
@@ -118,7 +118,7 @@ index 4cf535e615d..fcd670d8757 100644
                            GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, 0 );
      if (handle == INVALID_HANDLE_VALUE) return TRUE;
  
-@@ -292,33 +376,34 @@ static BOOL is_tsc_trusted_by_the_kernel(void)
+@@ -218,33 +302,34 @@ static BOOL is_tsc_trusted_by_the_kernel(void)
      return ret;
  }
  
@@ -163,7 +163,7 @@ index 4cf535e615d..fcd670d8757 100644
      }
  
      /* check for invariant tsc bit */
-@@ -326,50 +411,14 @@ static UINT64 read_tsc_frequency(void)
+@@ -252,53 +337,27 @@ static UINT64 read_tsc_frequency(void)
      if (!(regs[3] & (1 << 8)))
      {
          WARN( "Failed to compute TSC frequency, no invariant TSC.\n" );
@@ -203,23 +203,18 @@ index 4cf535e615d..fcd670d8757 100644
 -        error = llabs( (freq1 - freq0) * 1000000 / min( freq1, freq0 ) );
 -    }
 -    while (error > 500 && --retries);
--
++    *tsc_frequency = read_tsc_frequency( has_rdtscp );
++}
+ 
 -    if (!retries) WARN( "TSC frequency calibration failed, unstable TSC?\n" );
 -    else
 -    {
 -        freq = (freq0 + freq1) / 2;
 -        TRACE( "TSC frequency calibration complete, found %I64u Hz\n", freq );
 -    }
--
++#else
+ 
 -    return freq;
-+    *tsc_frequency = read_tsc_frequency( has_rdtscp );
- }
- 
- #else
-@@ -378,6 +427,16 @@ static void initialize_xstate_features(struct _KUSER_SHARED_DATA *data)
- {
- }
- 
 +static void initialize_qpc_features( struct _KUSER_SHARED_DATA *data, UINT64 *tsc_frequency )
 +{
 +    data->QpcBypassEnabled = 0;
@@ -227,30 +222,31 @@ index 4cf535e615d..fcd670d8757 100644
 +    data->QpcShift = 0;
 +    data->QpcBias = 0;
 +    *tsc_frequency = 0;
-+}
-+
-+
+ }
+ 
+-#else
+ 
  static UINT64 read_tsc_frequency(void)
  {
-     return 0;
-@@ -385,7 +444,7 @@ static UINT64 read_tsc_frequency(void)
+@@ -307,7 +366,7 @@ static UINT64 read_tsc_frequency(void)
  
  #endif
  
 -static void create_user_shared_data(void)
 +static void create_user_shared_data( UINT64 *tsc_frequency )
  {
-     SYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION machines[8];
      struct _KUSER_SHARED_DATA *data;
-@@ -563,6 +622,7 @@ static void create_user_shared_data(void)
-     data->ActiveGroupCount = 1;
+     RTL_OSVERSIONINFOEXW version;
+@@ -341,6 +400,8 @@ static void create_user_shared_data(void)
+     data->SuiteMask                   = version.wSuiteMask;
+     wcscpy( data->NtSystemRoot, L"C:\\windows" );
  
-     initialize_xstate_features( data );
 +    initialize_qpc_features( data, tsc_frequency );
- 
++
      UnmapViewOfFile( data );
  }
-@@ -885,7 +944,7 @@ static void create_bios_processor_values( HKEY system_key, const char *buf, UINT
+ 
+@@ -775,7 +836,7 @@ static void create_bios_processor_values( HKEY system_key, const char *buf, UINT
  }
  
  /* create the volatile hardware registry keys */
@@ -259,15 +255,15 @@ index 4cf535e615d..fcd670d8757 100644
  {
      HKEY system_key, bios_key;
      UINT len;
-@@ -1812,6 +1871,7 @@ int __cdecl main( int argc, char *argv[] )
+@@ -1882,6 +1943,7 @@ int __cdecl main( int argc, char *argv[] )
      BOOL end_session, force, init, kill, restart, shutdown, update;
      HANDLE event;
      OBJECT_ATTRIBUTES attr;
 +    UINT64 tsc_frequency = 0;
      UNICODE_STRING nameW = RTL_CONSTANT_STRING( L"\\KernelObjects\\__wineboot_event" );
+     HANDLE process = 0;
      BOOL is_wow64;
- 
-@@ -1897,8 +1957,8 @@ int __cdecl main( int argc, char *argv[] )
+@@ -1971,8 +2033,8 @@ int __cdecl main( int argc, char *argv[] )
  
      ResetEvent( event );  /* in case this is a restart */
  

@@ -1,7 +1,7 @@
-From bc39797e34783bb79b94eb34ec7432645b0da872 Mon Sep 17 00:00:00 2001
+From 3bc962e3ce5bbecd21fa4f9ff49d326e0728ce4e Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 21 Jan 2025 17:09:09 -0800
-Subject: [PATCH] ntdll/tests: Re-enable a previously crashing test.
+Subject: [PATCH 3/3] ntdll/tests: Re-enable a previously crashing test.
 
 See https://bugs.winehq.org/show_bug.cgi?id=51152 for the bug
 that led to commit 4e4847dd71a3c682356559a51705ccec93b2490e.
@@ -11,10 +11,10 @@ We can re-enable the %gs case now, as that no longer causes a crash.
  1 file changed, 4 insertions(+), 7 deletions(-)
 
 diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
-index f50d47917e8..13ef9b693bf 100644
+index 281cbb08865..0969897c12b 100644
 --- a/dlls/ntdll/tests/exception.c
 +++ b/dlls/ntdll/tests/exception.c
-@@ -2673,24 +2673,21 @@ static const struct exception
+@@ -2884,24 +2884,21 @@ static const struct exception
          /* It is observed that fs/gs base is reset
             on some CPUs when setting the segment value
             even to 0 (regardless of CPU spec
@@ -44,5 +44,5 @@ index f50d47917e8..13ef9b693bf 100644
  #endif
          0x58,       /* pop %rax */
 -- 
-GitLab
+2.49.0
 

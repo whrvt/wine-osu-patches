@@ -28,7 +28,7 @@ index 9f43085cd7d..fa38e5fde9e 100644
                     "call *(%eax,%edx,4)\n\t"
                     "leal 16(%esp),%esp\n\t"
 +                   "fldcw 0x40(%esp)\n\t"      /* restore x87 FPU CW */
-                    "testw $0xffff,2(%esp)\n\t" /* frame->restore_flags */
+                    "testl $0xffff,(%esp)\n\t"  /* frame->restore_flags */
                     "jnz " __ASM_LOCAL_LABEL("__wine_syscall_dispatcher_return") "\n\t"
                     "movl 0x08(%esp),%ecx\n\t"  /* frame->eip */
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c

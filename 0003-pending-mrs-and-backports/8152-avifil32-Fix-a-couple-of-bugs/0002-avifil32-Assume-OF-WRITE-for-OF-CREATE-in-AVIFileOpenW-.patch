@@ -1,0 +1,43 @@
+From 69e8301b9a283931ddb463b7c88659af891b812d Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 26 May 2025 15:27:34 -0600
+Subject: [PATCH] avifil32: Assume OF_WRITE for OF_CREATE in AVIFileOpenW().
+
+---
+ dlls/avifil32/api.c       | 3 +++
+ dlls/avifil32/tests/api.c | 5 ++---
+ 2 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/avifil32/api.c b/dlls/avifil32/api.c
+index fe0c163cf0a..f2ed1736882 100644
+--- a/dlls/avifil32/api.c
++++ b/dlls/avifil32/api.c
+@@ -260,6 +260,9 @@ HRESULT WINAPI AVIFileOpenW(PAVIFILE *ppfile, LPCWSTR szFile, UINT uMode,
+     return hr;
+   }
+ 
++  if (uMode & OF_CREATE)
++    uMode |= OF_WRITE;
++
+   hr = IPersistFile_Load(ppersist, szFile, uMode);
+   IPersistFile_Release(ppersist);
+   if (FAILED(hr)) {
+diff --git a/dlls/avifil32/tests/api.c b/dlls/avifil32/tests/api.c
+index 55838c92b1d..9efba25fd56 100644
+--- a/dlls/avifil32/tests/api.c
++++ b/dlls/avifil32/tests/api.c
+@@ -810,9 +810,8 @@ static void test_avifile_write(void)
+     hr = AVIFileOpenW(&avifile, fn, OF_CREATE, NULL);
+     ok(hr == S_OK, "got %#lx.\n", hr);
+     hr = AVIFileCreateStreamW(avifile, &stm, &si);
+-    todo_wine ok(hr == S_OK, "got %#lx.\n", hr);
+-    if (hr == S_OK)
+-        IAVIStream_Release(stm);
++    ok(hr == S_OK, "got %#lx.\n", hr);
++    IAVIStream_Release(stm);
+     IAVIFile_Release(avifile);
+     ret = DeleteFileW(fn);
+     ok(ret, "got error %lu.\n", GetLastError());
+-- 
+GitLab
+

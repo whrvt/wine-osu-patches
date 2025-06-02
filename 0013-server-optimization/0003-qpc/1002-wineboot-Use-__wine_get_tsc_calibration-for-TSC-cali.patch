@@ -84,9 +84,9 @@ index 11111111111..11111111111 100644
      struct _KUSER_SHARED_DATA *data;
      RTL_OSVERSIONINFOEXW version;
 @@ -620,7 +628,7 @@ static void create_user_shared_data( UINT64 *tsc_frequency )
-     data->ActiveGroupCount = 1;
+     data->SuiteMask                   = version.wSuiteMask;
+     wcscpy( data->NtSystemRoot, L"C:\\windows" );
  
-     initialize_xstate_features( data );
 -    initialize_qpc_features( data, tsc_frequency );
 +    initialize_qpc_features( data, tsc_frequency, tsc_offset );
  

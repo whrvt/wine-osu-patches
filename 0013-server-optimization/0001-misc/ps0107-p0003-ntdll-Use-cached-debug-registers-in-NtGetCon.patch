@@ -15,7 +15,7 @@ index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
 @@ -1004,10 +1004,15 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
-     struct syscall_frame *frame = x86_thread_data()->syscall_frame;
+     struct syscall_frame *frame = get_syscall_frame();
      DWORD needed_flags = context->ContextFlags & ~CONTEXT_i386;
      BOOL self = (handle == GetCurrentThread());
 +    BOOL use_cached_debug_regs = FALSE;
@@ -72,7 +72,7 @@ index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
 @@ -1065,9 +1065,14 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
-     struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
+     struct syscall_frame *frame = get_syscall_frame();
      DWORD needed_flags = context->ContextFlags & ~CONTEXT_AMD64;
      BOOL self = (handle == GetCurrentThread());
 +    BOOL use_cached_debug_regs = FALSE;
