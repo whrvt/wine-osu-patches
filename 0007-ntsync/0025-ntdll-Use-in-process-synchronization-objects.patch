@@ -886,9 +886,9 @@ index 8c335cd1efd..02988a868f2 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
 @@ -103,6 +103,7 @@ struct ntdll_thread_data
-     PRTL_THREAD_START_ROUTINE start;  /* thread entry point */
-     void              *param;         /* thread entry point parameter */
-     void              *jmp_buf;       /* setjmp buffer for exception handling */
+     PRTL_THREAD_START_ROUTINE start;         /* thread entry point */
+     void                     *param;         /* thread entry point parameter */
+     void                     *jmp_buf;       /* setjmp buffer for exception handling */
 +    int                linux_alert_obj; /* fd for the linux in-process alert event */
  };
  

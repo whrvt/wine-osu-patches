@@ -210,13 +210,13 @@ index 48bb596df99..0cef1f0d428 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
 @@ -94,6 +94,7 @@ struct ntdll_thread_data
-     void              *cpu_data[16];  /* reserved for CPU-specific data */
-     void              *kernel_stack;  /* stack for thread startup and kernel syscalls */
-     int                esync_apc_fd;  /* fd to wait on for user APCs */
-+    unsigned int       fsync_apc_idx;
-     int                request_fd;    /* fd for sending server requests */
-     int                reply_fd;      /* fd for receiving server replies */
-     int                wait_fd[2];    /* fd for sleeping server requests */
+     SYSTEM_SERVICE_TABLE     *syscall_table; /* 214/0370 syscall table */
+     struct syscall_frame     *syscall_frame; /* 218/0378 current syscall frame */
+     int                       esync_apc_fd;  /* fd to wait on for user APCs */
++    unsigned int              fsync_apc_idx;
+     int                       request_fd;    /* fd for sending server requests */
+     int                       reply_fd;      /* fd for receiving server replies */
+     int                       wait_fd[2];    /* fd for sleeping server requests */
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index 2309f936f66..5bcfe79dcd6 100644
 --- a/dlls/ntdll/unix/virtual.c

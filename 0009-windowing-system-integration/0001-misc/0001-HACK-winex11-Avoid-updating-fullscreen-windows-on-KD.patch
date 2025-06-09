@@ -1,0 +1,39 @@
+From 2a6dfcf6b6df65e2fe9e74f462f07e1eb1bc4afe Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 9 Jun 2025 23:41:30 +0200
+Subject: [PATCH] HACK: winex11: Avoid updating fullscreen windows on KDE
+
+When using custom resolutions (ex. 1760x1080) in a 1920x1080 window, after alt-tab
+the game's resolution resets to the window's on KDE. Returning before that happens is enough to fix it.
+
+Also fixes black screens on alt-tabs and weird behavior when going from windowed->fullscreen and vice-versa.
+---
+ dlls/winex11.drv/window.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index beb93d66251..c18c427cfdf 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1345,6 +1345,9 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
+     XWindowChanges changes;
+     RECT *new_rect = &rect;
+ 
++    /* osu! hack: avoid changes to the fullscreen window on KDE */
++    if (wm_is_kde(data->display) && data->is_fullscreen) return;
++
+     /* resizing a managed maximized window is not allowed */
+     if ((style & WS_MAXIMIZE) && data->managed)
+     {
+@@ -1361,7 +1364,7 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
+     data->desired_state.above = above;
+     if (!data->whole_window) return; /* no window, nothing to update */
+     if (EqualRect( old_rect, new_rect ) && (old_above || !above)) return; /* rects are the same, no need to be raised, nothing to update */
+-    if (window_needs_config_change_delay( data ))
++    if (window_needs_config_change_delay( data ) && !wm_is_kde(data->display)) /* osu! hack: fixes black screen on alt-tab on KDE*/
+     {
+         TRACE( "window %p/%lx is updating _NET_WM_STATE/_MOTIF_WM_HINTS, delaying request\n", data->hwnd, data->whole_window );
+         return;
+-- 
+2.49.0
+

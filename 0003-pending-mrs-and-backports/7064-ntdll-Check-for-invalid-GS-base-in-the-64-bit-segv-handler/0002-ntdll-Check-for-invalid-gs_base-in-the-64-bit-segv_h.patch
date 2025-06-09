@@ -1,7 +1,8 @@
-From 815407e8417ba14fd06135f76298cef1f3f61a1f Mon Sep 17 00:00:00 2001
+From 3b5cc7f09f192464da6e21d886835634dab1c38c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 22 Dec 2024 04:22:32 -0800
-Subject: [PATCH] ntdll: Check for invalid gs_base in the 64-bit segv_handler.
+Subject: [PATCH 2/3] ntdll: Check for invalid gs_base in the 64-bit
+ segv_handler.
 
 Adapted from check_invalid_gs in signal_i386.c. PE-side code can
 manipulate %gs and cause the next call to NtCurrentTeb to segfault, as
@@ -22,14 +23,14 @@ handle both architectures as well.
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57444
 ---
  dlls/ntdll/tests/exception.c    |   2 -
- dlls/ntdll/unix/signal_x86_64.c | 101 ++++++++++++++++++++++++++++++++
- 2 files changed, 101 insertions(+), 2 deletions(-)
+ dlls/ntdll/unix/signal_x86_64.c | 135 +++++++++++++++++++++++++++-----
+ 2 files changed, 117 insertions(+), 20 deletions(-)
 
 diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
-index 7745a762cb5..f50d47917e8 100644
+index 41f25cc6c8b..281cbb08865 100644
 --- a/dlls/ntdll/tests/exception.c
 +++ b/dlls/ntdll/tests/exception.c
-@@ -2711,14 +2711,12 @@ static const struct exception
+@@ -2922,14 +2922,12 @@ static const struct exception
      { { 0xb8, 0x01, 0x00, 0x00, 0x00,          /* mov $0x01, %eax */
          0xcd, 0x2d, 0xfa, 0xc3 },              /* int $0x2d; cli; ret */
        8, 0, STATUS_SUCCESS, 0 },
@@ -45,13 +46,32 @@ index 7745a762cb5..f50d47917e8 100644
  
  static int got_exception;
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index caa85249896..46c70adc83b 100644
+index 058e3976ef1..a3132087702 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -1967,6 +1967,102 @@ static BOOL handle_syscall_trap( ucontext_t *sigcontext, siginfo_t *siginfo )
+@@ -2007,6 +2007,118 @@ static BOOL handle_syscall_trap( ucontext_t *sigcontext, siginfo_t *siginfo )
  }
  
  
++#ifdef __APPLE__
++/**********************************************************************
++ *		mac_thread_gsbase
++ */
++static void *mac_thread_gsbase(void)
++{
++    struct thread_identifier_info tiinfo;
++    unsigned int info_count = THREAD_IDENTIFIER_INFO_COUNT;
++
++    mach_port_t self = mach_thread_self();
++    kern_return_t kr = thread_info(self, THREAD_IDENTIFIER_INFO, (thread_info_t) &tiinfo, &info_count);
++    mach_port_deallocate(mach_task_self(), self);
++
++    if (kr == KERN_SUCCESS) return (void*)tiinfo.thread_handle;
++    return NULL;
++}
++#endif
++
++
 +/***********************************************************************
 + *           check_invalid_gsbase
 + *
@@ -65,7 +85,7 @@ index caa85249896..46c70adc83b 100644
 +    ULONG_PTR cur_gsbase = 0;
 +
 +#ifdef __linux__
-+    if (syscall_flags & SYSCALL_HAVE_WRFSGSBASE)
++    if (user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE])
 +        __asm__ volatile ("rdgsbase %0" : "=r" (cur_gsbase));
 +    else
 +        arch_prctl( ARCH_GET_GS, &cur_gsbase );
@@ -74,7 +94,7 @@ index caa85249896..46c70adc83b 100644
 +#elif defined(__NetBSD__)
 +    sysarch( X86_64_GET_GSBASE, &cur_gsbase );
 +#elif defined(__APPLE__)
-+    cur_gsbase = (ULONG_PTR)teb->ThreadLocalStoragePointer;
++    cur_gsbase = (ULONG_PTR)mac_thread_gsbase();
 +#else
 +# error Please define getting %gs for your architecture
 +#endif
@@ -127,7 +147,7 @@ index caa85249896..46c70adc83b 100644
 +    TRACE( "gsbase %016lx teb %p at instr %p, fixing up\n", cur_gsbase, teb, instr );
 +
 +#ifdef __linux__
-+    if (syscall_flags & SYSCALL_HAVE_WRFSGSBASE)
++    if (user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE])
 +        __asm__ volatile ("wrgsbase %0" :: "r" (teb));
 +    else
 +        arch_prctl( ARCH_SET_GS, teb );
@@ -136,10 +156,7 @@ index caa85249896..46c70adc83b 100644
 +#elif defined(__NetBSD__)
 +    sysarch( X86_64_SET_GSBASE, &teb );
 +#elif defined(__APPLE__)
-+    __asm__ volatile ("movq %0,%%gs:%c1" :: "r" (teb->Tib.Self),
-+                      "n" (FIELD_OFFSET(TEB, Tib.Self)));
-+    __asm__ volatile ("movq %0,%%gs:%c1" :: "r" (teb->ThreadLocalStoragePointer),
-+                      "n" (FIELD_OFFSET(TEB, ThreadLocalStoragePointer)));
++    _thread_set_tsd_base((uint64_t)teb);
 +#else
 +# error Please define setting %gs for your architecture
 +#endif
@@ -151,7 +168,7 @@ index caa85249896..46c70adc83b 100644
  /**********************************************************************
   *		segv_handler
   *
-@@ -2025,6 +2121,11 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+@@ -2065,6 +2177,11 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
              /* send EXCEPTION_EXECUTE_FAULT only if data execution prevention is enabled */
              if (!(flags & MEM_EXECUTE_OPTION_DISABLE)) rec.ExceptionInformation[0] = EXCEPTION_READ_FAULT;
          }
@@ -163,6 +180,31 @@ index caa85249896..46c70adc83b 100644
          break;
      case TRAP_x86_ALIGNFLT:  /* Alignment check exception */
          if (EFL_sig(ucontext) & 0x00040000)
+@@ -2473,24 +2590,6 @@ void signal_free_thread( TEB *teb )
+     }
+ }
+ 
+-#ifdef __APPLE__
+-/**********************************************************************
+- *		mac_thread_gsbase
+- */
+-static void *mac_thread_gsbase(void)
+-{
+-    struct thread_identifier_info tiinfo;
+-    unsigned int info_count = THREAD_IDENTIFIER_INFO_COUNT;
+-
+-    mach_port_t self = mach_thread_self();
+-    kern_return_t kr = thread_info(self, THREAD_IDENTIFIER_INFO, (thread_info_t) &tiinfo, &info_count);
+-    mach_port_deallocate(mach_task_self(), self);
+-
+-    if (kr == KERN_SUCCESS) return (void*)tiinfo.thread_handle;
+-    return NULL;
+-}
+-#endif
+-
+ 
+ /**********************************************************************
+  *		signal_init_process
 -- 
-GitLab
+2.49.0
 
