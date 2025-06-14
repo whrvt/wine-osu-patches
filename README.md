@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-5063ab8a](https://gitlab.winehq.org/wine/wine/-/tree/5063ab8a805e77b9b9dfe5587fb38981923e422d)
+wine commit: [wine-88544655](https://gitlab.winehq.org/wine/wine/-/tree/885446556ce443b496e368b8f2c68807dcc7df0f)
 
-staging commit: [staging-df97d6c3](https://gitlab.winehq.org/wine/wine-staging/-/tree/df97d6c328104fe7197583818812be6b2f3475cc)
+staging commit: [staging-c37f9f50](https://gitlab.winehq.org/wine/wine-staging/-/tree/c37f9f50912bd801e217ba81d2512feb7386f0d1)
 
-Staging exclude flags: `-W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
+Staging exclude flags: `-W ntdll-ForceBottomUpAlloc -W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
 
 # Environment variables
 

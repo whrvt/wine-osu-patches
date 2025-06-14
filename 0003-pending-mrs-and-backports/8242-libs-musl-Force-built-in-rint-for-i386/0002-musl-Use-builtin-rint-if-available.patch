@@ -1,0 +1,32 @@
+From 42babe3b8527488b2f7a656643c64c0df0c0edab Mon Sep 17 00:00:00 2001
+From: Piotr Caban <piotr@codeweavers.com>
+Date: Sat, 14 Jun 2025 07:59:19 +0200
+Subject: [PATCH] musl: Use __builtin_rint if available.
+
+---
+ libs/musl/src/math/rint.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libs/musl/src/math/rint.c b/libs/musl/src/math/rint.c
+index b9e3cbb0ec2..61df07485b8 100644
+--- a/libs/musl/src/math/rint.c
++++ b/libs/musl/src/math/rint.c
+@@ -7,6 +7,9 @@ static const float_t toint = 1 / FLT_EPSILON;
+ 
+ double __cdecl rint(double x)
+ {
++#if defined(__GNUC__) || defined(__clang__)
++    return __builtin_rint(x);
++#else
+     union {double f; uint64_t i;} u = {x};
+     int e = (u.i >> 52 & 0x7ff) - 0x3ff;
+     int s = u.i>>63;
+@@ -49,4 +52,5 @@ double __cdecl rint(double x)
+     }
+ 
+     return z;
++#endif
+ }
+-- 
+GitLab
+

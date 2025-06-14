@@ -1,0 +1,174 @@
+From 3ef86fc0f197eb63d8472d1738db6bf9e46f6f04 Mon Sep 17 00:00:00 2001
+From: Piotr Caban <piotr@codeweavers.com>
+Date: Wed, 28 May 2025 21:29:11 +0200
+Subject: [PATCH] include: Add errlup.idl.
+
+Signed-off-by: Nikolay Sivov <nsivov@codeweavers.com>
+---
+ dlls/msdaps/usrmarshal.c | 45 ++++++++++++++++++++++++
+ include/Makefile.in      |  1 +
+ include/errlup.idl       | 74 ++++++++++++++++++++++++++++++++++++++++
+ include/oledb.idl        |  1 +
+ 4 files changed, 121 insertions(+)
+ create mode 100644 include/errlup.idl
+
+diff --git a/dlls/msdaps/usrmarshal.c b/dlls/msdaps/usrmarshal.c
+index 476008b53f9..80ae1305872 100644
+--- a/dlls/msdaps/usrmarshal.c
++++ b/dlls/msdaps/usrmarshal.c
+@@ -1856,3 +1856,48 @@ HRESULT __RPC_STUB IDBSchemaRowset_GetSchemas_Stub(IDBSchemaRowset* This, ULONG
+     FIXME("(%p)->(%p, %p, %p, %p): stub\n", This, pcSchemas, prgSchemas, prgRestrictionSupport, ppErrorInfoRem);
+     return E_NOTIMPL;
+ }
++
++HRESULT CALLBACK IErrorLookup_GetErrorDescription_Proxy(IErrorLookup* This, HRESULT hrError, DWORD dwLookupID,
++        DISPPARAMS *pdispparams, LCID lcid, BSTR *pbstrSource, BSTR *pbstrDescription)
++{
++    FIXME("(%p)->(%#lx, %#lx, %p, %#lx, %p, %p): stub\n", This, hrError, dwLookupID, pdispparams, lcid,
++            pbstrSource, pbstrDescription);
++    return E_NOTIMPL;
++}
++
++HRESULT __RPC_STUB IErrorLookup_GetErrorDescription_Stub(IErrorLookup* This, HRESULT hrError, DWORD dwLookupID,
++        DISPPARAMS *pdispparams, LCID lcid, BSTR *pbstrSource, BSTR *pbstrDescription, IErrorInfo **ppErrorInfoRem)
++{
++    FIXME("(%p)->(%#lx, %#lx, %p, %#lx, %p, %p, %p): stub\n", This, hrError, dwLookupID, pdispparams, lcid,
++            pbstrSource, pbstrDescription, ppErrorInfoRem);
++    return E_NOTIMPL;
++}
++
++HRESULT CALLBACK IErrorLookup_GetHelpInfo_Proxy(IErrorLookup* This, HRESULT hrError,
++        DWORD dwLookupID, LCID lcid, BSTR *pbstrHelpFile, DWORD *pdwHelpContext)
++{
++    FIXME("(%p)->(%#lx, %#lx, %#lx, %p, %p): stub\n", This, hrError, dwLookupID, lcid,
++            pbstrHelpFile, pdwHelpContext);
++    return E_NOTIMPL;
++}
++
++HRESULT __RPC_STUB IErrorLookup_GetHelpInfo_Stub(IErrorLookup* This, HRESULT hrError, DWORD dwLookupID,
++        LCID lcid, BSTR *pbstrHelpFile, DWORD *pdwHelpContext, IErrorInfo **ppErrorInfoRem)
++{
++    FIXME("(%p)->(%#lx, %#lx, %#lx, %p, %p, %p): stub\n", This, hrError, dwLookupID, lcid,
++            pbstrHelpFile, pdwHelpContext, ppErrorInfoRem);
++    return E_NOTIMPL;
++}
++
++HRESULT CALLBACK IErrorLookup_ReleaseErrors_Proxy(IErrorLookup* This, const DWORD dwDynamicErrorID)
++{
++    FIXME("(%p)->(%#lx): stub\n", This, dwDynamicErrorID);
++    return E_NOTIMPL;
++}
++
++HRESULT __RPC_STUB IErrorLookup_ReleaseErrors_Stub(IErrorLookup* This,
++        const DWORD dwDynamicErrorID, IErrorInfo **ppErrorInfoRem)
++{
++    FIXME("(%p)->(%#lx, %p): stub\n", This, dwDynamicErrorID, ppErrorInfoRem);
++    return E_NOTIMPL;
++}
+diff --git a/include/Makefile.in b/include/Makefile.in
+index 25c87c5e183..cfb80998387 100644
+--- a/include/Makefile.in
++++ b/include/Makefile.in
+@@ -312,6 +312,7 @@ SOURCES = \
+ 	dyngraph.idl \
+ 	endpointvolume.idl \
+ 	errhandlingapi.h \
++	errlup.idl \
+ 	errorrep.h \
+ 	errors.h \
+ 	errrec.idl \
+diff --git a/include/errlup.idl b/include/errlup.idl
+new file mode 100644
+index 00000000000..f1fca5b27bc
+--- /dev/null
++++ b/include/errlup.idl
+@@ -0,0 +1,74 @@
++/*
++ * Copyright (C) 2025 Piotr Caban
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#if 0
++#pragma makedep install
++#endif
++
++[
++    object,
++    uuid(0c733a66-2a1c-11ce-ade5-00aa0044773d),
++    pointer_default(unique)
++]
++interface IErrorLookup : IUnknown {
++    [local]
++    HRESULT GetErrorDescription(
++            [in] HRESULT hrError,
++            [in] DWORD dwLookupID,
++            [in] DISPPARAMS *pdispparams,
++            [in] LCID lcid,
++            [out] BSTR *pbstrSource,
++            [out] BSTR *pbstrDescription);
++
++    [call_as(GetErrorDescription)]
++    HRESULT RemoteGetErrorDescription(
++            [in] HRESULT hrError,
++            [in] DWORD dwLookupID,
++            [in] DISPPARAMS *pdispparams,
++            [in] LCID lcid,
++            [out] BSTR *pbstrSource,
++            [out] BSTR *pbstrDescription,
++            [out] IErrorInfo **ppErrorInfoRem);
++
++    [local]
++    HRESULT GetHelpInfo(
++            [in] HRESULT hrError,
++            [in] DWORD dwLookupID,
++            [in] LCID lcid,
++            [out] BSTR *pbstrHelpFile,
++            [out] DWORD *pdwHelpContext);
++
++    [call_as(GetHelpInfo)]
++    HRESULT RemoteGetHelpInfo(
++            [in] HRESULT hrError,
++            [in] DWORD dwLookupID,
++            [in] LCID lcid,
++            [out] BSTR *pbstrHelpFile,
++            [out] DWORD *pdwHelpContext,
++            [out] IErrorInfo **ppErrorInfoRem);
++
++    [local]
++    HRESULT ReleaseErrors(
++            [in] const DWORD dwDynamicErrorID);
++
++    [call_as(ReleaseErrors)]
++    HRESULT RemoteReleaseErrors(
++            [in] const DWORD dwDynamicErrorID,
++            [out] IErrorInfo **ppErrorInfoRem);
++
++}
+diff --git a/include/oledb.idl b/include/oledb.idl
+index 4677e3055a8..54fe572f2dc 100644
+--- a/include/oledb.idl
++++ b/include/oledb.idl
+@@ -75,6 +75,7 @@ typedef LONG_PTR DB_LRESERVE;
+ #include "binres.idl"
+ #include "crtrow.idl"
+ #include "errrec.idl"
++#include "errlup.idl"
+ #include "getdts.idl"
+ #include "cmdstrm.idl"
+ #include "cmdprp.idl"
+-- 
+GitLab
+

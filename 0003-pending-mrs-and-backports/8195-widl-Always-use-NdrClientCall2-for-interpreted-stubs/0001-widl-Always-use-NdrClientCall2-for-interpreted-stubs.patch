@@ -1,0 +1,32 @@
+From 847a261991ccb1486b27914a498c95040f86b578 Mon Sep 17 00:00:00 2001
+From: Nikolay Sivov <nsivov@codeweavers.com>
+Date: Tue, 3 Jun 2025 12:13:50 +0200
+Subject: [PATCH] widl: Always use NdrClientCall2() for interpreted stubs.
+
+NdrClientCall() should only be used in 32-bit mode when
+Oi or Oic stub optimizations are used. Currently our interpreted
+mode targets Oicf mode and other levels are not supported.
+
+Signed-off-by: Nikolay Sivov <nsivov@codeweavers.com>
+---
+ tools/widl/typegen.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/tools/widl/typegen.c b/tools/widl/typegen.c
+index 9567b2d5e4e..1db6ee5093b 100644
+--- a/tools/widl/typegen.c
++++ b/tools/widl/typegen.c
+@@ -5239,9 +5239,7 @@ void write_client_call_routine( FILE *file, const type_t *iface, const var_t *fu
+     }
+     else if (has_ret) print_file( file, 1, "%s", "CLIENT_CALL_RETURN _RetVal;\n\n" );
+ 
+-    len = fprintf( file, "    %s%s( ",
+-                   has_ret ? "_RetVal = " : "",
+-                   interpreted_mode ? "NdrClientCall2" : "NdrClientCall" );
++    len = fprintf( file, "    %sNdrClientCall2( ", has_ret ? "_RetVal = " : "" );
+     fprintf( file, "&%s_StubDesc,", prefix );
+     fprintf( file, "\n%*s&__MIDL_ProcFormatString.Format[%u]", len, "", proc_offset );
+     if (needs_params)
+-- 
+GitLab
+
