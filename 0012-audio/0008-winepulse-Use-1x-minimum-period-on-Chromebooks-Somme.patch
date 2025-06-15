@@ -1,0 +1,37 @@
+From f91e4aafb6026c92b183d2a47c2a13639121ae65 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 16 Jun 2025 02:47:17 +0200
+Subject: [PATCH] winepulse: Use 1x minimum period on Chromebooks (Sommelier)
+
+2x minimum period causes stuttering when playing on Chromebooks, probably due to its
+container shenanigans. Just default to 1x if Sommelier is detected.
+---
+ dlls/winepulse.drv/pulse.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 2e4a5420614..1b72ad22abf 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -792,8 +792,17 @@ static void pulse_probe_settings(int render, const char *pulse_name, WAVEFORMATE
+     if (stream)
+         pa_stream_unref(stream);
+ 
++    int multiply_period = 2; // Make the default period 2x the minimum
++    static int cached_sommelier = -1;
++    if (cached_sommelier == -1) {
++        cached_sommelier = getenv("SOMMELIER_GLAMOR") != NULL ? 1 : 0;
++    }
++
++    if (cached_sommelier)
++        multiply_period = 1; // Use 1x period on Chromebooks due to its shenanigans
++
+     if (length)
+-        *def_period = 2 * (*min_period = pa_bytes_to_usec(10 * length, &ss)); // make the default period 2x the minimum
++        *def_period = multiply_period * (*min_period = pa_bytes_to_usec(10 * length, &ss));
+ 
+     penv = getenv("STAGING_AUDIO_PERIOD");
+     if (penv && (periodval = atoi(penv)) >= 0) {
+-- 
+2.49.0
+

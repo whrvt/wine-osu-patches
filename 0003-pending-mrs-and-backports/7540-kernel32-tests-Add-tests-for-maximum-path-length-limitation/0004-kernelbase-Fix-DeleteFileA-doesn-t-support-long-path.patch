@@ -1,0 +1,99 @@
+From 3e6b42ad39437aca0f88eeb023e4b1bd4d79b362 Mon Sep 17 00:00:00 2001
+From: yaoyongjie <yaoyongjie@uniontech.com>
+Date: Tue, 11 Mar 2025 18:01:16 +0800
+Subject: [PATCH] kernelbase: Fix DeleteFileA doesn't support long path.
+
+If alloc is FALSE, file_name_AtoW will uses the TEB static buffer,
+but the buffer size is MAX_PATH+1 . If DeleteFileA
+is to support long paths prefixed with "\\\\?\\", alloc must be set to TRUE.
+---
+ dlls/kernel32/tests/file.c | 17 +++++++++--------
+ dlls/kernelbase/file.c     |  7 +++++--
+ 2 files changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/dlls/kernel32/tests/file.c b/dlls/kernel32/tests/file.c
+index 5d9f3aa4290..914e46d96f4 100644
+--- a/dlls/kernel32/tests/file.c
++++ b/dlls/kernel32/tests/file.c
+@@ -1432,9 +1432,9 @@ static void test_CopyFileEx(void)
+         retok = CopyFileExA(long_path_1, long_path_2, NULL, NULL, NULL, 0);
+         ok(retok, "Expected CopyFileExA succeeded, but got %ld, copy %s -> %s\n", GetLastError(), long_path_1, long_path_2);
+         retok = DeleteFileA(long_path_1);
+-        todo_wine ok(retok, "DeleteFileA failed: %ld, %s\n", GetLastError(), long_path_1);
++        ok(retok, "DeleteFileA failed: %ld, %s\n", GetLastError(), long_path_1);
+         retok = DeleteFileA(long_path_2);
+-        todo_wine ok(retok, "DeleteFileA failed: %ld, %s\n", GetLastError(), long_path_2);
++        ok(retok, "DeleteFileA failed: %ld, %s\n", GetLastError(), long_path_2);
+     }
+     else
+     {
+@@ -1449,9 +1449,9 @@ static void test_CopyFileEx(void)
+         retok = CopyFileExA(long_path_1, long_path_2, NULL, NULL, NULL, 0);
+         ok(!retok && GetLastError() == ERROR_PATH_NOT_FOUND, "Expected CopyFileExA failed with ERROR_PATH_NOT_FOUND, but got %ld, copy %s -> %s\n", GetLastError(), long_path_1, long_path_2);
+         retok = DeleteFileA(long_path_1);
+-        todo_wine ok(!retok, "Unexpected DeleteFileA successed\n");
++        ok(!retok, "Unexpected DeleteFileA successed\n");
+         retok = DeleteFileA(long_path_2);
+-        todo_wine ok(!retok, "Unexpected DeleteFileA successed\n");
++        ok(!retok, "Unexpected DeleteFileA successed\n");
+     }
+ 
+     /* test long file name prepend "\\?\" */
+@@ -1467,16 +1467,17 @@ static void test_CopyFileEx(void)
+     SetLastError(0xdeadbeef);
+     retok = CopyFileExA(long_path_1, long_path_2, NULL, NULL, NULL, 0);
+     ok(retok, "CopyFileExA failed, got %ld, copy %s -> %s failed\n", GetLastError(), long_path_1, long_path_2);
++
+     if (is_enabled_long_path())
+     {
+         strcpy(long_path_1, temp_path);
+         strcat(long_path_1, a);
+         ret = DeleteFileA(long_path_1);
+-        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
++        ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
+         strcpy(long_path_2, temp_path);
+         strcat(long_path_2, b);
+         ret = DeleteFileA(long_path_2);
+-        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
++        ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
+     }
+     else
+     {
+@@ -1494,13 +1495,13 @@ static void test_CopyFileEx(void)
+         strcat(long_path_1, a);
+         SetLastError(0xdeadbeef);
+         ret = DeleteFileA(long_path_1);
+-        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
++        ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
+         strcpy(long_path_2, "\\\\?\\");
+         strcat(long_path_2, temp_path);
+         strcat(long_path_2, b);
+         SetLastError(0xdeadbeef);
+         ret = DeleteFileA(long_path_2);
+-        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
++        ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
+     }
+ 
+     ret = DeleteFileA(source);
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index f208d92c209..20b6c5dafac 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -1005,9 +1005,12 @@ BOOLEAN WINAPI /* DECLSPEC_HOTPATCH */ CreateSymbolicLinkW( LPCWSTR link, LPCWST
+ BOOL WINAPI DECLSPEC_HOTPATCH DeleteFileA( LPCSTR path )
+ {
+     WCHAR *pathW;
++    BOOL res;
+ 
+-    if (!(pathW = file_name_AtoW( path, FALSE ))) return FALSE;
+-    return DeleteFileW( pathW );
++    if (!(pathW = file_name_AtoW( path, TRUE ))) return FALSE;
++    res = DeleteFileW( pathW );
++    HeapFree( GetProcessHeap(), 0, pathW );
++    return res;
+ }
+ 
+ 
+-- 
+GitLab
+
