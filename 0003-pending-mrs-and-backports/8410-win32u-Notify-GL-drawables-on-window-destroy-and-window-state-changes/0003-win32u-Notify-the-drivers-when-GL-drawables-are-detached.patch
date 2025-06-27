@@ -1,0 +1,307 @@
+From 7a9516972acd20328646bf17cfed2be18a30980e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 23 Jun 2025 09:11:33 +0200
+Subject: [PATCH] win32u: Notify the drivers when GL drawables are detached.
+
+---
+ dlls/win32u/opengl.c              |  1 +
+ dlls/wineandroid.drv/opengl.c     |  6 ++++++
+ dlls/wineandroid.drv/window.c     |  2 --
+ dlls/winemac.drv/opengl.c         | 10 ++++++++++
+ dlls/winewayland.drv/opengl.c     | 27 +++++++++++++++------------
+ dlls/winewayland.drv/waylanddrv.h |  1 -
+ dlls/winewayland.drv/window.c     |  1 -
+ dlls/winex11.drv/opengl.c         | 29 +++++++++++++++++------------
+ dlls/winex11.drv/window.c         |  1 -
+ dlls/winex11.drv/x11drv.h         |  1 -
+ include/wine/opengl_driver.h      |  2 ++
+ 11 files changed, 51 insertions(+), 30 deletions(-)
+
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index b024937a2e0..8198fd25487 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -169,6 +169,7 @@ static struct list drawables = LIST_INIT( drawables );
+ /* drawables_lock must be held */
+ static void opengl_drawable_detach( struct opengl_drawable *drawable )
+ {
++    drawable->funcs->detach( drawable );
+     list_remove( &drawable->entry );
+     list_init( &drawable->entry );
+ }
+diff --git a/dlls/wineandroid.drv/opengl.c b/dlls/wineandroid.drv/opengl.c
+index 4637a04eec9..ff8f2a13027 100644
+--- a/dlls/wineandroid.drv/opengl.c
++++ b/dlls/wineandroid.drv/opengl.c
+@@ -108,6 +108,11 @@ static void android_drawable_destroy( struct opengl_drawable *base )
+     release_ioctl_window( gl->window );
+ }
+ 
++static void android_drawable_detach( struct opengl_drawable *base )
++{
++    TRACE( "%s\n", debugstr_opengl_drawable( base ) );
++}
++
+ void update_gl_drawable( HWND hwnd )
+ {
+     struct gl_drawable *old, *new;
+@@ -278,6 +283,7 @@ static struct opengl_driver_funcs android_driver_funcs =
+ static const struct opengl_drawable_funcs android_drawable_funcs =
+ {
+     .destroy = android_drawable_destroy,
++    .detach = android_drawable_detach,
+     .flush = android_drawable_flush,
+     .swap = android_drawable_swap,
+ };
+diff --git a/dlls/wineandroid.drv/window.c b/dlls/wineandroid.drv/window.c
+index c71778f32d4..d1017fd8764 100644
+--- a/dlls/wineandroid.drv/window.c
++++ b/dlls/wineandroid.drv/window.c
+@@ -984,8 +984,6 @@ void ANDROID_DestroyWindow( HWND hwnd )
+     struct android_win_data *data;
+ 
+     if (!(data = get_win_data( hwnd ))) return;
+-
+-    destroy_gl_drawable( hwnd );
+     free_win_data( data );
+ }
+ 
+diff --git a/dlls/winemac.drv/opengl.c b/dlls/winemac.drv/opengl.c
+index 9a28ec10b51..36cb0854acc 100644
+--- a/dlls/winemac.drv/opengl.c
++++ b/dlls/winemac.drv/opengl.c
+@@ -2074,6 +2074,10 @@ static void macdrv_glCopyPixels(GLint x, GLint y, GLsizei width, GLsizei height,
+         make_context_current(context, FALSE);
+ }
+ 
++static void macdrv_surface_detach(struct opengl_drawable *base)
++{
++    TRACE("%s\n", debugstr_opengl_drawable(base));
++}
+ 
+ static void macdrv_surface_flush(struct opengl_drawable *base, UINT flags)
+ {
+@@ -2374,6 +2378,10 @@ static void macdrv_pbuffer_destroy(struct opengl_drawable *base)
+     CGLReleasePBuffer(gl->pbuffer);
+ }
+ 
++static void macdrv_pbuffer_detach(struct opengl_drawable *base)
++{
++}
++
+ static void macdrv_pbuffer_flush(struct opengl_drawable *base, UINT flags)
+ {
+ }
+@@ -3021,6 +3029,7 @@ static const struct opengl_driver_funcs macdrv_driver_funcs =
+ static const struct opengl_drawable_funcs macdrv_surface_funcs =
+ {
+     .destroy = macdrv_surface_destroy,
++    .detach = macdrv_surface_detach,
+     .flush = macdrv_surface_flush,
+     .swap = macdrv_surface_swap,
+ };
+@@ -3028,6 +3037,7 @@ static const struct opengl_drawable_funcs macdrv_surface_funcs =
+ static const struct opengl_drawable_funcs macdrv_pbuffer_funcs =
+ {
+     .destroy = macdrv_pbuffer_destroy,
++    .detach = macdrv_pbuffer_detach,
+     .flush = macdrv_pbuffer_flush,
+     .swap = macdrv_pbuffer_swap,
+ };
+diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
+index ede1b5982fa..9c239faa340 100644
+--- a/dlls/winewayland.drv/opengl.c
++++ b/dlls/winewayland.drv/opengl.c
+@@ -144,6 +144,20 @@ static void wayland_drawable_destroy(struct opengl_drawable *base)
+     }
+ }
+ 
++static void wayland_drawable_detach(struct opengl_drawable *base)
++{
++    struct wayland_gl_drawable *gl = impl_from_opengl_drawable(base), *old;
++    HWND hwnd = base->hwnd;
++
++    TRACE("%s\n", debugstr_opengl_drawable(base));
++
++    pthread_mutex_lock(&gl_object_mutex);
++    if ((old = find_drawable(hwnd, 0)) && old == gl) list_remove(&gl->entry);
++    pthread_mutex_unlock(&gl_object_mutex);
++
++    if (gl) opengl_drawable_release(&gl->base);
++}
++
+ static inline BOOL is_onscreen_format(int format)
+ {
+     return format > 0 && format <= egl->config_count;
+@@ -477,6 +491,7 @@ static struct opengl_driver_funcs wayland_driver_funcs =
+ static const struct opengl_drawable_funcs wayland_drawable_funcs =
+ {
+     .destroy = wayland_drawable_destroy,
++    .detach = wayland_drawable_detach,
+     .flush = wayland_drawable_flush,
+     .swap = wayland_drawable_swap,
+ };
+@@ -505,14 +520,6 @@ UINT WAYLAND_OpenGLInit(UINT version, const struct opengl_funcs *opengl_funcs, c
+     return STATUS_SUCCESS;
+ }
+ 
+-/**********************************************************************
+- *           wayland_destroy_gl_drawable
+- */
+-void wayland_destroy_gl_drawable(HWND hwnd)
+-{
+-    wayland_update_gl_drawable(hwnd, NULL);
+-}
+-
+ /**********************************************************************
+  *           wayland_resize_gl_drawable
+  */
+@@ -534,10 +541,6 @@ UINT WAYLAND_OpenGLInit(UINT version, const struct opengl_funcs *opengl_funcs, c
+     return STATUS_NOT_IMPLEMENTED;
+ }
+ 
+-void wayland_destroy_gl_drawable(HWND hwnd)
+-{
+-}
+-
+ void wayland_resize_gl_drawable(HWND hwnd)
+ {
+ }
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index e0be6970b05..e31be8d294a 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -416,7 +416,6 @@ void wayland_data_device_init(void);
+  *          OpenGL
+  */
+ 
+-void wayland_destroy_gl_drawable(HWND hwnd);
+ void wayland_resize_gl_drawable(HWND hwnd);
+ 
+ /**********************************************************************
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index dbcbd90be00..8077767a26f 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -403,7 +403,6 @@ void WAYLAND_DestroyWindow(HWND hwnd)
+ 
+     if (!(data = wayland_win_data_get(hwnd))) return;
+     wayland_win_data_destroy(data);
+-    wayland_destroy_gl_drawable(hwnd);
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 37b93e1b5b0..d99a86a8f33 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -914,10 +914,10 @@ static BOOL x11drv_surface_create( HWND hwnd, HDC hdc, int format, struct opengl
+     TRACE( "Created drawable %s with client window %lx\n", debugstr_opengl_drawable( &gl->base ), gl->window );
+ 
+     pthread_mutex_lock( &context_mutex );
+-    if (!XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&prev ))
+-        opengl_drawable_release( &prev->base );
++    if (XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&prev )) prev = NULL;
+     XSaveContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char *)gl );
+     pthread_mutex_unlock( &context_mutex );
++    if (prev) opengl_drawable_release( &prev->base );
+ 
+     XFlush( gdi_display );
+ 
+@@ -1020,20 +1020,19 @@ void sync_gl_drawable( HWND hwnd )
+ }
+ 
+ 
+-/***********************************************************************
+- *              destroy_gl_drawable
+- */
+-void destroy_gl_drawable( HWND hwnd )
++static void x11drv_surface_detach( struct opengl_drawable *base )
+ {
+-    struct gl_drawable *gl;
++    struct gl_drawable *gl = impl_from_opengl_drawable( base ), *current;
++    HWND hwnd = base->hwnd;
++
++    TRACE( "%s\n", debugstr_opengl_drawable( base ) );
+ 
+     pthread_mutex_lock( &context_mutex );
+-    if (!XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&gl ))
+-    {
+-        XDeleteContext( gdi_display, (XID)hwnd, gl_hwnd_context );
+-        opengl_drawable_release( &gl->base );
+-    }
++    if (XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&current )) current = NULL;
++    else if (current == gl) XDeleteContext( gdi_display, (XID)hwnd, gl_hwnd_context );
+     pthread_mutex_unlock( &context_mutex );
++
++    if (current == gl) opengl_drawable_release( &current->base );
+ }
+ 
+ 
+@@ -1480,6 +1479,10 @@ static void x11drv_pbuffer_destroy( struct opengl_drawable *base )
+     if (gl->drawable) pglXDestroyPbuffer( gdi_display, gl->drawable );
+ }
+ 
++static void x11drv_pbuffer_detach( struct opengl_drawable *base )
++{
++}
++
+ static void x11drv_pbuffer_flush( struct opengl_drawable *base, UINT flags )
+ {
+ }
+@@ -1653,6 +1656,7 @@ static const struct opengl_driver_funcs x11drv_driver_funcs =
+ static const struct opengl_drawable_funcs x11drv_surface_funcs =
+ {
+     .destroy = x11drv_surface_destroy,
++    .detach = x11drv_surface_detach,
+     .flush = x11drv_surface_flush,
+     .swap = x11drv_surface_swap,
+ };
+@@ -1660,6 +1664,7 @@ static const struct opengl_drawable_funcs x11drv_surface_funcs =
+ static const struct opengl_drawable_funcs x11drv_pbuffer_funcs =
+ {
+     .destroy = x11drv_pbuffer_destroy,
++    .detach = x11drv_pbuffer_detach,
+     .flush = x11drv_pbuffer_flush,
+     .swap = x11drv_pbuffer_swap,
+ };
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 726478ff040..e68d8d9d552 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2551,7 +2551,6 @@ void X11DRV_DestroyWindow( HWND hwnd )
+     XDeleteContext( gdi_display, (XID)hwnd, win_data_context );
+     release_win_data( data );
+     free( data );
+-    destroy_gl_drawable( hwnd );
+ }
+ 
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 421d394de20..47a413974f5 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -682,7 +682,6 @@ extern Window X11DRV_get_whole_window( HWND hwnd );
+ extern Window get_dummy_parent(void);
+ 
+ extern void sync_gl_drawable( HWND hwnd );
+-extern void destroy_gl_drawable( HWND hwnd );
+ 
+ extern BOOL window_is_reparenting( HWND hwnd );
+ extern BOOL window_should_take_focus( HWND hwnd, Time time );
+diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
+index fbd7b82e4e5..6509daf3d0f 100644
+--- a/include/wine/opengl_driver.h
++++ b/include/wine/opengl_driver.h
+@@ -131,6 +131,8 @@ struct opengl_drawable;
+ struct opengl_drawable_funcs
+ {
+     void (*destroy)( struct opengl_drawable *iface );
++    /* detach the drawable from its window, called from window owner thread */
++    void (*detach)( struct opengl_drawable *drawable );
+     /* flush and update the drawable front buffer, called from render thread */
+     void (*flush)( struct opengl_drawable *iface, UINT flags );
+     /* swap and present the drawable buffers, called from render thread */
+-- 
+GitLab
+

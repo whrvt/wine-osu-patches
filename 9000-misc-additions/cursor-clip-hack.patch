@@ -191,10 +191,10 @@ diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
 index 5c5bb8f0602..f63a41c7f41 100644
 --- a/dlls/winex11.drv/opengl.c
 +++ b/dlls/winex11.drv/opengl.c
-@@ -1111,6 +1111,11 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+@@ -1111,6 +1111,11 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, int format )
+     NtUserGetClientRect( hwnd, &rect, NtUserGetDpiForWindow( hwnd ) );
  
-     if (!(gl = calloc( 1, sizeof(*gl) ))) return NULL;
- 
+     if (!(gl = opengl_drawable_create( sizeof(*gl), &x11drv_surface_funcs, format, hwnd, hdc ))) return FALSE;
 +    /* lazy to find somewhere else to put this so that it doesn't show up more than once */
 +    static unsigned int once;
 +    if (!once++ && cursor_clip_hack)
@@ -202,7 +202,7 @@ index 5c5bb8f0602..f63a41c7f41 100644
 +
      /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI there is no way to query it. */
      gl->swap_interval = INT_MIN;
-     gl->format = format;
+     gl->rect = rect;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
 index f7c012f7a0d..f3ca4486816 100644
 --- a/dlls/winex11.drv/window.c

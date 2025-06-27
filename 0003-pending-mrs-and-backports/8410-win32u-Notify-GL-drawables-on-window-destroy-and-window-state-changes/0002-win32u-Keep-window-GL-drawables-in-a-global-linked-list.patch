@@ -1,0 +1,123 @@
+From 4ea33df30e490a706093b34b20f6370b1e61f41c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 23 Jun 2025 09:11:33 +0200
+Subject: [PATCH] win32u: Keep window GL drawables in a global linked list.
+
+---
+ dlls/win32u/ntuser_private.h |  3 +++
+ dlls/win32u/opengl.c         | 37 ++++++++++++++++++++++++++++++++++++
+ dlls/win32u/window.c         |  2 ++
+ include/wine/opengl_driver.h |  1 +
+ 4 files changed, 43 insertions(+)
+
+diff --git a/dlls/win32u/ntuser_private.h b/dlls/win32u/ntuser_private.h
+index a3714cd8994..fc2d2947210 100644
+--- a/dlls/win32u/ntuser_private.h
++++ b/dlls/win32u/ntuser_private.h
+@@ -223,6 +223,9 @@ extern PFN_vkGetInstanceProcAddr p_vkGetInstanceProcAddr;
+ extern BOOL vulkan_init(void);
+ extern void vulkan_detach_surfaces( struct list *surfaces );
+ 
++/* opengl.c */
++extern void detach_opengl_drawables( HWND hwnd );
++
+ /* window.c */
+ HANDLE alloc_user_handle( void *ptr, unsigned short type );
+ void *free_user_handle( HANDLE handle, unsigned short type );
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index 7e0b2116111..b024937a2e0 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -163,6 +163,31 @@ static void register_extension( char *list, size_t size, const char *name )
+     }
+ }
+ 
++static pthread_mutex_t drawables_lock = PTHREAD_MUTEX_INITIALIZER;
++static struct list drawables = LIST_INIT( drawables );
++
++/* drawables_lock must be held */
++static void opengl_drawable_detach( struct opengl_drawable *drawable )
++{
++    list_remove( &drawable->entry );
++    list_init( &drawable->entry );
++}
++
++void detach_opengl_drawables( HWND hwnd )
++{
++    struct opengl_drawable *drawable, *next;
++
++    pthread_mutex_lock( &drawables_lock );
++
++    LIST_FOR_EACH_ENTRY_SAFE( drawable, next, &drawables, struct opengl_drawable, entry )
++    {
++        if (drawable->hwnd != hwnd) continue;
++        opengl_drawable_detach( drawable );
++    }
++
++    pthread_mutex_unlock( &drawables_lock );
++}
++
+ void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd, HDC hdc )
+ {
+     struct opengl_drawable *drawable;
+@@ -176,6 +201,14 @@ void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *fun
+     drawable->hwnd = hwnd;
+     drawable->hdc = hdc;
+ 
++    if (!hwnd) list_init( &drawable->entry ); /* pbuffer, keep it unlinked */
++    else
++    {
++        pthread_mutex_lock( &drawables_lock );
++        list_add_tail( &drawables, &drawable->entry );
++        pthread_mutex_unlock( &drawables_lock );
++    }
++
+     TRACE( "created %s\n", debugstr_opengl_drawable( drawable ) );
+     return drawable;
+ }
+@@ -193,6 +226,10 @@ void opengl_drawable_release( struct opengl_drawable *drawable )
+ 
+     if (!ref)
+     {
++        pthread_mutex_lock( &drawables_lock );
++        opengl_drawable_detach( drawable );
++        pthread_mutex_unlock( &drawables_lock );
++
+         drawable->funcs->destroy( drawable );
+         free( drawable );
+     }
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index a82462e44e4..f33b3c51e7f 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -5054,6 +5054,7 @@ LRESULT destroy_window( HWND hwnd )
+         window_surface_release( surface );
+     }
+ 
++    detach_opengl_drawables( hwnd );
+     vulkan_detach_surfaces( &vulkan_surfaces );
+     if (win->opengl_drawable) opengl_drawable_release( win->opengl_drawable );
+     user_driver->pDestroyWindow( hwnd );
+@@ -5211,6 +5212,7 @@ void destroy_thread_windows(void)
+         free_list = entry->next;
+         TRACE( "destroying %p\n", entry );
+ 
++        detach_opengl_drawables( entry->handle );
+         user_driver->pDestroyWindow( entry->handle );
+         if (entry->opengl_drawable) opengl_drawable_release( entry->opengl_drawable );
+ 
+diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
+index c319d93ce27..fbd7b82e4e5 100644
+--- a/include/wine/opengl_driver.h
++++ b/include/wine/opengl_driver.h
+@@ -150,6 +150,7 @@ struct opengl_drawable
+     int         interval;       /* last set surface swap interval */
+     HWND        hwnd;           /* window the drawable was created for */
+     HDC         hdc;            /* DC the drawable was created for */
++    struct list entry;          /* entry in win32u managed list */
+ };
+ 
+ static inline const char *debugstr_opengl_drawable( struct opengl_drawable *drawable )
+-- 
+GitLab
+

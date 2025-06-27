@@ -23,7 +23,7 @@ index 11111111111..11111111111 100644
 @@ -88,7 +89,8 @@ static const addon_info_t addons_info[] = {
          GECKO_SHA,
          "http://source.winehq.org/winegecko.php",
-         "MSHTML", "GeckoUrl", "GeckoCabDir",
+         L"MSHTML", L"GeckoUrl", L"GeckoCabDir",
 -        MAKEINTRESOURCEW(ID_DWL_GECKO_DIALOG)
 +        MAKEINTRESOURCEW(ID_DWL_GECKO_DIALOG),
 +        "WINE_GECKO_CACHE_DIR"
@@ -33,7 +33,7 @@ index 11111111111..11111111111 100644
 @@ -97,7 +99,8 @@ static const addon_info_t addons_info[] = {
          MONO_SHA,
          "http://source.winehq.org/winemono.php",
-         "Dotnet", "MonoUrl", "MonoCabDir",
+         L"Dotnet", L"MonoUrl", L"MonoCabDir",
 -        MAKEINTRESOURCEW(ID_DWL_MONO_DIALOG)
 +        MAKEINTRESOURCEW(ID_DWL_MONO_DIALOG),
 +        "WINE_MONO_CACHE_DIR"

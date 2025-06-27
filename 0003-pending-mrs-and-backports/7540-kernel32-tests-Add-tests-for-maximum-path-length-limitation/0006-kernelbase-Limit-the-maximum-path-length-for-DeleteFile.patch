@@ -1,0 +1,85 @@
+From 7272fe19126b2a33cd37e9007f37deb5ab820a4e Mon Sep 17 00:00:00 2001
+From: yaoyongjie <yaoyongjie@uniontech.com>
+Date: Wed, 12 Mar 2025 11:54:42 +0800
+Subject: [PATCH] kernelbase: Limit the maximum path length for DeleteFile.
+
+In DeleteFile functions, by default, the file name
+and path are limited to MAX_PATH characters. To extend this limit
+to 32,767 wide characters, need prepend "\\\\?\\" to the path.
+---
+ dlls/kernel32/tests/file.c | 12 ++++++------
+ dlls/kernelbase/file.c     |  6 ++++++
+ 2 files changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/kernel32/tests/file.c b/dlls/kernel32/tests/file.c
+index d841a5cbd17..d955ced842e 100644
+--- a/dlls/kernel32/tests/file.c
++++ b/dlls/kernel32/tests/file.c
+@@ -1068,9 +1068,9 @@ static void test_CopyFileW(void)
+         ok(!ret && GetLastError() == ERROR_PATH_NOT_FOUND, "Expected CopyFileExW failed with ERROR_PATH_NOT_FOUND, but got %ld, copy %s -> %s\n", GetLastError(), wine_dbgstr_w(long_path_1), wine_dbgstr_w(long_path_2));
+ 
+         ret = DeleteFileW(long_path_1);
+-        todo_wine ok(!ret, "Unexpected DeleteFileW successed\n");
++        ok(!ret, "Unexpected DeleteFileW successed\n");
+         ret = DeleteFileW(long_path_2);
+-        todo_wine ok(!ret, "Unexpected DeleteFileW successed\n");
++        ok(!ret, "Unexpected DeleteFileW successed\n");
+     }
+ 
+     /* test long file name prepend "\\?\" */
+@@ -2187,7 +2187,7 @@ static void test_DeleteFileA( void )
+         strcpy(long_path, temp_path);
+         strcat(long_path, a);
+         ret = DeleteFileA(long_path);
+-        todo_wine ok(!ret, "Unexpected DeleteFileA successed, %s\n", long_path);
++        ok(!ret, "Unexpected DeleteFileA successed, %s\n", long_path);
+     }
+ }
+ 
+@@ -2267,7 +2267,7 @@ static void test_DeleteFileW( void )
+         wcscpy(long_path, pathW);
+         wcscat(long_path, a);
+         ret = DeleteFileW(long_path);
+-        todo_wine ok(ret, "DeleteFileW: error %ld\n", GetLastError());
++        ok(ret, "DeleteFileW: error %ld\n", GetLastError());
+     }
+     else
+     {
+@@ -2276,7 +2276,7 @@ static void test_DeleteFileW( void )
+         wcscat(long_path, a);
+         SetLastError(0xdeadbeef);
+         ret = DeleteFileW(long_path);
+-        todo_wine ok(ret, "DeleteFileW: error %ld\n", GetLastError());
++        ok(ret, "DeleteFileW: error %ld\n", GetLastError());
+ 
+         ret = CopyFileExW(pathsubW, long_path, NULL, NULL, NULL, 0);
+         ok(ret, "got error %lu\n", GetLastError());
+@@ -2284,7 +2284,7 @@ static void test_DeleteFileW( void )
+         wcscpy(long_path, pathW);
+         wcscat(long_path, a);
+         ret = DeleteFileW(long_path);
+-        todo_wine ok(!ret, "Unexpected DeleteFileW successed, %s\n", wine_dbgstr_w(long_path));
++        ok(!ret, "Unexpected DeleteFileW successed, %s\n", wine_dbgstr_w(long_path));
+     }
+ 
+     DeleteFileW(pathsubW);
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index 152b9fb8771..9c04041bf59 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -1033,6 +1033,12 @@ BOOL WINAPI DECLSPEC_HOTPATCH DeleteFileW( LPCWSTR path )
+         return FALSE;
+     }
+ 
++    if (wcslen(path) >= MAX_PATH && wcsncmp(path, L"\\\\?\\", 4) && !RtlGetCurrentPeb()->IsLongPathAwareProcess)
++    {
++        SetLastError( ERROR_PATH_NOT_FOUND );
++        return FALSE;
++    }
++
+     InitializeObjectAttributes( &attr, &nameW, OBJ_CASE_INSENSITIVE, 0, NULL );
+     status = NtCreateFile(&hFile, SYNCHRONIZE | DELETE, &attr, &io, NULL, 0,
+ 			  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+-- 
+GitLab
+

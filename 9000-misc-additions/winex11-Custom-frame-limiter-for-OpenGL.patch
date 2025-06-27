@@ -101,10 +101,10 @@ index 008a92dad98..f46b03ca2e4 100644
  /**
   * glxdrv_SwapBuffers
   *
-@@ -2880,6 +2931,11 @@ static BOOL x11drv_swap_buffers( void *private, HWND hwnd, HDC hdc, int interval )
-     present_gl_drawable( hwnd, ctx ? ctx->hdc : hdc, gl, !pglXWaitForSbcOML, FALSE );
-     update_gl_drawable_size( gl );
-     release_gl_drawable( gl );
+@@ -2880,6 +2931,11 @@ static BOOL x11drv_surface_swap( struct opengl_drawable *base )
+     update_gl_drawable_offscreen( gl );
+ 
+     present_gl_drawable( gl, !pglXWaitForSbcOML, FALSE );
 +
 +#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
 +    if (custom_fps) limit_frame_rate();

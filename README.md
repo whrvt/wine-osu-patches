@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-88544655](https://gitlab.winehq.org/wine/wine/-/tree/885446556ce443b496e368b8f2c68807dcc7df0f)
+wine commit: [wine-cad35b3c](https://gitlab.winehq.org/wine/wine/-/tree/cad35b3c8119f38bf2084a5a3613630cd7b2d45d)
 
-staging commit: [staging-c37f9f50](https://gitlab.winehq.org/wine/wine-staging/-/tree/c37f9f50912bd801e217ba81d2512feb7386f0d1)
+staging commit: [staging-3e94d124](https://gitlab.winehq.org/wine/wine-staging/-/tree/3e94d12465c0ed9f6ce1bec742ae779a0932813c)
 
-Staging exclude flags: `-W ntdll-ForceBottomUpAlloc -W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix -W eventfd_synchronization`
+Staging exclude flags: `-W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix`
 
 # Environment variables
 
@@ -166,6 +166,18 @@ Patch: [disable-ime-envvar.patch](9000-misc-additions/disable-ime-envvar.patch)
 
 `boolean`
 
+## WINE_DISABLE_KDE_HACKS
+
+Patch: [0001-HACK-winex11-Skip-delay-on-KDE-if-wm_state-is-unchan.patch](0009-windowing-system-integration/0001-misc/0001-HACK-winex11-Skip-delay-on-KDE-if-wm_state-is-unchan.patch)
+
+### Commit message
+
+```
+HACK: winex11: Skip delay on KDE if wm_state is unchanged
+Attempt at fixing an edge-case where a black window is created upon alt-tab on KDE when the window state is unchanged.
+Can be disabled with WINE_DISABLE_KDE_HACKS=1.
+```
+
 ## WINE_DISABLE_RAWINPUT
 
 Patch: [force-disable-rawinput-envvar.patch](9000-misc-additions/force-disable-rawinput-envvar.patch)
@@ -290,6 +302,32 @@ But allow disabling it with WINE_PULSE_MEMLOCK=0.
 ### Type
 
 `numeric`
+
+## WINE_SHELL32_HACKS
+
+Patch: [HACK-shell32-replace-osu-s-explorer.exe-calls-with-t.patch](9000-misc-additions/HACK-shell32-replace-osu-s-explorer.exe-calls-with-t.patch)
+
+### Commit message
+
+```
+HACK: shell32: Strip hardcoded explorer/notepad prefix from osu!'s shell open calls.
+This allows osu! to open the screenshot folder by clicking
+the popup ingame, when WINE_BLOCK_GET_VERSION=1 is used.
+That's under the assumption that the Folder\\shell\\open\\command
+registry key is set up correctly with xdg-open and all that
+machinery that osu-winello sets up automatically.
+v2: Added replacement for notepad.exe. Allows opening .osu files from
+the editor given the registry association is in place.
+Example registry file:
+Windows Registry Editor Version 5.00
+[HKEY_CLASSES_ROOT\.osu]
+@="txtfile"
+[HKEY_CLASSES_ROOT\folder\shell\open\command]
+@="wscript.exe \"Z:\\\\home\\\\username\\\\.local\\\\share\\\\osuconfig\\\\folderfixosu.vbs\" \"%1\""
+[HKEY_CLASSES_ROOT\txtfile\shell\open\command]
+@="wscript.exe \"Z:\\\\home\\\\username\\\\.local\\\\share\\\\osuconfig\\\\folderfixosu.vbs\" \"%1\""
+v3: Allow force-enabling the hacks outside of osu! with the env var WINE_SHELL32_HACKS=1
+```
 
 ## WINE_SIMULATE_ASYNC_READ
 
