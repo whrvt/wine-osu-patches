@@ -1,4 +1,4 @@
-From edad84b9bf0272a08d92df6ebfccfad328360350 Mon Sep 17 00:00:00 2001
+From 68256ad6d7c393d0bae2936e9258cb3a2555d34c Mon Sep 17 00:00:00 2001
 From: yaoyongjie <yaoyongjie@uniontech.com>
 Date: Thu, 20 Mar 2025 10:13:13 +0800
 Subject: [PATCH] ntdll: Check if long path aware is enabled.
@@ -10,7 +10,7 @@ Subject: [PATCH] ntdll: Check if long path aware is enabled.
  3 files changed, 63 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/ntdll/actctx.c b/dlls/ntdll/actctx.c
-index 9828d90d11d..656875c9b55 100644
+index 99b44a70275..f492a48d3e8 100644
 --- a/dlls/ntdll/actctx.c
 +++ b/dlls/ntdll/actctx.c
 @@ -5223,11 +5223,61 @@ static const WCHAR *find_app_settings( ACTIVATION_CONTEXT *actctx, const WCHAR *
@@ -76,7 +76,7 @@ index 9828d90d11d..656875c9b55 100644
      ctx.cbSize   = sizeof(ctx);
      ctx.lpSource = NULL;
 @@ -5238,6 +5288,16 @@ void actctx_init(void)
-     if (!RtlCreateActivationContext( &handle, &ctx )) process_actctx = check_actctx(handle);
+     if (!RtlCreateActivationContext( &actctx, &ctx )) process_actctx = check_actctx( actctx );
  
      NtCurrentTeb()->Peb->ActivationContextData = process_actctx;
 +
@@ -106,10 +106,10 @@ index 6b089c990b5..f89d577fbd8 100644
      NTSTATUS status;
      UNICODE_STRING str;
 diff --git a/dlls/ntdll/ntdll_misc.h b/dlls/ntdll/ntdll_misc.h
-index f82edef6b65..5bfb5f262b4 100644
+index 99e0aceeef3..798d67000b7 100644
 --- a/dlls/ntdll/ntdll_misc.h
 +++ b/dlls/ntdll/ntdll_misc.h
-@@ -186,4 +186,6 @@ extern void *__os_arm64x_helper8;
+@@ -188,4 +188,6 @@ extern void *__os_arm64x_helper8;
  
  #endif
  

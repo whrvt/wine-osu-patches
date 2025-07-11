@@ -1,4 +1,4 @@
-From 5d91555cc1efd3a38806822c00f610dd22a04c3c Mon Sep 17 00:00:00 2001
+From f896c7a8c2fdf33d2182cb02eab897e4abd99b41 Mon Sep 17 00:00:00 2001
 From: yaoyongjie <yaoyongjie@uniontech.com>
 Date: Tue, 11 Mar 2025 18:01:16 +0800
 Subject: [PATCH] kernelbase: Fix DeleteFileA doesn't support long path.
@@ -70,7 +70,7 @@ index a98c48ccd7b..d841a5cbd17 100644
          ret = CopyFileExA(argv[0], long_path, NULL, NULL, NULL, 0);
          ok(ret, "got error %lu\n", GetLastError());
 diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
-index 0f70e28063f..152b9fb8771 100644
+index 68949cfe99b..faba17e8ac6 100644
 --- a/dlls/kernelbase/file.c
 +++ b/dlls/kernelbase/file.c
 @@ -1005,9 +1005,12 @@ BOOLEAN WINAPI /* DECLSPEC_HOTPATCH */ CreateSymbolicLinkW( LPCWSTR link, LPCWST

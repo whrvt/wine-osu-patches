@@ -1,4 +1,4 @@
-From 7272fe19126b2a33cd37e9007f37deb5ab820a4e Mon Sep 17 00:00:00 2001
+From 85e69ca21758ed4359aa6a039514e3b862151c5e Mon Sep 17 00:00:00 2001
 From: yaoyongjie <yaoyongjie@uniontech.com>
 Date: Wed, 12 Mar 2025 11:54:42 +0800
 Subject: [PATCH] kernelbase: Limit the maximum path length for DeleteFile.
@@ -64,7 +64,7 @@ index d841a5cbd17..d955ced842e 100644
  
      DeleteFileW(pathsubW);
 diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
-index 152b9fb8771..9c04041bf59 100644
+index faba17e8ac6..599ee5ec65e 100644
 --- a/dlls/kernelbase/file.c
 +++ b/dlls/kernelbase/file.c
 @@ -1033,6 +1033,12 @@ BOOL WINAPI DECLSPEC_HOTPATCH DeleteFileW( LPCWSTR path )

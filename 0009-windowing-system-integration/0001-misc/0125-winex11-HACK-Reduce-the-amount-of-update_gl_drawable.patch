@@ -6,58 +6,33 @@ Subject: [PATCH] winex11: HACK: Reduce the amount of
 
 Temporary performance optimization hack until Remi finishes refactoring.
 ---
- dlls/winex11.drv/opengl.c | 8 ++++++--
- dlls/winex11.drv/vulkan.c | 9 ++++++---
- 2 files changed, 12 insertions(+), 5 deletions(-)
+ dlls/winex11.drv/init.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
 
-diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
-index db5b3c28b84..0fa12731a88 100644
---- a/dlls/winex11.drv/opengl.c
-+++ b/dlls/winex11.drv/opengl.c
-@@ -1594,6 +1594,7 @@ static BOOL x11drv_surface_swap( struct opengl_drawable *base )
-     struct x11drv_context *ctx = NtCurrentTeb()->glReserved2;
-     struct gl_drawable *gl = impl_from_opengl_drawable( base );
-     INT64 ust, msc, sbc, target_sbc = 0;
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index e6b6213f289..67fa2286793 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -381,13 +381,17 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+ {
+     struct x11drv_client_surface *surface = impl_from_client_surface( client );
+     HWND hwnd = client->hwnd, toplevel = NtUserGetAncestor( hwnd, GA_ROOT );
 +    static unsigned char drawable_update_throttle = 0;
+     struct x11drv_win_data *data;
+     RECT rect_dst, rect;
+     Drawable window;
+     HRGN region;
  
-     TRACE( "drawable %s\n", debugstr_opengl_drawable( base ) );
- 
-@@ -1605,8 +1606,11 @@ static BOOL x11drv_surface_swap( struct opengl_drawable *base )
-         if (pglXWaitForSbcOML) pglXWaitForSbcOML( gdi_display, gl->drawable, target_sbc, &ust, &msc, &sbc );
-     }
- 
--    update_gl_drawable_size( gl );
--    update_gl_drawable_offscreen( gl );
+-    client_surface_update_size( hwnd, surface );
+-    client_surface_update_offscreen( hwnd, surface );
 +    if (!drawable_update_throttle++)
 +    {
-+        update_gl_drawable_size( gl );
-+        update_gl_drawable_offscreen( gl );
++        client_surface_update_size( hwnd, surface );
++        client_surface_update_offscreen( hwnd, surface );
 +    }
  
-     present_gl_drawable( gl, !pglXWaitForSbcOML, FALSE );
- 
-diff --git a/dlls/winex11.drv/vulkan.c b/dlls/winex11.drv/vulkan.c
-index 364274b3903..64a04109158 100644
---- a/dlls/winex11.drv/vulkan.c
-+++ b/dlls/winex11.drv/vulkan.c
-@@ -211,11 +211,14 @@ static void vulkan_surface_update_offscreen( HWND hwnd, struct x11drv_vulkan_sur
- static void X11DRV_vulkan_surface_update( HWND hwnd, void *private )
- {
-     struct x11drv_vulkan_surface *surface = private;
-+    static unsigned char surface_update_throttle = 0;
- 
-     TRACE( "%p %p\n", hwnd, private );
--
--    vulkan_surface_update_size( hwnd, surface );
--    vulkan_surface_update_offscreen( hwnd, surface );
-+    if (!surface_update_throttle++)
-+    {
-+        vulkan_surface_update_size( hwnd, surface );
-+        vulkan_surface_update_offscreen( hwnd, surface );
-+    }
- }
- 
- static void X11DRV_vulkan_surface_presented( HWND hwnd, void *private, VkResult result )
+     if (!hdc) return;
+     window = X11DRV_get_whole_window( toplevel );
 -- 
 2.50.0
 

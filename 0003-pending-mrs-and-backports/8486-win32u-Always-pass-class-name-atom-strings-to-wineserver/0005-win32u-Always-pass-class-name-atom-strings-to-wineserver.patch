@@ -1,0 +1,268 @@
+From 6d277d83b61b845e9ade7260e0d73cd77d7ae71e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 16 Jun 2025 09:28:04 +0200
+Subject: [PATCH] win32u: Always pass class name atom strings to wineserver.
+
+---
+ dlls/win32u/class.c  | 23 +++++++++++++++--------
+ dlls/win32u/window.c | 25 ++++++++++++++++++++-----
+ server/class.c       | 40 +++++++++++++++-------------------------
+ server/protocol.def  |  4 ----
+ server/window.c      |  5 ++---
+ 5 files changed, 52 insertions(+), 45 deletions(-)
+
+diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
+index c1fe4b0be76..cf850d5f8c9 100644
+--- a/dlls/win32u/class.c
++++ b/dlls/win32u/class.c
+@@ -489,9 +489,8 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
+ 
+     if (!(class = calloc( 1, sizeof(CLASS) + wc->cbClsExtra ))) return 0;
+ 
+-    class->atomName = get_int_atom_value( name );
+     class->basename = class->name;
+-    if (!class->atomName && name)
++    if (!(atom = get_int_atom_value( name )))
+     {
+         memcpy( class->name, name->Buffer, name->Length );
+         class->name[name->Length / sizeof(WCHAR)] = 0;
+@@ -499,8 +498,9 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
+     }
+     else
+     {
+-        UNICODE_STRING str = { .MaximumLength = sizeof(class->name), .Buffer = class->name };
+-        NtUserGetAtomName( class->atomName, &str );
++        name->Buffer = class->name;
++        name->MaximumLength = sizeof(class->name);
++        name->Length = NtUserGetAtomName( atom, name ) * sizeof(WCHAR);
+     }
+ 
+     class->style      = wc->style;
+@@ -517,9 +517,8 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
+         req->extra      = class->cbClsExtra;
+         req->win_extra  = class->cbWndExtra;
+         req->client_ptr = wine_server_client_ptr( class );
+-        req->atom       = class->atomName;
+         req->name_offset = version->Length / sizeof(WCHAR);
+-        if (!req->atom && name) wine_server_add_data( req, name->Buffer, name->Length );
++        wine_server_add_data( req, name->Buffer, name->Length );
+         ret = !wine_server_call_err( req );
+         class->atomName = reply->atom;
+     }
+@@ -564,16 +563,24 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
+ BOOL WINAPI NtUserUnregisterClass( UNICODE_STRING *name, HINSTANCE instance,
+                                    struct client_menu_name *client_menu_name )
+ {
++    WCHAR nameW[MAX_ATOM_LEN + 1];
+     CLASS *class = NULL;
++    ATOM atom;
+ 
+     /* create the desktop window to trigger builtin class registration */
+     get_desktop_window();
+ 
++    if ((atom = get_int_atom_value( name )))
++    {
++        name->Buffer = nameW;
++        name->MaximumLength = sizeof(nameW);
++        name->Length = NtUserGetAtomName( atom, name ) * sizeof(WCHAR);
++    }
++
+     SERVER_START_REQ( destroy_class )
+     {
+         req->instance = wine_server_client_ptr( instance );
+-        if (!(req->atom = get_int_atom_value( name )) && name->Length)
+-            wine_server_add_data( req, name->Buffer, name->Length );
++        wine_server_add_data( req, name->Buffer, name->Length );
+         if (!wine_server_call_err( req )) class = wine_server_get_ptr( reply->client_ptr );
+     }
+     SERVER_END_REQ;
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index d75cc4febed..df0b6bc7d41 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2914,9 +2914,17 @@ HWND WINAPI NtUserFindWindowEx( HWND parent, HWND child, UNICODE_STRING *class,
+     user_handle_t *list;
+     HWND retvalue = 0;
+     int i = 0, size = 128, title_len;
+-    ATOM atom = class ? get_int_atom_value( class ) : 0;
++    WCHAR nameW[MAX_ATOM_LEN + 1];
++    ATOM atom;
+     NTSTATUS status;
+ 
++    if ((atom = class ? get_int_atom_value( class ) : 0))
++    {
++        class->Buffer = nameW;
++        class->MaximumLength = sizeof(nameW);
++        class->Length = NtUserGetAtomName( atom, class ) * sizeof(WCHAR);
++    }
++
+     /* empty class is not the same as NULL class */
+     if (!atom && class && !class->Length) return 0;
+ 
+@@ -2930,8 +2938,7 @@ HWND WINAPI NtUserFindWindowEx( HWND parent, HWND child, UNICODE_STRING *class,
+         {
+             req->parent = wine_server_user_handle( parent );
+             req->child  = wine_server_user_handle( child );
+-            req->atom   = atom;
+-            if (!atom && class) wine_server_add_data( req, class->Buffer, class->Length );
++            if (class) wine_server_add_data( req, class->Buffer, class->Length );
+             wine_server_set_reply( req, list, size * sizeof(user_handle_t) );
+             status = wine_server_call( req );
+             size = reply->count;
+@@ -5264,10 +5271,19 @@ static WND *create_window_handle( HWND parent, HWND owner, UNICODE_STRING *name,
+ {
+     UINT dpi_context = get_thread_dpi_awareness_context();
+     HWND handle = 0, full_parent = 0, full_owner = 0;
++    WCHAR nameW[MAX_ATOM_LEN + 1];
+     struct tagCLASS *class = NULL;
+     int extra_bytes = 0;
++    ATOM atom;
+     WND *win;
+ 
++    if ((atom = get_int_atom_value( name )))
++    {
++        name->Buffer = nameW;
++        name->MaximumLength = sizeof(nameW);
++        name->Length = NtUserGetAtomName( atom, name ) * sizeof(WCHAR);
++    }
++
+     SERVER_START_REQ( create_window )
+     {
+         req->parent          = wine_server_user_handle( parent );
+@@ -5277,8 +5293,7 @@ static WND *create_window_handle( HWND parent, HWND owner, UNICODE_STRING *name,
+         req->dpi_context     = dpi_context;
+         req->style           = style;
+         req->ex_style        = ex_style;
+-        if (!(req->atom = get_int_atom_value( name )) && name->Length)
+-            wine_server_add_data( req, name->Buffer, name->Length );
++        wine_server_add_data( req, name->Buffer, name->Length );
+         if (!wine_server_call_err( req ))
+         {
+             handle      = wine_server_ptr_handle( reply->handle );
+diff --git a/server/class.c b/server/class.c
+index 2790ff7ce6a..c7c600b6280 100644
+--- a/server/class.c
++++ b/server/class.c
+@@ -167,33 +167,23 @@ DECL_HANDLER(create_class)
+     struct atom_table *table = get_user_atom_table();
+     atom_t atom, base_atom;
+ 
+-    if (name.len)
++    if (!(atom = add_atom( table, &name ))) return;
++    if (req->name_offset && req->name_offset < name.len / sizeof(WCHAR))
+     {
+-        atom = add_atom( table, &name );
+-        if (!atom) return;
+-        if (req->name_offset && req->name_offset < name.len / sizeof(WCHAR))
+-        {
+-            name.str += req->name_offset;
+-            name.len -= req->name_offset * sizeof(WCHAR);
+-
+-            base_atom = add_atom( table, &name );
+-            if (!base_atom)
+-            {
+-                release_atom( table, atom );
+-                return;
+-            }
+-        }
+-        else
++        name.str += req->name_offset;
++        name.len -= req->name_offset * sizeof(WCHAR);
++
++        base_atom = add_atom( table, &name );
++        if (!base_atom)
+         {
+-            base_atom = atom;
+-            grab_atom( table, atom );
++            release_atom( table, atom );
++            return;
+         }
+     }
+     else
+     {
+-        base_atom = atom = req->atom;
+-        if (!grab_atom( table, atom )) return;
+-        grab_atom( table, base_atom );
++        base_atom = atom;
++        grab_atom( table, atom );
+     }
+ 
+     class = find_class( current->process, atom, req->instance );
+@@ -234,11 +224,11 @@ DECL_HANDLER(destroy_class)
+     struct window_class *class;
+     struct unicode_str name = get_req_unicode_str();
+     struct atom_table *table = get_user_atom_table();
+-    atom_t atom = req->atom;
++    atom_t atom;
+ 
+-    if (name.len) atom = find_atom( table, &name );
+-
+-    if (!(class = find_class( current->process, atom, req->instance )))
++    if (!(atom = find_atom( table, &name )))
++        set_win32_error( ERROR_CLASS_DOES_NOT_EXIST );
++    else if (!(class = find_class( current->process, atom, req->instance )))
+         set_win32_error( ERROR_CLASS_DOES_NOT_EXIST );
+     else if (class->count)
+         set_win32_error( ERROR_CLASS_HAS_WINDOWS );
+diff --git a/server/protocol.def b/server/protocol.def
+index 22470e33ae0..91a19d9c4e5 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -2560,7 +2560,6 @@ enum message_type
+ @REQ(create_window)
+     user_handle_t  parent;      /* parent window */
+     user_handle_t  owner;       /* owner window */
+-    atom_t         atom;        /* class atom */
+     mod_handle_t   class_instance; /* class module instance */
+     mod_handle_t   instance;    /* module instance */
+     unsigned int   dpi_context; /* thread DPI context */
+@@ -2669,7 +2668,6 @@ enum message_type
+ @REQ(get_class_windows)
+     user_handle_t  parent;        /* parent window */
+     user_handle_t  child;         /* first child window */
+-    atom_t         atom;          /* class atom for the listed siblings */
+     VARARG(class,unicode_str);    /* class name */
+ @REPLY
+     int            count;         /* total count of siblings */
+@@ -3217,7 +3215,6 @@ enum caret_state
+ /* Create a window class */
+ @REQ(create_class)
+     int            local;          /* is it a local class? */
+-    atom_t         atom;           /* class atom */
+     unsigned int   style;          /* class style */
+     mod_handle_t   instance;       /* module instance */
+     int            extra;          /* number of extra class bytes */
+@@ -3232,7 +3229,6 @@ enum caret_state
+ 
+ /* Destroy a window class */
+ @REQ(destroy_class)
+-    atom_t         atom;           /* class atom */
+     mod_handle_t   instance;       /* module instance */
+     VARARG(name,unicode_str);      /* class name */
+ @REPLY
+diff --git a/server/window.c b/server/window.c
+index 4b1acba1adb..90e93f4ae06 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -2233,8 +2233,7 @@ DECL_HANDLER(create_window)
+                 owner = owner->parent;
+     }
+ 
+-    atom = cls_name.len ? find_atom( table, &cls_name ) : req->atom;
+-
++    if (!(atom = find_atom( table, &cls_name ))) return;
+     if (!(win = create_window( parent, owner, atom, req->class_instance, req->instance ))) return;
+ 
+     if (parent && !is_desktop_window( parent ))
+@@ -2534,7 +2533,7 @@ DECL_HANDLER(get_class_windows)
+     struct window *parent = NULL, *win = NULL;
+     struct unicode_str cls_name = get_req_unicode_str();
+     struct atom_table *table = get_user_atom_table();
+-    atom_t atom = req->atom;
++    atom_t atom = 0;
+     user_handle_t *data;
+     unsigned int count = 0, max_count = get_reply_max_size() / sizeof(*data);
+ 
+-- 
+GitLab
+

@@ -102,17 +102,17 @@ index 008a92dad98..f46b03ca2e4 100644
   * glxdrv_SwapBuffers
   *
 @@ -2880,6 +2931,11 @@ static BOOL x11drv_surface_swap( struct opengl_drawable *base )
-     update_gl_drawable_offscreen( gl );
- 
-     present_gl_drawable( gl, !pglXWaitForSbcOML, FALSE );
+         if (!pglXWaitForSbcOML) XFlush( gdi_display );
+         client_surface_present( base->client, gl->hdc );
+     }
 +
 +#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
 +    if (custom_fps) limit_frame_rate();
 +#endif
 +
+ 
      return TRUE;
  }
- 
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
 index e6bf0bed08d..abf5b166cf1 100644
 --- a/dlls/winex11.drv/x11drv.h

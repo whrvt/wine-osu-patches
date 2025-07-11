@@ -1,4 +1,4 @@
-From 48cf8f98c58bb27ac48721fb9a55a9688d776185 Mon Sep 17 00:00:00 2001
+From eefe36a9f002d3401a124a9324c35ae6f4d9476d Mon Sep 17 00:00:00 2001
 From: yaoyongjie <yaoyongjie@uniontech.com>
 Date: Wed, 18 Jun 2025 11:28:03 +0800
 Subject: [PATCH] kernel32/tests: Add tests for DeleteFile

@@ -56,10 +56,10 @@ diff --git a/dlls/ntdll/ntdll.spec b/dlls/ntdll/ntdll.spec
 index 850299f22ee..805aaf188c8 100644
 --- a/dlls/ntdll/ntdll.spec
 +++ b/dlls/ntdll/ntdll.spec
-@@ -1733,3 +1733,4 @@
+@@ -1733,3 +1733,4 @@ @ cdecl wine_get_host_version(ptr ptr)
+ 
  # Filesystem
  @ stdcall -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)
- @ stdcall -syscall wine_unix_to_nt_file_name(str ptr ptr)
 +@ stdcall -syscall __wine_needs_override_large_address_aware()
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index c2292765ffb..20fb3b6b7c9 100644

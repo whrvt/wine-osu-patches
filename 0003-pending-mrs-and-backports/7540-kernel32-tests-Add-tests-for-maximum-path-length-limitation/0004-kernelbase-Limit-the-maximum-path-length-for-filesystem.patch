@@ -1,4 +1,4 @@
-From f18e87500fce520c086ecc24971549760172d666 Mon Sep 17 00:00:00 2001
+From b6c1813bcfef51bbd115ca4391b53d59462162cd Mon Sep 17 00:00:00 2001
 From: yaoyongjie <yaoyongjie@uniontech.com>
 Date: Tue, 11 Mar 2025 15:20:33 +0800
 Subject: [PATCH] kernelbase: Limit the maximum path length for filesystem.
@@ -47,7 +47,7 @@ index 87cfb7f7a8a..a98c48ccd7b 100644
          todo_wine ok(!retok, "Unexpected DeleteFileA successed\n");
          retok = DeleteFileA(long_path_2);
 diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
-index 7d8b6844456..0f70e28063f 100644
+index b637e92bbce..68949cfe99b 100644
 --- a/dlls/kernelbase/file.c
 +++ b/dlls/kernelbase/file.c
 @@ -527,6 +527,18 @@ static BOOL copy_file( const WCHAR *source, const WCHAR *dest, COPYFILE2_EXTENDE
