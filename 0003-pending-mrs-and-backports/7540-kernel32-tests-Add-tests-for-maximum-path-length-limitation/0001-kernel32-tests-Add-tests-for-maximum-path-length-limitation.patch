@@ -1,4 +1,4 @@
-From d2661b550e6b743be7c9acbc664a1c73cedcc5e3 Mon Sep 17 00:00:00 2001
+From 737f3c3fd42e64166c06dfa6c6e17dc277e4a13d Mon Sep 17 00:00:00 2001
 From: yaoyongjie <yaoyongjie@uniontech.com>
 Date: Tue, 11 Mar 2025 14:18:18 +0800
 Subject: [PATCH] kernel32/tests: Add tests for maximum path length limitation.
@@ -15,18 +15,17 @@ To enable the new long path behavior per application, two conditions
 must be met. A registry value must be set, and the application manifest
 must include the longPathAware element.
 ---
- dlls/kernel32/tests/file.c             | 268 +++++++++++++++++++++++++
- dlls/kernel32/tests/wine_test.manifest |   9 +-
- 2 files changed, 275 insertions(+), 2 deletions(-)
+ dlls/kernel32/tests/file.c | 280 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 280 insertions(+)
 
 diff --git a/dlls/kernel32/tests/file.c b/dlls/kernel32/tests/file.c
-index cf0c40d5cd6..ab63b8ad120 100644
+index db3ffc655ce..9dcba5fa3dd 100644
 --- a/dlls/kernel32/tests/file.c
 +++ b/dlls/kernel32/tests/file.c
 @@ -34,6 +34,7 @@
- #include "winternl.h"
  #include "winnls.h"
  #include "fileapi.h"
+ #include "ddk/ntifs.h"
 +#include "winreg.h"
  
  static HANDLE (WINAPI *pFindFirstFileExA)(LPCSTR,FINDEX_INFO_LEVELS,LPVOID,FINDEX_SEARCH_OPS,LPVOID,DWORD);
@@ -35,11 +34,29 @@ index cf0c40d5cd6..ab63b8ad120 100644
  static void (WINAPI *pRtlFreeUnicodeString)(PUNICODE_STRING);
  static BOOL (WINAPI *pSetFileCompletionNotificationModes)(HANDLE, UCHAR);
  static HANDLE (WINAPI *pFindFirstStreamW)(LPCWSTR filename, STREAM_INFO_LEVELS infolevel, void *data, DWORD flags);
-+static NTSTATUS(WINAPI* pRtlGetVersion)(PRTL_OSVERSIONINFOEXW);
++static NTSTATUS(WINAPI *pRtlGetVersion)(PRTL_OSVERSIONINFOEXW);
  
  static char filename[MAX_PATH];
  static const char sillytext[] =
-@@ -106,6 +108,7 @@ static void InitFunctionPointers(void)
+@@ -71,6 +73,17 @@ static const char sillytext[] =
+ "1234 43 4kljf lf &%%%&&&&&& 34 4 34   3############# 33 3 3 3 # 3## 3"
+ "sdlkfjasdlkfj a dslkj adsklf  \n  \nasdklf askldfa sdlkf \nsadklf asdklf asdf ";
+ 
++static const char manifest_long_path_aware[] =
++"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
++"<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\" xmlns:asmv3=\"urn:schemas-microsoft-com:asm.v3\">"
++"  <assemblyIdentity type=\"win32\" version=\"1.0.0.0\" name=\"Wine.Test\"/>"
++"  <asmv3:application>"
++"    <asmv3:windowsSettings xmlns:ws2=\"http://schemas.microsoft.com/SMI/2016/WindowsSettings\">"
++"      <ws2:longPathAware>true</ws2:longPathAware>"
++"    </asmv3:windowsSettings>"
++"  </asmv3:application>"
++"</assembly>";
++
+ struct test_list {
+     const char *file;           /* file string to test */
+     const DWORD err;            /* Win NT and further error code */
+@@ -106,6 +119,7 @@ static void InitFunctionPointers(void)
      pReOpenFile = (void *) GetProcAddress(hkernel32, "ReOpenFile");
      pSetFileCompletionNotificationModes = (void *)GetProcAddress(hkernel32, "SetFileCompletionNotificationModes");
      pFindFirstStreamW = (void *)GetProcAddress(hkernel32, "FindFirstStreamW");
@@ -47,7 +64,7 @@ index cf0c40d5cd6..ab63b8ad120 100644
  }
  
  static void create_file( const char *path )
-@@ -904,12 +907,85 @@ static void test_CopyFileA(void)
+@@ -904,12 +918,83 @@ static void test_CopyFileA(void)
      ok(ret, "DeleteFileA: error %ld\n", GetLastError());
  }
  
@@ -55,6 +72,7 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +static BOOL is_win10_1607_or_later(void)
 +{
 +    static RTL_OSVERSIONINFOEXW rovi = { 0 };
++
 +    if (rovi.dwOSVersionInfoSize == 0)
 +    {
 +        rovi.dwOSVersionInfoSize = sizeof(rovi);
@@ -65,20 +83,20 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +    return rovi.dwMajorVersion >= 10 && rovi.dwBuildNumber >= 14393;
 +}
 +
-+static BOOL is_reg_enable_long_path(void)
++static BOOL is_reg_long_path_enabled(void)
 +{
 +    static DWORD LongPathEnabled = -1;
 +
-+    DWORD ret;
++    DWORD ret, type, size;
 +    HKEY hkey;
-+    DWORD type, size = sizeof(LongPathEnabled);
 +
 +    if (LongPathEnabled == -1)
 +    {
-+        ret = RegOpenKeyExA( HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Control\\FileSystem", 0, KEY_READ, &hkey);
++        ret = RegOpenKeyExW( HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\FileSystem", 0, KEY_READ, &hkey);
 +        if (ret == ERROR_SUCCESS)
 +        {
-+            ret = RegQueryValueExA(hkey, "LongPathsEnabled", NULL, &type, (LPBYTE)&LongPathEnabled, &size);
++            size = sizeof(LongPathEnabled);
++            ret = RegQueryValueExW(hkey, L"LongPathsEnabled", NULL, &type, (LPBYTE)&LongPathEnabled, &size);
 +            RegCloseKey(hkey);
 +        }
 +        else
@@ -90,20 +108,17 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +    return LongPathEnabled == 1;
 +}
 +
-+static BOOL is_app_enabled_long_path(void)
++static BOOL is_manifest_long_path_enabled(void)
 +{
 +    static WCHAR buffer[10] = { 0 };
 +    static const WCHAR *trueW = L"true";
-+    static const WCHAR *longPathAwareW = L"longPathAware";
-+    static const WCHAR *namespace2016W = L"http://schemas.microsoft.com/SMI/2016/WindowsSettings";
-+
 +    BOOL ret;
 +    SIZE_T size;
 +
 +    if (buffer[0] == 0)
 +    {
 +        memset( buffer, 0xcc, sizeof(buffer) );
-+        ret = QueryActCtxSettingsW( 0, NULL, namespace2016W, longPathAwareW, buffer, lstrlenW(trueW) + 1, &size );
++        ret = QueryActCtxSettingsW( 0, NULL, L"http://schemas.microsoft.com/SMI/2016/WindowsSettings", L"longPathAware", buffer, lstrlenW(trueW) + 1, &size );
 +        if (ret && size == lstrlenW(trueW) + 1)
 +        {
 +            trace("in app manifest LongPathAware: %s\n", debugstr_w(buffer));
@@ -115,7 +130,7 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +
 +static BOOL is_enabled_long_path(void)
 +{
-+    return is_win10_1607_or_later() && is_reg_enable_long_path() && is_app_enabled_long_path();
++    return is_win10_1607_or_later() && is_reg_long_path_enabled() && is_manifest_long_path_enabled();
 +}
 +
  static void test_CopyFileW(void)
@@ -133,29 +148,31 @@ index cf0c40d5cd6..ab63b8ad120 100644
  
      ret = GetTempPathW(MAX_PATH, temp_path);
      if (ret == 0 && GetLastError() == ERROR_CALL_NOT_IMPLEMENTED)
-@@ -942,6 +1018,101 @@ static void test_CopyFileW(void)
+@@ -942,6 +1027,71 @@ static void test_CopyFileW(void)
      ok(GetLastError() == ERROR_SUCCESS || broken(GetLastError() == ERROR_INVALID_PARAMETER) /* some win8 machines */,
          "Unexpected error %lu.\n", GetLastError());
  
 +    /* test long file path, the length of the long_dest is larger than MAX_PATH. */
 +    if (is_enabled_long_path())
 +    {
++        trace("long path is enabled\n");
 +        wcscpy(long_path_1, temp_path);
 +        wcscat(long_path_1, a);
 +        SetLastError(0xdeadbeef);
 +        ret = CopyFileExW(source, long_path_1, NULL, NULL, NULL, 0);
-+        ok(ret, "Expected CopyFileExW successed, but got %ld, copy %s -> %s\n", GetLastError(), wine_dbgstr_w(source), wine_dbgstr_w(long_path_1));
++        ok(ret, "CopyFileExW(%s,%s), error %lu.\n", wine_dbgstr_w(source), wine_dbgstr_w(long_path_1), GetLastError());
 +
 +        DeleteFileW(dest);
 +        SetLastError(0xdeadbeef);
 +        ret = CopyFileExW(long_path_1, dest, NULL, NULL, NULL, 0);
-+        ok(ret, "Expected CopyFileExW successed, but got %ld, copy %s -> %s\n", GetLastError(), wine_dbgstr_w(long_path_1), wine_dbgstr_w(dest));
++        ok(ret, "CopyFileExW(%s,%s), error %lu.\n", wine_dbgstr_w(long_path_1), wine_dbgstr_w(dest), GetLastError());
 +
 +        wcscpy(long_path_2, temp_path);
 +        wcscat(long_path_2, b);
 +        SetLastError(0xdeadbeef);
 +        ret = CopyFileExW(long_path_1, long_path_2, NULL, NULL, NULL, 0);
-+        ok(ret, "Expected CopyFileExW successed, but got %ld, copy %s -> %s\n", GetLastError(), wine_dbgstr_w(long_path_1), wine_dbgstr_w(long_path_2));
++        ok(ret, "CopyFileExW(%s,%s), error %lu.\n", wine_dbgstr_w(long_path_1), wine_dbgstr_w(long_path_2), GetLastError());
++
 +        ret = DeleteFileW(long_path_1);
 +        ok(ret, "Unexpected DeleteFileW successed\n");
 +        ret = DeleteFileW(long_path_2);
@@ -168,11 +185,13 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +        SetLastError(0xdeadbeef);
 +        ret = CopyFileExW(source, long_path_1, NULL, NULL, NULL, 0);
 +        todo_wine ok(!ret && GetLastError() == ERROR_PATH_NOT_FOUND, "Expected CopyFileExW failed with ERROR_PATH_NOT_FOUND, but got %ld, copy %s -> %s\n", GetLastError(), wine_dbgstr_w(source), wine_dbgstr_w(long_path_1));
++
 +        wcscpy(long_path_2, temp_path);
 +        wcscat(long_path_2, b);
 +        SetLastError(0xdeadbeef);
 +        ret = CopyFileExW(long_path_1, long_path_2, NULL, NULL, NULL, 0);
 +        todo_wine ok(!ret && GetLastError() == ERROR_PATH_NOT_FOUND, "Expected CopyFileExW failed with ERROR_PATH_NOT_FOUND, but got %ld, copy %s -> %s\n", GetLastError(), wine_dbgstr_w(long_path_1), wine_dbgstr_w(long_path_2));
++
 +        ret = DeleteFileW(long_path_1);
 +        todo_wine ok(!ret, "Unexpected DeleteFileW successed\n");
 +        ret = DeleteFileW(long_path_2);
@@ -193,49 +212,15 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +    ret = CopyFileExW(long_path_1, long_path_2, NULL, NULL, NULL, 0);
 +    ok(ret, "CopyFileExW failed, got %ld, copy %s -> %s failed\n", GetLastError(), wine_dbgstr_w(long_path_1), wine_dbgstr_w(long_path_2));
 +
-+    if (is_enabled_long_path())
-+    {
-+        wcscpy(long_path_1, temp_path);
-+        wcscat(long_path_1, a);
-+        ret = DeleteFileW(long_path_1);
-+        todo_wine ok(ret, "DeleteFileW: error %ld\n", GetLastError());
-+        wcscpy(long_path_2, temp_path);
-+        wcscat(long_path_2, b);
-+        ret = DeleteFileW(long_path_2);
-+        todo_wine ok(ret, "DeleteFileW: error %ld\n", GetLastError());
-+    }
-+    else
-+    {
-+        wcscpy(long_path_1, temp_path);
-+        wcscat(long_path_1, a);
-+        ret = DeleteFileW(long_path_1);
-+        todo_wine ok(!ret, "Unexpected DeleteFileW successed, %s\n", wine_dbgstr_w(long_path_1));
-+        wcscpy(long_path_2, temp_path);
-+        wcscat(long_path_2, b);
-+        ret = DeleteFileW(long_path_2);
-+        todo_wine ok(!ret, "Unexpected DeleteFileW successed, %s\n", wine_dbgstr_w(long_path_1));
-+
-+        wcscpy(long_path_1, L"\\\\?\\");
-+        wcscat(long_path_1, temp_path);
-+        wcscat(long_path_1, a);
-+        SetLastError(0xdeadbeef);
-+        ret = DeleteFileW(long_path_1);
-+        todo_wine ok(ret, "DeleteFileW: error %ld\n", GetLastError());
-+        wcscpy(long_path_2, L"\\\\?\\");
-+        wcscat(long_path_2, temp_path);
-+        wcscat(long_path_2, b);
-+        SetLastError(0xdeadbeef);
-+        ret = DeleteFileW(long_path_2);
-+        todo_wine ok(ret, "DeleteFileW: error %ld\n", GetLastError());
-+    }
-+
-+    ret = DeleteFileW(NULL);
-+    ok(!ret && GetLastError() == ERROR_PATH_NOT_FOUND, "Expected ERROR_PATH_NOT_FOUND for DeleteFileW(NULL), but got error %ld\n", GetLastError());
++    ret = DeleteFileW(long_path_1);
++    ok(ret, "DeleteFilew: error %lu\n", GetLastError());
++    ret = DeleteFileW(long_path_2);
++    ok(ret, "DeleteFileW: error %lu\n", GetLastError());
 +
      ret = DeleteFileW(source);
      ok(ret, "DeleteFileW: error %ld\n", GetLastError());
      ret = DeleteFileW(dest);
-@@ -1194,6 +1365,12 @@ static void test_CopyFileEx(void)
+@@ -1194,6 +1344,12 @@ static void test_CopyFileEx(void)
      HANDLE hfile;
      DWORD ret;
      BOOL retok;
@@ -248,13 +233,14 @@ index cf0c40d5cd6..ab63b8ad120 100644
  
      ret = GetTempPathA(MAX_PATH, temp_path);
      ok(ret != 0, "GetTempPathA error %ld\n", GetLastError());
-@@ -1235,6 +1412,97 @@ static void test_CopyFileEx(void)
+@@ -1235,6 +1391,69 @@ static void test_CopyFileEx(void)
      ok(!retok, "CopyFileExA unexpectedly succeeded\n");
      ok(GetLastError() == ERROR_PATH_NOT_FOUND, "expected ERROR_PATH_NOT_FOUND, got %ld\n", GetLastError());
  
 +    /* test long file path, the length of the long_dest is larger than MAX_PATH. */
 +    if (is_enabled_long_path())
 +    {
++        trace("long path is enabled\n");
 +        strcpy(long_path_1, temp_path);
 +        strcat(long_path_1, a);
 +        SetLastError(0xdeadbeef);
@@ -265,6 +251,7 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +        SetLastError(0xdeadbeef);
 +        retok = CopyFileExA(long_path_1, dest, NULL, NULL, NULL, 0);
 +        ok(retok, "Expected CopyFileExA successed, but got %ld, copy %s -> %s\n", GetLastError(), long_path_1, dest);
++        DeleteFileA(dest);
 +
 +        strcpy(long_path_2, temp_path);
 +        strcat(long_path_2, b);
@@ -307,61 +294,92 @@ index cf0c40d5cd6..ab63b8ad120 100644
 +    SetLastError(0xdeadbeef);
 +    retok = CopyFileExA(long_path_1, long_path_2, NULL, NULL, NULL, 0);
 +    ok(retok, "CopyFileExA failed, got %ld, copy %s -> %s failed\n", GetLastError(), long_path_1, long_path_2);
-+    if (is_enabled_long_path())
-+    {
-+        strcpy(long_path_1, temp_path);
-+        strcat(long_path_1, a);
-+        ret = DeleteFileA(long_path_1);
-+        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
-+        strcpy(long_path_2, temp_path);
-+        strcat(long_path_2, b);
-+        ret = DeleteFileA(long_path_2);
-+        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
-+    }
-+    else
-+    {
-+        strcpy(long_path_1, temp_path);
-+        strcat(long_path_1, a);
-+        ret = DeleteFileA(long_path_1);
-+        todo_wine ok(!ret, "Unexpected DeleteFileA successed, %s\n", long_path_1);
-+        strcpy(long_path_2, temp_path);
-+        strcat(long_path_2, b);
-+        ret = DeleteFileA(long_path_2);
-+        todo_wine ok(!ret, "Unexpected DeleteFileA successed, %s\n", long_path_2);
 +
-+        strcpy(long_path_1, "\\\\?\\");
-+        strcat(long_path_1, temp_path);
-+        strcat(long_path_1, a);
-+        SetLastError(0xdeadbeef);
-+        ret = DeleteFileA(long_path_1);
-+        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
-+        strcpy(long_path_2, "\\\\?\\");
-+        strcat(long_path_2, temp_path);
-+        strcat(long_path_2, b);
-+        SetLastError(0xdeadbeef);
-+        ret = DeleteFileA(long_path_2);
-+        todo_wine ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
-+    }
++    retok = DeleteFileA(long_path_1);
++    todo_wine ok(retok, "DeleteFileA failed: %lu, %s\n", GetLastError(), long_path_1);
++    retok = DeleteFileA(long_path_2);
++    todo_wine ok(retok, "DeleteFileA failed: %lu, %s\n", GetLastError(), long_path_2);
 +
      ret = DeleteFileA(source);
      ok(ret, "DeleteFileA failed with error %ld\n", GetLastError());
      ret = DeleteFileA(dest);
-diff --git a/dlls/kernel32/tests/wine_test.manifest b/dlls/kernel32/tests/wine_test.manifest
-index de77de3e201..124fa6713ac 100644
---- a/dlls/kernel32/tests/wine_test.manifest
-+++ b/dlls/kernel32/tests/wine_test.manifest
-@@ -1,4 +1,9 @@
- <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
--<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
--  <assemblyIdentity version="1.0.0.0" name="Wine.Test"/>
-+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
-+  <assemblyIdentity type="win32" version="1.0.0.0" name="Wine.Test"/>
-+  <asmv3:application>
-+    <asmv3:windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
-+      <ws2:longPathAware>true</ws2:longPathAware>
-+    </asmv3:windowsSettings>
-+  </asmv3:application>
- </assembly>
+@@ -6317,10 +6536,68 @@ static void test_eof(void)
+     ok(ret, "failed to delete %s, error %lu\n", debugstr_a(filename), GetLastError());
+ }
+ 
++static BOOL create_manifest_file(const char *filename)
++{
++    DWORD size;
++    HANDLE file;
++
++    file = CreateFileA(filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
++                       FILE_ATTRIBUTE_NORMAL, NULL);
++    ok(file != INVALID_HANDLE_VALUE, "CreateFile failed: %lu\n", GetLastError());
++    if(file == INVALID_HANDLE_VALUE)
++        return FALSE;
++    WriteFile(file, manifest_long_path_aware, strlen(manifest_long_path_aware), &size, NULL);
++    CloseHandle(file);
++
++    return TRUE;
++}
++
++static void run_child_process(void)
++{
++    char cmdline[MAX_PATH];
++    char path[MAX_PATH];
++    char **argv;
++    PROCESS_INFORMATION pi;
++    STARTUPINFOA si = { 0 };
++    HANDLE file;
++    FILETIME now;
++    BOOL ret;
++
++    GetModuleFileNameA(NULL, path, MAX_PATH);
++    strcat(path, ".manifest");
++    if(!create_manifest_file(path)) {
++        skip("Could not create manifest file\n");
++        return;
++    }
++
++    si.cb = sizeof(si);
++    winetest_get_mainargs( &argv );
++    /* Vista+ seems to cache presence of .manifest files. Change last modified
++       date to defeat the cache */
++    file = CreateFileA(argv[0], FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
++                       NULL, OPEN_EXISTING, 0, NULL);
++    if (file != INVALID_HANDLE_VALUE) {
++        GetSystemTimeAsFileTime(&now);
++        SetFileTime(file, NULL, NULL, &now);
++        CloseHandle(file);
++    }
++    sprintf(cmdline, "\"%s\" %s manifest", argv[0], argv[1]);
++    ret = CreateProcessA(argv[0], cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
++    ok(ret, "Could not create process: %lu\n", GetLastError());
++    wait_child_process( pi.hProcess );
++    CloseHandle(pi.hThread);
++    CloseHandle(pi.hProcess);
++    DeleteFileA(path);
++}
++
+ START_TEST(file)
+ {
+     char temp_path[MAX_PATH];
+     DWORD ret;
++    int argc;
++    char **argv;
++
++    argc = winetest_get_mainargs(&argv);
+ 
+     InitFunctionPointers();
+ 
+@@ -6395,4 +6672,7 @@ START_TEST(file)
+     test_move_file();
+     test_eof();
+     test_symbolic_link();
++
++    if (argc <= 2)
++        run_child_process();
+ }
 -- 
 GitLab
 

@@ -1,0 +1,125 @@
+From 1ce0928ffd10d100ed382b8ee73acd7ceda04734 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 16 Jun 2025 14:27:34 +0200
+Subject: [PATCH] win32u: Forbid setting GCW_ATOM class info.
+
+---
+ dlls/user32/tests/class.c      | 16 ++++++++--------
+ dlls/win32u/class.c            | 15 ---------------
+ include/wine/server_protocol.h |  1 -
+ server/class.c                 |  7 -------
+ 4 files changed, 8 insertions(+), 31 deletions(-)
+
+diff --git a/dlls/user32/tests/class.c b/dlls/user32/tests/class.c
+index 480f528e015..1a655023a18 100644
+--- a/dlls/user32/tests/class.c
++++ b/dlls/user32/tests/class.c
+@@ -2346,11 +2346,11 @@ static void test_class_name(void)
+     ok(res != 0, "unexpected class atom %#Ix\n", res);
+     SetLastError(0xdeadbeef);
+     res = SetClassWord(hwnd, GCW_ATOM, 2);
+-    todo_wine ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
+-    todo_wine ok(GetLastError() == ERROR_INVALID_INDEX, "got error %lu\n", GetLastError());
++    ok(res == 0, "SetClassWord returned %#Ix\n", res);
++    ok(GetLastError() == ERROR_INVALID_INDEX, "got error %lu\n", GetLastError());
+     SetLastError(0xdeadbeef);
+     res = SetClassLongPtrA(hwnd, GCW_ATOM, 2);
+-    todo_wine ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
++    ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
+     todo_wine ok(GetLastError() == ERROR_INVALID_PARAMETER, "got error %lu\n", GetLastError());
+     SetLastError(0xdeadbeef);
+ 
+@@ -2368,15 +2368,15 @@ static void test_class_name(void)
+     ok(res == 1, "unexpected class atom %#Ix\n", res);
+     SetLastError(0xdeadbeef);
+     res = SetClassWord(hwnd, GCW_ATOM, 2);
+-    todo_wine ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
+-    todo_wine ok(GetLastError() == ERROR_INVALID_INDEX, "got error %lu\n", GetLastError());
++    ok(res == 0, "SetClassWord returned %#Ix\n", res);
++    ok(GetLastError() == ERROR_INVALID_INDEX, "got error %lu\n", GetLastError());
+     SetLastError(0xdeadbeef);
+     res = SetClassWord(hwnd, GCW_ATOM, 1);
+-    todo_wine ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
+-    todo_wine ok(GetLastError() == ERROR_INVALID_INDEX, "got error %lu\n", GetLastError());
++    ok(res == 0, "SetClassWord returned %#Ix\n", res);
++    ok(GetLastError() == ERROR_INVALID_INDEX, "got error %lu\n", GetLastError());
+     SetLastError(0xdeadbeef);
+     res = SetClassLongPtrA(hwnd, GCW_ATOM, 2);
+-    todo_wine ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
++    ok(res == 0, "SetClassLongPtrA returned %#Ix\n", res);
+     todo_wine ok(GetLastError() == ERROR_INVALID_PARAMETER, "got error %lu\n", GetLastError());
+ 
+     nameA = (const char *)GetClassLongPtrA(hwnd, GCLP_MENUNAME);
+diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
+index 2c960a4060a..2b47776ee4b 100644
+--- a/dlls/win32u/class.c
++++ b/dlls/win32u/class.c
+@@ -749,10 +749,6 @@ static BOOL set_server_info( HWND hwnd, INT offset, LONG_PTR newval, UINT size )
+         req->extra_offset = -1;
+         switch(offset)
+         {
+-        case GCW_ATOM:
+-            req->flags = SET_CLASS_ATOM;
+-            req->atom = LOWORD(newval);
+-            break;
+         case GCL_STYLE:
+             req->flags = SET_CLASS_STYLE;
+             req->style = newval;
+@@ -910,17 +906,6 @@ static ULONG_PTR set_class_long( HWND hwnd, INT offset, LONG_PTR newval, UINT si
+         retval = class->instance;
+         class->instance = newval;
+         break;
+-    case GCW_ATOM:
+-        {
+-            UNICODE_STRING us;
+-            if (!set_server_info( hwnd, offset, newval, size )) break;
+-            retval = class->atomName;
+-            class->atomName = newval;
+-            us.Buffer = class->name;
+-            us.MaximumLength = sizeof(class->name);
+-            NtUserGetAtomName( newval, &us );
+-        }
+-        break;
+     case GCL_CBCLSEXTRA:  /* cannot change this one */
+         RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
+         break;
+diff --git a/include/wine/server_protocol.h b/include/wine/server_protocol.h
+index 1f9348e9e86..7dbd9446ea2 100644
+--- a/include/wine/server_protocol.h
++++ b/include/wine/server_protocol.h
+@@ -4517,7 +4517,6 @@ struct set_class_info_reply
+     int            old_win_extra;
+     char __pad_44[4];
+ };
+-#define SET_CLASS_ATOM      0x0001
+ #define SET_CLASS_STYLE     0x0002
+ #define SET_CLASS_WINEXTRA  0x0004
+ #define SET_CLASS_INSTANCE  0x0008
+diff --git a/server/class.c b/server/class.c
+index 5ecf60044da..6563a87fce5 100644
+--- a/server/class.c
++++ b/server/class.c
+@@ -254,7 +254,6 @@ DECL_HANDLER(destroy_class)
+ DECL_HANDLER(set_class_info)
+ {
+     struct window_class *class = get_window_class( req->window );
+-    struct atom_table *table = get_user_atom_table();
+ 
+     if (!class) return;
+ 
+@@ -293,12 +292,6 @@ DECL_HANDLER(set_class_info)
+     reply->old_instance  = class->instance;
+     reply->base_atom     = class->base_atom;
+ 
+-    if (req->flags & SET_CLASS_ATOM)
+-    {
+-        if (!grab_atom( table, req->atom )) return;
+-        release_atom( table, class->atom );
+-        class->atom = req->atom;
+-    }
+     if (req->flags & SET_CLASS_STYLE) class->style = req->style;
+     if (req->flags & SET_CLASS_WINEXTRA) class->win_extra = req->win_extra;
+     if (req->flags & SET_CLASS_INSTANCE) class->instance = req->instance;
+-- 
+GitLab
+

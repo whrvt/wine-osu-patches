@@ -64,9 +64,9 @@ index 30caeba7622..ea57e7303c0 100644
  
  /* dump a thread on stdout for debugging purposes */
 @@ -1394,6 +1407,7 @@ void kill_thread( struct thread *thread, int violent_death )
-         check_terminated( thread );
      }
-     else wake_up( &thread->obj, 0 );
+     else
+         wake_up( &thread->obj, 0 );
 +    set_inproc_event( thread->inproc_sync );
      cleanup_thread( thread );
      remove_process_thread( thread->process, thread );

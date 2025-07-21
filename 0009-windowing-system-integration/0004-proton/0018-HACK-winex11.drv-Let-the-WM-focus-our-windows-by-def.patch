@@ -40,9 +40,9 @@ index 7e17501e320..761e14c9c1c 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
 @@ -71,7 +71,7 @@ BOOL usexvidmode = TRUE;
- BOOL usexrandr = TRUE;
  BOOL usexcomposite = TRUE;
  BOOL use_xfixes = FALSE;
+ BOOL use_egl = FALSE;
 -BOOL use_take_focus = TRUE;
 +BOOL use_take_focus = FALSE;
  BOOL use_primary_selection = FALSE;

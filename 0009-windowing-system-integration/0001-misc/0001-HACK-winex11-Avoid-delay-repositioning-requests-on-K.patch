@@ -1,0 +1,40 @@
+From 10928f4222bfd766ff5372e8e4fc1e2998628c0d Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 21 Jul 2025 02:28:00 +0200
+Subject: [PATCH] HACK: winex11: Avoid delay/repositioning requests on KDE
+ X11/Wayland
+
+osu!stable behaves weird when it comes to alt-tab on KDE:
+- Repositioning sometimes breaks, leaving the window over the panel or not making it able to move.
+- Losing/grabbing focus causes issues with decorations/Mwmhints, due to some race condition with delay and WM events
+- (Mostly on Wayland) focusing back into the window sometimes fail leaving a blank window, always related to delay
+
+While debugging those can differ depending on setup/GPU, easiest fix is to just avoid such events.
+---
+ dlls/winex11.drv/window.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 23df481aca7..ac7d8328d2d 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1051,6 +1051,7 @@ static BOOL window_needs_config_change_delay( struct x11drv_win_data *data )
+ {
+     if (!data->managed || data->embedded) return FALSE; /* window is not managed or is embedded, safe to make changes */
+     if (data->pending_state.wm_state == WithdrawnState) return FALSE; /* window is unmapped, should be safe to make any change */
++    if (wm_is_kde(data->display)) return FALSE; /* HACK: KDE Wayland and osu!'s window management don't play well with the delay */
+     if (data->configure_serial) return TRUE; /* another config update is pending, wait for it to complete */
+     /* delay any config request when a _NET_WM_STATE or _MOTIF_WM_HINTS change which might trigger a ConfigureNotify is in flight */
+     return (data->net_wm_state_serial && (data->pending_state.net_wm_state ^ data->current_state.net_wm_state) & config_notify_mask) ||
+@@ -1473,6 +1474,8 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
+     data->desired_state.above = above;
+     if (!data->whole_window) return; /* no window, nothing to update */
+     if (EqualRect( old_rect, new_rect ) && (old_above || !above || data->managed)) return; /* rects are the same, no need to be raised, nothing to update */
++    /* KDE has issues repositioning the window/handling delay requests on osu!'s weird window management: simply avoid them */
++    if (data->is_fullscreen && !is_virtual_desktop() && wm_is_kde(data->display)) return;
+     if (window_needs_config_change_delay( data ))
+     {
+         TRACE( "window %p/%lx is updating _NET_WM_STATE/_MOTIF_WM_HINTS, delaying request\n", data->hwnd, data->whole_window );
+-- 
+2.50.1
+
