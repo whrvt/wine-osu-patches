@@ -1,0 +1,205 @@
+From bb9502fba85974fc5bb8dfbdc471e4574249a3ea Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 14 Jul 2025 15:26:57 -0600
+Subject: [PATCH] ntdll: Validate reserve handle in NtQueueApcThreadEx2().
+
+---
+ dlls/ntdll/tests/thread.c | 10 +++++-----
+ dlls/ntdll/unix/thread.c  |  3 ++-
+ server/object.c           | 29 ++++++++++++++++++++++++++++-
+ server/object.h           |  3 +++
+ server/protocol.def       |  1 +
+ server/thread.c           |  9 +++++++++
+ 6 files changed, 48 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/ntdll/tests/thread.c b/dlls/ntdll/tests/thread.c
+index a9b2b3db888..b47d43776f9 100644
+--- a/dlls/ntdll/tests/thread.c
++++ b/dlls/ntdll/tests/thread.c
+@@ -278,21 +278,21 @@ static void test_NtQueueApcThreadEx(void)
+     }
+ 
+     status = pNtQueueApcThreadEx( GetCurrentThread(), (HANDLE)QUEUE_USER_APC_CALLBACK_DATA_CONTEXT, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+-    todo_wine_if(!status) ok( status == STATUS_INVALID_HANDLE, "got %#lx, expected %#lx.\n", status, STATUS_INVALID_HANDLE );
++    ok( status == STATUS_INVALID_HANDLE, "got %#lx, expected %#lx.\n", status, STATUS_INVALID_HANDLE );
+ 
+     status = pNtQueueApcThreadEx( GetCurrentThread(), (HANDLE)QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+     ok( status == STATUS_SUCCESS || status == STATUS_INVALID_HANDLE /* wow64 and win64 on Win version before Win10 1809 */,
+         "got %#lx.\n", status );
+ 
+     status = pNtQueueApcThreadEx( GetCurrentThread(), GetCurrentThread(), apc_func, 0x1234, 0x5678, 0xdeadbeef );
+-    todo_wine_if(!status) ok( status == STATUS_OBJECT_TYPE_MISMATCH, "got %#lx.\n", status );
++    ok( status == STATUS_OBJECT_TYPE_MISMATCH, "got %#lx.\n", status );
+ 
+     status = pNtAllocateReserveObject( &reserve, NULL, MemoryReserveObjectTypeUserApc );
+     ok( status == STATUS_SUCCESS, "Got unexpected status %#lx.\n", status );
+     status = pNtQueueApcThreadEx( GetCurrentThread(), reserve, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+     ok( !status, "got %#lx.\n", status );
+     status = pNtQueueApcThreadEx( GetCurrentThread(), reserve, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+-    todo_wine_if(!status) ok( status == STATUS_INVALID_PARAMETER_2, "got %#lx.\n", status );
++    ok( status == STATUS_INVALID_PARAMETER_2, "got %#lx.\n", status );
+     SleepEx( 0, TRUE );
+     status = pNtQueueApcThreadEx( GetCurrentThread(), reserve, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+     ok( !status, "got %#lx.\n", status );
+@@ -302,7 +302,7 @@ static void test_NtQueueApcThreadEx(void)
+     status = pNtAllocateReserveObject( &reserve, NULL, MemoryReserveObjectTypeIoCompletion );
+     ok( status == STATUS_SUCCESS, "Got unexpected status %#lx.\n", status );
+     status = pNtQueueApcThreadEx( GetCurrentThread(), reserve, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+-    todo_wine_if(!status) ok( status == STATUS_OBJECT_TYPE_MISMATCH, "got %#lx.\n", status );
++    ok( status == STATUS_OBJECT_TYPE_MISMATCH, "got %#lx.\n", status );
+     NtClose( reserve );
+ 
+     SleepEx( 0, TRUE );
+@@ -317,7 +317,7 @@ static void test_NtQueueApcThreadEx(void)
+     ok( status == expected, "got %#lx, expected %#lx.\n", status, expected );
+ 
+     status = pNtQueueApcThreadEx2( GetCurrentThread(), (HANDLE)QUEUE_USER_APC_CALLBACK_DATA_CONTEXT, 0, apc_func, 0x1234, 0x5678, 0xdeadbeef );
+-    todo_wine_if(!status) ok( status == STATUS_INVALID_HANDLE, "got %#lx.\n", status );
++    ok( status == STATUS_INVALID_HANDLE, "got %#lx.\n", status );
+ 
+     SleepEx( 0, TRUE );
+ }
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index e554b06fe1c..71d1b62803c 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -1729,13 +1729,14 @@ NTSTATUS WINAPI NtQueueApcThreadEx2( HANDLE handle, HANDLE reserve_handle, ULONG
+     union apc_call call;
+ 
+     TRACE( "%p %p %#x %p %p %p %p.\n", handle, reserve_handle, flags, func, (void *)arg1, (void *)arg2, (void *)arg3 );
+-    if (reserve_handle || flags) FIXME( "Unsupported reserve_handle %p, flags %#x.\n", reserve_handle, flags );
++    if (flags) FIXME( "Unsupported flags %#x.\n", flags );
+ 
+     if (flags & QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC && is_wow64()) return STATUS_NOT_SUPPORTED;
+ 
+     SERVER_START_REQ( queue_apc )
+     {
+         req->handle = wine_server_obj_handle( handle );
++        req->reserve_handle = wine_server_obj_handle( reserve_handle );
+         if (func)
+         {
+             call.type         = APC_USER;
+diff --git a/server/object.c b/server/object.c
+index 28bda0db77b..25589b4bd2b 100644
+--- a/server/object.c
++++ b/server/object.c
+@@ -68,6 +68,7 @@ struct reserve
+ {
+     struct object obj;          /* object header */
+     int    type;                /* reserve object type. See MEMORY_RESERVE_OBJECT_TYPE */
++    struct object *bound_obj;   /* object using reserve object */
+     /* BYTE *memory */;         /* reserved memory */
+ };
+ 
+@@ -857,7 +858,11 @@ static struct reserve *create_reserve( struct object *root, const struct unicode
+         return NULL;
+     }
+ 
+-    if (reserve && get_error() != STATUS_OBJECT_NAME_EXISTS) reserve->type = type;
++    if (reserve && get_error() != STATUS_OBJECT_NAME_EXISTS)
++    {
++        reserve->type = type;
++        reserve->bound_obj = NULL;
++    }
+ 
+     return reserve;
+ }
+@@ -867,6 +872,28 @@ struct reserve *get_completion_reserve_obj( struct process *process, obj_handle_
+     return (struct reserve *)get_handle_obj( process, handle, access, &completion_reserve_ops );
+ }
+ 
++struct reserve *reserve_obj_associate_apc( struct process *process, obj_handle_t handle, struct object *apc )
++{
++    struct reserve *reserve;
++
++    if (!(reserve = (struct reserve *)get_handle_obj( process, handle, 0, &apc_reserve_ops ))) return NULL;
++    if (reserve->bound_obj)
++    {
++        release_object( reserve );
++        set_error( STATUS_INVALID_PARAMETER_2 );
++        return NULL;
++    }
++    reserve->bound_obj = apc;
++    return reserve;
++}
++
++void reserve_obj_unbind( struct reserve *reserve )
++{
++    if (!reserve) return;
++    reserve->bound_obj = NULL;
++    release_object( reserve );
++}
++
+ /* Allocate a reserve object for pre-allocating memory for object types */
+ DECL_HANDLER(allocate_reserve_object)
+ {
+diff --git a/server/object.h b/server/object.h
+index 1bf439338d4..1622e93f784 100644
+--- a/server/object.h
++++ b/server/object.h
+@@ -194,6 +194,9 @@ extern void dump_objects(void);
+ extern void close_objects(void);
+ #endif
+ 
++struct reserve *reserve_obj_associate_apc( struct process *process, obj_handle_t handle, struct object *apc );
++void reserve_obj_unbind( struct reserve *reserve );
++
+ static inline void make_object_permanent( struct object *obj ) { obj->is_permanent = 1; }
+ static inline void make_object_temporary( struct object *obj ) { obj->is_permanent = 0; }
+ 
+diff --git a/server/protocol.def b/server/protocol.def
+index 22470e33ae0..09b6f189162 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1297,6 +1297,7 @@ struct obj_locator
+ /* Queue an APC for a thread or process */
+ @REQ(queue_apc)
+     obj_handle_t handle;       /* thread or process handle */
++    obj_handle_t reserve_handle; /* APC object optional reserve handle */
+     VARARG(call,apc_call);     /* call arguments */
+ @REPLY
+     obj_handle_t handle;       /* APC handle */
+diff --git a/server/thread.c b/server/thread.c
+index 05ec6a4ec00..f154c1ed075 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -89,6 +89,7 @@ struct thread_apc
+     struct list         entry;    /* queue linked list */
+     struct thread      *caller;   /* thread that queued this apc */
+     struct object      *owner;    /* object that queued this apc */
++    struct reserve     *reserve;  /* reserve object associated with apc object */
+     int                 executed; /* has it been executed by the client? */
+     union apc_call      call;     /* call arguments */
+     union apc_result    result;   /* call results once executed */
+@@ -701,6 +702,7 @@ static void thread_apc_destroy( struct object *obj )
+         release_object( apc->owner );
+     }
+     if (apc->sync) release_object( apc->sync );
++    reserve_obj_unbind( apc->reserve );
+ }
+ 
+ /* queue an async procedure call */
+@@ -715,6 +717,7 @@ static struct thread_apc *create_apc( struct object *owner, const union apc_call
+         else apc->call.type = APC_NONE;
+         apc->caller      = NULL;
+         apc->owner       = owner;
++        apc->reserve     = NULL;
+         apc->executed    = 0;
+         apc->result.type = APC_NONE;
+         if (owner) grab_object( owner );
+@@ -2016,6 +2019,12 @@ DECL_HANDLER(queue_apc)
+     {
+     case APC_NONE:
+     case APC_USER:
++        if (req->reserve_handle &&
++            !(apc->reserve = reserve_obj_associate_apc( current->process, req->reserve_handle, &apc->obj )))
++        {
++            release_object( apc );
++            return;
++        }
+         thread = get_thread_from_handle( req->handle, THREAD_SET_CONTEXT );
+         break;
+     case APC_VIRTUAL_ALLOC:
+-- 
+GitLab
+

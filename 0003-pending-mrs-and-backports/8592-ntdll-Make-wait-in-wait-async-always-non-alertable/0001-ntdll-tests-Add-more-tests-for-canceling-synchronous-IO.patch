@@ -1,0 +1,321 @@
+From 891afb884bf941b401cbf1374caf5ae4db40b954 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 17 Jul 2025 19:03:50 -0600
+Subject: [PATCH] ntdll/tests: Add more tests for canceling synchronous IO.
+
+---
+ dlls/ntdll/tests/pipe.c | 186 +++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 175 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index 14a6148a2c5..fb292a8c5e6 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -1655,19 +1655,27 @@ struct blocking_thread_args
+     enum {
+         BLOCKING_THREAD_WRITE,
+         BLOCKING_THREAD_READ,
++        BLOCKING_THREAD_USER_APC,
++        BLOCKING_THREAD_CANCEL_IO,
+         BLOCKING_THREAD_QUIT
+     } cmd;
+     HANDLE client;
+     HANDLE pipe;
+     HANDLE event;
++    HANDLE io_thread;
++    unsigned int line;
+ };
+ 
++#define blocking_thread_command(command) {ctx.cmd = command; ctx.line = __LINE__; SetEvent(ctx.wait);}
++
+ static DWORD WINAPI blocking_thread(void *arg)
+ {
+     struct blocking_thread_args *ctx = arg;
+     static const char buf[] = "testdata";
+     char read_buf[32];
+     DWORD res, num_bytes;
++    IO_STATUS_BLOCK io;
++    NTSTATUS status;
+     BOOL ret;
+ 
+     for (;;)
+@@ -1675,6 +1683,7 @@ static DWORD WINAPI blocking_thread(void *arg)
+         res = WaitForSingleObject(ctx->wait, 10000);
+         ok(res == WAIT_OBJECT_0, "wait returned %lx\n", res);
+         if (res != WAIT_OBJECT_0) break;
++        winetest_push_context("test line %d", ctx->line);
+         switch(ctx->cmd) {
+         case BLOCKING_THREAD_WRITE:
+             Sleep(100);
+@@ -1698,11 +1707,32 @@ static DWORD WINAPI blocking_thread(void *arg)
+             ok(ret, "WriteFile failed, error %lu\n", GetLastError());
+             ok(is_signaled(ctx->pipe), "pipe is not signaled\n");
+             break;
++        case BLOCKING_THREAD_USER_APC:
++            Sleep(100);
++            if(ctx->event)
++                ok(!is_signaled(ctx->event), "event is signaled\n");
++            ok(!ioapc_called, "ioapc called\n");
++            ok(!userapc_called, "userapc called.\n");
++            ok(!is_signaled(ctx->client), "client is signaled\n");
++            ok(is_signaled(ctx->pipe), "pipe is not signaled\n");
++            pQueueUserAPC(userapc, ctx->io_thread, 0);
++            break;
++        case BLOCKING_THREAD_CANCEL_IO:
++            Sleep(100);
++            if(ctx->event)
++                ok(!is_signaled(ctx->event), "event is signaled\n");
++            ok(!ioapc_called, "ioapc called\n");
++            ok(!is_signaled(ctx->client), "client is signaled\n");
++            ok(is_signaled(ctx->pipe), "pipe is not signaled\n");
++            status = pNtCancelSynchronousIoFile(ctx->io_thread, NULL, &io);
++            ok(status == STATUS_SUCCESS, "NtCancelSynchronousIoFile failed, status %#lx.\n", status);
++            break;
+         case BLOCKING_THREAD_QUIT:
+             return 0;
+         default:
+             ok(0, "unvalid command\n");
+         }
++        winetest_pop_context();
+         SetEvent(ctx->done);
+     }
+ 
+@@ -1712,6 +1742,7 @@ static DWORD WINAPI blocking_thread(void *arg)
+ static void test_blocking(ULONG options)
+ {
+     struct blocking_thread_args ctx;
++    BOOL completing_canceled;
+     OBJECT_ATTRIBUTES attr;
+     UNICODE_STRING name;
+     char read_buf[16];
+@@ -1719,10 +1750,13 @@ static void test_blocking(ULONG options)
+     IO_STATUS_BLOCK io;
+     NTSTATUS status;
+     DWORD res, num_bytes;
++    HANDLE client_nonalert;
+     BOOL ret;
+ 
+     ctx.wait = CreateEventW(NULL, FALSE, FALSE, NULL);
+     ctx.done = CreateEventW(NULL, FALSE, FALSE, NULL);
++    DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &ctx.io_thread, 0, FALSE,
++            DUPLICATE_SAME_ACCESS);
+     thread = CreateThread(NULL, 0, blocking_thread, &ctx, 0, 0);
+     ok(thread != INVALID_HANDLE_VALUE, "can't create thread, GetLastError: %lx\n", GetLastError());
+ 
+@@ -1743,9 +1777,8 @@ static void test_blocking(ULONG options)
+     /* blocking read with no event nor APC */
+     ioapc_called = FALSE;
+     memset(&io, 0xff, sizeof(io));
+-    ctx.cmd = BLOCKING_THREAD_WRITE;
+     ctx.event = NULL;
+-    SetEvent(ctx.wait);
++    blocking_thread_command(BLOCKING_THREAD_WRITE);
+     status = NtReadFile(ctx.client, NULL, NULL, NULL, &io, read_buf, sizeof(read_buf), NULL, NULL);
+     ok(status == STATUS_SUCCESS, "status = %lx\n", status);
+     ok(io.Status == STATUS_SUCCESS, "Status = %lx\n", io.Status);
+@@ -1758,9 +1791,8 @@ static void test_blocking(ULONG options)
+     /* blocking read with event and APC */
+     ioapc_called = FALSE;
+     memset(&io, 0xff, sizeof(io));
+-    ctx.cmd = BLOCKING_THREAD_WRITE;
+     ctx.event = CreateEventW(NULL, TRUE, TRUE, NULL);
+-    SetEvent(ctx.wait);
++    blocking_thread_command(BLOCKING_THREAD_WRITE);
+     status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
+                         sizeof(read_buf), NULL, NULL);
+     ok(status == STATUS_SUCCESS, "status = %lx\n", status);
+@@ -1772,12 +1804,14 @@ static void test_blocking(ULONG options)
+ 
+     if (!(options & FILE_SYNCHRONOUS_IO_ALERT))
+         ok(!ioapc_called, "ioapc called\n");
++    else
++        todo_wine ok(ioapc_called, "ioapc called\n");
+     SleepEx(0, TRUE); /* alertable wait state */
+     ok(ioapc_called, "ioapc not called\n");
+ 
+     res = WaitForSingleObject(ctx.done, 10000);
+     ok(res == WAIT_OBJECT_0, "wait returned %lx\n", res);
+-    ioapc_called = FALSE;
++
+     CloseHandle(ctx.event);
+     ctx.event = NULL;
+ 
+@@ -1787,8 +1821,7 @@ static void test_blocking(ULONG options)
+ 
+     ioapc_called = FALSE;
+     memset(&io, 0xff, sizeof(io));
+-    ctx.cmd = BLOCKING_THREAD_READ;
+-    SetEvent(ctx.wait);
++    blocking_thread_command(BLOCKING_THREAD_READ);
+     status = NtFlushBuffersFile(ctx.client, &io);
+     ok(status == STATUS_SUCCESS, "status = %lx\n", status);
+     ok(io.Status == STATUS_SUCCESS, "Status = %lx\n", io.Status);
+@@ -1814,8 +1847,7 @@ static void test_blocking(ULONG options)
+ 
+     ioapc_called = FALSE;
+     memset(&io, 0xff, sizeof(io));
+-    ctx.cmd = BLOCKING_THREAD_READ;
+-    SetEvent(ctx.wait);
++    blocking_thread_command(BLOCKING_THREAD_READ);
+     status = NtFlushBuffersFile(ctx.client, &io);
+     ok(status == STATUS_SUCCESS, "status = %lx\n", status);
+     ok(io.Status == STATUS_SUCCESS, "Status = %lx\n", io.Status);
+@@ -1828,13 +1860,143 @@ static void test_blocking(ULONG options)
+     CloseHandle(ctx.pipe);
+     CloseHandle(ctx.client);
+ 
+-    ctx.cmd = BLOCKING_THREAD_QUIT;
+-    SetEvent(ctx.wait);
++    ctx.event = CreateEventW(NULL, TRUE, TRUE, NULL);
++    status = create_pipe(&ctx.pipe, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
++                         options);
++    ok(status == STATUS_SUCCESS, "NtCreateNamedPipeFile returned %lx\n", status);
++    pRtlInitUnicodeString(&name, testpipe_nt);
++    InitializeObjectAttributes( &attr, &name, OBJ_CASE_INSENSITIVE, 0, NULL );
++    status = NtCreateFile(&ctx.client, SYNCHRONIZE | GENERIC_READ | GENERIC_WRITE, &attr, &io,
++                          NULL, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN,
++                          options, NULL, 0 );
++    ok(status == STATUS_SUCCESS, "NtCreateFile returned %lx\n", status);
++    if (options & FILE_SYNCHRONOUS_IO_ALERT)
++    {
++        /* Alertable IO interrupted with pre-queued user APC. */
++        io.Status = 0xdeadbeef;
++        io.Information = 0xdeadbeef;
++        pQueueUserAPC(userapc, GetCurrentThread(), 0);
++        userapc_called = FALSE;
++        ioapc_called = FALSE;
++        status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
++                            sizeof(read_buf), NULL, NULL);
++        todo_wine ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++        todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef) /* Before Win11 24H2 */,
++                "Status = %lx\n", io.Status);
++        completing_canceled = io.Status != 0xdeadbeef;
++        todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++                "Information = %Iu\n", io.Information);
++        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++                "event is not signaled\n");
++        ok(!ioapc_called, "ioapc called\n");
++        ok(userapc_called, "user apc is not called.\n");
++        SleepEx(0, TRUE);
++        ok(!ioapc_called, "ioapc called\n");
++
++        /* Alertable IO interrupted with pre-queued IO completion user APC. */
++        ioapc_called = FALSE;
++        client_nonalert = CreateFileW(L"test.dat", GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
++        ok(client_nonalert != INVALID_HANDLE_VALUE, "CreateFileW error %lu\n", GetLastError());
++        status = NtWriteFile(client_nonalert, ctx.event, ioapc, &io, &io, read_buf, sizeof(read_buf), NULL, NULL);
++        ok(status == STATUS_SUCCESS, "status = %lx\n", status);
++        ok(io.Status == STATUS_SUCCESS, "Status = %lx\n", io.Status);
++        ok(io.Information == sizeof(read_buf), "Information = %Iu\n", io.Information);
++        ok(!ioapc_called, "ioapc called\n");
++        ok(is_signaled(ctx.event), "event is not signaled\n");
++
++        io.Status = 0xdeadbeef;
++        io.Information = 0xdeadbeef;
++        userapc_called = FALSE;
++        ioapc_called = FALSE;
++        status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
++                            sizeof(read_buf), NULL, NULL);
++        todo_wine ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++        todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++                "Status = %lx\n", io.Status);
++        todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++                "Information = %Iu\n", io.Information);
++        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++                "event is not signaled\n");
++        ok(ioapc_called, "ioapc called\n");
++        ok(!userapc_called, "user apc is not called.\n");
++        SleepEx(0, TRUE);
++
++        DeleteFileW(L"test.dat");
++        CloseHandle(client_nonalert);
++
++        /* Non-alertable IO function with FILE_SYNCHRONOUS_IO_ALERT handle. */
++        io.Status = 0xdeadbeef;
++        io.Information = 0xdeadbeef;
++        pQueueUserAPC(userapc, GetCurrentThread(), 0);
++        userapc_called = FALSE;
++        ioapc_called = FALSE;
++        status = NtFlushBuffersFile(ctx.client, &io);
++        ok(status == STATUS_SUCCESS, "status = %lx\n", status);
++        ok(io.Status == STATUS_SUCCESS, "Status = %lx\n", io.Status);
++        ok(io.Information == 0, "Information = %Iu\n", io.Information);
++        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled), "event is not signaled\n");
++        ok(!ioapc_called, "ioapc called\n");
++        ok(!userapc_called, "user apc is not called.\n");
++        SleepEx(0, TRUE);
++        ok(!ioapc_called, "ioapc called\n");
++        ok(userapc_called, "user apc is not called.\n");
++
++        /* Alertable IO interrupted with user APC during wait. */
++        io.Status = 0xdeadbeef;
++        io.Information = 0xdeadbeef;
++        userapc_called = FALSE;
++        ioapc_called = FALSE;
++        blocking_thread_command(BLOCKING_THREAD_USER_APC);
++        status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
++                            sizeof(read_buf), NULL, NULL);
++        todo_wine ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++        todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++                "Status = %lx\n", io.Status);
++        todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++                "Information = %Iu\n", io.Information);
++        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++                "event is not signaled\n");
++        ok(!ioapc_called, "ioapc called\n");
++        ok(userapc_called, "user apc is not called.\n");
++        SleepEx(0, TRUE);
++        ok(!ioapc_called, "ioapc called\n");
++    }
++
++    /* IO interrupted with NtCancelSynchronousIoFile(). */
++    io.Status = 0xdeadbeef;
++    io.Information = 0xdeadbeef;
++    userapc_called = FALSE;
++    ioapc_called = FALSE;
++    blocking_thread_command(BLOCKING_THREAD_CANCEL_IO);
++    status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
++                        sizeof(read_buf), NULL, NULL);
++    ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++    todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef) /* Before Win11 24H2 */,
++            "Status = %lx\n", io.Status);
++    completing_canceled = io.Status != 0xdeadbeef;
++    todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++            "Information = %Iu\n", io.Information);
++    ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++            "event is not signaled\n");
++    ok(!ioapc_called, "ioapc called\n");
++    ok(!userapc_called, "user apc is not called.\n");
++    SleepEx(0, TRUE);
++    todo_wine ok(!ioapc_called, "ioapc called\n");
++
++    ioapc_called = FALSE;
++    CloseHandle(ctx.event);
++    ctx.event = NULL;
++
++    CloseHandle(ctx.pipe);
++    CloseHandle(ctx.client);
++
++    blocking_thread_command(BLOCKING_THREAD_QUIT);
+     res = WaitForSingleObject(thread, 10000);
+     ok(res == WAIT_OBJECT_0, "wait returned %lx\n", res);
+ 
+     CloseHandle(ctx.wait);
+     CloseHandle(ctx.done);
++    CloseHandle(ctx.io_thread);
+     CloseHandle(thread);
+ }
+ 
+@@ -3118,7 +3280,9 @@ START_TEST(pipe)
+ 
+     trace("starting blocking tests\n");
+     test_blocking(FILE_SYNCHRONOUS_IO_NONALERT);
++    winetest_push_context("aletrable");
+     test_blocking(FILE_SYNCHRONOUS_IO_ALERT);
++    winetest_pop_context();
+ 
+     trace("starting FILE_PIPE_INFORMATION tests\n");
+     test_filepipeinfo();
+-- 
+GitLab
+

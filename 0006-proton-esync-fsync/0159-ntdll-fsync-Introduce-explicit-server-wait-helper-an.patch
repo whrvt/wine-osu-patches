@@ -50,26 +50,27 @@ index fd3faf61997..b2db0247b76 100644
      if (status != WAIT_OBJECT_0) goto done;
  
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index 82fc9d2bc02..9dc8ea627e0 100644
+index 92acd19036a..0f4f3d14758 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -214,6 +214,7 @@ extern unsigned int server_select( const select_op_t *select_op, data_size_t siz
-                                    timeout_t abs_timeout, context_t *context, user_apc_t *user_apc );
- extern unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT flags,
+@@ -236,6 +236,7 @@ extern unsigned int server_select( const union select_op *select_op, data_size_t
+                                    timeout_t abs_timeout, struct context_data *context, struct user_apc *user_apc );
+ extern unsigned int server_wait( const union select_op *select_op, data_size_t size, UINT flags,
                                   const LARGE_INTEGER *timeout );
 +extern NTSTATUS wait_internal_server( HANDLE handle, BOOLEAN alertable, const LARGE_INTEGER *timeout );
  extern unsigned int server_queue_process_apc( HANDLE process, const union apc_call *call,
                                                union apc_result *result );
  extern int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
-@@ -455,7 +456,7 @@ static inline async_data_t server_async( HANDLE handle, struct async_fileio *use
- 
- static inline NTSTATUS wait_async( HANDLE handle, BOOL alertable )
+@@ -480,7 +481,7 @@ static inline NTSTATUS wait_async( HANDLE handle, BOOL alertable )
  {
--    return NtWaitForSingleObject( handle, alertable, NULL );
-+    return wait_internal_server( handle, alertable, NULL );
- }
+     NTSTATUS ret;
  
- static inline BOOL in_wow64_call(void)
+-    ret = NtWaitForSingleObject( handle, FALSE, NULL );
++    ret = wait_internal_server( handle, FALSE, NULL );
+     if (alertable) test_alert_with_status( ret );
+     return ret;
+ }
+
 -- 
 2.47.0
 

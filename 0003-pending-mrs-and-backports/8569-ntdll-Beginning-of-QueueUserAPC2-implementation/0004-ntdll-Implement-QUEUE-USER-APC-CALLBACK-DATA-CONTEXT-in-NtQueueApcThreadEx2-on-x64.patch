@@ -1,0 +1,298 @@
+From 091f62daf7210f1cb8cb8a0842c0a23f1ca4598f Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 11 Jul 2025 20:58:38 -0600
+Subject: [PATCH] ntdll: Implement QUEUE_USER_APC_CALLBACK_DATA_CONTEXT in
+ NtQueueApcThreadEx2() on x64.
+
+---
+ dlls/ntdll/signal_x86_64.c      |   6 +-
+ dlls/ntdll/tests/exception.c    | 119 ++++++++++++++++++++++++++++++--
+ dlls/ntdll/unix/signal_x86_64.c |  28 ++++++--
+ include/processthreadsapi.h     |   8 +++
+ 4 files changed, 148 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/ntdll/signal_x86_64.c b/dlls/ntdll/signal_x86_64.c
+index ad9557ca906..31070566d40 100644
+--- a/dlls/ntdll/signal_x86_64.c
++++ b/dlls/ntdll/signal_x86_64.c
+@@ -348,7 +348,7 @@ __ASM_GLOBAL_FUNC( KiUserExceptionDispatcher,
+  */
+ __ASM_GLOBAL_FUNC( KiUserApcDispatcher,
+                    __ASM_SEH(".seh_pushframe\n\t")
+-                   __ASM_SEH(".seh_stackalloc 0x4d0\n\t")  /* sizeof(CONTEXT) */
++                   __ASM_SEH(".seh_stackalloc 0x530\n\t")  /* machine_frame offset */
+                    __ASM_SEH(".seh_savereg %rbx,0x90\n\t")
+                    __ASM_SEH(".seh_savereg %rbp,0xa0\n\t")
+                    __ASM_SEH(".seh_savereg %rsi,0xa8\n\t")
+@@ -368,8 +368,8 @@ __ASM_GLOBAL_FUNC( KiUserApcDispatcher,
+                    __ASM_CFI(".cfi_offset %r13,0xe0\n\t")
+                    __ASM_CFI(".cfi_offset %r14,0xe8\n\t")
+                    __ASM_CFI(".cfi_offset %r15,0xf0\n\t")
+-                   __ASM_CFI(".cfi_offset %rip,0x4d0\n\t")
+-                   __ASM_CFI(".cfi_offset %rsp,0x4e8\n\t")
++                   __ASM_CFI(".cfi_offset %rip,0x530\n\t")
++                   __ASM_CFI(".cfi_offset %rsp,0x548\n\t")
+                    "movq 0x00(%rsp),%rcx\n\t"  /* context->P1Home = arg1 */
+                    "movq 0x08(%rsp),%rdx\n\t"  /* context->P2Home = arg2 */
+                    "movq 0x10(%rsp),%r8\n\t"   /* context->P3Home = arg3 */
+diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
+index 00c428e5071..f3cca611968 100644
+--- a/dlls/ntdll/tests/exception.c
++++ b/dlls/ntdll/tests/exception.c
+@@ -44,6 +44,10 @@ static NTSTATUS  (WINAPI *pNtGetContextThread)(HANDLE,CONTEXT*);
+ static NTSTATUS  (WINAPI *pNtSetContextThread)(HANDLE,CONTEXT*);
+ static NTSTATUS  (WINAPI *pNtQueueApcThread)(HANDLE handle, PNTAPCFUNC func,
+         ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3);
++static NTSTATUS  (WINAPI *pNtQueueApcThreadEx)(HANDLE handle, HANDLE reserve_handle, PNTAPCFUNC func,
++        ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3);
++static NTSTATUS  (WINAPI *pNtQueueApcThreadEx2)(HANDLE handle, HANDLE reserve_handle, ULONG flags, PNTAPCFUNC func,
++        ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3);
+ static NTSTATUS  (WINAPI *pNtContinueEx)(CONTEXT*,KCONTINUE_ARGUMENT*);
+ static NTSTATUS  (WINAPI *pRtlRaiseException)(EXCEPTION_RECORD *rec);
+ static PVOID     (WINAPI *pRtlUnwind)(PVOID, PVOID, PEXCEPTION_RECORD, PVOID);
+@@ -178,11 +182,31 @@ static BOOL old_wow64;  /* Wine old-style wow64 */
+ static UINT apc_count;
+ static BOOL have_vectored_api;
+ static enum debugger_stages test_stage;
++static QUEUE_USER_APC_FLAGS apc_flags;
+ 
+ static void CALLBACK apc_func( ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3 )
+ {
++    if (apc_flags & QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC && ((ULONG64)arg1 >> 48) == 0xffff /* Win 10 1809v2 */)
++    {
++        win_skip( "Broken APC layout, skipping tests.\n" );
++        apc_count++;
++        return;
++    }
++
+     ok( arg1 == 0x1234 + apc_count, "wrong arg1 %Ix\n", arg1 );
+-    ok( arg2 == 0x5678, "wrong arg2 %Ix\n", arg2 );
++    if (apc_flags & QUEUE_USER_APC_CALLBACK_DATA_CONTEXT)
++    {
++        APC_CALLBACK_DATA *d = (APC_CALLBACK_DATA *)arg2;
++
++        ok( !!d->ContextRecord, "got NULL.\n" );
++        ok( d->Parameter == 0x5678, "got %#Ix\n", arg2 );
++        ok( !d->Reserved0, "got %#Ix.\n", d->Reserved0 );
++        ok( !d->Reserved1, "got %#Ix.\n", d->Reserved1 );
++    }
++    else
++    {
++        ok( arg2 == 0x5678, "wrong arg2 %Ix\n", arg2 );
++    }
+     ok( arg3 == 0xdeadbeef, "wrong arg3 %Ix\n", arg3 );
+     apc_count++;
+ }
+@@ -5230,8 +5254,14 @@ static void * WINAPI hook_KiUserApcDispatcher(CONTEXT *context)
+            context, context->Rip, context->Rsp,
+            (char *)context->Rsp - (char *)context, context->ContextFlags );
+ 
+-    ok( context->P1Home == 0x1234, "wrong p1 %#Ix\n", context->P1Home );
+-    ok( context->P2Home == 0x5678, "wrong p2 %#Ix\n", context->P2Home );
++    ok( context->P1Home == 0x1234 ||
++        broken(apc_flags & QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC && (context->P1Home >> 48) == 0xffff) /* Win 10 1809v2 */,
++        "wrong p1 %#Ix\n", context->P1Home );
++    if (context->P1Home != 0x1234)
++    {
++        win_skip( "Broken APC layout, skipping tests.\n" );
++        goto done;
++    }
+     ok( context->P3Home == 0xdeadbeef, "wrong p3 %#Ix\n", context->P3Home );
+     ok( context->P4Home == (ULONG_PTR)apc_func, "wrong p4 %#Ix / %p\n", context->P4Home, apc_func );
+ 
+@@ -5241,9 +5271,38 @@ static void * WINAPI hook_KiUserApcDispatcher(CONTEXT *context)
+         if (frame->rip == context->Rip) break;
+         frame = (struct machine_frame *)((ULONG64 *)frame + 2);
+     }
++
++    if ((char *)frame - (char *)context == 0x530)
++    {
++        KCONTINUE_ARGUMENT *continue_arg;
++        APC_CALLBACK_DATA *data;
++
++        continue_arg = (KCONTINUE_ARGUMENT *)((char *)context + sizeof(CONTEXT) + sizeof(CONTEXT_EX));
++        data = (APC_CALLBACK_DATA *)((char *)continue_arg + sizeof(*continue_arg) + sizeof(void *));
++        ok( (char *)frame == (char *)(data + 1), "got %p, %p.\n", data, frame );
++        if (apc_flags & QUEUE_USER_APC_CALLBACK_DATA_CONTEXT)
++            ok( data == (void *)context->P2Home, "got %p, %p.\n", data, (void *)context->P2Home);
++
++        ok( continue_arg->ContinueType == KCONTINUE_RESUME, "got %d.\n", continue_arg->ContinueType );
++        if (apc_flags & QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC)
++            todo_wine ok( continue_arg->ContinueFlags == KCONTINUE_FLAG_DELIVER_APC,
++                          "got %d.\n", continue_arg->ContinueType );
++        else
++            ok( continue_arg->ContinueFlags == (KCONTINUE_FLAG_TEST_ALERT | KCONTINUE_FLAG_DELIVER_APC),
++                "got %d.\n", continue_arg->ContinueType );
++    }
++    else
++    {
++        if (is_arm64ec)
++            skip( "Unsupported stack layout, skipping exact layout test.\n" );
++        else
++            win_skip( "Unsupported stack layout, skipping exact layout test.\n" );
++    }
++
+     ok( frame->rip == context->Rip, "wrong rip %#Ix / %#Ix\n", frame->rip, context->Rip );
+     ok( frame->rsp == context->Rsp, "wrong rsp %#Ix / %#Ix\n", frame->rsp, context->Rsp );
+ 
++done:
+     hook_called = TRUE;
+     memcpy( pKiUserApcDispatcher, saved_KiUserApcDispatcher, sizeof(saved_KiUserApcDispatcher));
+     return pKiUserApcDispatcher;
+@@ -5262,6 +5321,7 @@ static void test_KiUserApcDispatcher(void)
+ 
+     BYTE patched_KiUserApcDispatcher[12];
+     DWORD old_protect;
++    NTSTATUS status;
+     BYTE *ptr;
+     BOOL ret;
+ 
+@@ -5286,12 +5346,61 @@ static void test_KiUserApcDispatcher(void)
+ 
+     hook_called = FALSE;
+     apc_count = 0;
+-    pNtQueueApcThread( GetCurrentThread(), apc_func, 0x1234, 0x5678, 0xdeadbeef );
++    apc_flags = 0;
++    status = pNtQueueApcThread( GetCurrentThread(), apc_func, 0x1234, 0x5678, 0xdeadbeef );
++    ok( !status, "got %#lx.\n", status );
+     SleepEx( 0, TRUE );
+     ok( apc_count == 1, "APC was not called\n" );
+     /* hooking is bypassed on arm64ec */
+     ok( is_arm64ec ? !hook_called : hook_called, "hook was not called\n" );
+ 
++    if (!pNtQueueApcThreadEx)
++    {
++        win_skip( "NtQueueApcThreadEx is not available.\n" );
++        goto done;
++    }
++
++    memcpy( pKiUserApcDispatcher, patched_KiUserApcDispatcher, sizeof(patched_KiUserApcDispatcher) );
++    hook_called = FALSE;
++    apc_count = 0;
++    apc_flags = QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC;
++    status = pNtQueueApcThreadEx( GetCurrentThread(), (HANDLE)QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC, apc_func,
++                                  0x1234, 0x5678, 0xdeadbeef );
++    ok( !status || broken( status == STATUS_INVALID_HANDLE ) /* before Win10 1809 */, "got %#lx.\n", status );
++    if (!status)
++    {
++        todo_wine ok( apc_count == 1, "got %u.\n", apc_count );
++        SleepEx( 0, TRUE );
++        ok( apc_count == 1, "APC was not called\n" );
++        /* hooking is bypassed on arm64ec */
++        ok( is_arm64ec ? !hook_called : hook_called, "hook was not called\n" );
++    }
++
++    if (!pNtQueueApcThreadEx2)
++    {
++        win_skip( "NtQueueApcThreadEx2 is not available.\n" );
++        goto done;
++    }
++
++    memcpy( pKiUserApcDispatcher, patched_KiUserApcDispatcher, sizeof(patched_KiUserApcDispatcher) );
++    hook_called = FALSE;
++    apc_count = 0;
++    apc_flags = QUEUE_USER_APC_CALLBACK_DATA_CONTEXT;
++    status = pNtQueueApcThreadEx2( GetCurrentThread(), NULL, QUEUE_USER_APC_CALLBACK_DATA_CONTEXT,
++                                   apc_func, 0x1234, 0x5678, 0xdeadbeef );
++    ok( !status || broken(status == STATUS_INVALID_PARAMETER /* Before Win11 22H2 */), "got %#lx.\n", status );
++    ok( apc_count == 0, "got %u.\n", apc_count );
++    if (!status)
++    {
++        SleepEx( 0, TRUE );
++        ok( apc_count == 1, "APC was not called\n" );
++        /* hooking is bypassed on arm64ec */
++        ok( is_arm64ec ? !hook_called : hook_called, "hook was not called\n" );
++    }
++
++done:
++    apc_flags = 0;
++
+     VirtualProtect( pKiUserApcDispatcher, sizeof(saved_KiUserApcDispatcher), old_protect, &old_protect );
+ }
+ 
+@@ -12201,6 +12310,8 @@ START_TEST(exception)
+     X(NtGetContextThread);
+     X(NtSetContextThread);
+     X(NtQueueApcThread);
++    X(NtQueueApcThreadEx);
++    X(NtQueueApcThreadEx2);
+     X(NtContinueEx);
+     X(NtReadVirtualMemory);
+     X(NtClose);
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 59815a47497..ddfa0381256 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -376,11 +376,16 @@ C_ASSERT( sizeof(struct exc_stack_layout) == 0x5c0 );
+ struct apc_stack_layout
+ {
+     CONTEXT              context;        /* 000 */
+-    struct machine_frame machine_frame;  /* 4d0 */
+-    ULONG64              align;          /* 4f8 */
++    CONTEXT_EX           context_ex;     /* 4d0 */
++    KCONTINUE_ARGUMENT   continue_arg;   /* 4f0 */
++    ULONG64              align1;         /* 4f8 */
++    APC_CALLBACK_DATA    callback_data;  /* 510 */
++    struct machine_frame machine_frame;  /* 530 */
++    ULONG64              align2;         /* 558 */
+ };
+-C_ASSERT( offsetof(struct apc_stack_layout, machine_frame) == 0x4d0 );
+-C_ASSERT( sizeof(struct apc_stack_layout) == 0x500 );
++C_ASSERT( offsetof(struct apc_stack_layout, continue_arg) == 0x4f0 );
++C_ASSERT( offsetof(struct apc_stack_layout, machine_frame) == 0x530 );
++C_ASSERT( sizeof(struct apc_stack_layout) == 0x560 );
+ 
+ /* stack layout when calling KiUserCallbackDispatcher */
+ struct callback_stack_layout
+@@ -1539,7 +1544,7 @@ NTSTATUS call_user_apc_dispatcher( CONTEXT *context, unsigned int flags, ULONG_P
+     ULONG64 rsp = context ? context->Rsp : frame->rsp;
+     struct apc_stack_layout *stack;
+ 
+-    if (flags) FIXME( "flags %#x are not supported.\n", flags );
++    if (flags & ~SERVER_USER_APC_CALLBACK_DATA_CONTEXT) FIXME( "flags %#x are not supported.\n", flags );
+ 
+     rsp &= ~15;
+     stack = (struct apc_stack_layout *)rsp - 1;
+@@ -1554,8 +1559,19 @@ NTSTATUS call_user_apc_dispatcher( CONTEXT *context, unsigned int flags, ULONG_P
+         NtGetContextThread( GetCurrentThread(), &stack->context );
+         stack->context.Rax = status;
+     }
++    memset( &stack->continue_arg, 0, sizeof(stack->continue_arg) );
++    stack->continue_arg.ContinueType = KCONTINUE_RESUME;
++    stack->continue_arg.ContinueFlags = KCONTINUE_FLAG_TEST_ALERT | KCONTINUE_FLAG_DELIVER_APC;
+     stack->context.P1Home    = arg1;
+-    stack->context.P2Home    = arg2;
++    if (flags & SERVER_USER_APC_CALLBACK_DATA_CONTEXT)
++    {
++        stack->callback_data.ContextRecord = &stack->context;
++        stack->callback_data.Parameter = arg2;
++        stack->callback_data.Reserved0 = 0;
++        stack->callback_data.Reserved1 = 0;
++        stack->context.P2Home = (ULONG_PTR)&stack->callback_data;
++    }
++    else stack->context.P2Home = arg2;
+     stack->context.P3Home    = arg3;
+     stack->context.P4Home    = (ULONG64)func;
+     stack->machine_frame.rip = stack->context.Rip;
+diff --git a/include/processthreadsapi.h b/include/processthreadsapi.h
+index f5f033c99b2..c2058245469 100644
+--- a/include/processthreadsapi.h
++++ b/include/processthreadsapi.h
+@@ -56,6 +56,14 @@ typedef enum _QUEUE_USER_APC_FLAGS
+     QUEUE_USER_APC_CALLBACK_DATA_CONTEXT = 0x00010000,
+ } QUEUE_USER_APC_FLAGS;
+ 
++typedef struct _APC_CALLBACK_DATA
++{
++    ULONG_PTR Parameter;
++    CONTEXT *ContextRecord;
++    ULONG_PTR Reserved0;
++    ULONG_PTR Reserved1;
++} APC_CALLBACK_DATA, *PAPC_CALLBACK_DATA;
++
+ #ifdef __cplusplus
+ }
+ #endif
+-- 
+GitLab
+

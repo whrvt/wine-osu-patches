@@ -1,0 +1,29 @@
+From 4fa8f772dffe56026280cf5340d18fc40241e2b1 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Mon, 23 Jun 2025 17:24:28 +0800
+Subject: [PATCH] gdi32: Use the maximum number of colours when biClrUsed is
+ zero.
+
+Fix a regression from 225004e1. According to MSDN, if the biClrUsed field is zero, the bitmap should
+use the maximum number of colours corresponding to the value of the biBitCount member for the
+compression mode specified by biCompression.
+---
+ dlls/gdi32/emfdc.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/gdi32/emfdc.c b/dlls/gdi32/emfdc.c
+index 098caff0c0b..1633d617bb9 100644
+--- a/dlls/gdi32/emfdc.c
++++ b/dlls/gdi32/emfdc.c
+@@ -319,6 +319,8 @@ static BOOL emf_parse_user_bitmapinfo( BITMAPINFOHEADER *dst, const BITMAPINFOHE
+         UINT elm_size = coloruse == DIB_PAL_COLORS ? sizeof(WORD) : sizeof(DWORD);
+         UINT colours = dst->biClrUsed;
+ 
++        if (!colours) colours = 1 << dst->biBitCount;
++
+         /* Windows never truncates colour tables, even if they are
+          * unnecessarily big (> 1<<bpp).  We emulate this behaviour. */
+ 
+-- 
+GitLab
+

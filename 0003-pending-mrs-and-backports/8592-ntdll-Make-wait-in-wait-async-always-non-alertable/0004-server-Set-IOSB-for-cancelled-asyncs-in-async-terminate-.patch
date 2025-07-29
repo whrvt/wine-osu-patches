@@ -1,0 +1,57 @@
+From 5f32cb3a97259b341cb8a6ccc548a5697ad5bfa7 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Tue, 15 Jul 2025 20:28:16 -0600
+Subject: [PATCH] server: Set IOSB for cancelled asyncs in async_terminate().
+
+---
+ dlls/ntdll/tests/pipe.c | 8 ++++----
+ server/async.c          | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index 1e863cb7b2d..cf3d523b936 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -1950,9 +1950,9 @@ static void test_blocking(ULONG options)
+         status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
+                             sizeof(read_buf), NULL, NULL);
+         ok(status == STATUS_CANCELLED, "status = %lx\n", status);
+-        todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++        ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Status = %lx\n", io.Status);
+-        todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++        ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Information = %Iu\n", io.Information);
+         ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
+                 "event is not signaled\n");
+@@ -1971,10 +1971,10 @@ static void test_blocking(ULONG options)
+     status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
+                         sizeof(read_buf), NULL, NULL);
+     ok(status == STATUS_CANCELLED, "status = %lx\n", status);
+-    todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef) /* Before Win11 24H2 */,
++    ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef) /* Before Win11 24H2 */,
+             "Status = %lx\n", io.Status);
+     completing_canceled = io.Status != 0xdeadbeef;
+-    todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++    ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+             "Information = %Iu\n", io.Information);
+     ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
+             "event is not signaled\n");
+diff --git a/server/async.c b/server/async.c
+index b2409319ee8..22e9ecfbb22 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -192,8 +192,8 @@ void async_terminate( struct async *async, unsigned int status )
+         /* this can happen if the initial status was unknown (i.e. for device
+          * files). the client should not fill the IOSB in this case; pass it as
+          * NULL to communicate that.
+-         * note that we check the IOSB status and not the initial status */
+-        if (NT_ERROR( status ) && (!is_fd_overlapped( async->fd ) || !async->pending))
++         * Windows 11 will fill the IOSB for canceled IO. */
++        if (NT_ERROR( status ) && !async->canceled && (!is_fd_overlapped( async->fd ) || !async->pending))
+             data.async_io.sb = 0;
+         else
+             data.async_io.sb = async->data.iosb;
+-- 
+GitLab
+

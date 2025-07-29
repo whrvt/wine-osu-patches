@@ -1,0 +1,301 @@
+From 8ab18da2072b96d090a505e1616841ec253499cb Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Thu, 17 Jul 2025 19:15:58 -0600
+Subject: [PATCH] ntdll: Make wait in wait_async() always non-alertable.
+
+Cancel async and signal async object on user APC instead.
+---
+ dlls/ntdll/tests/pipe.c        | 30 +++++++++++-----------
+ dlls/ntdll/unix/server.c       |  2 +-
+ dlls/ntdll/unix/unix_private.h |  8 +++++-
+ server/async.c                 | 46 +++++++++++++++++++++++++++-------
+ server/fd.c                    |  6 +++++
+ server/file.h                  |  2 ++
+ server/thread.c                |  1 +
+ 7 files changed, 69 insertions(+), 26 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index fb292a8c5e6..1e863cb7b2d 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -477,7 +477,7 @@ static void test_alertable(void)
+     ok(ret, "can't queue user apc, GetLastError: %lx\n", GetLastError());
+ 
+     res = listen_pipe(hPipe, hEvent, &iosb, TRUE);
+-    todo_wine ok(res == STATUS_CANCELLED, "NtFsControlFile returned %lx\n", res);
++    ok(res == STATUS_CANCELLED, "NtFsControlFile returned %lx\n", res);
+ 
+     ok(userapc_called, "user apc didn't run\n");
+     ok(iosb.Status == 0x55555555 || iosb.Status == STATUS_CANCELLED, "iosb.Status got changed to %lx\n", iosb.Status);
+@@ -491,7 +491,7 @@ static void test_alertable(void)
+     /* wine_todo: the earlier NtFsControlFile call gets cancelled after the pipe gets set into listen state
+                   instead of before, so this NtFsControlFile will fail STATUS_INVALID_HANDLE */
+     res = listen_pipe(hPipe, hEvent, &iosb, TRUE);
+-    todo_wine ok(res == STATUS_CANCELLED, "NtFsControlFile returned %lx\n", res);
++    ok(res == STATUS_CANCELLED, "NtFsControlFile returned %lx\n", res);
+ 
+     ok(userapc_called, "user apc didn't run\n");
+     ok(iosb.Status == 0x55555555 || iosb.Status == STATUS_CANCELLED, "iosb.Status got changed to %lx\n", iosb.Status);
+@@ -1805,7 +1805,7 @@ static void test_blocking(ULONG options)
+     if (!(options & FILE_SYNCHRONOUS_IO_ALERT))
+         ok(!ioapc_called, "ioapc called\n");
+     else
+-        todo_wine ok(ioapc_called, "ioapc called\n");
++        ok(ioapc_called, "ioapc called\n");
+     SleepEx(0, TRUE); /* alertable wait state */
+     ok(ioapc_called, "ioapc not called\n");
+ 
+@@ -1880,13 +1880,13 @@ static void test_blocking(ULONG options)
+         ioapc_called = FALSE;
+         status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
+                             sizeof(read_buf), NULL, NULL);
+-        todo_wine ok(status == STATUS_CANCELLED, "status = %lx\n", status);
+-        todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef) /* Before Win11 24H2 */,
++        ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++        ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef) /* Before Win11 24H2 */,
+                 "Status = %lx\n", io.Status);
+         completing_canceled = io.Status != 0xdeadbeef;
+-        todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++        ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Information = %Iu\n", io.Information);
+-        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++        ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
+                 "event is not signaled\n");
+         ok(!ioapc_called, "ioapc called\n");
+         ok(userapc_called, "user apc is not called.\n");
+@@ -1910,12 +1910,12 @@ static void test_blocking(ULONG options)
+         ioapc_called = FALSE;
+         status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
+                             sizeof(read_buf), NULL, NULL);
+-        todo_wine ok(status == STATUS_CANCELLED, "status = %lx\n", status);
+-        todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++        ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++        ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Status = %lx\n", io.Status);
+-        todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
++        ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Information = %Iu\n", io.Information);
+-        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++        ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
+                 "event is not signaled\n");
+         ok(ioapc_called, "ioapc called\n");
+         ok(!userapc_called, "user apc is not called.\n");
+@@ -1934,7 +1934,7 @@ static void test_blocking(ULONG options)
+         ok(status == STATUS_SUCCESS, "status = %lx\n", status);
+         ok(io.Status == STATUS_SUCCESS, "Status = %lx\n", io.Status);
+         ok(io.Information == 0, "Information = %Iu\n", io.Information);
+-        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled), "event is not signaled\n");
++        ok(is_signaled(ctx.event) || broken(!completing_canceled), "event is not signaled\n");
+         ok(!ioapc_called, "ioapc called\n");
+         ok(!userapc_called, "user apc is not called.\n");
+         SleepEx(0, TRUE);
+@@ -1949,12 +1949,12 @@ static void test_blocking(ULONG options)
+         blocking_thread_command(BLOCKING_THREAD_USER_APC);
+         status = NtReadFile(ctx.client, ctx.event, ioapc, &io, &io, read_buf,
+                             sizeof(read_buf), NULL, NULL);
+-        todo_wine ok(status == STATUS_CANCELLED, "status = %lx\n", status);
++        ok(status == STATUS_CANCELLED, "status = %lx\n", status);
+         todo_wine ok(io.Status == STATUS_CANCELLED || broken(io.Status == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Status = %lx\n", io.Status);
+         todo_wine ok(io.Information == 0 || broken(io.Information == 0xdeadbeef && !completing_canceled) /* Before Win11 24H2 */,
+                 "Information = %Iu\n", io.Information);
+-        todo_wine ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
++        ok(is_signaled(ctx.event) || broken(!completing_canceled) /* Before Win11 24H2 */,
+                 "event is not signaled\n");
+         ok(!ioapc_called, "ioapc called\n");
+         ok(userapc_called, "user apc is not called.\n");
+@@ -1981,7 +1981,7 @@ static void test_blocking(ULONG options)
+     ok(!ioapc_called, "ioapc called\n");
+     ok(!userapc_called, "user apc is not called.\n");
+     SleepEx(0, TRUE);
+-    todo_wine ok(!ioapc_called, "ioapc called\n");
++    ok(!ioapc_called, "ioapc called\n");
+ 
+     ioapc_called = FALSE;
+     CloseHandle(ctx.event);
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index e9d11f12e42..17531b2a1ca 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -853,7 +853,7 @@ NTSTATUS WINAPI NtContinueEx( CONTEXT *context, KCONTINUE_ARGUMENT *args )
+ /***********************************************************************
+  *              test_alert_with_status
+  */
+-static void test_alert_with_status( NTSTATUS ret_status )
++void test_alert_with_status( NTSTATUS ret_status )
+ {
+     struct user_apc apc;
+     NTSTATUS status;
+diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+index fa38f4b87ca..74fb95644ed 100644
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -393,6 +393,8 @@ extern NTSTATUS call_user_apc_dispatcher( CONTEXT *context_ptr, ULONG_PTR arg1,
+ extern NTSTATUS call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context );
+ extern void call_raise_user_exception_dispatcher(void);
+ 
++extern void test_alert_with_status( NTSTATUS status );
++
+ #define IMAGE_DLLCHARACTERISTICS_PREFER_NATIVE 0x0010 /* Wine extension */
+ 
+ #define TICKSPERSEC 10000000
+@@ -467,7 +469,11 @@ static inline struct async_data server_async( HANDLE handle, struct async_fileio
+ 
+ static inline NTSTATUS wait_async( HANDLE handle, BOOL alertable )
+ {
+-    return NtWaitForSingleObject( handle, alertable, NULL );
++    NTSTATUS ret;
++
++    ret = NtWaitForSingleObject( handle, FALSE, NULL );
++    if (alertable) test_alert_with_status( ret );
++    return ret;
+ }
+ 
+ static inline BOOL in_wow64_call(void)
+diff --git a/server/async.c b/server/async.c
+index 1ed241dcb65..b2409319ee8 100644
+--- a/server/async.c
++++ b/server/async.c
+@@ -57,6 +57,7 @@ struct async
+     unsigned int         canceled :1;     /* have we already queued cancellation for this async? */
+     unsigned int         unknown_status :1; /* initial status is not known yet */
+     unsigned int         blocking :1;     /* async is blocking */
++    unsigned int         alertable_wait :1; /* blocking alertable IO */
+     unsigned int         is_system :1;    /* background system operation not affecting userspace visible state. */
+     struct completion   *completion;      /* completion associated with fd */
+     apc_param_t          comp_key;        /* completion key associated with fd */
+@@ -279,6 +280,7 @@ struct async *create_async( struct fd *fd, struct thread *thread, const struct a
+     async->canceled      = 0;
+     async->unknown_status = 0;
+     async->blocking      = !is_fd_overlapped( fd );
++    async->alertable_wait = 0;
+     async->is_system     = 0;
+     async->completion    = fd_get_completion( fd, &async->comp_key );
+     async->comp_flags    = 0;
+@@ -336,6 +338,7 @@ static void async_call_completion_callback( struct async *async )
+ obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_blocking )
+ {
+     async->blocking = force_blocking || async->blocking;
++    async->alertable_wait = is_fd_wait_alertable( async->fd ) && !force_blocking;
+ 
+     if (async->unknown_status)
+     {
+@@ -396,6 +399,12 @@ obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_
+         return 0;
+     }
+ 
++    if (async->alertable_wait && !list_empty( &async->thread->user_apc ))
++    {
++        async->canceled = 1;
++        fd_cancel_async( async->fd, async );
++    }
++
+     if (async->iosb->status != STATUS_PENDING)
+     {
+         if (result) *result = async->iosb->result;
+@@ -512,18 +521,21 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
+         /* don't signal completion if the async failed synchronously
+          * this can happen if the initial status was unknown (i.e. for device files)
+          * note that we check the IOSB status here, not the initial status */
+-        if (async->pending || !NT_ERROR( status ))
++        if (async->pending || async->canceled || !NT_ERROR( status ))
+         {
+             if (async->data.apc)
+             {
+-                union apc_call data;
+-                memset( &data, 0, sizeof(data) );
+-                data.type         = APC_USER;
+-                data.user.func    = async->data.apc;
+-                data.user.args[0] = async->data.apc_context;
+-                data.user.args[1] = async->data.iosb;
+-                data.user.args[2] = 0;
+-                thread_queue_apc( NULL, async->thread, NULL, &data );
++                if (!(async->blocking && async->canceled))
++                {
++                    union apc_call data;
++                    memset( &data, 0, sizeof(data) );
++                    data.type         = APC_USER;
++                    data.user.func    = async->data.apc;
++                    data.user.args[0] = async->data.apc_context;
++                    data.user.args[1] = async->data.iosb;
++                    data.user.args[2] = 0;
++                    thread_queue_apc( NULL, async->thread, NULL, &data );
++                }
+             }
+             else if (async->data.apc_context && (async->pending ||
+                      !(async->comp_flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)))
+@@ -675,6 +687,22 @@ restart:
+     }
+ }
+ 
++void cancel_alerted_thread_async( struct thread *thread )
++{
++    struct async *async;
++
++    LIST_FOR_EACH_ENTRY( async, &thread->process->asyncs, struct async, process_entry )
++    {
++        if (async->terminated || async->canceled) continue;
++        if (async->blocking && async->thread == thread && async->alertable_wait)
++        {
++            async->canceled = 1;
++            fd_cancel_async( async->fd, async );
++            return;
++        }
++    }
++}
++
+ /* wake up async operations on the queue */
+ void async_wake_up( struct async_queue *queue, unsigned int status )
+ {
+diff --git a/server/fd.c b/server/fd.c
+index 663f497b7a9..997e66ca517 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -2139,6 +2139,12 @@ int is_fd_overlapped( struct fd *fd )
+     return !(fd->options & (FILE_SYNCHRONOUS_IO_ALERT | FILE_SYNCHRONOUS_IO_NONALERT));
+ }
+ 
++/* check if fd is in synchronous alert mode  */
++int is_fd_wait_alertable( struct fd *fd )
++{
++    return fd->options & FILE_SYNCHRONOUS_IO_ALERT;
++}
++
+ /* retrieve the unix fd for an object */
+ int get_unix_fd( struct fd *fd )
+ {
+diff --git a/server/file.h b/server/file.h
+index 567194bf00a..972e4f54bb4 100644
+--- a/server/file.h
++++ b/server/file.h
+@@ -94,6 +94,7 @@ extern void set_fd_user( struct fd *fd, const struct fd_ops *ops, struct object
+ extern unsigned int get_fd_options( struct fd *fd );
+ extern unsigned int get_fd_comp_flags( struct fd *fd );
+ extern int is_fd_overlapped( struct fd *fd );
++extern int is_fd_wait_alertable( struct fd *fd );
+ extern int get_unix_fd( struct fd *fd );
+ extern client_ptr_t get_fd_map_address( struct fd *fd );
+ extern void set_fd_map_address( struct fd *fd, client_ptr_t addr, mem_size_t size );
+@@ -278,6 +279,7 @@ extern void fd_copy_completion( struct fd *src, struct fd *dst );
+ extern struct iosb *async_get_iosb( struct async *async );
+ extern struct thread *async_get_thread( struct async *async );
+ extern struct async *find_pending_async( struct async_queue *queue );
++extern void cancel_alerted_thread_async( struct thread *thread );
+ extern void cancel_process_asyncs( struct process *process );
+ extern void cancel_terminating_thread_asyncs( struct thread *thread );
+ extern int async_close_obj_handle( struct object *obj, struct process *process, obj_handle_t handle );
+diff --git a/server/thread.c b/server/thread.c
+index 05ec6a4ec00..65feb5ffbb8 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -2073,6 +2073,7 @@ DECL_HANDLER(queue_apc)
+     if (thread)
+     {
+         if (!queue_apc( NULL, thread, apc )) set_error( STATUS_UNSUCCESSFUL );
++        else if (apc->call.type == APC_USER) cancel_alerted_thread_async( thread );
+         release_object( thread );
+     }
+     else if (process)
+-- 
+GitLab
+

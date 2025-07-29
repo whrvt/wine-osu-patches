@@ -1,0 +1,31 @@
+From 21ecf79826b691fa52ce2cf4e228df30da788406 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Fri, 18 Jul 2025 03:33:38 +0200
+Subject: [PATCH] ntdll: Fill EnabledFeatures before return.
+
+Followup to 03039ab2ee.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=58335
+---
+ dlls/ntdll/unix/system.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
+index e486da40691..e8758a3df6d 100644
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -436,10 +436,10 @@ static void init_xstate_features( XSTATE_CONFIGURATION *xstate )
+     TRACE( "XSAVE details %#x, %#x, %#x, %#x.\n", regs[0], regs[1], regs[2], regs[3] );
+     supported_mask = ((ULONG64)regs[3] << 32) | regs[0];
+     supported_mask &= do_xgetbv(0) & supported_features;
+-    if (!(supported_mask >> 2)) return;
+ 
+     xstate->EnabledFeatures = (1 << XSTATE_LEGACY_FLOATING_POINT) | (1 << XSTATE_LEGACY_SSE) | supported_mask;
+     xstate->EnabledVolatileFeatures = xstate->EnabledFeatures;
++    if (!(supported_mask >> 2)) return;
+     xstate->AllFeatureSize = regs[1];
+ 
+     do_cpuid( 0x0000000d, 1, regs );
+-- 
+GitLab
+

@@ -55,9 +55,9 @@
          release_object( apc->owner );
      }
 -    if (apc->sync) release_object( apc->sync );
+     reserve_obj_unbind( apc->reserve );
  }
  
- /* queue an async procedure call */
 @@ -689,7 +686,6 @@
  
      if ((apc = alloc_object( &thread_apc_ops )))
