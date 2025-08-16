@@ -324,8 +324,8 @@ index 02988a868f2..be6ee7be3e1 100644
  
 +extern void close_inproc_sync_obj( HANDLE handle );
 +
- extern NTSTATUS call_user_apc_dispatcher( CONTEXT *context_ptr, unsigned int flags, ULONG_PTR arg1, ULONG_PTR arg2,
-                                           ULONG_PTR arg3, PNTAPCFUNC func, NTSTATUS status );
+ extern NTSTATUS call_user_apc_dispatcher( CONTEXT *context_ptr, ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3,
+                                           PNTAPCFUNC func, NTSTATUS status );
  extern NTSTATUS call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context );
 -- 
 2.47.1

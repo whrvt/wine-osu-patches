@@ -15,15 +15,6 @@ diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
 index 11111111111..11111111111 100644
 --- a/dlls/winebus.sys/main.c
 +++ b/dlls/winebus.sys/main.c
-@@ -963,7 +963,7 @@ static NTSTATUS fdo_pnp_dispatch(DEVICE_OBJECT *device, IRP *irp)
-     case IRP_MN_START_DEVICE:
-         mouse_device_create();
-         keyboard_device_create();
--
-+        
-         if ((enable_sdl = check_bus_option(L"Enable SDL", 1)))
-             enable_sdl = !sdl_driver_init();
-         udev_driver_init(enable_sdl);
 @@ -1363,10 +1363,21 @@ static void WINAPI driver_unload(DRIVER_OBJECT *driver)
      NtClose(driver_key);
  }

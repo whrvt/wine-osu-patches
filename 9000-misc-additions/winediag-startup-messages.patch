@@ -233,8 +233,8 @@ index 702aa245597..2bea0fa4697 100644
  
 +extern NTSTATUS unixcall_wine_get_sync_type(void *args);
 +
- extern NTSTATUS call_user_apc_dispatcher( CONTEXT *context_ptr, unsigned int flags, ULONG_PTR arg1, ULONG_PTR arg2,
-                                           ULONG_PTR arg3, PNTAPCFUNC func, NTSTATUS status );
+ extern NTSTATUS call_user_apc_dispatcher( CONTEXT *context_ptr, ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3,
+                                           PNTAPCFUNC func, NTSTATUS status );
  extern NTSTATUS call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context );
 diff --git a/dlls/ntdll/unixlib.h b/dlls/ntdll/unixlib.h
 index 63ed9dadb88..cfdf6825909 100644
