@@ -1,0 +1,167 @@
+From 378354cfb9665886386207110bc8dc25c305e64e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 11 Sep 2025 15:06:26 +0200
+Subject: [PATCH] win32u: Rename window opengl drawable to current_drawable.
+
+---
+ dlls/win32u/dce.c             |  2 +-
+ dlls/win32u/ntuser_private.h  |  2 +-
+ dlls/win32u/opengl.c          | 16 ++++++++--------
+ dlls/win32u/window.c          |  8 ++++----
+ dlls/wineandroid.drv/opengl.c |  2 +-
+ include/wine/opengl_driver.h  |  2 +-
+ 6 files changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
+index d1cf5c78bab..142c3c1dc93 100644
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -1367,7 +1367,7 @@ HDC WINAPI NtUserGetDCEx( HWND hwnd, HRGN clip_rgn, DWORD flags )
+ 
+     if (dce->hwnd != hwnd)
+     {
+-        struct opengl_drawable *drawable = get_window_opengl_drawable( hwnd );
++        struct opengl_drawable *drawable = get_window_current_drawable( hwnd );
+         set_dc_opengl_drawable( dce->hdc, drawable );
+         if (drawable) opengl_drawable_release( drawable );
+     }
+diff --git a/dlls/win32u/ntuser_private.h b/dlls/win32u/ntuser_private.h
+index f5559c5ca4f..25d42f98d4e 100644
+--- a/dlls/win32u/ntuser_private.h
++++ b/dlls/win32u/ntuser_private.h
+@@ -66,7 +66,7 @@ typedef struct tagWND
+     HICON              hIconSmall2;   /* window's secondary small icon, derived from hIcon */
+     HIMC               imc;           /* window's input context */
+     struct window_surface *surface;   /* Window surface if any */
+-    struct opengl_drawable *opengl_drawable; /* last GL client surface for this window */
++    struct opengl_drawable *current_drawable; /* current GL client surface for this window */
+     struct tagDIALOGINFO *dlgInfo;    /* Dialog additional info (dialogs only) */
+     int                swap_interval; /* OpenGL surface swap interval */
+     int                pixel_format;  /* Pixel format set by the graphics driver */
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index 5f8586f8655..f4f562087fd 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -1103,29 +1103,29 @@ static int win32u_wglGetPixelFormat( HDC hdc )
+ 
+ void set_window_opengl_drawable( HWND hwnd, struct opengl_drawable *new_drawable )
+ {
+-    void *old_drawable = NULL;
++    struct opengl_drawable *old_drawable = NULL;
+     WND *win;
+ 
+     TRACE( "hwnd %p, new_drawable %s\n", hwnd, debugstr_opengl_drawable( new_drawable ) );
+ 
+     if ((win = get_win_ptr( hwnd )) && win != WND_DESKTOP && win != WND_OTHER_PROCESS)
+     {
+-        old_drawable = win->opengl_drawable;
+-        if ((win->opengl_drawable = new_drawable)) opengl_drawable_add_ref( new_drawable );
++        old_drawable = win->current_drawable;
++        if ((win->current_drawable = new_drawable)) opengl_drawable_add_ref( new_drawable );
+         release_win_ptr( win );
+     }
+ 
+     if (old_drawable) opengl_drawable_release( old_drawable );
+ }
+ 
+-struct opengl_drawable *get_window_opengl_drawable( HWND hwnd )
++struct opengl_drawable *get_window_current_drawable( HWND hwnd )
+ {
+-    void *drawable = NULL;
++    struct opengl_drawable *drawable = NULL;
+     WND *win;
+ 
+     if ((win = get_win_ptr( hwnd )) && win != WND_DESKTOP && win != WND_OTHER_PROCESS)
+     {
+-        if ((drawable = win->opengl_drawable)) opengl_drawable_add_ref( drawable );
++        if ((drawable = win->current_drawable)) opengl_drawable_add_ref( drawable );
+         release_win_ptr( win );
+     }
+ 
+@@ -1337,7 +1337,7 @@ static BOOL context_sync_drawables( struct wgl_context *context, HDC draw_hdc, H
+     new_draw = get_dc_opengl_drawable( draw_hdc );
+ 
+     /* get the last used window drawable when reading */
+-    if ((hwnd = NtUserWindowFromDC( read_hdc ))) new_read = get_window_opengl_drawable( hwnd );
++    if ((hwnd = NtUserWindowFromDC( read_hdc ))) new_read = get_window_current_drawable( hwnd );
+     else new_read = get_dc_opengl_drawable( read_hdc );
+ 
+     TRACE( "context %p, new_draw %s, new_read %s\n", context, debugstr_opengl_drawable( new_draw ), debugstr_opengl_drawable( new_read ) );
+@@ -1963,7 +1963,7 @@ static BOOL win32u_wglSwapBuffers( HDC hdc )
+     if (context) context_sync_drawables( context, draw_hdc, read_hdc );
+ 
+     if (context) opengl_drawable_add_ref( (draw = context->draw) );
+-    else if (!(draw = get_window_opengl_drawable( hwnd ))) return FALSE;
++    else if (!(draw = get_window_current_drawable( hwnd ))) return FALSE;
+ 
+     opengl_drawable_flush( draw, interval, 0 );
+     ret = draw->funcs->swap( draw );
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 4345c7b7ff4..7422a4c3d4a 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -5186,7 +5186,7 @@ LRESULT destroy_window( HWND hwnd )
+     }
+ 
+     detach_client_surfaces( hwnd );
+-    if (win->opengl_drawable) opengl_drawable_release( win->opengl_drawable );
++    if (win->current_drawable) opengl_drawable_release( win->current_drawable );
+     user_driver->pDestroyWindow( hwnd );
+ 
+     free_window_handle( hwnd );
+@@ -5291,7 +5291,7 @@ void destroy_thread_windows(void)
+         HWND handle;
+         HMENU menu;
+         HMENU sys_menu;
+-        struct opengl_drawable *opengl_drawable;
++        struct opengl_drawable *current_drawable;
+         struct window_surface *surface;
+         struct destroy_entry *next;
+     } *entry, *free_list = NULL;
+@@ -5317,7 +5317,7 @@ void destroy_thread_windows(void)
+         tmp.handle = win->handle;
+         if (!is_child) tmp.menu = (HMENU)win->wIDmenu;
+         tmp.sys_menu = win->hSysMenu;
+-        tmp.opengl_drawable = win->opengl_drawable;
++        tmp.current_drawable = win->current_drawable;
+         tmp.surface = win->surface;
+         *entry = tmp;
+ 
+@@ -5342,7 +5342,7 @@ void destroy_thread_windows(void)
+ 
+         detach_client_surfaces( entry->handle );
+         user_driver->pDestroyWindow( entry->handle );
+-        if (entry->opengl_drawable) opengl_drawable_release( entry->opengl_drawable );
++        if (entry->current_drawable) opengl_drawable_release( entry->current_drawable );
+ 
+         NtUserDestroyMenu( entry->menu );
+         NtUserDestroyMenu( entry->sys_menu );
+diff --git a/dlls/wineandroid.drv/opengl.c b/dlls/wineandroid.drv/opengl.c
+index 4893e288289..f0eb98844e3 100644
+--- a/dlls/wineandroid.drv/opengl.c
++++ b/dlls/wineandroid.drv/opengl.c
+@@ -102,7 +102,7 @@ void update_gl_drawable( HWND hwnd )
+ {
+     struct gl_drawable *old, *new;
+ 
+-    if (!(old = impl_from_opengl_drawable( get_window_opengl_drawable( hwnd ) ))) return;
++    if (!(old = impl_from_opengl_drawable( get_window_current_drawable( hwnd ) ))) return;
+     if ((new = create_gl_drawable( hwnd, old->base.format, old->window )))
+     {
+         set_window_opengl_drawable( hwnd, &new->base );
+diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
+index a468e5e0a40..c961e5602be 100644
+--- a/include/wine/opengl_driver.h
++++ b/include/wine/opengl_driver.h
+@@ -183,7 +183,7 @@ W32KAPI void *opengl_drawable_create( UINT size, const struct opengl_drawable_fu
+ W32KAPI void opengl_drawable_add_ref( struct opengl_drawable *drawable );
+ W32KAPI void opengl_drawable_release( struct opengl_drawable *drawable );
+ 
+-W32KAPI struct opengl_drawable *get_window_opengl_drawable( HWND hwnd );
++W32KAPI struct opengl_drawable *get_window_current_drawable( HWND hwnd );
+ W32KAPI void set_window_opengl_drawable( HWND hwnd, struct opengl_drawable *drawable );
+ 
+ /* interface between win32u and the user drivers */
+-- 
+GitLab
+

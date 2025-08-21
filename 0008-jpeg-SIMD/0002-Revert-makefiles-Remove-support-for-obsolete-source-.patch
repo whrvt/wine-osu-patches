@@ -134,10 +134,10 @@ index 7be4fe259a4..426f71cdfdf 100644
 --- a/libs/faudio/Makefile.in
 +++ b/libs/faudio/Makefile.in
 @@ -19,5 +19,4 @@ SOURCES = \
- 	src/FAudio_internal.c \
  	src/FAudio_internal_simd.c \
  	src/FAudio_operationset.c \
--	src/FAudio_platform_win32.c \
+ 	src/FAudio_platform_win32.c \
+-	src/FAudio_platform_win32_wmadec.c \
 -	src/matrix_defaults.inl
 +	src/FAudio_platform_win32.c
 diff --git a/tools/make_makefiles b/tools/make_makefiles

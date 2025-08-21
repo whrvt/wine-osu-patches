@@ -44,9 +44,9 @@ index 40a351cc42b..093d1c7c82d 100644
                     __ASM_CFI_REG_IS_AT1(rbx, rcx, 0x08)
                     "movq %rsi,0x20(%rcx)\n\t"
 @@ -3266,6 +3267,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
-                    "movq %r8,%rdi\n\t"             /* args */
                     "callq *(%r10,%rdx,8)\n\t"
                     "movq %rsp,%rcx\n\t"
+                    "ldmxcsr 0xd8(%rcx)\n\t"        /* frame->xsave.MxCsr */
 +                   "fldcw 0xc0(%rcx)\n\t"          /* restore x87 FPU CW from FXSAVE */
                     "movdqa 0x1c0(%rcx),%xmm6\n\t"
                     "movdqa 0x1d0(%rcx),%xmm7\n\t"

@@ -135,58 +135,18 @@ index d2a6d5700d4..1437f402ffe 100644
              sei_tmp.fMask, sei_tmp.hwnd, debugstr_w(sei_tmp.lpVerb),
              debugstr_w(sei_tmp.lpFile), debugstr_w(sei_tmp.lpParameters),
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index 5eb351c63e6..58875d86ba8 100644
+index d8cf772ca5c..9b38d4bda4c 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
-@@ -74,6 +74,7 @@ AddReg=\
-     ThemeManager,\
-     VCRuntime.ntx86,\
-     LicenseInformation
+@@ -71,6 +71,7 @@ AddReg=\
+     Services, \
+     SessionMgr,\
+     ThemeManager
 +DelReg=RemoveClasses
  
- [DefaultInstall.NT]
- RegisterDlls=RegisterDllsSection
-@@ -101,6 +102,7 @@ AddReg=\
-     VCRuntime.ntx86,\
-     VersionInfo,\
-     LicenseInformation
-+DelReg=RemoveClasses
- 
- [DefaultInstall.ntamd64]
- RegisterDlls=RegisterDllsSection
-@@ -129,6 +131,7 @@ AddReg=\
-     VCRuntime.ntamd64,\
-     VersionInfo,\
-     LicenseInformation
-+DelReg=RemoveClasses
- 
- [DefaultInstall.ntarm64]
- RegisterDlls=RegisterDllsSection
-@@ -157,6 +160,7 @@ AddReg=\
-     VCRuntime.ntarm64,\
-     VersionInfo,\
-     LicenseInformation
-+DelReg=RemoveClasses
- 
- [Wow64Install.ntx86]
- RegisterDlls=RegisterDllsSection
-@@ -175,6 +179,7 @@ AddReg=\
-     VCRuntime.ntx86,\
-     VersionInfo,\
-     LicenseInformation
-+DelReg=RemoveClasses
- 
- [Wow64Install.ntarm]
- RegisterDlls=RegisterDllsSection
-@@ -191,6 +196,7 @@ AddReg=\
-     Tapi,\
-     VersionInfo,\
-     LicenseInformation
-+DelReg=RemoveClasses
- 
- [DefaultInstall.Services]
- AddService=BITS,0,BITSService
-@@ -306,9 +312,6 @@ HKCR,exefile,,2,"Application"
+ [DefaultInstall]
+ Needs=BaseInstall
+@@ -246,9 +247,6 @@ HKCR,exefile,,2,"Application"
  HKCR,exefile\DefaultIcon,,2,"%1"
  HKCR,exefile\shell\open\command,,2,"""%1"" %*"
  HKCR,exefile\shell\runas\command,,2,"""%1"" %*"
@@ -196,7 +156,7 @@ index 5eb351c63e6..58875d86ba8 100644
  HKCR,folder\shellex\ContextMenuHandlers,,16
  HKCR,folder\shellnew,"Directory",,""
  HKCR,folder\shellnew,"ItemName",,"@%11%\shell32.dll,-142"
-@@ -353,6 +356,9 @@ HKCR,http\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
+@@ -293,6 +291,9 @@ HKCR,http\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
  HKCR,https\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
  HKCR,mailto\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
  

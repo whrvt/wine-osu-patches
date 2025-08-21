@@ -1,8 +1,8 @@
 # Patchset context
 
-wine commit: [wine-75b9e172](https://gitlab.winehq.org/wine/wine/-/tree/75b9e1722d11d75c3d7745b39a03b73e9f9003ba)
+wine commit: [wine-e3c9d3ac](https://gitlab.winehq.org/wine/wine/-/tree/e3c9d3ac76b223073253667e2447e1cbc407ac97)
 
-staging commit: [staging-a8a6d7b0](https://gitlab.winehq.org/wine/wine-staging/-/tree/a8a6d7b0ed4fe5217490907cc9222de8f2bdc040)
+staging commit: [staging-317665ee](https://gitlab.winehq.org/wine/wine-staging/-/tree/317665ee20ac811ae6f48a7c16d86502db764869)
 
 Staging exclude flags: `-W oleaut32_VarAdd -W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix`
 
@@ -32,22 +32,6 @@ Also, silence pcm.c underrun errors.
 ### Type
 
 `boolean`
-
-## STAGING_AUDIO_DURATION
-
-Patch: [0005-alsa-pulse-mmdevapi-Support-custom-period-and-buffer-sizes.patch](0012-audio/0005-alsa-pulse-mmdevapi-Support-custom-period-and-buffer-sizes.patch)
-
-### Type
-
-`numeric`
-
-## STAGING_AUDIO_PERIOD
-
-Patch: [0005-alsa-pulse-mmdevapi-Support-custom-period-and-buffer-sizes.patch](0012-audio/0005-alsa-pulse-mmdevapi-Support-custom-period-and-buffer-sizes.patch)
-
-### Type
-
-`numeric`
 
 ## WINEDMO
 

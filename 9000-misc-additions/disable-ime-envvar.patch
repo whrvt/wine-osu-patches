@@ -23,6 +23,6 @@ index 11111111111..11111111111 100644
 -    if (use_xim) use_xim = xim_init( input_style );
 +    const char *e = getenv("WINE_DISABLE_IME");
 +    if (use_xim) use_xim = !(e && *e != '\0' && *e != '0') && xim_init( input_style );
+     cursor_clip_hack = use_cursor_clip_hack();
  
- #if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
-     {
+     init_icm_profile();

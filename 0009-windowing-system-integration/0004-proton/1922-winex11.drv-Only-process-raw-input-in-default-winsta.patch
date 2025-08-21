@@ -1,0 +1,45 @@
+From 1e762ff62ba3deaae2cf89c39b6ef85ad796ee69 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Tue, 19 Aug 2025 13:42:06 -0600
+Subject: [PATCH 1922/1922] winex11.drv: Only process raw input in default
+ winstation's explorer.exe.
+
+CW-Bug-Id: #25818
+---
+ dlls/winex11.drv/window.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 9c085ccc5f4..8229ab43b06 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2959,13 +2959,22 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
+ {
+     if (hwnd == NtUserGetDesktopWindow())
+     {
++        static const WCHAR winsta0[] = {'W','i','n','S','t','a','0',0};
+         struct x11drv_thread_data *data = x11drv_init_thread_data();
++        WCHAR winstation_name[64];
+         XSetWindowAttributes attr;
+ 
+-        /* listen to raw xinput event in the desktop window thread */
+-        data->xinput2_rawinput = TRUE;
+-        x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );
+-
++        if (NtUserGetObjectInformation( NtUserGetProcessWindowStation(), UOI_NAME, winstation_name,
++                                        sizeof(winstation_name), NULL ))
++        {
++            TRACE( "winstation name %s.\n", debugstr_w(winstation_name) );
++            if (!wcscmp( winstation_name, winsta0 ))
++            {
++                /* listen to raw xinput event in the desktop window thread */
++                data->xinput2_rawinput = TRUE;
++                x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );
++            }
++        }
+         /* create the cursor clipping window */
+         attr.override_redirect = TRUE;
+         attr.event_mask = StructureNotifyMask | FocusChangeMask;
+-- 
+2.50.1
+
