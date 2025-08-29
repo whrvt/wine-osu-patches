@@ -1,0 +1,34 @@
+From 989aff60f18ad2522b46e1036484ec9dbcbc3416 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 29 Aug 2025 04:15:35 -0700
+Subject: [PATCH 2/6] mmdevapi: HACK: Remove the hardcoded 10ms minimum default
+ shared mode period.
+
+---
+ dlls/mmdevapi/client.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index 2522541e78a..506b9837ca2 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -110,7 +110,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
+ static HRESULT get_periods(struct audio_client *client,
+                            REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
+ {
+-    static const REFERENCE_TIME min_def_period = 100000; /* 10 ms */
+     struct get_device_period_params params;
+ 
+     params.device     = client->device_name;
+@@ -120,8 +119,6 @@ static HRESULT get_periods(struct audio_client *client,
+ 
+     wine_unix_call(get_device_period, &params);
+ 
+-    if (def_period) *def_period = max(*def_period, min_def_period);
+-
+     return params.result;
+ }
+ 
+-- 
+2.50.1
+

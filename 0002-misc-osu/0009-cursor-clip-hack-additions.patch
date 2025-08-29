@@ -1,0 +1,47 @@
+From 578a209564059ead2950a4be22888375d5a0e1a2 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 13 Nov 2024 03:05:16 -0800
+Subject: [PATCH 2/2] cursor-clip-hack additions
+
+---
+ dlls/win32u/message.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 4d4431eab34..0f24a5a543d 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2130,8 +2130,8 @@ static LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPAR
+     case WM_WINE_CLIPCURSOR:
+         /* non-hardware message, posted on display mode change to trigger fullscreen
+            clipping or to the desktop window to forcefully release the cursor grabs */
+-        if (wparam & SET_CURSOR_FSCLIP) return clip_fullscreen_window( hwnd, FALSE );
+-        return process_wine_clipcursor( hwnd, wparam, lparam );
++        if (wparam & SET_CURSOR_FSCLIP) return cursor_clip_hack ? TRUE : clip_fullscreen_window( hwnd, FALSE );
++        return cursor_clip_hack ? TRUE : process_wine_clipcursor( hwnd, wparam, lparam );
+     case WM_WINE_SETCURSOR:
+         FIXME( "Unexpected non-hardware WM_WINE_SETCURSOR message\n" );
+         return FALSE;
+@@ -2753,7 +2753,9 @@ static BOOL process_hardware_message( MSG *msg, UINT hw_id, const struct hardwar
+     else if (msg->message >= WM_POINTERUPDATE && msg->message <= WM_POINTERLEAVE)
+         ret = process_pointer_message( msg, hw_id, msg_data );
+     else if (msg->message == WM_WINE_CLIPCURSOR)
+-        process_wine_clipcursor( msg->hwnd, msg->wParam, msg->lParam );
++    {
++        if (!cursor_clip_hack) process_wine_clipcursor( msg->hwnd, msg->wParam, msg->lParam );
++    }
+     else if (msg->message == WM_WINE_SETCURSOR)
+         process_wine_setcursor( msg->hwnd, (HWND)msg->wParam, (HCURSOR)msg->lParam );
+     else
+@@ -3727,7 +3729,7 @@ NTSTATUS send_hardware_message( HWND hwnd, UINT flags, const INPUT *input, LPARA
+     info.timeout  = 0;
+     info.params   = NULL;
+ 
+-    if (input->type == INPUT_MOUSE && (input->mi.dwFlags & (MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_RIGHTDOWN)))
++    if (!cursor_clip_hack && input->type == INPUT_MOUSE && (input->mi.dwFlags & (MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_RIGHTDOWN)))
+         clip_fullscreen_window( hwnd, FALSE );
+ 
+     SERVER_START_REQ( send_hardware_message )
+-- 
+2.50.1
+

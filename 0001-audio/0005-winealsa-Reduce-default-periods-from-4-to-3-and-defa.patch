@@ -1,0 +1,59 @@
+From ba00582d29c1e169c667629b7bc6043af90c55b8 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 29 Aug 2025 06:46:05 -0700
+Subject: [PATCH 5/6] winealsa: Reduce default periods from 4 to 3, and default
+ period to 2.67ms.
+
+---
+ dlls/winealsa.drv/alsa.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/winealsa.drv/alsa.c b/dlls/winealsa.drv/alsa.c
+index 5bd1d71d837..4838a35196d 100644
+--- a/dlls/winealsa.drv/alsa.c
++++ b/dlls/winealsa.drv/alsa.c
+@@ -82,10 +82,10 @@ struct alsa_stream
+     pthread_mutex_t lock;
+ };
+ 
+-#define EXTRA_SAFE_RT 40000
++#define EXTRA_SAFE_RT 6667
+ 
+-static const REFERENCE_TIME def_period = 100000;
+-static const REFERENCE_TIME min_period = 50000;
++static const REFERENCE_TIME def_period = 26667;
++static const REFERENCE_TIME min_period = 26667;
+ 
+ static const WCHAR drv_keyW[] = {'S','o','f','t','w','a','r','e','\\',
+     'W','i','n','e','\\','D','r','i','v','e','r','s','\\',
+@@ -882,13 +882,13 @@ static NTSTATUS alsa_create_stream(void *args)
+     stream->mmdev_period_frames = muldiv(params->fmt->nSamplesPerSec,
+             stream->mmdev_period_rt, 10000000);
+ 
+-    /* Buffer 4 ALSA periods if large enough, else 4 mmdevapi periods */
+-    stream->alsa_bufsize_frames = stream->mmdev_period_frames * 4;
++    /* Buffer 3 ALSA periods if large enough, else 3 mmdevapi periods */
++    stream->alsa_bufsize_frames = stream->mmdev_period_frames * 3;
+     if(err < 0 || alsa_period_us < params->period / 10)
+         err = snd_pcm_hw_params_set_buffer_size_near(stream->pcm_handle,
+                 stream->hw_params, &stream->alsa_bufsize_frames);
+     else{
+-        unsigned int periods = 4;
++        unsigned int periods = 3;
+         err = snd_pcm_hw_params_set_periods_near(stream->pcm_handle, stream->hw_params, &periods, NULL);
+     }
+     if(err < 0)
+@@ -963,8 +963,8 @@ static NTSTATUS alsa_create_stream(void *args)
+         stream->bufsize_frames -= stream->bufsize_frames % stream->mmdev_period_frames;
+     stream->hidden_frames = stream->alsa_period_frames + stream->mmdev_period_frames +
+         muldiv(params->fmt->nSamplesPerSec, EXTRA_SAFE_RT, 10000000);
+-    /* leave no less than about 1.33ms or 256 bytes of data after a rewind */
+-    stream->safe_rewind_frames = max(256 / params->fmt->nBlockAlign, muldiv(133, params->fmt->nSamplesPerSec, 100000));
++    /* leave no less than about 1s or 192 bytes of data after a rewind */
++    stream->safe_rewind_frames = max(192 / params->fmt->nBlockAlign, muldiv(100, params->fmt->nSamplesPerSec, 100000));
+ 
+     /* Check if the ALSA buffer is so small that it will run out before
+      * the next MMDevAPI period tick occurs. Allow a little wiggle room
+-- 
+2.50.1
+

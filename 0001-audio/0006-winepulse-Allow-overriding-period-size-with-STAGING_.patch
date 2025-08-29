@@ -1,0 +1,63 @@
+From caf6230cc24a7fcc6bbc43ef4546c6a5c4fa8de4 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 29 Aug 2025 12:53:37 -0700
+Subject: [PATCH 6/6] winepulse: Allow overriding period size with
+ STAGING_AUDIO_PERIOD.
+
+---
+ dlls/winepulse.drv/pulse.c | 32 ++++++++++++++++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index ebb67810a50..8a0609e54e1 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -713,6 +713,15 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
+     fmt->dwChannelMask = pa_mask;
+ }
+ 
++static LONGLONG find_closest_to_next_integer(LONGLONG x, LONGLONG c, LONGLONG d) {
++    // get the target ceiling value (next integer)
++    LONGLONG target = ((x * c) + d - 1) / d;  // ceil((x * c) / d)
++    // find the largest x' such that (x' * c) / d <= target  
++    LONGLONG max_x_for_target = (target * d) / c;  // floor((target * d) / c)
++    // return the maximum of input x and calculated boundary
++    return (x > max_x_for_target) ? x : max_x_for_target;
++}
++
+ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, const char *pulse_name,
+                                  WAVEFORMATEXTENSIBLE *fmt, REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
+ {
+@@ -767,8 +776,27 @@ static void pulse_probe_settings(int render, const char *pulse_name, WAVEFORMATE
+     if (stream)
+         pa_stream_unref(stream);
+ 
+-    if (length)
+-        *def_period = *min_period = pa_bytes_to_usec(10 * length, &ss);
++    if (length) {
++        static int periodval = -1;
++        REFERENCE_TIME period_to_set = pa_bytes_to_usec(10 * length, &ss);
++        int multiplier = 2; // set 2x actual minimum unless custom period was specified
++        if (periodval == -1) {
++            const char* penv = getenv("STAGING_AUDIO_PERIOD");
++            periodval = 0;
++            if (penv && *penv != '\0' && ((periodval = atoi(penv)) > 0)) {
++                MESSAGE("Set custom audio period %d\n", periodval);
++            }
++        }
++
++        if (periodval > 0) {
++            period_to_set = periodval;
++            multiplier = 1;
++        }
++
++        /* overwrite default with minimum (for playback devices) */
++        *min_period = find_closest_to_next_integer(period_to_set, ss.rate, 10000000);
++        *def_period = find_closest_to_next_integer(*min_period * multiplier, ss.rate, 10000000);
++    }
+ 
+     wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+     wfx->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+-- 
+2.50.1
+

@@ -1,0 +1,25 @@
+From f492dbba04d11f624c2d00caa68fe50bec96e4f9 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 29 Aug 2025 06:42:00 -0700
+Subject: [PATCH 4/6] winepulse: Remove 2x multiplier for buffered frames.
+
+---
+ dlls/winepulse.drv/pulse.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 9a218e75c1b..ebb67810a50 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -1195,7 +1195,7 @@ static NTSTATUS pulse_create_stream(void *args)
+         dump_attr(attr);
+         if (stream->dataflow == eRender) {
+             size = stream->real_bufsize_bytes =
+-                stream->bufsize_frames * 2 * pa_frame_size(&stream->ss);
++                stream->bufsize_frames * pa_frame_size(&stream->ss);
+             if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+                                         zero_bits, &size, MEM_COMMIT, PAGE_READWRITE))
+                 hr = E_OUTOFMEMORY;
+-- 
+2.50.1
+

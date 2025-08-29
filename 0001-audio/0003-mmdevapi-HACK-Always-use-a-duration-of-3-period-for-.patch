@@ -1,0 +1,27 @@
+From 2e5f4690b0dc08e5bfb555ea9f0dcaa424c0ced3 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 29 Aug 2025 05:17:16 -0700
+Subject: [PATCH 3/6] mmdevapi: HACK: Always use a duration of 3*period for
+ playback streams.
+
+This shouldn't be required, as duration should not affect the end-to-end latency, but winepulse.drv's current implementation does not behave in this way for some reason.
+---
+ dlls/mmdevapi/client.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index 506b9837ca2..b2fe6d7c417 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -142,7 +142,7 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+             *period = def_period;
+         else if (*period < min_period)
+             return AUDCLNT_E_INVALID_DEVICE_PERIOD;
+-        if (*duration < 3 * *period)
++        if (client->dataflow == eRender || *duration < 3 * *period)
+             *duration = 3 * *period;
+     } else {
+         const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
+-- 
+2.50.1
+
