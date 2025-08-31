@@ -1,0 +1,476 @@
+From 797b230a6d0d061e8ad5dcaf23e80912bfde3764 Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Mon, 18 Aug 2025 14:12:33 +0530
+Subject: [PATCH] opcservices: Implement IOpcPart::GetContentType for opened
+ packages.
+
+---
+ dlls/opcservices/compress.c          | 287 +++++++++++++++++++++++----
+ dlls/opcservices/tests/opcservices.c |   2 +-
+ include/opcbase.idl                  |   3 +
+ 3 files changed, 249 insertions(+), 43 deletions(-)
+
+diff --git a/dlls/opcservices/compress.c b/dlls/opcservices/compress.c
+index dbd928d8aef..e32396d0d00 100644
+--- a/dlls/opcservices/compress.c
++++ b/dlls/opcservices/compress.c
+@@ -25,9 +25,11 @@
+ #include "windef.h"
+ #include "winternl.h"
+ #include "msopc.h"
++#include "xmllite.h"
+ 
+ #include "opc_private.h"
+ 
++#include "wine/rbtree.h"
+ #include "wine/debug.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(msopc);
+@@ -457,10 +459,26 @@ static const char *debugstr_zip_entry(const struct zip_entry *entry)
+     return wine_dbg_sprintf("{%s, %#I64x}", opt_str, entry->local_file_offset.QuadPart);
+ }
+ 
++struct zip_part
++{
++    IOpcPart IOpcPart_iface;
++    IStream *archive;
++    IStream *content;
++    struct zip_entry entry;
++    IOpcPartUri *name;
++    WCHAR *content_type;
++    LONG ref;
++};
++
++static inline struct zip_part *impl_from_IOpcPart(IOpcPart *iface)
++{
++    return CONTAINING_RECORD(iface, struct zip_part, IOpcPart_iface);
++}
++
+ struct zip_part_set
+ {
+     IOpcPartSet IOpcPartSet_iface;
+-    IOpcPart **parts;
++    struct zip_part **parts;
+     size_t count;
+     LONG ref;
+ };
+@@ -509,7 +527,7 @@ static ULONG WINAPI zip_part_set_Release(IOpcPartSet *iface)
+         size_t i;
+ 
+         for (i = 0; i < part_set->count; i++)
+-            IOpcPart_Release(part_set->parts[i]);
++            IOpcPart_Release(&part_set->parts[i]->IOpcPart_iface);
+         free(part_set->parts);
+         free(part_set);
+     }
+@@ -526,18 +544,14 @@ static HRESULT WINAPI zip_part_set_GetPart(IOpcPartSet *iface, IOpcPartUri *name
+     for (i = 0; i < part_set->count; i++)
+     {
+         BOOL exists = FALSE;
+-        IOpcPartUri *name2;
+         HRESULT hr;
+ 
+-        if (FAILED(hr = IOpcPart_GetName(part_set->parts[i], &name2)))
+-            return hr;
+-        hr = IOpcPartUri_IsEqual(name, (IUri *)name2, &exists);
+-        IOpcPartUri_Release(name2);
++        hr = IOpcPartUri_IsEqual(name, (IUri *)part_set->parts[i]->name, &exists);
+         if (FAILED(hr))
+             return hr;
+         if (exists)
+         {
+-            IOpcPart_AddRef((*part = part_set->parts[i]));
++            IOpcPart_AddRef((*part = &part_set->parts[i]->IOpcPart_iface));
+             return S_OK;
+         }
+     }
+@@ -562,20 +576,16 @@ static HRESULT WINAPI zip_part_set_DeletePart(IOpcPartSet *iface, IOpcPartUri *n
+     return E_NOTIMPL;
+ }
+ 
+-static HRESULT part_name_exists(IOpcPartUri *name, IOpcPart **parts, size_t parts_len, BOOL *exists)
++static HRESULT part_name_exists(IOpcPartUri *name, struct zip_part **parts, size_t parts_len, BOOL *exists)
+ {
+     size_t i;
+ 
+     *exists = FALSE;
+     for (i = 0; i < parts_len; i++)
+     {
+-        IOpcPartUri *name2;
+         HRESULT hr;
+ 
+-        if (FAILED(hr = IOpcPart_GetName(parts[i], &name2)))
+-            return hr;
+-        hr = IOpcPartUri_IsEqual(name, (IUri *)name2, exists);
+-        IOpcPartUri_Release(name2);
++        hr = IOpcPartUri_IsEqual(name, (IUri *)parts[i]->name, exists);
+         if (FAILED(hr))
+             return hr;
+         if (*exists)
+@@ -617,7 +627,7 @@ static const IOpcPartSetVtbl zip_part_set_vtbl =
+     zip_part_set_GetEnumerator,
+ };
+ 
+-static HRESULT zip_part_set_create(IOpcPart **parts, size_t len, IOpcPartSet **out)
++static HRESULT zip_part_set_create(struct zip_part **parts, size_t len, IOpcPartSet **out)
+ {
+     struct zip_part_set *part_set;
+ 
+@@ -634,21 +644,6 @@ static HRESULT zip_part_set_create(IOpcPart **parts, size_t len, IOpcPartSet **o
+     return S_OK;
+ }
+ 
+-struct zip_part
+-{
+-    IOpcPart IOpcPart_iface;
+-    IStream *archive;
+-    IStream *content;
+-    struct zip_entry entry;
+-    IOpcPartUri *name;
+-    LONG ref;
+-};
+-
+-static inline struct zip_part *impl_from_IOpcPart(IOpcPart *iface)
+-{
+-    return CONTAINING_RECORD(iface, struct zip_part, IOpcPart_iface);
+-}
+-
+ static HRESULT WINAPI zip_part_QueryInterface(IOpcPart *iface, REFIID iid, void **out)
+ {
+     struct zip_part *part = impl_from_IOpcPart(iface);
+@@ -685,6 +680,7 @@ static ULONG WINAPI zip_part_Release(IOpcPart *iface)
+         IStream_Release(part->archive);
+         if (part->content) IStream_Release(part->content);
+         IOpcPartUri_Release(part->name);
++        if (part->content_type) free(part->content_type);
+         free(part);
+     }
+     return ref;
+@@ -877,9 +873,12 @@ static HRESULT WINAPI zip_part_GetName(IOpcPart *iface, IOpcPartUri **name)
+ 
+ static HRESULT WINAPI zip_part_GetContentType(IOpcPart *iface, WCHAR **type)
+ {
+-    FIXME("(%p, %p) stub!\n", iface, type);
+-    *type = NULL;
+-    return E_NOTIMPL;
++    struct zip_part *part = impl_from_IOpcPart(iface);
++
++    TRACE("(%p, %p)\n", iface, type);
++
++    *type = wcsdup(part->content_type);
++    return *type ? S_OK : E_OUTOFMEMORY;
+ }
+ 
+ static HRESULT WINAPI zip_part_GetCompressionOptions(IOpcPart *iface, OPC_COMPRESSION_OPTIONS *options)
+@@ -904,7 +903,7 @@ static const IOpcPartVtbl zip_part_vtbl =
+     zip_part_GetCompressionOptions,
+ };
+ 
+-static HRESULT zip_part_create(IOpcPartUri *name, IStream *stream, struct zip_entry entry, IOpcPart **part)
++static HRESULT zip_part_create(IOpcPartUri *name, IStream *stream, struct zip_entry entry, struct zip_part **out)
+ {
+     struct zip_part *zip_part;
+ 
+@@ -916,19 +915,212 @@ static HRESULT zip_part_create(IOpcPartUri *name, IStream *stream, struct zip_en
+     IStream_AddRef((zip_part->archive = stream));
+     zip_part->entry = entry;
+     zip_part->ref = 1;
+-    *part = &zip_part->IOpcPart_iface;
++    *out = zip_part;
++    return S_OK;
++}
++
++struct content_type_entry
++{
++    struct rb_entry entry;
++    WCHAR *extension_or_part_name;
++    WCHAR *type;
++};
++
++static int content_type_entry_compare(const void *key, const struct rb_entry *entry)
++{
++    const WCHAR *key2 = RB_ENTRY_VALUE(entry, struct content_type_entry, entry)->extension_or_part_name;
++    return wcsicmp(key, key2);
++}
++
++static void content_type_entry_destroy(struct rb_entry *entry, void *data)
++{
++    free(RB_ENTRY_VALUE(entry, struct content_type_entry, entry));
++}
++
++static HRESULT xml_get_attribute(IXmlReader *reader, const WCHAR *name, WCHAR **val_ret)
++{
++    const WCHAR *val;
++    HRESULT hr;
++
++    hr = IXmlReader_MoveToAttributeByName(reader, name, NULL);
++    if (hr != S_OK)
++        return FAILED(hr) ? hr : OPC_E_INVALID_CONTENT_TYPE_XML;
++    if (FAILED(hr = IXmlReader_GetValue(reader, &val, NULL)))
++        return hr;
++    *val_ret = wcsdup(val);
++    return *val_ret ? S_OK : E_OUTOFMEMORY;
++}
++
++static HRESULT xml_get_next_node(IXmlReader *reader, XmlNodeType exp_type, const WCHAR *exp_name)
++{
++    XmlNodeType type;
++    HRESULT hr;
++
++    do {
++        hr = IXmlReader_Read(reader, &type);
++        if (hr != S_OK)
++            return hr;
++    } while (type == XmlNodeType_Whitespace);
++    if (exp_type != XmlNodeType_None && type != exp_type)
++        return OPC_E_INVALID_CONTENT_TYPE_XML;
++    if (exp_name)
++    {
++        const WCHAR *name;
++
++        if (FAILED(hr = IXmlReader_GetLocalName(reader, &name, NULL)))
++            return hr;
++        if (wcscmp(name, exp_name))
++            return OPC_E_INVALID_CONTENT_TYPE_XML;
++    }
++    return hr;
++}
++
++static HRESULT content_types_add_type(IXmlReader *reader, const WCHAR *attr_name, struct rb_tree *types)
++{
++    struct content_type_entry *type;
++    WCHAR *ext_or_part, *content_type;
++    HRESULT hr;
++
++    if (FAILED(hr = xml_get_attribute(reader, attr_name, &ext_or_part))) return hr;
++    if (FAILED(hr = xml_get_attribute(reader, L"ContentType", &content_type)))
++    {
++        free(ext_or_part);
++        return hr;
++    }
++    if (!(type = malloc(sizeof(*type))))
++    {
++        free(content_type);
++        free(ext_or_part);
++        return E_OUTOFMEMORY;
++    }
++    type->extension_or_part_name = ext_or_part;
++    type->type = content_type;
++    if (rb_put(types, ext_or_part, &type->entry))
++    {
++        free(content_type);
++        free(ext_or_part);
++        free(type);
++        return OPC_E_DUPLICATE_DEFAULT_EXTENSION;
++    }
++    return S_OK;
++}
++
++static HRESULT content_types_add_default(IXmlReader *reader, struct rb_tree *defaults)
++{
++    return content_types_add_type(reader, L"Extension", defaults);
++}
++
++static HRESULT content_types_add_override(IXmlReader *reader, struct rb_tree *overrides)
++{
++    return content_types_add_type(reader, L"PartName", overrides);
++}
++
++static HRESULT part_create_content_stream(IStream *archive, const struct zip_entry *entry, IStream **out);
++
++static HRESULT compress_read_content_types(IStream *archive, const struct zip_entry *content_types,
++                                           struct rb_tree *defaults, struct rb_tree *overrides)
++{
++    IXmlReader *reader;
++    IStream *xml;
++    HRESULT hr;
++
++    if (FAILED(hr = part_create_content_stream(archive, content_types, &xml)))
++        return hr;
++    if (FAILED(hr = CreateXmlReader(&IID_IXmlReader, (void *)&reader, NULL)))
++    {
++        IStream_Release(xml);
++        return hr;
++    }
++
++    hr = IXmlReader_SetInput(reader, (IUnknown *)xml);
++    IStream_Release(xml);
++    if (FAILED(hr))
++    {
++        IXmlReader_Release(reader);
++        return hr;
++    }
++
++    if (FAILED(hr = xml_get_next_node(reader, XmlNodeType_XmlDeclaration, L"xml")))
++        goto fail;
++    if (FAILED(hr = xml_get_next_node(reader, XmlNodeType_Element, L"Types")))
++        goto fail;
++    while(SUCCEEDED(hr = xml_get_next_node(reader, XmlNodeType_None, NULL)))
++    {
++        const WCHAR *name;
++        XmlNodeType type;
++
++        if (FAILED(hr = IXmlReader_GetNodeType(reader, &type))) goto fail;
++        if (type != XmlNodeType_Element && type != XmlNodeType_EndElement) continue;
++        if (FAILED(hr = IXmlReader_GetLocalName(reader, &name, NULL))) goto fail;
++        if (type == XmlNodeType_EndElement) break;
++
++        if (!wcscmp(name, L"Default"))
++            hr = content_types_add_default(reader, defaults);
++        else if (!wcscmp(name, L"Override"))
++            hr = content_types_add_override(reader, overrides);
++        else
++            FIXME("Unknown node: %s\n", debugstr_w(name));
++
++        if (FAILED(hr)) goto fail;
++    }
++    if (SUCCEEDED(hr))
++    {
++        IXmlReader_Release(reader);
++        return hr;
++    }
++fail:
++    rb_destroy(defaults, content_type_entry_destroy, NULL);
++    rb_destroy(overrides, content_type_entry_destroy, NULL);
++    IXmlReader_Release(reader);
++    return hr;
++}
++
++static HRESULT zip_parts_set_content_types(const struct rb_tree *defaults, const struct rb_tree *overrides,
++                                           struct zip_part **parts, size_t count)
++{
++    size_t i;
++
++    for (i = 0; i < count; i++)
++    {
++        struct rb_entry *entry;
++        HRESULT hr;
++        BSTR str;
++
++        if (FAILED(hr = IOpcPartUri_GetAbsoluteUri(parts[i]->name, &str)))
++            return hr;
++        entry = rb_get(overrides, str);
++        SysFreeString(str);
++        if (!entry)
++        {
++            if (FAILED(hr = IOpcPartUri_GetExtension(parts[i]->name, &str)))
++                return hr;
++            entry = rb_get(defaults, &str[1]); /* Omit the leading dot */
++            SysFreeString(str);
++        }
++        if (!entry)
++            return E_INVALIDARG;
++        parts[i]->content_type = wcsdup(RB_ENTRY_VALUE(entry, struct content_type_entry, entry)->type);
++        if (!parts[i]->content_type)
++            return E_OUTOFMEMORY;
++    }
++
+     return S_OK;
+ }
+ 
+ /* The stream should be at the start of the central directory. */
+-static HRESULT compress_read_entries(IOpcFactory *factory, IStream *stream, ULONG dir_records, IOpcPart ***parts,
++static HRESULT compress_read_entries(IOpcFactory *factory, IStream *stream, ULONG dir_records, struct zip_part ***parts,
+                                      size_t *parts_len)
+ {
+     static const char *content_types_name = "[Content_Types].xml";
++    struct zip_entry content_types = {0};
+     BOOL found_content_types = FALSE;
++    struct rb_tree type_overrides;
++    struct rb_tree type_defaults;
+     HRESULT hr;
+     ULONG i;
+ 
++    rb_init(&type_defaults, content_type_entry_compare);
++    rb_init(&type_overrides, content_type_entry_compare);
+     *parts = NULL;
+     *parts_len = 0;
+     for (i = 0; i < dir_records; i++)
+@@ -1004,11 +1196,12 @@ static HRESULT compress_read_entries(IOpcFactory *factory, IStream *stream, ULON
+                 hr = OPC_E_ZIP_DUPLICATE_NAME;
+                 goto failed;
+             }
++            content_types = entry;
+             found_content_types = TRUE;
+         }
+         else
+         {
+-            IOpcPart *new_part, **tmp;
++            struct zip_part *new_part, **tmp;
+             IOpcPartUri *name_uri;
+             BOOL dup = FALSE;
+             WCHAR *nameW;
+@@ -1042,7 +1235,7 @@ static HRESULT compress_read_entries(IOpcFactory *factory, IStream *stream, ULON
+             if (!(tmp = realloc(*parts, sizeof(**parts) * (*parts_len + 1))))
+             {
+                 hr = E_OUTOFMEMORY;
+-                IOpcPart_Release(new_part);
++                IOpcPart_Release(&new_part->IOpcPart_iface);
+                 goto failed;
+             }
+             *parts = tmp;
+@@ -1050,11 +1243,21 @@ static HRESULT compress_read_entries(IOpcFactory *factory, IStream *stream, ULON
+             *parts_len += 1;
+         }
+     }
+-    return S_OK;
+-
++    if (!found_content_types)
++    {
++        hr = OPC_E_MISSING_CONTENT_TYPES;
++        goto failed;
++    }
++    if (FAILED(hr = compress_read_content_types(stream, &content_types, &type_defaults, &type_overrides)))
++        goto failed;
++    hr = zip_parts_set_content_types(&type_defaults, &type_overrides, *parts, *parts_len);
++    rb_destroy(&type_defaults, content_type_entry_destroy, NULL);
++    rb_destroy(&type_overrides, content_type_entry_destroy, NULL);
++    if (SUCCEEDED(hr))
++        return S_OK;
+ failed:
+     for (i = 0; i < *parts_len; i++)
+-        IOpcPart_Release((*parts)[i]);
++        IOpcPart_Release(&(*parts)[i]->IOpcPart_iface);
+     free(*parts);
+     *parts = NULL;
+     *parts_len = 0;
+@@ -1064,8 +1267,8 @@ failed:
+ HRESULT compress_open_archive(IOpcFactory *factory, IStream *stream, IOpcPartSet **part_set)
+ {
+     struct central_directory_end end = {0};
++    struct zip_part **parts = NULL;
+     ULARGE_INTEGER end_dir_start;
+-    IOpcPart **parts = NULL;
+     size_t parts_count = 0;
+     LARGE_INTEGER off;
+     HRESULT hr;
+diff --git a/dlls/opcservices/tests/opcservices.c b/dlls/opcservices/tests/opcservices.c
+index f671b5022e3..e0045537338 100644
+--- a/dlls/opcservices/tests/opcservices.c
++++ b/dlls/opcservices/tests/opcservices.c
+@@ -1338,7 +1338,7 @@ static void test_read_package(void)
+         ok(hr == S_OK, "Failed to get part, hr %#lx.\n", hr);
+         if (FAILED(hr)) continue;
+         hr = IOpcPart_GetContentType(part, &type);
+-        todo_wine ok(hr == S_OK, "Failed to get content type, hr %#lx.\n", hr);
++        ok(hr == S_OK, "Failed to get content type, hr %#lx.\n", hr);
+         if (SUCCEEDED(hr))
+         {
+             ok(!wcscmp(type, parts[i].type), "got type %s != %s.\n", debugstr_w(type), debugstr_w(parts[i].type));
+diff --git a/include/opcbase.idl b/include/opcbase.idl
+index 8418f8475ae..08f467f02d7 100644
+--- a/include/opcbase.idl
++++ b/include/opcbase.idl
+@@ -43,6 +43,9 @@ typedef [v1_enum] enum
+ 
+ cpp_quote("#define OPC_E_NONCONFORMING_URI MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0x1)")
+ cpp_quote("#define OPC_E_RELATIONSHIP_URI_REQUIRED MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0x3)")
++cpp_quote("#define OPC_E_INVALID_CONTENT_TYPE_XML MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0x6)")
++cpp_quote("#define OPC_E_MISSING_CONTENT_TYPES MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0x7)")
++cpp_quote("#define OPC_E_DUPLICATE_DEFAULT_EXTENSION MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0xf)")
+ cpp_quote("#define OPC_E_DUPLICATE_PART MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0xb)")
+ cpp_quote("#define OPC_E_INVALID_RELATIONSHIP_TARGET MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0x12)")
+ cpp_quote("#define OPC_E_DUPLICATE_RELATIONSHIP MAKE_HRESULT(SEVERITY_ERROR, FACILITY_OPC, 0x13)")
+-- 
+GitLab
+

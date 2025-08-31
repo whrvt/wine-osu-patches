@@ -1,0 +1,36 @@
+From 83aeca3ca29224546269915411db8b247c556aa3 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 7 Oct 2024 17:57:19 -0700
+Subject: [PATCH] libs: Fix compilation with clang in MSVC-mode.
+
+This won't retain the thread safety for lib32, but it allows it to compile.
+See: https://github.com/libjpeg-turbo/libjpeg-turbo/issues/87
+Shouldn't cause any real problems.
+---
+ libs/jpeg/jconfigint.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/libs/jpeg/jconfigint.h b/libs/jpeg/jconfigint.h
+index e2489248012..4b5f0f63c22 100644
+--- a/libs/jpeg/jconfigint.h
++++ b/libs/jpeg/jconfigint.h
+@@ -8,7 +8,16 @@
+ #undef inline
+ #undef INLINE
+ #define INLINE FORCEINLINE
++#if defined(__clang__) && defined(_MSC_VER) && defined(_WIN32)
++#ifdef _WIN64
++#define THREAD_LOCAL __declspec(thread) __attribute__((tls_model("local-exec")))
++#else
++/* Can't find a way to make it work here. */
++#define THREAD_LOCAL
++#endif
++#else
+ #define THREAD_LOCAL __declspec(thread)
++#endif
+ #define PACKAGE_NAME "libjpeg-turbo"
+ #define VERSION "3.0.4"
+ #define HAVE_INTRIN_H
+-- 
+2.46.2
+

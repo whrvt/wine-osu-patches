@@ -1,0 +1,141 @@
+From 3b53d2deb741fde4d13ce410f5688a36779dd718 Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Fri, 1 Aug 2025 19:27:29 +0530
+Subject: [PATCH] combase: Don't marshal objects that implement IAgileObject in
+ RoGetAgileReference.
+
+---
+ dlls/combase/roapi.c       | 40 +++++++++++++++++++++++---------------
+ dlls/combase/tests/roapi.c |  4 ----
+ 2 files changed, 24 insertions(+), 20 deletions(-)
+
+diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
+index df3a3c5c176..e1216dbb462 100644
+--- a/dlls/combase/roapi.c
++++ b/dlls/combase/roapi.c
+@@ -245,6 +245,7 @@ struct agile_reference
+     IStream *marshal_stream;
+     CRITICAL_SECTION cs;
+     IUnknown *obj;
++    BOOLEAN is_agile;
+     LONG ref;
+ };
+ 
+@@ -331,6 +332,9 @@ static HRESULT WINAPI agile_ref_Resolve(IAgileReference *iface, REFIID riid, voi
+ 
+     TRACE("(%p, %s, %p)\n", iface, debugstr_guid(riid), obj);
+ 
++    if (impl->is_agile)
++        return IUnknown_QueryInterface(impl->obj, riid, obj);
++
+     EnterCriticalSection(&impl->cs);
+     if (impl->option == AGILEREFERENCE_DELAYEDMARSHAL && impl->marshal_stream == NULL)
+     {
+@@ -359,6 +363,17 @@ static const IAgileReferenceVtbl agile_ref_vtbl =
+     agile_ref_Resolve,
+ };
+ 
++static BOOL object_has_interface(IUnknown *obj, REFIID iid)
++{
++    IUnknown *unk;
++    HRESULT hr;
++
++    hr = IUnknown_QueryInterface(obj, iid, (void **)&unk);
++    if (SUCCEEDED(hr))
++        IUnknown_Release(unk);
++    return SUCCEEDED(hr);
++}
++
+ /***********************************************************************
+  *      RoGetAgileReference (combase.@)
+  */
+@@ -366,7 +381,6 @@ HRESULT WINAPI RoGetAgileReference(enum AgileReferenceOptions option, REFIID rii
+                                    IAgileReference **agile_reference)
+ {
+     struct agile_reference *impl;
+-    IUnknown *unknown;
+     HRESULT hr;
+ 
+     TRACE("(%d, %s, %p, %p).\n", option, debugstr_guid(riid), obj, agile_reference);
+@@ -380,17 +394,10 @@ HRESULT WINAPI RoGetAgileReference(enum AgileReferenceOptions option, REFIID rii
+         return CO_E_NOTINITIALIZED;
+     }
+ 
+-    hr = IUnknown_QueryInterface(obj, riid, (void **)&unknown);
+-    if (FAILED(hr))
++    if (!object_has_interface(obj, riid))
+         return E_NOINTERFACE;
+-    IUnknown_Release(unknown);
+-
+-    hr = IUnknown_QueryInterface(obj, &IID_INoMarshal, (void **)&unknown);
+-    if (SUCCEEDED(hr))
+-    {
+-        IUnknown_Release(unknown);
++    if (object_has_interface(obj, &IID_INoMarshal))
+         return CO_E_NOT_SUPPORTED;
+-    }
+ 
+     impl = calloc(1, sizeof(*impl));
+     if (!impl)
+@@ -398,9 +405,15 @@ HRESULT WINAPI RoGetAgileReference(enum AgileReferenceOptions option, REFIID rii
+ 
+     impl->IAgileReference_iface.lpVtbl = &agile_ref_vtbl;
+     impl->option = option;
++    impl->is_agile = object_has_interface(obj, &IID_IAgileObject);
+     impl->ref = 1;
+ 
+-    if (option == AGILEREFERENCE_DEFAULT)
++    if (option == AGILEREFERENCE_DELAYEDMARSHAL || impl->is_agile)
++    {
++        impl->obj = obj;
++        IUnknown_AddRef(impl->obj);
++    }
++    else if (option == AGILEREFERENCE_DEFAULT)
+     {
+         if (FAILED(hr = marshal_object_in_agile_reference(impl, riid, obj)))
+         {
+@@ -408,11 +421,6 @@ HRESULT WINAPI RoGetAgileReference(enum AgileReferenceOptions option, REFIID rii
+             return hr;
+         }
+     }
+-    else if (option == AGILEREFERENCE_DELAYEDMARSHAL)
+-    {
+-        impl->obj = obj;
+-        IUnknown_AddRef(impl->obj);
+-    }
+ 
+     InitializeCriticalSection(&impl->cs);
+ 
+diff --git a/dlls/combase/tests/roapi.c b/dlls/combase/tests/roapi.c
+index fb40dc60f5a..91421605a75 100644
+--- a/dlls/combase/tests/roapi.c
++++ b/dlls/combase/tests/roapi.c
+@@ -446,9 +446,7 @@ static DWORD CALLBACK test_RoGetAgileReference_thread_proc(void *arg)
+     ok(!!unknown, "Expected pointer not NULL.\n");
+     if (param->obj_is_agile)
+     {
+-        todo_wine_if(param->from_type == RO_INIT_SINGLETHREADED || param->to_type == RO_INIT_SINGLETHREADED)
+         ok(unknown == param->unk_obj, "Expected the same object.\n");
+-        todo_wine_if(param->from_type == RO_INIT_MULTITHREADED && param->to_type == RO_INIT_MULTITHREADED)
+         EXPECT_REF(param->unk_obj, 4);
+     }
+     else if (param->from_type == RO_INIT_MULTITHREADED && param->to_type == RO_INIT_MULTITHREADED)
+@@ -565,7 +563,6 @@ static void test_RoGetAgileReference(void)
+             hr = RoGetAgileReference(option, &IID_IUnknown, &unk_agile_obj.IUnknown_iface, &agile_reference);
+             ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+             ok(!!agile_reference, "Got unexpected agile_reference.\n");
+-            todo_wine_if(option == AGILEREFERENCE_DEFAULT)
+             EXPECT_REF(&unk_agile_obj, 2);
+ 
+             unknown = NULL;
+@@ -573,7 +570,6 @@ static void test_RoGetAgileReference(void)
+             ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+             ok(!!unknown, "Expected pointer not NULL.\n");
+             ok(unknown == &unk_agile_obj.IUnknown_iface, "Expected the same object.\n");
+-            todo_wine
+             EXPECT_REF(&unk_agile_obj, 3);
+ 
+             for (to_type = RO_INIT_SINGLETHREADED; to_type <= RO_INIT_MULTITHREADED; to_type++)
+-- 
+GitLab
+

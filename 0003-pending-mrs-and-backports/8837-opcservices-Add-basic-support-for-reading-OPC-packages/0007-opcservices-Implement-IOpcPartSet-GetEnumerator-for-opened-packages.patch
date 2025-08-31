@@ -1,0 +1,203 @@
+From a34c9f9a837deb0bccdc8e0671210340fa75e657 Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Mon, 18 Aug 2025 23:39:55 +0530
+Subject: [PATCH] opcservices: Implement IOpcPartSet::GetEnumerator for opened
+ packages.
+
+---
+ dlls/opcservices/compress.c          | 157 ++++++++++++++++++++++++++-
+ dlls/opcservices/tests/opcservices.c |   2 +-
+ 2 files changed, 156 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/opcservices/compress.c b/dlls/opcservices/compress.c
+index e32396d0d00..206b3e0701a 100644
+--- a/dlls/opcservices/compress.c
++++ b/dlls/opcservices/compress.c
+@@ -488,6 +488,156 @@ static inline struct zip_part_set *impl_from_IOpcPartSet(IOpcPartSet *iface)
+     return CONTAINING_RECORD(iface, struct zip_part_set, IOpcPartSet_iface);
+ }
+ 
++struct zip_part_enum
++{
++    IOpcPartEnumerator IOpcPartEnumerator_iface;
++    struct zip_part_set *part_set;
++    size_t pos;
++    LONG ref;
++};
++
++static inline struct zip_part_enum *impl_from_IOpcPartEnumerator(IOpcPartEnumerator *iface)
++{
++    return CONTAINING_RECORD(iface, struct zip_part_enum, IOpcPartEnumerator_iface);
++}
++
++static HRESULT WINAPI zip_part_enum_QueryInterface(IOpcPartEnumerator *iface, REFIID iid, void **out)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++
++    TRACE("(%p, %s, %p)\n", iface, debugstr_guid(iid), out);
++
++    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IOpcPartEnumerator))
++    {
++        *out = &part_enum->IOpcPartEnumerator_iface;
++        IOpcPartEnumerator_AddRef(iface);
++        return S_OK;
++    }
++
++    *out = NULL;
++    WARN("Unsupported interface %s.\n", debugstr_guid(iid));
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI zip_part_enum_AddRef(IOpcPartEnumerator *iface)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++
++    TRACE("(%p)\n", iface);
++
++    return InterlockedIncrement(&part_enum->ref);
++}
++
++static ULONG WINAPI zip_part_enum_Release(IOpcPartEnumerator *iface)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++    ULONG ref = InterlockedDecrement(&part_enum->ref);
++
++    TRACE("(%p)\n", iface);
++
++    if (!ref)
++    {
++        IOpcPartSet_Release(&part_enum->part_set->IOpcPartSet_iface);
++        free(part_enum);
++    }
++    return ref;
++}
++
++static HRESULT WINAPI zip_part_enum_MoveNext(IOpcPartEnumerator *iface, BOOL *has_next)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++    HRESULT hr = S_OK;
++
++    TRACE("(%p, %p)\n", iface, has_next);
++
++    if (!has_next)
++        return E_POINTER;
++
++    if (part_enum->part_set->count && (part_enum->pos == ~(size_t)0 || part_enum->pos < part_enum->part_set->count))
++        part_enum->pos++;
++    else if (part_enum->pos >= part_enum->part_set->count)
++        hr = OPC_E_ENUM_CANNOT_MOVE_NEXT;
++    *has_next = part_enum->pos < part_enum->part_set->count;
++    return hr;
++}
++
++static HRESULT WINAPI zip_part_enum_MovePrevious(IOpcPartEnumerator *iface, BOOL *has_previous)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++
++    TRACE("(%p, %p)\n", iface, has_previous);
++
++    if (!has_previous)
++        return E_POINTER;
++
++    if (part_enum->pos != ~(size_t)0)
++        part_enum->pos--;
++    *has_previous = part_enum->pos != ~(size_t)0;
++    return S_OK;
++}
++
++static HRESULT WINAPI zip_part_enum_GetCurrent(IOpcPartEnumerator *iface, IOpcPart **part)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++
++    TRACE("(%p, %p)\n", iface, part);
++
++    if (!part)
++        return E_POINTER;
++
++    if (part_enum->pos < part_enum->part_set->count)
++    {
++        IOpcPart_AddRef((*part = &part_enum->part_set->parts[part_enum->pos]->IOpcPart_iface));
++        return S_OK;
++    }
++    *part = NULL;
++    return OPC_E_ENUM_INVALID_POSITION;
++}
++
++static HRESULT zip_part_enum_create(struct zip_part_set *part_set, IOpcPartEnumerator **out);
++
++static HRESULT WINAPI zip_part_enum_Clone(IOpcPartEnumerator *iface, IOpcPartEnumerator **out)
++{
++    struct zip_part_enum *part_enum = impl_from_IOpcPartEnumerator(iface);
++
++    TRACE("(%p, %p)\n", iface, out);
++
++    if (!out)
++        return E_POINTER;
++
++    return zip_part_enum_create(part_enum->part_set, out);
++}
++
++static const IOpcPartEnumeratorVtbl zip_part_enum_vtbl =
++{
++    /* IUnknown */
++    zip_part_enum_QueryInterface,
++    zip_part_enum_AddRef,
++    zip_part_enum_Release,
++    /* IOpcPartEnumeratorVtbl */
++    zip_part_enum_MoveNext,
++    zip_part_enum_MovePrevious,
++    zip_part_enum_GetCurrent,
++    zip_part_enum_Clone,
++};
++
++static HRESULT zip_part_enum_create(struct zip_part_set *part_set, IOpcPartEnumerator **out)
++{
++    struct zip_part_enum *part_enum;
++
++    if (!(part_enum = calloc(1, sizeof(*part_enum))))
++        return E_OUTOFMEMORY;
++
++    part_enum->IOpcPartEnumerator_iface.lpVtbl = &zip_part_enum_vtbl;
++    part_enum->ref =1;
++    part_enum->part_set = part_set;
++    part_enum->pos = ~(size_t)0;
++    IOpcPartSet_AddRef(&part_set->IOpcPartSet_iface);
++
++    *out = &part_enum->IOpcPartEnumerator_iface;
++    return S_OK;
++}
++
+ static HRESULT WINAPI zip_part_set_QueryInterface(IOpcPartSet *iface, REFIID iid, void **out)
+ {
+     struct zip_part_set *part_set = impl_from_IOpcPartSet(iface);
+@@ -608,9 +758,12 @@ static HRESULT WINAPI zip_part_set_PartExists(IOpcPartSet *iface, IOpcPartUri *n
+ 
+ static HRESULT WINAPI zip_part_set_GetEnumerator(IOpcPartSet *iface, IOpcPartEnumerator **out)
+ {
+-    FIXME("(%p, %p) stub\n", iface, out);
++    struct zip_part_set *part_set = impl_from_IOpcPartSet(iface);
++
++    TRACE("(%p, %p)\n", iface, out);
++
+     *out = NULL;
+-    return E_NOTIMPL;
++    return zip_part_enum_create(part_set, out);
+ }
+ 
+ static const IOpcPartSetVtbl zip_part_set_vtbl =
+diff --git a/dlls/opcservices/tests/opcservices.c b/dlls/opcservices/tests/opcservices.c
+index e0045537338..2518742ce04 100644
+--- a/dlls/opcservices/tests/opcservices.c
++++ b/dlls/opcservices/tests/opcservices.c
+@@ -1367,7 +1367,7 @@ static void test_read_package(void)
+     }
+ 
+     hr = IOpcPartSet_GetEnumerator(partset, &partenum);
+-    todo_wine ok(hr == S_OK, "Failed to get part enumerator, hr %#lx.\n", hr);
++    ok(hr == S_OK, "Failed to get part enumerator, hr %#lx.\n", hr);
+     if (FAILED(hr))
+     {
+         IOpcPartSet_Release(partset);
+-- 
+GitLab
+

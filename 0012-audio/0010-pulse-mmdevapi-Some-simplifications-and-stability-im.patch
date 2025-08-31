@@ -1,0 +1,191 @@
+From 1e65e385165ea0dfcd45059739ce06253521b87f Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 29 Aug 2025 11:19:36 -0700
+Subject: [PATCH] pulse,mmdevapi: Some simplifications and stability
+ improvements to the low latency patches.
+
+---
+ dlls/mmdevapi/client.c     | 52 ++++++++------------------------------
+ dlls/winepulse.drv/pulse.c | 46 ++++++++++++++++++++-------------
+ 2 files changed, 38 insertions(+), 60 deletions(-)
+
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index f4259e9d912..433829e65db 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -52,9 +52,6 @@ extern struct audio_session_wrapper *session_wrapper_create(struct audio_client
+ 
+ static HANDLE main_loop_thread;
+ 
+-static BOOL custom;
+-static REFERENCE_TIME num_periods = 3;
+-
+ void main_loop_stop(void)
+ {
+     if (main_loop_thread) {
+@@ -141,10 +138,12 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+     TRACE("Device periods: %lu default and %lu minimum\n", (ULONG)def_period, (ULONG)min_period);
+ 
+     if (mode == AUDCLNT_SHAREMODE_SHARED) {
+-        if (!custom) {
++        if (*period == 0 || force_def_period)
+             *period = def_period;
+-            *duration = num_periods * *period;
+-        }
++        else if (*period < min_period)
++            return AUDCLNT_E_INVALID_DEVICE_PERIOD;
++        if (client->dataflow == eRender || *duration < 3 * *period)
++            *duration = 3 * *period;
+     } else {
+         const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
+         if (fmtex->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+@@ -169,11 +168,7 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+         }
+     }
+ 
+-    if (custom) {
+-        MESSAGE("Set custom audio period %lu and duration %lu\n", (ULONG)*period, (ULONG)*duration);
+-    } else {
+-        TRACE("Adjusted duration %lu and period %lu\n", (ULONG)*duration, (ULONG)*period);
+-    }
++    TRACE("Adjusted duration %lu and period %lu\n", (ULONG)*duration, (ULONG)*period);
+ 
+     return hr;
+ }
+@@ -386,25 +381,6 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
+     if (mode != AUDCLNT_SHAREMODE_SHARED && mode != AUDCLNT_SHAREMODE_EXCLUSIVE)
+         return E_INVALIDARG;
+ 
+-    if (mode == AUDCLNT_SHAREMODE_SHARED) {
+-        const char* penv = getenv("STAGING_AUDIO_PERIOD");
+-        const char* denv = getenv("STAGING_AUDIO_DURATION");
+-        int periodval, durationval;
+-
+-        if (penv && ((periodval = atoi(penv)) >= 0)) {
+-            custom = TRUE;
+-            period = periodval;
+-
+-            /* only set duration if period is given (backwards compatibility?) */
+-            if (denv && ((durationval = atoi(denv)) >= 0)) {
+-                duration = max(durationval, periodval);
+-            }
+-            else {
+-                duration = num_periods * periodval;
+-            }
+-        }
+-    }
+-
+     if (flags & ~(AUDCLNT_STREAMFLAGS_CROSSPROCESS |
+                   AUDCLNT_STREAMFLAGS_LOOPBACK |
+                   AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+@@ -1084,9 +1060,9 @@ static HRESULT WINAPI client_GetSharedModeEnginePeriod(IAudioClient3 *iface,
+     if (FAILED(hr = get_periods(This, &def_period, &min_period)))
+         return hr;
+ 
+-    *default_period_frames = def_period * format->nSamplesPerSec / (REFERENCE_TIME)10000000;
+-    *min_period_frames     = min_period * format->nSamplesPerSec / (REFERENCE_TIME)10000000;
+-    *max_period_frames     = *default_period_frames;
++    *default_period_frames = ((def_period * format->nSamplesPerSec) + (REFERENCE_TIME)9999999) / (REFERENCE_TIME)10000000;
++    *min_period_frames     = ((min_period * format->nSamplesPerSec) + (REFERENCE_TIME)9999999) / (REFERENCE_TIME)10000000;
++    *max_period_frames     = *default_period_frames * 2;
+     *unit_period_frames    = 1;
+ 
+     return hr;
+@@ -1118,21 +1094,13 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
+ {
+     struct audio_client *This = impl_from_IAudioClient3(iface);
+     REFERENCE_TIME period;
+-    const char *penv;
+-    int periodval;
+ 
+     TRACE("(%p)->(0x%lx, %u, %p, %s)\n", This, flags, period_frames, format, debugstr_guid(session_guid));
+ 
+     if (!format)
+         return E_POINTER;
+ 
+-    penv = getenv("STAGING_AUDIO_PERIOD");
+-    if (penv && (periodval = atoi(penv)) >= 0) { // Custom
+-        period = periodval;
+-        TRACE("Audio period set to %d.\n", periodval);
+-    } else { // Default
+-        period = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
+-    }
++    period = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
+ 
+     return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
+ }
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 333ddb22746..e8523fd56c5 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -750,6 +750,15 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
+     fmt->dwChannelMask = pa_mask;
+ }
+ 
++static LONGLONG find_closest_to_next_integer(LONGLONG x, LONGLONG c, LONGLONG d) {
++    // get the target ceiling value (next integer)
++    LONGLONG target = ((x * c) + d - 1) / d;  // ceil((x * c) / d)
++    // find the largest x' such that (x' * c) / d <= target  
++    LONGLONG max_x_for_target = (target * d) / c;  // floor((target * d) / c)
++    // return the maximum of input x and calculated boundary
++    return (x > max_x_for_target) ? x : max_x_for_target;
++}
++
+ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, const char *pulse_name,
+                                  WAVEFORMATEXTENSIBLE *fmt, REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
+ {
+@@ -806,13 +815,26 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+     if (stream)
+         pa_stream_unref(stream);
+ 
+-    if (length)
+-        *def_period = 2 * (*min_period = pa_bytes_to_usec(10 * length, &ss)); // make the default period 2x the minimum
++    if (length) {
++        REFERENCE_TIME period_to_set = pa_bytes_to_usec(10 * length, &ss);
++        int multiplier = 2; // set 2x actual minimum unless custom period was specified
++        static int periodval = -1;
++        if (periodval == -1) {
++            const char* penv = getenv("STAGING_AUDIO_PERIOD");
++            periodval = 0;
++            if (penv && *penv != '\0' && ((periodval = atoi(penv)) > 0)) {
++                MESSAGE("Set custom audio period %d\n", periodval);
++            }
++        }
++
++        if (periodval > 0) {
++            period_to_set = periodval;
++            multiplier = 1;
++        }
+ 
+-    penv = getenv("STAGING_AUDIO_PERIOD");
+-    if (penv && (periodval = atoi(penv)) >= 0) {
+-        *def_period = *min_period = periodval;
+-        TRACE("Pulse audio period set to %d.\n", periodval);
++        /* overwrite default with minimum (for playback devices) */
++        *min_period = find_closest_to_next_integer(period_to_set, ss.rate, 10000000);
++        *def_period = find_closest_to_next_integer(*min_period * multiplier, ss.rate, 10000000);
+     }
+ 
+     wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+@@ -1223,18 +1245,6 @@ static NTSTATUS pulse_create_stream(void *args)
+     if (FAILED(hr))
+         goto exit;
+ 
+-    penv = getenv("STAGING_AUDIO_PERIOD");
+-    if ((stream->dataflow == eRender) && penv && (periodval = atoi(penv)) >= 0) {
+-        params->period = periodval;
+-        TRACE("Pulse audio period set to %d.\n", periodval);
+-    }
+-
+-    denv = getenv("STAGING_AUDIO_DURATION");
+-    if ((stream->dataflow == eRender) && denv && (durationval = atoi(denv)) >= 0) {
+-        params->duration = max(durationval, params->period);
+-        TRACE("Pulse audio duration set to %d.\n", durationval);
+-    }
+-
+     stream->def_period = params->period;
+     stream->duration = params->duration;
+ 
+-- 
+2.50.1
+

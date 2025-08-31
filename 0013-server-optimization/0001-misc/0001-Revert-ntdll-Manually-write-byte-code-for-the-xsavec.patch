@@ -1,0 +1,44 @@
+From: William Horvath <william@horvath.blog>
+Date: Tue, 3 Dec 2024 21:56:01 -0800
+Subject: [PATCH] Revert "ntdll: Manually write byte code for the xsavec
+ instruction."
+
+This reverts commit 5250493177f3dcb1ab455e018c1c3046198db746.
+---
+ dlls/ntdll/unix/signal_i386.c   | 4 +---
+ dlls/ntdll/unix/signal_x86_64.c | 4 +---
+ 2 files changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/signal_i386.c
++++ b/dlls/ntdll/unix/signal_i386.c
+@@ -2659,9 +2659,7 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
+                    "movl %edi,0x274(%ecx)\n\t"
+                    "movl %edi,0x278(%ecx)\n\t"
+                    "movl %edi,0x27c(%ecx)\n\t"
+-                   /* The xsavec instruction is not supported by
+-                    * binutils < 2.25. */
+-                   ".byte 0x0f, 0xc7, 0x61, 0x40\n\t" /* xsavec 0x40(%ecx) */
++                   "xsavec 0x40(%ecx)\n\t"
+                    "jmp 4f\n"
+                    "1:\txsave 0x40(%ecx)\n\t"
+                    "jmp 4f\n"
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 11111111111..11111111111 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2967,9 +2967,7 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
+                    "movq %rbp,0x2e8(%rcx)\n\t"
+                    "movq %rbp,0x2f0(%rcx)\n\t"
+                    "movq %rbp,0x2f8(%rcx)\n\t"
+-                   /* The xsavec instruction is not supported by
+-                    * binutils < 2.25. */
+-                   ".byte 0x48, 0x0f, 0xc7, 0xa1, 0xc0, 0x00, 0x00, 0x00\n\t" /* xsavec64 0xc0(%rcx) */
++                   "xsavec64 0xc0(%rcx)\n\t"
+                    "jmp 3f\n"
+                    "1:\txsave64 0xc0(%rcx)\n\t"
+                    "jmp 3f\n"
+-- 
+0.0.0
+
