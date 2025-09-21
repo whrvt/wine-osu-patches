@@ -1,0 +1,28 @@
+From 7df0afae36f93a54198dd93131677335d566f291 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sun, 21 Sep 2025 16:54:47 +0200
+Subject: [PATCH] Revert "win32u: Also flush the GL drawable if the client
+ surface is offscreen."
+
+This reverts commit ff2f6c4e502c05500e6b9e81066e395f0a1df37d.
+---
+ dlls/win32u/opengl.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index fae9a71c988..f35358b4950 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -161,8 +161,7 @@ static void opengl_drawable_flush( struct opengl_drawable *drawable, int interva
+         flags = GL_FLUSH_INTERVAL;
+     }
+ 
+-    if (flags || InterlockedCompareExchange( &drawable->client->offscreen, 0, 0 ))
+-        drawable->funcs->flush( drawable, flags );
++    if (flags) drawable->funcs->flush( drawable, flags );
+ }
+ 
+ static BOOL opengl_drawable_swap( struct opengl_drawable *drawable )
+-- 
+2.51.0
+
