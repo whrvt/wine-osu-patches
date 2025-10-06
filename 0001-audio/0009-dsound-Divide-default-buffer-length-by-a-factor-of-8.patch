@@ -1,0 +1,25 @@
+From 1eac4767ac4d64adad8ec098926cf07bdda2821f Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 16 Mar 2025 17:31:41 -0700
+Subject: [PATCH 09/10] dsound: Divide default buffer length by a factor of 8.
+
+---
+ dlls/dsound/dsound_main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/dsound/dsound_main.c b/dlls/dsound/dsound_main.c
+index 9d268c6eeb3..9ab282ea279 100644
+--- a/dlls/dsound/dsound_main.c
++++ b/dlls/dsound/dsound_main.c
+@@ -82,7 +82,7 @@ GUID *DSOUND_capture_guids;
+ const WCHAR wine_vxd_drv[] = L"winemm.vxd";
+ 
+ /* All default settings, you most likely don't want to touch these, see wiki on UsefulRegistryKeys */
+-int ds_hel_buflen = 32768 * 2;
++int ds_hel_buflen = 4096 * 2;
+ int ds_hq_buffers_max = 4;
+ BOOL ds_eax_enabled = TRUE;
+ 
+-- 
+2.51.0
+

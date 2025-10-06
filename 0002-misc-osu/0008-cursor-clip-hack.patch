@@ -1,0 +1,269 @@
+From 98ee33ac1f857bab937787f8558b0a9ddfa62f90 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 6 Nov 2024 14:06:24 -0800
+Subject: [PATCH 1/2] cursor clip hack
+
+---
+ dlls/win32u/class.c                    |  2 ++
+ dlls/win32u/input.c                    |  4 ++++
+ dlls/win32u/win32u_private.h           | 19 +++++++++++++++++++
+ dlls/winewayland.drv/wayland_pointer.c |  2 ++
+ dlls/winewayland.drv/waylanddrv.h      | 17 +++++++++++++++++
+ dlls/winewayland.drv/window.c          |  1 +
+ dlls/winex11.drv/mouse.c               |  2 +-
+ dlls/winex11.drv/opengl.c              |  5 +++++
+ dlls/winex11.drv/window.c              |  2 +-
+ dlls/winex11.drv/x11drv.h              | 20 ++++++++++++++++++++
+ dlls/winex11.drv/x11drv_main.c         |  2 ++
+ 11 files changed, 74 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
+index ea0d7efe74b..06607ae0714 100644
+--- a/dlls/win32u/class.c
++++ b/dlls/win32u/class.c
+@@ -84,6 +84,7 @@ static pthread_mutex_t winproc_lock = PTHREAD_MUTEX_INITIALIZER;
+ static struct list class_list = LIST_INIT( class_list );
+ 
+ HINSTANCE user32_module = 0;
++BOOL cursor_clip_hack = FALSE;
+ 
+ /* find an existing winproc for a given function and type */
+ /* FIXME: probably should do something more clever than a linear search */
+@@ -248,6 +249,7 @@ DLGPROC get_dialog_proc( DLGPROC ret, BOOL ansi )
+ 
+ static void init_user(void)
+ {
++    cursor_clip_hack = use_cursor_clip_hack();
+     gdi_init();
+     sysparams_init();
+     winstation_init();
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index fe0674c9240..9d96d2839da 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2621,6 +2621,7 @@ static BOOL is_captured_by_system(void)
+  */
+ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
+ {
++    if (cursor_clip_hack) return TRUE;
+     struct user_thread_info *thread_info = get_user_thread_info();
+     MONITORINFO monitor_info = {.cbSize = sizeof(MONITORINFO)};
+     RECT rect, virtual_rect;
+@@ -2709,6 +2710,7 @@ BOOL WINAPI NtUserGetPointerInfoList( UINT32 id, POINTER_INPUT_TYPE type, UINT_P
+ 
+ BOOL get_clip_cursor( RECT *rect, UINT dpi, MONITOR_DPI_TYPE type )
+ {
++    if (cursor_clip_hack) return TRUE;
+     struct object_lock lock = OBJECT_LOCK_INIT;
+     const desktop_shm_t *desktop_shm;
+     NTSTATUS status;
+@@ -2724,6 +2726,7 @@ BOOL get_clip_cursor( RECT *rect, UINT dpi, MONITOR_DPI_TYPE type )
+ 
+ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
+ {
++    if (cursor_clip_hack) return TRUE;
+     struct user_thread_info *thread_info = get_user_thread_info();
+     RECT rect, virtual_rect = get_virtual_screen_rect( 0, MDT_RAW_DPI );
+     BOOL was_clipping, empty = !!(flags & SET_CURSOR_NOCLIP);
+@@ -2763,6 +2766,7 @@ BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset )
+  */
+ BOOL WINAPI NtUserClipCursor( const RECT *rect )
+ {
++    if (cursor_clip_hack) rect = NULL;
+     static int keep_inside_window = -1;
+     HWND foreground = NtUserGetForegroundWindow();
+     RECT new_rect, full_rect;
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 14083c21b7e..f9cab93c45a 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -90,6 +90,7 @@ extern void unregister_imm_window( HWND hwnd );
+ extern BOOL enable_mouse_in_pointer;
+ extern BOOL grab_pointer;
+ extern BOOL grab_fullscreen;
++extern BOOL cursor_clip_hack;
+ extern HWND get_active_window(void);
+ extern HWND get_capture(void);
+ extern BOOL get_cursor_pos( POINT *pt );
+@@ -410,4 +411,22 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+     return !IsRectEmpty( dst );
+ }
+ 
++static inline int use_cursor_clip_hack(void)
++{
++    static int enable_cached = -1;
++    if (enable_cached == -1)
++    {
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (!getenv("WAYLAND_DISPLAY"))
++            enable_cached = 0;
++        else if (e && (atoi(e) > 1))
++            enable_cached = 2;
++        else if (e && (atoi(e) > 0))
++            enable_cached = 1;
++        else
++            enable_cached = 0;
++    }
++    return enable_cached;
++}
++
+ #endif /* __WINE_WIN32U_PRIVATE */
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index f535108a79f..66c2096184c 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -870,6 +870,7 @@ clear_cursor:
+ 
+ static void reapply_cursor_clipping(void)
+ {
++    if (use_cursor_clip_hack()) return;
+     RECT rect;
+     UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
+     if (NtUserGetClipCursor(&rect)) NtUserClipCursor(&rect);
+@@ -1231,6 +1232,7 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
+  */
+ BOOL WAYLAND_ClipCursor(const RECT *clip, BOOL reset)
+ {
++    if (use_cursor_clip_hack()) return TRUE;
+     struct wayland_pointer *pointer = &process_wayland.pointer;
+     HWND hwnd;
+     struct wl_surface *wl_surface = NULL;
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index da84fb014f4..2af52fa3897 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -52,6 +52,7 @@
+ #include "wine/gdi_driver.h"
+ #include "wine/list.h"
+ #include "wine/rbtree.h"
++#include "stdlib.h"
+ 
+ #include "unixlib.h"
+ 
+@@ -559,4 +560,20 @@ BOOL WAYLAND_HasWindowManager(const char *name);
+ UINT WAYLAND_VulkanInit(UINT version, void *vulkan_handle, const struct vulkan_driver_funcs **driver_funcs);
+ struct opengl_funcs *WAYLAND_wine_get_wgl_driver(UINT version);
+ 
++static inline int use_cursor_clip_hack(void)
++{
++    static int enable_cached = -1;
++    if (enable_cached == -1)
++    {
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (e && (atoi(e) > 1))
++            enable_cached = 2;
++        else if (e && (atoi(e) > 0))
++            enable_cached = 1;
++        else
++            enable_cached = 0;
++    }
++    return enable_cached;
++}
++
+ #endif /* __WINE_WAYLANDDRV_H */
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 364398c24c6..43d35162921 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -185,6 +185,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
+ 
+ static void reapply_cursor_clipping(void)
+ {
++    if (use_cursor_clip_hack()) return;
+     RECT rect;
+     UINT context = NtUserSetThreadDpiAwarenessContext(NTUSER_DPI_PER_MONITOR_AWARE);
+     if (NtUserGetClipCursor(&rect )) NtUserClipCursor(&rect);
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 902776c4972..59769ba38f5 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -501,7 +501,7 @@ static BOOL grab_clipping_window( const RECT *clip )
+         clip->right < clip_rect.right || clip->bottom < clip_rect.bottom)
+         data->warp_serial = NextRequest( data->display );
+ 
+-    if (!XGrabPointer( data->display, clip_window, False,
++    if (cursor_clip_hack < 2 && !XGrabPointer( data->display, clip_window, False,
+                        PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+                        GrabModeAsync, GrabModeAsync, clip_window, None, CurrentTime ))
+         clipping_cursor = TRUE;
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 478e3c253e5..766dd908a8e 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -1900,6 +1900,11 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct glx_pixel
+ 
+     if (!(gl = calloc( 1, sizeof(*gl) ))) return NULL;
+ 
++    /* lazy to find somewhere else to put this so that it doesn't show up more than once */
++    static unsigned int once;
++    if (!once++ && cursor_clip_hack)
++        MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_ENABLE_ABS_TABLET_HACK=0 to disable.\n");
++
+     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI
+      * there is no way to query it, so we have to store it here.
+      */
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 12ea7f03945..ae92ee87fae 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -3335,7 +3335,7 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags )
+ 
+     if (!(flags & (GUI_INMOVESIZE | GUI_INMENUMODE))) return;
+ 
+-    if (hwnd)
++    if (cursor_clip_hack < 2 && hwnd)
+     {
+         if (!(data = get_win_data( NtUserGetAncestor( hwnd, GA_ROOT )))) return;
+         if (data->whole_window)
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 91a681c3250..880d5c290cc 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -1020,4 +1020,24 @@ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+     return (p - dst) * sizeof(WCHAR);
+ }
+ 
++extern int cursor_clip_hack;
++ 
++static inline int use_cursor_clip_hack(void)
++{
++    static int enable_cached = -1;
++    if (enable_cached == -1)
++    {
++        const char *e = getenv("WINE_ENABLE_ABS_TABLET_HACK");
++        if (!getenv("WAYLAND_DISPLAY"))
++            enable_cached = 0;
++        else if (e && (atoi(e) > 1))
++            enable_cached = 2;
++        else if (e && (atoi(e) > 0))
++            enable_cached = 1;
++        else
++            enable_cached = 0;
++    }
++    return enable_cached;
++}
++
+ #endif  /* __WINE_X11DRV_H */
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 69656ec42bb..f29cc1c3ce2 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -82,6 +82,7 @@ int primary_monitor = 0;
+ BOOL client_side_graphics = TRUE;
+ BOOL client_side_with_render = TRUE;
+ BOOL shape_layered_windows = TRUE;
++int cursor_clip_hack = 0;
+ int copy_default_colors = 128;
+ int alloc_system_colors = 256;
+ int xrender_error_base = 0;
+@@ -849,6 +850,7 @@ static NTSTATUS x11drv_init( void *arg )
+     if (use_xim) use_xim = xim_init( input_style );
+ 
+     init_user_driver();
++    cursor_clip_hack = use_cursor_clip_hack();
+ 
+     {
+         RECT rect = NtUserGetVirtualScreenRect( MDT_DEFAULT );
+-- 
+2.50.1
+
