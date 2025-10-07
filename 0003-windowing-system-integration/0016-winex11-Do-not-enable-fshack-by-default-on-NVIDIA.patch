@@ -1,0 +1,39 @@
+From 8feb3205df821dfe9a3140afda98a0dbb17cc8b2 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 7 Oct 2025 04:29:39 +0200
+Subject: [PATCH] winex11: Do not enable fshack by default on NVIDIA
+
+---
+ dlls/winex11.drv/opengl.c | 16 ----------------
+ 1 file changed, 16 deletions(-)
+
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index ab15d645212..a1f8e75216d 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -1847,22 +1847,6 @@ BOOL enable_fullscreen_hack( HWND hwnd, BOOL check_gamma )
+ 
+     if (disable_fshack) return FALSE;
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_RAW_DPI )) return TRUE; /* needs DPI scaling */
+-    if (check_gamma && X11DRV_HasWindowManager( "xwayland" ) && gl_renderer && strstr( gl_renderer, "NVIDIA" ))
+-    {
+-        static int skip_cached = -1;
+-        if (skip_cached == -1)
+-        {
+-            const char *sgi = getenv( "SteamGameId" );
+-            skip_cached = sgi && !strcmp( sgi, "582660" );
+-        }
+-        if (!skip_cached)
+-        {
+-            /* Force fshack on XWayland / NVidia because drawing to front buffer doesn't get presented there and fshack works
+-             * that around as a side effect. */
+-            TRACE( "Forcing fshack on xwayland / NVIDIA.\n" );
+-            return TRUE;
+-        }
+-    }
+     return check_gamma && ReadNoFence( &gamma_serial );
+ }
+ 
+-- 
+2.51.0
+
