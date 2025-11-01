@@ -1,0 +1,49 @@
+From 4f39bd797687345aac4ff498ee26a7fbaaf11a68 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 7 Oct 2025 00:42:07 +0200
+Subject: [PATCH 02/15] winex11: Use Xshape fallback on Mutter
+
+Workarounds https://github.com/wine-mirror/wine/commit/35193586, without this
+osu! force-enables vsync due to the compositor not being disabled, even in fullscreen.
+---
+ dlls/winex11.drv/window.c | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index dc40a8f7c15..1b9f279cce5 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2447,7 +2447,9 @@ Window get_dummy_parent(void)
+         attrib.colormap = default_colormap;
+ 
+ #ifdef HAVE_LIBXSHAPE
++        if (!X11DRV_HasWindowManager( "Mutter" ))
+         {
++            TRACE("Not using Xshape fallback, WM isn't Mutter.\n");
+             static XRectangle empty_rect;
+             dummy_parent = XCreateWindow( gdi_display, root_window, 0, 0, 1, 1, 0,
+                                           default_visual.depth, InputOutput, default_visual.visual,
+@@ -2455,11 +2457,15 @@ Window get_dummy_parent(void)
+             XShapeCombineRectangles( gdi_display, dummy_parent, ShapeBounding, 0, 0, &empty_rect, 1,
+                                      ShapeSet, YXBanded );
+         }
+-#else
+-        dummy_parent = XCreateWindow( gdi_display, root_window, -1, -1, 1, 1, 0, default_visual.depth,
+-                                      InputOutput, default_visual.visual,
+-                                      CWColormap | CWBorderPixel | CWOverrideRedirect, &attrib );
+-        WARN("Xshape support is not compiled in. Applications under XWayland may have poor performance.\n");
++        else 
++        {
++#endif
++            dummy_parent = XCreateWindow( gdi_display, root_window, -1, -1, 1, 1, 0, default_visual.depth,
++                                          InputOutput, default_visual.visual,
++                                          CWColormap | CWBorderPixel | CWOverrideRedirect, &attrib );
++            FIXME("Using Xshape fallback. Either your WM is Mutter, or Xshape support was not compiled in.\n");
++#ifdef HAVE_LIBXSHAPE
++        }
+ #endif
+         XMapWindow( gdi_display, dummy_parent );
+     }
+-- 
+2.51.0
+
