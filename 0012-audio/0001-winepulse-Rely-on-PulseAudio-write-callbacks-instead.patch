@@ -1,0 +1,1018 @@
+From d0a1b15d700612aca00f8c18f12a5347e5add393 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 2 Sep 2024 16:27:50 -0700
+Subject: [PATCH 1/7] winepulse: Rely on PulseAudio write callbacks instead of a
+ timer loop.
+
+Reverting a patch from Andrew Eikum.
+---
+ dlls/winepulse.drv/pulse.c | 650 +++++++++++++++++++------------------
+ 1 file changed, 334 insertions(+), 316 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 4069fd3c24f..34a22a3143d 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -73,13 +73,10 @@ struct pulse_stream
+ 
+     INT32 locked;
+     BOOL started;
+-    SIZE_T bufsize_frames, real_bufsize_bytes, period_bytes;
+-    SIZE_T peek_ofs, read_offs_bytes, lcl_offs_bytes, pa_offs_bytes;
+-    SIZE_T tmp_buffer_bytes, held_bytes, peek_len, peek_buffer_len, pa_held_bytes;
++    SIZE_T bufsize_frames, bufsize_bytes, period_bytes, capture_period, pad, peek_ofs, wri_offs_bytes, lcl_offs_bytes;
++    SIZE_T tmp_buffer_bytes, held_bytes, peek_len, peek_buffer_len;
+     BYTE *local_buffer, *tmp_buffer, *peek_buffer;
+     void *locked_ptr;
+-    BOOL please_quit, just_started, just_underran;
+-    pa_usec_t mmdev_period_usec;
+ 
+     INT64 clock_lastpos, clock_written;
+ 
+@@ -366,15 +363,25 @@ static void pulse_attr_update(pa_stream *s, void *user) {
+ }
+ 
+ static void pulse_underflow_callback(pa_stream *s, void *userdata)
++{
++    WARN("Underflow\n");
++}
++
++/* Latency is periodically updated even when nothing is played,
++ * because of PA_STREAM_AUTO_TIMING_UPDATE so use it as timer
++ *
++ * Perfect for passing all tests :)
++ */
++static void pulse_latency_callback(pa_stream *s, void *userdata)
+ {
+     struct pulse_stream *stream = userdata;
+-    WARN("%p: Underflow\n", userdata);
+-    stream->just_underran = TRUE;
++    if (!stream->pad && stream->event)
++        NtSetEvent(stream->event, NULL);
+ }
+ 
+ static void pulse_started_callback(pa_stream *s, void *userdata)
+ {
+-    TRACE("%p: (Re)started playing\n", userdata);
++    TRACE("(Re)started playing\n");
+ }
+ 
+ static void pulse_op_cb(pa_stream *s, int success, void *user)
+@@ -1039,9 +1046,13 @@ static HRESULT pulse_spec_from_waveformat(struct pulse_stream *stream, const WAV
+     return S_OK;
+ }
+ 
++static void pulse_wr_callback(pa_stream *s, size_t bytes, void *userdata);
++static void pulse_rd_callback(pa_stream *s, size_t bytes, void *userdata);
++
+ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pulse_name, UINT32 period_bytes)
+ {
+-    pa_stream_flags_t flags = PA_STREAM_START_CORKED | PA_STREAM_START_UNMUTED | PA_STREAM_ADJUST_LATENCY;
++    pa_stream_flags_t flags = PA_STREAM_START_CORKED | PA_STREAM_START_UNMUTED | PA_STREAM_AUTO_TIMING_UPDATE |
++                              PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_EARLY_REQUESTS;
+     int ret;
+     char buffer[64];
+     static LONG number;
+@@ -1062,8 +1073,7 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+ 
+     /* PulseAudio will fill in correct values */
+     attr.minreq = attr.fragsize = period_bytes;
+-    attr.tlength = period_bytes * 3;
+-    attr.maxlength = stream->bufsize_frames * pa_frame_size(&stream->ss);
++    attr.maxlength = attr.tlength = stream->bufsize_bytes;
+     attr.prebuf = pa_frame_size(&stream->ss);
+     dump_attr(&attr);
+ 
+@@ -1076,7 +1086,9 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+     if (stream->dataflow == eRender)
+         ret = pa_stream_connect_playback(stream->stream, pulse_name, &attr, flags|PA_STREAM_VARIABLE_RATE, NULL, NULL);
+     else
+-        ret = pa_stream_connect_record(stream->stream, pulse_name, &attr, flags);
++        ret = -1;
++        /* FIXME
++         * ret = pa_stream_connect_record(stream->stream, pulse_name, &attr, flags); */
+     if (ret < 0) {
+         WARN("Returns %i\n", ret);
+         return AUDCLNT_E_ENDPOINT_CREATE_FAILED;
+@@ -1087,9 +1099,11 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+         return AUDCLNT_E_ENDPOINT_CREATE_FAILED;
+ 
+     if (stream->dataflow == eRender) {
++        pa_stream_set_write_callback(stream->stream, pulse_wr_callback, stream);
+         pa_stream_set_underflow_callback(stream->stream, pulse_underflow_callback, stream);
+         pa_stream_set_started_callback(stream->stream, pulse_started_callback, stream);
+-    }
++    } else
++        pa_stream_set_read_callback(stream->stream, pulse_rd_callback, stream);
+     return S_OK;
+ }
+ 
+@@ -1120,7 +1134,7 @@ static NTSTATUS pulse_create_stream(void *args)
+ {
+     struct create_stream_params *params = args;
+     struct pulse_stream *stream;
+-    unsigned int i, bufsize_bytes;
++    unsigned int i;
+     HRESULT hr;
+     char *name;
+ 
+@@ -1165,53 +1179,57 @@ static NTSTATUS pulse_create_stream(void *args)
+                                                                stream->ss.rate,
+                                                                10000000);
+ 
+-    stream->bufsize_frames = ceil((params->duration / 10000000.) * params->fmt->nSamplesPerSec);
+-    bufsize_bytes = stream->bufsize_frames * pa_frame_size(&stream->ss);
+-    stream->mmdev_period_usec = params->period / 10;
++    if (params->duration < 20000000)
++        stream->bufsize_frames = ceil((params->duration / 10000000.) * params->fmt->nSamplesPerSec);
++    else
++        stream->bufsize_frames = 2 * params->fmt->nSamplesPerSec;
++    stream->bufsize_bytes = stream->bufsize_frames * pa_frame_size(&stream->ss);
+ 
+     stream->share = params->share;
+     stream->flags = params->flags;
+     hr = pulse_stream_connect(stream, params->device, stream->period_bytes);
+     if (SUCCEEDED(hr)) {
+-        UINT32 unalign;
++        /* UINT32 unalign; */
+         const pa_buffer_attr *attr = pa_stream_get_buffer_attr(stream->stream);
+-        SIZE_T size;
+ 
+         stream->attr = *attr;
+         /* Update frames according to new size */
+         dump_attr(attr);
+         if (stream->dataflow == eRender) {
+-            size = stream->real_bufsize_bytes =
+-                stream->bufsize_frames * 2 * pa_frame_size(&stream->ss);
+             if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+-                                        zero_bits, &size, MEM_COMMIT, PAGE_READWRITE))
++                zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
+                 hr = E_OUTOFMEMORY;
+-        } else {
+-            UINT32 i, capture_packets;
+-
+-            if ((unalign = bufsize_bytes % stream->period_bytes))
+-                bufsize_bytes += stream->period_bytes - unalign;
+-            stream->bufsize_frames = bufsize_bytes / pa_frame_size(&stream->ss);
+-            stream->real_bufsize_bytes = bufsize_bytes;
+-
+-            capture_packets = stream->real_bufsize_bytes / stream->period_bytes;
+-
+-            size = stream->real_bufsize_bytes + capture_packets * sizeof(ACPacket);
+-            if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+-                                        zero_bits, &size, MEM_COMMIT, PAGE_READWRITE))
+-                hr = E_OUTOFMEMORY;
+-            else {
+-                ACPacket *cur_packet = (ACPacket*)((char*)stream->local_buffer + stream->real_bufsize_bytes);
+-                BYTE *data = stream->local_buffer;
+-                silence_buffer(stream->ss.format, stream->local_buffer, stream->real_bufsize_bytes);
+-                list_init(&stream->packet_free_head);
+-                list_init(&stream->packet_filled_head);
+-                for (i = 0; i < capture_packets; ++i, ++cur_packet) {
+-                    list_add_tail(&stream->packet_free_head, &cur_packet->entry);
+-                    cur_packet->data = data;
+-                    data += stream->period_bytes;
+-                }
+-            }
++        }
++        else {
++            WARN("Capture device support is unavailable with this version of wine.\n");
++            hr = E_NOTIMPL;
++            /* WIP
++            * UINT32 i, capture_packets;
++            *
++            * stream->capture_period = stream->period_bytes = attr->fragsize;
++            * if ((unalign = stream->bufsize_bytes % stream->period_bytes))
++            *     stream->bufsize_bytes += stream->period_bytes - unalign;
++            * stream->bufsize_frames = stream->bufsize_bytes / pa_frame_size(&stream->ss);
++            *
++            * capture_packets = stream->bufsize_bytes / stream->capture_period;
++            *
++            * size = stream->bufsize_bytes + capture_packets * sizeof(ACPacket);
++            * if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
++            *                             zero_bits, &size, MEM_COMMIT, PAGE_READWRITE))
++            *     hr = E_OUTOFMEMORY;
++            * else {
++            *     ACPacket *cur_packet = (ACPacket*)((char*)stream->local_buffer + stream->bufsize_bytes);
++            *     BYTE *data = stream->local_buffer;
++            *     silence_buffer(stream->ss.format, stream->local_buffer, stream->bufsize_bytes);
++            *     list_init(&stream->packet_free_head);
++            *     list_init(&stream->packet_filled_head);
++            *     for (i = 0; i < capture_packets; ++i, ++cur_packet) {
++            *         list_add_tail(&stream->packet_free_head, &cur_packet->entry);
++            *         cur_packet->data = data;
++            *         data += stream->capture_period;
++            *     }
++            * }
++            */
+         }
+     }
+ 
+@@ -1220,7 +1238,9 @@ static NTSTATUS pulse_create_stream(void *args)
+ 
+ exit:
+     if (FAILED(params->result = hr)) {
+-        free(stream->local_buffer);
++        if (stream->local_buffer) {
++            free(stream->local_buffer);
++        }
+         if (stream->stream) {
+             pa_stream_disconnect(stream->stream);
+             pa_stream_unref(stream->stream);
+@@ -1238,12 +1258,6 @@ static NTSTATUS pulse_release_stream(void *args)
+     struct pulse_stream *stream = handle_get_stream(params->stream);
+     SIZE_T size;
+ 
+-    if(params->timer_thread) {
+-        stream->please_quit = TRUE;
+-        NtWaitForSingleObject(params->timer_thread, FALSE, NULL);
+-        NtClose(params->timer_thread);
+-    }
+-
+     pulse_lock();
+     if (PA_STREAM_IS_GOOD(pa_stream_get_state(stream->stream))) {
+         pa_stream_disconnect(stream->stream);
+@@ -1268,7 +1282,18 @@ static NTSTATUS pulse_release_stream(void *args)
+     return STATUS_SUCCESS;
+ }
+ 
+-static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32 bytes)
++static void pulse_free_noop(void *buf)
++{
++}
++
++enum write_buffer_flags
++{
++    WINEPULSE_WRITE_NOFREE = 0x01,
++    WINEPULSE_WRITE_SILENT = 0x02
++};
++
++
++static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32 bytes, enum write_buffer_flags flags)
+ {
+     const float *vol = stream->vol;
+     UINT32 i, channels, mute = 0;
+@@ -1285,7 +1310,7 @@ static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32
+         if (vol[i] == 0.0f)
+             mute++;
+     }
+-    if (mute == channels)
++    if (mute == channels || (flags & WINEPULSE_WRITE_SILENT))
+     {
+         silence_buffer(stream->ss.format, buffer, bytes);
+         goto write;
+@@ -1404,127 +1429,130 @@ static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32
+     }
+ 
+ write:
+-    return pa_stream_write(stream->stream, buffer, bytes, NULL, 0, PA_SEEK_RELATIVE);
++    return pa_stream_write(stream->stream, buffer, bytes,
++                           (flags & WINEPULSE_WRITE_NOFREE) ? pulse_free_noop : NULL,
++                           0, PA_SEEK_RELATIVE);
+ }
+ 
+-static void pulse_write(struct pulse_stream *stream)
++/* Here's the buffer setup:
++ *
++ *  vvvvvvvv sent to HW already
++ *          vvvvvvvv in Pulse buffer but rewindable
++ * [dddddddddddddddd] Pulse buffer
++ *         [dddddddddddddddd--------] mmdevapi buffer
++ *          ^^^^^^^^^^^^^^^^ pad
++ *                  ^ lcl_offs_bytes
++ *                  ^^^^^^^^^ held_bytes
++ *                          ^ wri_offs_bytes
++ *
++ * GetCurrentPadding is pad
++ *
++ * During pulse_wr_callback, we decrement pad, fill Pulse buffer, and move
++ *   lcl_offs forward
++ *
++ * During Stop, we flush the Pulse buffer
++ */
++static void pulse_wr_callback(pa_stream *s, size_t bytes, void *userdata)
+ {
+     /* write as much data to PA as we can */
+-    UINT32 to_write;
+-    BYTE *buf = stream->local_buffer + stream->pa_offs_bytes;
+-    UINT32 bytes = pa_stream_writable_size(stream->stream);
+-
+-    if (stream->just_underran)
+-    {
+-        /* prebuffer with silence if needed */
+-        if(stream->pa_held_bytes < bytes){
+-            to_write = bytes - stream->pa_held_bytes;
+-            TRACE("prebuffering %u frames of silence\n",
+-                    (int)(to_write / pa_frame_size(&stream->ss)));
+-            buf = calloc(1, to_write);
+-            pa_stream_write(stream->stream, buf, to_write, NULL, 0, PA_SEEK_RELATIVE);
+-            free(buf);
++    struct pulse_stream *stream = userdata;
++    UINT32 oldpad = stream->pad;
++
++    if(stream->local_buffer){
++        UINT32 to_write;
++        BYTE *buf = stream->local_buffer + stream->lcl_offs_bytes;
++
++        if(stream->pad > bytes){
++            stream->clock_written += bytes;
++            stream->pad -= bytes;
++        }else{
++            stream->clock_written += stream->pad;
++            stream->pad = 0;
+         }
+ 
+-        stream->just_underran = FALSE;
+-    }
++        bytes = min(bytes, stream->held_bytes);
++
++        if(stream->lcl_offs_bytes + bytes > stream->bufsize_bytes){
++            to_write = stream->bufsize_bytes - stream->lcl_offs_bytes;
++            TRACE("writing small chunk of %u bytes\n", to_write);
++            write_buffer(stream, buf, to_write, 0);
++            stream->held_bytes -= to_write;
++            to_write = bytes - to_write;
++            stream->lcl_offs_bytes = 0;
++            buf = stream->local_buffer;
++        }else
++            to_write = bytes;
++
++        TRACE("writing main chunk of %u bytes\n", to_write);
++        write_buffer(stream, buf, to_write, 0);
++        stream->lcl_offs_bytes += to_write;
++        stream->lcl_offs_bytes %= stream->bufsize_bytes;
++        stream->held_bytes -= to_write;
++    }else{
++        if (bytes < stream->bufsize_bytes)
++            stream->pad = stream->bufsize_bytes - bytes;
++        else
++            stream->pad = 0;
++        if (oldpad == stream->pad)
++            return;
+ 
+-    buf = stream->local_buffer + stream->pa_offs_bytes;
+-    TRACE("held: %lu, avail: %u\n", stream->pa_held_bytes, bytes);
+-    bytes = min(stream->pa_held_bytes, bytes);
++        assert(oldpad > stream->pad);
+ 
+-    if (stream->pa_offs_bytes + bytes > stream->real_bufsize_bytes)
+-    {
+-        to_write = stream->real_bufsize_bytes - stream->pa_offs_bytes;
+-        TRACE("writing small chunk of %u bytes\n", to_write);
+-        write_buffer(stream, buf, to_write);
+-        stream->pa_held_bytes -= to_write;
+-        to_write = bytes - to_write;
+-        stream->pa_offs_bytes = 0;
+-        buf = stream->local_buffer;
++        stream->clock_written += oldpad - stream->pad;
++        TRACE("New pad: %lu (-%lu)\n", stream->pad / pa_frame_size(&stream->ss), (oldpad - stream->pad) / pa_frame_size(&stream->ss));
+     }
+-    else
+-        to_write = bytes;
+-
+-    TRACE("writing main chunk of %u bytes\n", to_write);
+-    write_buffer(stream, buf, to_write);
+-    stream->pa_offs_bytes += to_write;
+-    stream->pa_offs_bytes %= stream->real_bufsize_bytes;
+-    stream->pa_held_bytes -= to_write;
++    if (stream->event)
++        NtSetEvent(stream->event, NULL);
+ }
+ 
+-static void pulse_read(struct pulse_stream *stream)
++static void pulse_rd_loop(struct pulse_stream *stream, size_t bytes)
+ {
+-    size_t bytes = pa_stream_readable_size(stream->stream);
+-
+-    TRACE("Readable total: %zu, fragsize: %u\n", bytes, pa_stream_get_buffer_attr(stream->stream)->fragsize);
+-
+-    bytes += stream->peek_len - stream->peek_ofs;
+-
+-    while (bytes >= stream->period_bytes)
+-    {
+-        BYTE *dst = NULL, *src;
+-        size_t src_len, copy, rem = stream->period_bytes;
+-
+-        if (stream->started)
+-        {
+-            LARGE_INTEGER stamp, freq;
+-            ACPacket *p, *next;
+-
+-            if (!(p = (ACPacket*)list_head(&stream->packet_free_head)))
+-            {
+-                p = (ACPacket*)list_head(&stream->packet_filled_head);
+-                if (!p) return;
+-                if (!p->discont) {
+-                    next = (ACPacket*)p->entry.next;
+-                    next->discont = 1;
+-                } else
+-                    p = (ACPacket*)list_tail(&stream->packet_filled_head);
+-            }
+-            else
+-            {
+-                stream->held_bytes += stream->period_bytes;
+-            }
+-            NtQueryPerformanceCounter(&stamp, &freq);
+-            p->qpcpos = (stamp.QuadPart * (INT64)10000000) / freq.QuadPart;
+-            p->discont = 0;
+-            list_remove(&p->entry);
+-            list_add_tail(&stream->packet_filled_head, &p->entry);
+-
+-            dst = p->data;
++    while (bytes >= stream->capture_period) {
++        ACPacket *p, *next;
++        LARGE_INTEGER stamp, freq;
++        BYTE *dst, *src;
++        size_t src_len, copy, rem = stream->capture_period;
++        if (!(p = (ACPacket*)list_head(&stream->packet_free_head))) {
++            p = (ACPacket*)list_head(&stream->packet_filled_head);
++            if (!p->discont) {
++                next = (ACPacket*)p->entry.next;
++                next->discont = 1;
++            } else
++                p = (ACPacket*)list_tail(&stream->packet_filled_head);
++            assert(stream->pad == stream->bufsize_bytes);
++        } else {
++            assert(stream->pad < stream->bufsize_bytes);
++            stream->pad += stream->capture_period;
++            assert(stream->pad <= stream->bufsize_bytes);
+         }
++        NtQueryPerformanceCounter(&stamp, &freq);
++        p->qpcpos = (stamp.QuadPart * (INT64)10000000) / freq.QuadPart;
++        p->discont = 0;
++        list_remove(&p->entry);
++        list_add_tail(&stream->packet_filled_head, &p->entry);
+ 
++        dst = p->data;
+         while (rem)
+         {
+             if (stream->peek_len)
+             {
+                 copy = min(rem, stream->peek_len - stream->peek_ofs);
+ 
+-                if (dst)
+-                {
+-                    memcpy(dst, stream->peek_buffer + stream->peek_ofs, copy);
+-                    dst += copy;
+-                }
++                memcpy(dst, stream->peek_buffer + stream->peek_ofs, copy);
+ 
+                 rem -= copy;
++                dst += copy;
+                 stream->peek_ofs += copy;
+                 if(stream->peek_len == stream->peek_ofs)
+-                    stream->peek_len = stream->peek_ofs = 0;
++                   stream->peek_len = 0;
++            } else {
++                pa_stream_peek(stream->stream, (const void**)&src, &src_len);
+ 
+-            }
+-            else if (pa_stream_peek(stream->stream, (const void**)&src, &src_len) == 0 && src_len)
+-            {
+                 copy = min(rem, src_len);
+ 
+-                if (dst) {
+-                    if(src)
+-                        memcpy(dst, src, copy);
+-                    else
+-                        silence_buffer(stream->ss.format, dst, copy);
+-
+-                    dst += copy;
+-                }
++                memcpy(dst, src, rem);
+ 
++                dst += copy;
+                 rem -= copy;
+ 
+                 if (copy < src_len)
+@@ -1536,10 +1564,7 @@ static void pulse_read(struct pulse_stream *stream)
+                         stream->peek_buffer_len = src_len;
+                     }
+ 
+-                    if(src)
+-                        memcpy(stream->peek_buffer, src + copy, src_len - copy);
+-                    else
+-                        silence_buffer(stream->ss.format, stream->peek_buffer, src_len - copy);
++                    memcpy(stream->peek_buffer, src + copy, src_len - copy);
+ 
+                     stream->peek_len = src_len - copy;
+                     stream->peek_ofs = 0;
+@@ -1549,111 +1574,59 @@ static void pulse_read(struct pulse_stream *stream)
+             }
+         }
+ 
+-        bytes -= stream->period_bytes;
++        bytes -= stream->capture_period;
+     }
+ }
+ 
+-static NTSTATUS pulse_timer_loop(void *args)
++static void pulse_rd_drop(struct pulse_stream *stream, size_t bytes)
+ {
+-    struct timer_loop_params *params = args;
+-    struct pulse_stream *stream = handle_get_stream(params->stream);
+-    LARGE_INTEGER delay;
+-    pa_usec_t last_time;
+-    UINT32 adv_bytes;
+-    int success;
+-
+-    pulse_lock();
+-    delay.QuadPart = -stream->mmdev_period_usec * 10;
+-    pa_stream_get_time(stream->stream, &last_time);
+-    pulse_unlock();
+-
+-    while (!stream->please_quit)
+-    {
+-        pa_usec_t now, adv_usec = 0;
+-        int err;
+-
+-        NtDelayExecution(FALSE, &delay);
++    while (bytes >= stream->capture_period) {
++        size_t src_len, copy, rem = stream->capture_period;
++        while (rem) {
++            const void *src;
++            pa_stream_peek(stream->stream, &src, &src_len);
++            assert(src_len);
++            assert(stream->peek_ofs < src_len);
++            src_len -= stream->peek_ofs;
++            assert(src_len <= bytes);
+ 
+-        pulse_lock();
++            copy = rem;
++            if (copy > src_len)
++                copy = src_len;
+ 
+-        delay.QuadPart = -stream->mmdev_period_usec * 10;
++            src_len -= copy;
++            rem -= copy;
+ 
+-        wait_pa_operation_complete(pa_stream_update_timing_info(stream->stream, pulse_op_cb, &success));
+-        err = pa_stream_get_time(stream->stream, &now);
+-        if (err == 0)
+-        {
+-            TRACE("got now: %s, last time: %s\n", wine_dbgstr_longlong(now), wine_dbgstr_longlong(last_time));
+-            if (stream->started && (stream->dataflow == eCapture || stream->held_bytes))
+-            {
+-                if(stream->just_underran)
+-                {
+-                    last_time = now;
+-                    stream->just_started = TRUE;
+-                }
+-
+-                if (stream->just_started)
+-                {
+-                    /* let it play out a period to absorb some latency and get accurate timing */
+-                    pa_usec_t diff = now - last_time;
+-
+-                    if (diff > stream->mmdev_period_usec)
+-                    {
+-                        stream->just_started = FALSE;
+-                        last_time = now;
+-                    }
+-                }
+-                else
+-                {
+-                    INT32 adjust = last_time + stream->mmdev_period_usec - now;
+-
+-                    adv_usec = now - last_time;
+-
+-                    if(adjust > ((INT32)(stream->mmdev_period_usec / 2)))
+-                        adjust = stream->mmdev_period_usec / 2;
+-                    else if(adjust < -((INT32)(stream->mmdev_period_usec / 2)))
+-                        adjust = -1 * stream->mmdev_period_usec / 2;
+-
+-                    delay.QuadPart = -(stream->mmdev_period_usec + adjust) * 10;
+-
+-                    last_time += stream->mmdev_period_usec;
+-                }
+-
+-                if (stream->dataflow == eRender)
+-                {
+-                    pulse_write(stream);
+-
+-                    /* regardless of what PA does, advance one period */
+-                    adv_bytes = min(stream->period_bytes, stream->held_bytes);
+-                    stream->lcl_offs_bytes += adv_bytes;
+-                    stream->lcl_offs_bytes %= stream->real_bufsize_bytes;
+-                    stream->held_bytes -= adv_bytes;
+-                }
+-                else if(stream->dataflow == eCapture)
+-                {
+-                    pulse_read(stream);
+-                }
+-            }
+-            else
+-            {
+-                last_time = now;
+-                delay.QuadPart = -stream->mmdev_period_usec * 10;
+-            }
++            if (!src_len) {
++                stream->peek_ofs = 0;
++                pa_stream_drop(stream->stream);
++            } else
++                stream->peek_ofs += copy;
++            bytes -= copy;
+         }
++    }
++}
+ 
+-        if (stream->event)
+-            NtSetEvent(stream->event, NULL);
++static void pulse_rd_callback(pa_stream *s, size_t bytes, void *userdata)
++{
++    struct pulse_stream *stream = userdata;
+ 
+-        TRACE("%p after update, adv usec: %d, held: %u, delay usec: %u\n",
+-                stream, (int)adv_usec,
+-                (int)(stream->held_bytes/ pa_frame_size(&stream->ss)),
+-                (unsigned int)(-delay.QuadPart / 10));
++    TRACE("Readable total: %zu, fragsize: %u\n", bytes, pa_stream_get_buffer_attr(s)->fragsize);
++    assert(bytes >= stream->peek_ofs);
++    bytes -= stream->peek_ofs;
++    if (bytes < stream->capture_period)
++        return;
+ 
+-        pulse_unlock();
+-    }
++    if (stream->started)
++        pulse_rd_loop(stream, bytes);
++    else
++        pulse_rd_drop(stream, bytes);
+ 
+-    return STATUS_SUCCESS;
++    if (stream->event)
++        NtSetEvent(stream->event, NULL);
+ }
+ 
++
+ static NTSTATUS pulse_start(void *args)
+ {
+     struct start_params *params = args;
+@@ -1683,8 +1656,6 @@ static NTSTATUS pulse_start(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    pulse_write(stream);
+-
+     if (pa_stream_is_corked(stream->stream))
+     {
+         if (!wait_pa_operation_complete(pa_stream_cork(stream->stream, 0, pulse_op_cb, &success)))
+@@ -1696,7 +1667,8 @@ static NTSTATUS pulse_start(void *args)
+     if (SUCCEEDED(params->result))
+     {
+         stream->started = TRUE;
+-        stream->just_started = TRUE;
++        if (stream->dataflow == eRender && stream->event)
++            pa_stream_set_latency_update_callback(stream->stream, pulse_latency_callback, stream);
+     }
+     pulse_unlock();
+     return STATUS_SUCCESS;
+@@ -1768,21 +1740,19 @@ static NTSTATUS pulse_reset(void *args)
+     {
+         /* If there is still data in the render buffer it needs to be removed from the server */
+         int success = 0;
+-        if (stream->held_bytes)
++        if (stream->pad)
+             wait_pa_operation_complete(pa_stream_flush(stream->stream, pulse_op_cb, &success));
+ 
+-        if (success || !stream->held_bytes)
+-        {
+-            stream->clock_lastpos = stream->clock_written = 0;
+-            stream->pa_offs_bytes = stream->lcl_offs_bytes = 0;
+-            stream->held_bytes = stream->pa_held_bytes = 0;
++        if (success || !stream->pad){
++            stream->clock_lastpos = stream->clock_written = stream->pad = 0;
++            stream->wri_offs_bytes = stream->lcl_offs_bytes = stream->held_bytes = 0;
+         }
+     }
+     else
+     {
+         ACPacket *p;
+-        stream->clock_written += stream->held_bytes;
+-        stream->held_bytes = 0;
++        stream->clock_written += stream->pad;
++        stream->pad = 0;
+ 
+         if ((p = stream->locked_ptr))
+         {
+@@ -1821,7 +1791,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+ 
+ static UINT32 pulse_render_padding(struct pulse_stream *stream)
+ {
+-    return stream->held_bytes / pa_frame_size(&stream->ss);
++    return stream->pad / pa_frame_size(&stream->ss);
+ }
+ 
+ static UINT32 pulse_capture_padding(struct pulse_stream *stream)
+@@ -1833,15 +1803,16 @@ static UINT32 pulse_capture_padding(struct pulse_stream *stream)
+         stream->locked_ptr = packet;
+         list_remove(&packet->entry);
+     }
+-    return stream->held_bytes / pa_frame_size(&stream->ss);
++    return stream->pad / pa_frame_size(&stream->ss);
+ }
+ 
+ static NTSTATUS pulse_get_render_buffer(void *args)
+ {
+     struct get_render_buffer_params *params = args;
+     struct pulse_stream *stream = handle_get_stream(params->stream);
+-    size_t bytes;
+-    UINT32 wri_offs_bytes;
++    size_t avail, req, bytes = params->frames * pa_frame_size(&stream->ss);
++    UINT32 pad;
++    int ret = -1;
+ 
+     pulse_lock();
+     if (!pulse_stream_valid(stream))
+@@ -1866,30 +1837,45 @@ static NTSTATUS pulse_get_render_buffer(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (stream->held_bytes / pa_frame_size(&stream->ss) + params->frames > stream->bufsize_frames)
++    pad = pulse_render_padding(stream);
++    avail = stream->bufsize_frames - pad;
++    if (avail < params->frames || bytes > stream->bufsize_bytes)
+     {
+         pulse_unlock();
++        WARN("Wanted to write %u, but only %zu available\n", params->frames, avail);
+         params->result = AUDCLNT_E_BUFFER_TOO_LARGE;
+         return STATUS_SUCCESS;
+     }
+ 
+-    bytes = params->frames * pa_frame_size(&stream->ss);
+-    wri_offs_bytes = (stream->lcl_offs_bytes + stream->held_bytes) % stream->real_bufsize_bytes;
+-    if (wri_offs_bytes + bytes > stream->real_bufsize_bytes)
++    if(stream->local_buffer)
+     {
+-        if (!alloc_tmp_buffer(stream, bytes))
++        if(stream->wri_offs_bytes + bytes > stream->bufsize_bytes)
+         {
+-            pulse_unlock();
+-            params->result = E_OUTOFMEMORY;
+-            return STATUS_SUCCESS;
++            alloc_tmp_buffer(stream, bytes);
++            *params->data = stream->tmp_buffer;
++            stream->locked = -params->frames;
++        }
++        else
++        {
++            *params->data = stream->local_buffer + stream->wri_offs_bytes;
++            stream->locked = params->frames;
+         }
+-        *params->data = stream->tmp_buffer;
+-        stream->locked = -bytes;
+     }
+     else
+     {
+-        *params->data = stream->local_buffer + wri_offs_bytes;
+-        stream->locked = bytes;
++        req = bytes;
++        ret = pa_stream_begin_write(stream->stream, &stream->locked_ptr, &req);
++        if (ret < 0 || req < bytes) {
++            FIXME("%p Not using pulse locked data: %i %zu/%u %u/%lu\n", stream, ret, req/pa_frame_size(&stream->ss), params->frames, pad, stream->bufsize_frames);
++            if (ret >= 0)
++                pa_stream_cancel_write(stream->stream);
++            alloc_tmp_buffer(stream, bytes);
++            *params->data = stream->tmp_buffer;
++            stream->locked_ptr = NULL;
++        } else
++            *params->data = stream->locked_ptr;
++
++        stream->locked = params->frames;
+     }
+ 
+     silence_buffer(stream->ss.format, *params->data, bytes);
+@@ -1901,16 +1887,15 @@ static NTSTATUS pulse_get_render_buffer(void *args)
+ 
+ static void pulse_wrap_buffer(struct pulse_stream *stream, BYTE *buffer, UINT32 written_bytes)
+ {
+-    UINT32 wri_offs_bytes = (stream->lcl_offs_bytes + stream->held_bytes) % stream->real_bufsize_bytes;
+-    UINT32 chunk_bytes = stream->real_bufsize_bytes - wri_offs_bytes;
++    UINT32 chunk_bytes = stream->bufsize_bytes - stream->wri_offs_bytes;
+ 
+     if (written_bytes <= chunk_bytes)
+     {
+-        memcpy(stream->local_buffer + wri_offs_bytes, buffer, written_bytes);
++        memcpy(stream->local_buffer + stream->wri_offs_bytes, buffer, written_bytes);
+     }
+     else
+     {
+-        memcpy(stream->local_buffer + wri_offs_bytes, buffer, chunk_bytes);
++        memcpy(stream->local_buffer + stream->wri_offs_bytes, buffer, chunk_bytes);
+         memcpy(stream->local_buffer, buffer + chunk_bytes, written_bytes - chunk_bytes);
+     }
+ }
+@@ -1919,53 +1904,83 @@ static NTSTATUS pulse_release_render_buffer(void *args)
+ {
+     struct release_render_buffer_params *params = args;
+     struct pulse_stream *stream = handle_get_stream(params->stream);
+-    UINT32 written_bytes;
+-    BYTE *buffer;
++    UINT32 written_bytes = params->written_frames * pa_frame_size(&stream->ss);
+ 
+     pulse_lock();
+     if (!stream->locked || !params->written_frames)
+     {
++        if (stream->locked_ptr)
++            pa_stream_cancel_write(stream->stream);
+         stream->locked = 0;
++        stream->locked_ptr = NULL;
+         pulse_unlock();
+         params->result = params->written_frames ? AUDCLNT_E_OUT_OF_ORDER : S_OK;
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (params->written_frames * pa_frame_size(&stream->ss) >
+-        (stream->locked >= 0 ? stream->locked : -stream->locked))
++    if (stream->locked < params->written_frames)
+     {
+         pulse_unlock();
+         params->result = AUDCLNT_E_INVALID_SIZE;
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (stream->locked >= 0)
+-        buffer = stream->local_buffer + (stream->lcl_offs_bytes + stream->held_bytes) % stream->real_bufsize_bytes;
+-    else
+-        buffer = stream->tmp_buffer;
++    if(stream->local_buffer)
++    {
++        BYTE *buffer;
+ 
+-    written_bytes = params->written_frames * pa_frame_size(&stream->ss);
+-    if (params->flags & AUDCLNT_BUFFERFLAGS_SILENT)
+-        silence_buffer(stream->ss.format, buffer, written_bytes);
++        if(stream->locked >= 0)
++            buffer = stream->local_buffer + stream->wri_offs_bytes;
++        else
++            buffer = stream->tmp_buffer;
+ 
+-    if (stream->locked < 0)
+-        pulse_wrap_buffer(stream, buffer, written_bytes);
++        if(params->flags & AUDCLNT_BUFFERFLAGS_SILENT)
++            silence_buffer(stream->ss.format, buffer, written_bytes);
+ 
+-    stream->held_bytes += written_bytes;
+-    stream->pa_held_bytes += written_bytes;
+-    if (stream->pa_held_bytes > stream->real_bufsize_bytes)
+-    {
+-        stream->pa_offs_bytes += stream->pa_held_bytes - stream->real_bufsize_bytes;
+-        stream->pa_offs_bytes %= stream->real_bufsize_bytes;
+-        stream->pa_held_bytes = stream->real_bufsize_bytes;
++        if(stream->locked < 0)
++            pulse_wrap_buffer(stream, buffer, written_bytes);
++
++        stream->wri_offs_bytes += written_bytes;
++        stream->wri_offs_bytes %= stream->bufsize_bytes;
++
++        stream->pad += written_bytes;
++        stream->held_bytes += written_bytes;
++
++        if(stream->held_bytes == stream->pad)
++        {
++            int e;
++            UINT32 to_write = min(stream->attr.tlength, written_bytes);
++
++            /* nothing in PA, so send data immediately */
++            TRACE("pre-writing %u bytes\n", to_write);
++
++            e = write_buffer(stream, buffer, to_write, 0);
++            if(e)
++                ERR("pa_stream_write failed: 0x%x\n", e);
++
++            stream->lcl_offs_bytes += to_write;
++            stream->lcl_offs_bytes %= stream->bufsize_bytes;
++            stream->held_bytes -= to_write;
++        }
+     }
+-    stream->clock_written += written_bytes;
+-    stream->locked = 0;
++    else
++    {
++        enum write_buffer_flags wr_flags = 0;
+ 
+-    /* push as much data as we can to pulseaudio too */
+-    pulse_write(stream);
++        if (params->flags & AUDCLNT_BUFFERFLAGS_SILENT) wr_flags |= WINEPULSE_WRITE_SILENT;
++        if (!stream->locked_ptr) wr_flags |= WINEPULSE_WRITE_NOFREE;
+ 
+-    TRACE("Released %u, held %lu\n", params->written_frames, stream->held_bytes / pa_frame_size(&stream->ss));
++        write_buffer(stream, stream->locked_ptr ? stream->locked_ptr : stream->tmp_buffer, written_bytes, wr_flags);
++        stream->pad += written_bytes;
++    }
++    if (!pa_stream_is_corked(stream->stream)) {
++        int success;
++        wait_pa_operation_complete(pa_stream_trigger(stream->stream, pulse_op_cb, &success));
++    }
++
++    stream->locked = 0;
++    stream->locked_ptr = NULL;
++    TRACE("Released %u, pad %lu\n", params->written_frames, stream->pad / pa_frame_size(&stream->ss));
+ 
+     pulse_unlock();
+     params->result = S_OK;
+@@ -1995,14 +2010,14 @@ static NTSTATUS pulse_get_capture_buffer(void *args)
+     pulse_capture_padding(stream);
+     if ((packet = stream->locked_ptr))
+     {
+-        *params->frames = stream->period_bytes / pa_frame_size(&stream->ss);
++        *params->frames = stream->capture_period / pa_frame_size(&stream->ss);
+         *params->flags = 0;
+         if (packet->discont)
+             *params->flags |= AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY;
+         if (params->devpos)
+         {
+             if (packet->discont)
+-                *params->devpos = (stream->clock_written + stream->period_bytes) / pa_frame_size(&stream->ss);
++                *params->devpos = (stream->clock_written + stream->capture_period) / pa_frame_size(&stream->ss);
+             else
+                 *params->devpos = stream->clock_written / pa_frame_size(&stream->ss);
+         }
+@@ -2040,11 +2055,11 @@ static NTSTATUS pulse_release_capture_buffer(void *args)
+     {
+         ACPacket *packet = stream->locked_ptr;
+         stream->locked_ptr = NULL;
+-        stream->held_bytes -= stream->period_bytes;
++        stream->held_bytes -= stream->capture_period;
+         if (packet->discont)
+-            stream->clock_written += 2 * stream->period_bytes;
++            stream->clock_written += 2 * stream->capture_period;
+         else
+-            stream->clock_written += stream->period_bytes;
++            stream->clock_written += stream->capture_period;
+         list_add_tail(&stream->packet_free_head, &packet->entry);
+     }
+     stream->locked = 0;
+@@ -2343,11 +2358,15 @@ static NTSTATUS pulse_get_latency(void *args)
+         return STATUS_SUCCESS;
+     }
+     attr = pa_stream_get_buffer_attr(stream->stream);
+-    if (stream->dataflow == eRender)
++    if (stream->dataflow == eRender) {
+         lat = attr->minreq / pa_frame_size(&stream->ss);
++        lat += stream->def_period;
++    }
+     else
+         lat = attr->fragsize / pa_frame_size(&stream->ss);
+-    *params->latency = (lat * 10000000) / stream->ss.rate + stream->def_period;
++    *params->latency = 10000000;
++    *params->latency *= lat;
++    *params->latency /= stream->ss.rate;
+     pulse_unlock();
+     TRACE("Latency: %u ms\n", (unsigned)(*params->latency / 10000));
+     params->result = S_OK;
+@@ -2387,7 +2406,7 @@ static NTSTATUS pulse_get_next_packet_size(void *args)
+     pulse_lock();
+     pulse_capture_padding(stream);
+     if (stream->locked_ptr)
+-        *params->frames = stream->period_bytes / pa_frame_size(&stream->ss);
++        *params->frames = stream->capture_period / pa_frame_size(&stream->ss);
+     else
+         *params->frames = 0;
+     pulse_unlock();
+@@ -2430,7 +2449,7 @@ static NTSTATUS pulse_get_position(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    *params->pos = stream->clock_written - stream->held_bytes;
++    *params->pos = stream->clock_written;
+ 
+     if (stream->share == AUDCLNT_SHAREMODE_EXCLUSIVE || params->device)
+         *params->pos /= pa_frame_size(&stream->ss);
+@@ -2521,12 +2540,11 @@ static NTSTATUS pulse_set_sample_rate(void *args)
+         wait_pa_operation_complete(pa_stream_flush(stream->stream, pulse_op_cb, &success));
+ 
+     stream->clock_lastpos = stream->clock_written = 0;
+-    stream->pa_offs_bytes = stream->lcl_offs_bytes = 0;
+-    stream->held_bytes = stream->pa_held_bytes = 0;
+-    stream->period_bytes = pa_frame_size(&new_ss) * muldiv(stream->mmdev_period_usec, new_ss.rate, 1000000);
++    stream->wri_offs_bytes = stream->lcl_offs_bytes = stream->held_bytes = 0;
++    stream->period_bytes = pa_frame_size(&new_ss) * muldiv(stream->def_period / 10, new_ss.rate, 1000000);
+     stream->ss = new_ss;
+ 
+-    silence_buffer(new_ss.format, stream->local_buffer, stream->real_bufsize_bytes);
++    silence_buffer(new_ss.format, stream->local_buffer, stream->bufsize_bytes);
+ 
+ exit:
+     pulse_unlock();
+@@ -2651,7 +2669,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     pulse_start,
+     pulse_stop,
+     pulse_reset,
+-    pulse_timer_loop,
++    pulse_not_implemented,
+     pulse_get_render_buffer,
+     pulse_release_render_buffer,
+     pulse_get_capture_buffer,
+@@ -3150,7 +3168,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+     pulse_start,
+     pulse_stop,
+     pulse_reset,
+-    pulse_timer_loop,
++    pulse_not_implemented,
+     pulse_wow64_get_render_buffer,
+     pulse_release_render_buffer,
+     pulse_wow64_get_capture_buffer,
+-- 
+2.49.0
+

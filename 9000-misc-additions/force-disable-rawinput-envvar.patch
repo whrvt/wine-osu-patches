@@ -1,0 +1,98 @@
+From e0c5663a1301f699dc05c6c9a458311ef66cffba Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 4 Nov 2024 01:25:35 -0800
+Subject: [PATCH] add an env var to force disable rawinput.
+
+---
+ dlls/win32u/rawinput.c       | 15 +++++++++++++++
+ dlls/win32u/win32u_private.h | 11 +++++++++++
+ dlls/winex11.drv/x11drv.h    | 11 +++++++++++
+ 3 files changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/rawinput.c b/dlls/win32u/rawinput.c
+index 62b1707dbfe..a1dfcd463c6 100644
+--- a/dlls/win32u/rawinput.c
++++ b/dlls/win32u/rawinput.c
+@@ -327,6 +327,11 @@ static struct device *find_device_from_handle( HANDLE handle, BOOL refresh )
+  */
+ UINT WINAPI NtUserGetRawInputDeviceList( RAWINPUTDEVICELIST *device_list, UINT *device_count, UINT size )
+ {
++    if (rawinput_disabled())
++    {
++        RtlSetLastWin32Error( ERROR_SUCCESS );
++        return ~0u;
++    }
+     unsigned int count = 0;
+     struct device *device;
+ 
+@@ -661,6 +666,11 @@ static void register_rawinput_device( const RAWINPUTDEVICE *device )
+  */
+ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT device_count, UINT device_size )
+ {
++    if (rawinput_disabled())
++    {
++        RtlSetLastWin32Error( ERROR_SUCCESS );
++        return FALSE;
++    }
+     struct rawinput_device *server_devices;
+     RAWINPUTDEVICE *new_registered_devices;
+     SIZE_T size;
+@@ -751,6 +761,11 @@ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT d
+  */
+ UINT WINAPI NtUserGetRegisteredRawInputDevices( RAWINPUTDEVICE *devices, UINT *device_count, UINT device_size )
+ {
++    if (rawinput_disabled())
++    {
++        RtlSetLastWin32Error( ERROR_SUCCESS );
++        return FALSE;
++    }
+     SIZE_T size, capacity;
+ 
+     TRACE( "devices %p, device_count %p, device_size %u\n", devices, device_count, device_size );
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 40911694a6f..f04b25f69a5 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -398,6 +398,17 @@ static inline const char *debugstr_color( COLORREF color )
+     return wine_dbg_sprintf( "RGB(%02x,%02x,%02x)", GetRValue(color), GetGValue(color), GetBValue(color) );
+ }
+ 
++static inline BOOL rawinput_disabled(void)
++{
++    static int disabled_cached = -1;
++    if (disabled_cached == -1)
++    {
++        const char *e = getenv("WINE_DISABLE_RAWINPUT");
++        if (e && !!atoi(e)) disabled_cached = 1; else disabled_cached = 0;
++    }
++    return !!disabled_cached;
++}
++
+ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2 )
+ {
+     dst->left   = max( src1->left, src2->left );
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 811f62f07c5..bddd73989be 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -985,6 +985,17 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
+     while (len--) *dst++ = (unsigned char)*src++;
+ }
+ 
++static inline BOOL rawinput_disabled(void)
++{
++    static int disabled_cached = -1;
++    if (disabled_cached == -1)
++    {
++        const char *e = getenv("WINE_DISABLE_RAWINPUT");
++        if (e && !!atoi(e)) disabled_cached = 1; else disabled_cached = 0;
++    }
++    return !!disabled_cached;
++}
++
+ static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+ {
+     WCHAR *p = dst;
+-- 
+2.47.0
+

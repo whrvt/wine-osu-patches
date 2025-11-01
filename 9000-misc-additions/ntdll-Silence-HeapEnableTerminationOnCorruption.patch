@@ -1,0 +1,42 @@
+From 31c781dd33f48ddd2a12f6f9fba0901a2a64b394 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 13 Dec 2024 19:58:02 -0800
+Subject: [PATCH] ntdll: Silence HeapEnableTerminationOnCorruption.
+
+---
+ dlls/ntdll/heap.c | 6 ++++++
+ include/winnt.h   | 1 +
+ 2 files changed, 7 insertions(+)
+
+diff --git a/dlls/ntdll/heap.c b/dlls/ntdll/heap.c
+index 164b8714459..5c4563e44d9 100644
+--- a/dlls/ntdll/heap.c
++++ b/dlls/ntdll/heap.c
+@@ -2601,6 +2601,12 @@ NTSTATUS WINAPI RtlSetHeapInformation( HANDLE handle, HEAP_INFORMATION_CLASS inf
+             return STATUS_UNSUCCESSFUL;
+         return STATUS_SUCCESS;
+     }
++    case HeapEnableTerminationOnCorruption:
++    {
++        /* From Microsoft SDK:
++         * Unsupported until Vista+, returns success */
++        return STATUS_SUCCESS;
++    }
+ 
+     default:
+         FIXME( "HEAP_INFORMATION_CLASS %u not implemented!\n", info_class );
+diff --git a/include/winnt.h b/include/winnt.h
+index db39262979e..f865002089e 100644
+--- a/include/winnt.h
++++ b/include/winnt.h
+@@ -1068,6 +1068,7 @@ NTSYSAPI WORD         WINAPI RtlQueryDepthSList(PSLIST_HEADER);
+ 
+ typedef enum _HEAP_INFORMATION_CLASS {
+     HeapCompatibilityInformation,
++    HeapEnableTerminationOnCorruption
+ } HEAP_INFORMATION_CLASS;
+ 
+ /* Processor feature flags.  */
+-- 
+2.47.1
+

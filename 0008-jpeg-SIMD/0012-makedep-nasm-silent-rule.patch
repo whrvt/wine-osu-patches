@@ -1,0 +1,12 @@
+diff --git a/tools/makedep.c b/tools/makedep.c
+index e8e5512f5f8..ed5731383fc 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -4427,6 +4427,7 @@ static void output_silent_rules(void)
+         "GEN",
+         "LN",
+         "MSG",
++        "NASM",
+         "SAST",
+         "SED",
+         "TEST",

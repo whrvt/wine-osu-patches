@@ -1,0 +1,25 @@
+From 5d424cc8b82b47bf3e321f7d10f7a137ed7d30e6 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 29 Jan 2025 00:11:01 -0800
+Subject: [PATCH] win32u: Increase the driver check freq to 12kHz.
+
+---
+ dlls/win32u/message.c  |  2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 902610c44ba..bdd242adf01 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -3120,7 +3120,7 @@ static inline LONGLONG get_driver_check_time(void)
+ {
+     LARGE_INTEGER counter, freq;
+     NtQueryPerformanceCounter( &counter, &freq );
+-    return counter.QuadPart * 8000 / freq.QuadPart; /* 8kHz */
++    return counter.QuadPart * 12000 / freq.QuadPart; /* 12kHz */
+ }
+ 
+ /* check for driver events if we detect that the app is not properly consuming messages */
+-- 
+2.48.1
+

@@ -1,0 +1,96 @@
+From 72e840cb0d702720bcf291465687082f621b3120 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 27 Mar 2025 03:19:56 -0700
+Subject: [PATCH] gdiplus: FORCEINLINE header funcs
+
+---
+ dlls/gdiplus/gdiplus_private.h | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/gdiplus/gdiplus_private.h b/dlls/gdiplus/gdiplus_private.h
+index 8316a1334d1..40b1d622fab 100644
+--- a/dlls/gdiplus/gdiplus_private.h
++++ b/dlls/gdiplus/gdiplus_private.h
+@@ -151,22 +151,22 @@ extern void delete_element(region_element *element);
+ 
+ extern GpStatus get_hatch_data(GpHatchStyle hatchstyle, const unsigned char **result);
+ 
+-static inline INT gdip_round(REAL x)
++static FORCEINLINE INT gdip_round(REAL x)
+ {
+     return (INT) floorf(x + 0.5);
+ }
+ 
+-static inline INT ceilr(REAL x)
++static FORCEINLINE INT ceilr(REAL x)
+ {
+     return (INT) ceilf(x);
+ }
+ 
+-static inline REAL deg2rad(REAL degrees)
++static FORCEINLINE REAL deg2rad(REAL degrees)
+ {
+     return M_PI * degrees / 180.0;
+ }
+ 
+-static inline ARGB color_over(ARGB bg, ARGB fg)
++static FORCEINLINE ARGB color_over(ARGB bg, ARGB fg)
+ {
+     BYTE b, g, r, a;
+     BYTE bg_alpha, fg_alpha;
+@@ -190,7 +190,7 @@ static inline ARGB color_over(ARGB bg, ARGB fg)
+ }
+ 
+ /* fg is premult, bg and return value are not */
+-static inline ARGB color_over_fgpremult(ARGB bg, ARGB fg)
++static FORCEINLINE ARGB color_over_fgpremult(ARGB bg, ARGB fg)
+ {
+     BYTE b, g, r, a;
+     BYTE bg_alpha, fg_alpha;
+@@ -629,14 +629,14 @@ struct memory_buffer
+     INT size, pos;
+ };
+ 
+-static inline void init_memory_buffer(struct memory_buffer *mbuf, const BYTE *buffer, INT size)
++static FORCEINLINE void init_memory_buffer(struct memory_buffer *mbuf, const BYTE *buffer, INT size)
+ {
+     mbuf->buffer = buffer;
+     mbuf->size = size;
+     mbuf->pos = 0;
+ }
+ 
+-static inline const void *buffer_read(struct memory_buffer *mbuf, INT size)
++static FORCEINLINE const void *buffer_read(struct memory_buffer *mbuf, INT size)
+ {
+     if (mbuf->size - mbuf->pos >= size)
+     {
+@@ -685,22 +685,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
+ 
+ void get_log_fontW(const GpFont *, GpGraphics *, LOGFONTW *);
+ 
+-static inline BOOL image_lock(GpImage *image)
++static FORCEINLINE BOOL image_lock(GpImage *image)
+ {
+     return TryAcquireSRWLockExclusive(&image->lock);
+ }
+ 
+-static inline void image_unlock(GpImage *image)
++static FORCEINLINE void image_unlock(GpImage *image)
+ {
+     ReleaseSRWLockExclusive(&image->lock);
+ }
+ 
+-static inline BOOL has_gdi_dc(GpGraphics *graphics)
++static FORCEINLINE BOOL has_gdi_dc(GpGraphics *graphics)
+ {
+     return graphics->hdc != NULL || graphics->owndc;
+ }
+ 
+-static inline void set_rect(GpRectF *rect, REAL x, REAL y, REAL width, REAL height)
++static FORCEINLINE void set_rect(GpRectF *rect, REAL x, REAL y, REAL width, REAL height)
+ {
+     rect->X = x;
+     rect->Y = y;
+-- 
+2.49.0
+

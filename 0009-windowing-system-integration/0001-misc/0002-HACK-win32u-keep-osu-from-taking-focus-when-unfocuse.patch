@@ -1,0 +1,67 @@
+From 2ef281dbd3d3f99d971d80725d890e944a2abc4b Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 12 Mar 2025 20:15:28 +0100
+Subject: [PATCH] HACK: win32u: keep osu! from taking focus when unfocused on
+ certain WMs
+
+Depends on Proton's WM detection. KDE seems to not be affected by this.
+Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
+---
+dlls/win32u/window.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index e4ca25a9521..73888ed4115 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -31,6 +31,8 @@
+ #include "ntuser_private.h"
+ #include "wine/server.h"
+ #include "wine/debug.h"
++#include "ntuser.h"
++#include "winuser.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(win);
+ 
+@@ -3730,6 +3732,19 @@ done:
+     return after;
+ }
+ 
++static inline BOOL osu_focus_hack(LONG_PTR wm)
++{
++    static char enable_cached = -1;
++    if (enable_cached == -1)
++    {
++        enable_cached = 0;
++        const char *e = getenv("WINE_ENABLE_OSU_FOCUS_FIX");
++        if ((wm == WINE_WM_UNKNOWN || wm == WINE_WM_X11_XFCE || (e && *e != '\0' && *e != '0')) && !(e && *e == '0'))
++            enable_cached = 1;
++    }
++    return !!enable_cached;
++}
++
+ /* NtUserSetWindowPos implementation */
+ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+ {
+@@ -3738,9 +3753,18 @@ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+     struct window_rects old_rects, new_rects;
+     UINT orig_flags, context;
+     BOOL ret = FALSE;
++    LONG_PTR wm = __wine_get_window_manager();
+ 
+     orig_flags = winpos->flags;
+ 
++    /* osu! hack: fix osu! taking focus over other apps on certain WMs (ex. i3, sway) and xFCE */
++    /* GNOME: game will mostly behave as borderless, to fix Mutter stacking issues..*/
++    /* can also be forced with: WINE_ENABLE_OSU_FOCUS_FIX=1 */
++    if (wm == WINE_WM_X11_MUTTER || (osu_focus_hack(wm) && winpos->hwndInsertAfter == HWND_NOTOPMOST && (get_window_long(winpos->hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST)))
++    {
++        winpos->flags |= SWP_NOACTIVATE | SWP_NOZORDER;
++    }
++
+     /* First, check z-order arguments.  */
+     if (!(winpos->flags & SWP_NOZORDER))
+     {
+-- 
+2.49.0
+

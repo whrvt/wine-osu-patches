@@ -1,0 +1,34 @@
+From a25882f3bcbb9b0f174dd45bd2d0866bf7c0f7a5 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 2 Sep 2024 16:15:33 -0700
+Subject: [PATCH 2/7] winepulse: Don't unconditionally allocate a tmp buffer.
+
+---
+ dlls/winepulse.drv/pulse.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 34a22a3143d..ba0c42f1173 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -1196,9 +1196,14 @@ static NTSTATUS pulse_create_stream(void *args)
+         /* Update frames according to new size */
+         dump_attr(attr);
+         if (stream->dataflow == eRender) {
+-            if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+-                zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
+-                hr = E_OUTOFMEMORY;
++            /* Don't unconditionally create a tmp buffer outside of experimental wow64 mode */
++            if ((attr->tlength < stream->bufsize_bytes) || zero_bits) {
++                WARN("Allocating a temporary audio buffer. WoW64=%s tlength=%u bufsize_bytes=%lu\n",
++                     zero_bits ? "yes" : "no", attr->tlength, stream->bufsize_bytes);
++                if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
++                                            zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
++                    hr = E_OUTOFMEMORY;
++            }
+         }
+         else {
+             WARN("Capture device support is unavailable with this version of wine.\n");
+-- 
+2.49.0
+

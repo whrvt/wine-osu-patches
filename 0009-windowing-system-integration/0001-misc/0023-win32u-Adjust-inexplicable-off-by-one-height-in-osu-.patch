@@ -1,0 +1,34 @@
+From 57fe8456421a5519cb7f7b63ca70a7c472676ecc Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 13 Oct 2024 18:03:33 -0700
+Subject: [PATCH] win32u: Adjust inexplicable off-by-one height in osu!'s
+ window size request.
+
+---
+ dlls/win32u/defwnd.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
+index ec569a29996..cb95a003028 100644
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -257,6 +257,16 @@ BOOL adjust_window_rect( RECT *rect, DWORD style, BOOL menu, DWORD ex_style, UIN
+     NONCLIENTMETRICSW ncm = {.cbSize = sizeof(ncm)};
+     int adjust = 0;
+ 
++    int width = rect->right - rect->left;
++    int height = rect->bottom - rect->top;
++
++    if ((height - 1) == get_system_metrics(SM_CYSCREEN))
++    {
++        rect->bottom--;
++        TRACE("adjusted off-by-one window height: %dx%d -> %dx%d\n",
++               width, height, rect->right - rect->left, rect->bottom - rect->top);
++    }
++
+     NtUserSystemParametersInfoForDpi( SPI_GETNONCLIENTMETRICS, 0, &ncm, 0, dpi );
+ 
+     if ((ex_style & (WS_EX_STATICEDGE|WS_EX_DLGMODALFRAME)) == WS_EX_STATICEDGE)
+-- 
+2.47.0
+

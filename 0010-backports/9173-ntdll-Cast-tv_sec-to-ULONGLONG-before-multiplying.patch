@@ -1,0 +1,26 @@
+From 4b263fea12efc162f8f6a683c1766eed5d12bbb7 Mon Sep 17 00:00:00 2001
+From: Sven Baars <sbaars@codeweavers.com>
+Date: Tue, 14 Oct 2025 16:41:29 +0200
+Subject: [PATCH] ntdll: Cast tv_sec to ULONGLONG before multiplying.
+
+Fixes an overflow on 32-bit.
+---
+ dlls/ntdll/unix/sync.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index bcd06f8338b..e67bc4d3f1e 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -412,7 +412,7 @@ static NTSTATUS linux_wait_objs( int device, const DWORD count, const int *objs,
+     else if (timeout->QuadPart <= 0)
+     {
+         clock_gettime( CLOCK_MONOTONIC, &now );
+-        args.timeout = (now.tv_sec * NSECPERSEC) + now.tv_nsec + (-timeout->QuadPart * 100);
++        args.timeout = ((ULONGLONG)now.tv_sec * NSECPERSEC) + now.tv_nsec + (-timeout->QuadPart * 100);
+     }
+     else
+     {
+-- 
+2.51.1
+

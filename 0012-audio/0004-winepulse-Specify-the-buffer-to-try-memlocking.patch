@@ -1,0 +1,60 @@
+From b1ac681f88154ef80c82d945746cc9c42be2fae2 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 26 Sep 2024 05:12:47 -0700
+Subject: [PATCH 4/7] winepulse: Specify the buffer to try memlocking.
+
+---
+ dlls/winepulse.drv/pulse.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index af231d307df..735d16bbdc3 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -202,11 +202,23 @@ static char *wstr_to_str(const WCHAR *wstr)
+     return str;
+ }
+ 
+-static void try_memlock(struct pulse_stream *stream, SIZE_T bytes)
++enum lock_buffer_type
+ {
++    BUFTYPE_LOCAL,
++    BUFTYPE_TMP
++};
++
++static void try_memlock(struct pulse_stream *stream, SIZE_T bytes, enum lock_buffer_type buftype)
++{
++    NTSTATUS ret;
+     if (!allow_memlock) return;
+ 
+-    if (NtLockVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer, &bytes, 1))
++    if (buftype == BUFTYPE_LOCAL)
++        ret = NtLockVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer, &bytes, 1);
++    else /* BUFTYPE_TMP */
++        ret = NtLockVirtualMemory(GetCurrentProcess(), (void **)&stream->tmp_buffer, &bytes, 1);
++
++    if (ret)
+         WARN("Couldn't memlock audio buffer.\n");
+     else
+         TRACE("Successfully memlocked audio buffer.\n");
+@@ -1220,7 +1232,7 @@ static NTSTATUS pulse_create_stream(void *args)
+                                             zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
+                     hr = E_OUTOFMEMORY;
+                 else
+-                    try_memlock(stream, stream->bufsize_bytes);
++                    try_memlock(stream, stream->bufsize_bytes, BUFTYPE_LOCAL);
+             }
+         }
+         else {
+@@ -1809,7 +1821,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+         return FALSE;
+ 
+     stream->tmp_buffer_bytes = bytes;
+-    try_memlock(stream, bytes);
++    try_memlock(stream, bytes, BUFTYPE_TMP);
+     return TRUE;
+ }
+ 
+-- 
+2.49.0
+

@@ -1,0 +1,78 @@
+From 98a609ebd773867df81fa3770a642d92f3b812ce Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 2 Sep 2024 16:21:12 -0700
+Subject: [PATCH 3/7] winepulse: Try memlocking the audio buffer.
+
+But allow disabling it with WINE_PULSE_MEMLOCK=0.
+---
+ dlls/winepulse.drv/pulse.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index ba0c42f1173..af231d307df 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -115,6 +115,7 @@ static pthread_mutex_t pulse_mutex;
+ static pthread_cond_t pulse_cond = PTHREAD_COND_INITIALIZER;
+ 
+ static ULONG_PTR zero_bits = 0;
++static BOOL allow_memlock = TRUE;
+ 
+ static NTSTATUS pulse_not_implemented(void *args)
+ {
+@@ -201,6 +202,16 @@ static char *wstr_to_str(const WCHAR *wstr)
+     return str;
+ }
+ 
++static void try_memlock(struct pulse_stream *stream, SIZE_T bytes)
++{
++    if (!allow_memlock) return;
++
++    if (NtLockVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer, &bytes, 1))
++        WARN("Couldn't memlock audio buffer.\n");
++    else
++        TRACE("Successfully memlocked audio buffer.\n");
++}
++
+ static BOOL wait_pa_operation_complete(pa_operation *o)
+ {
+     if (!o)
+@@ -238,6 +249,7 @@ static int pulse_poll_func(struct pollfd *ufds, unsigned long nfds, int timeout,
+ static NTSTATUS pulse_process_attach(void *args)
+ {
+     pthread_mutexattr_t attr;
++    const char *memlock_env;
+ 
+     pthread_mutexattr_init(&attr);
+     pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT);
+@@ -255,6 +267,10 @@ static NTSTATUS pulse_process_attach(void *args)
+     }
+ #endif
+ 
++    memlock_env = getenv("WINE_PULSE_MEMLOCK");
++    if (memlock_env && atoi(memlock_env) == 0)
++        allow_memlock = FALSE;
++
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -1203,6 +1219,8 @@ static NTSTATUS pulse_create_stream(void *args)
+                 if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+                                             zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
+                     hr = E_OUTOFMEMORY;
++                else
++                    try_memlock(stream, stream->bufsize_bytes);
+             }
+         }
+         else {
+@@ -1791,6 +1809,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+         return FALSE;
+ 
+     stream->tmp_buffer_bytes = bytes;
++    try_memlock(stream, bytes);
+     return TRUE;
+ }
+ 
+-- 
+2.49.0
+

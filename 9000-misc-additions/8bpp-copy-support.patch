@@ -1,0 +1,126 @@
+diff --git a/dlls/windowscodecs/converter.c b/dlls/windowscodecs/converter.c
+index 11111111111..11111111111 100644
+--- a/dlls/windowscodecs/converter.c
++++ b/dlls/windowscodecs/converter.c
+@@ -1034,6 +1034,50 @@ static HRESULT copypixels_to_24bppBGR(struct FormatConverter *This, const WICRec
+ 
+     switch (source_format)
+     {
++    case format_8bppGray:
++        if (prc)
++        {
++            HRESULT res;
++            INT x, y;
++            BYTE *srcdata;
++            UINT srcstride, srcdatasize;
++            const BYTE *srcrow;
++            const BYTE *srcbyte;
++            BYTE *dstrow;
++            BYTE *dstpixel;
++
++            srcstride = prc->Width;
++            srcdatasize = srcstride * prc->Height;
++
++            srcdata = malloc(srcdatasize);
++            if (!srcdata) return E_OUTOFMEMORY;
++
++            res = IWICBitmapSource_CopyPixels(This->source, prc, srcstride, srcdatasize, srcdata);
++
++            if (SUCCEEDED(res))
++            {
++                srcrow = srcdata;
++                dstrow = pbBuffer;
++                for (y=0; y<prc->Height; y++) {
++                    srcbyte = srcrow;
++                    dstpixel = dstrow;
++                    for (x=0; x<prc->Width; x++)
++                    {
++                        *dstpixel++ = *srcbyte;
++                        *dstpixel++ = *srcbyte;
++                        *dstpixel++ = *srcbyte;
++                        srcbyte++;
++                    }
++                    srcrow += srcstride;
++                    dstrow += cbStride;
++                }
++            }
++
++            free(srcdata);
++
++            return res;
++        }
++        return S_OK;
+     case format_BlackWhite:
+         if (prc)
+         {
+
+
+From 62cccf99b1f4891d5a487bc6b3115c677c5721c6 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 27 Mar 2025 02:23:08 -0700
+Subject: [PATCH] windowscodecs: unroll 8bppGray->24bppBGR
+
+---
+ dlls/windowscodecs/converter.c | 33 +++++++++++++++++++++++++--------
+ 1 file changed, 25 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/windowscodecs/converter.c b/dlls/windowscodecs/converter.c
+index 55677aab982..00f38a71d14 100644
+--- a/dlls/windowscodecs/converter.c
++++ b/dlls/windowscodecs/converter.c
+@@ -1067,9 +1067,11 @@ static HRESULT copypixels_to_24bppBGR(struct FormatConverter *This, const WICRec
+             const BYTE *srcbyte;
+             BYTE *dstrow;
+             BYTE *dstpixel;
++            INT width = prc->Width;
++            INT height = prc->Height;
+ 
+-            srcstride = prc->Width;
+-            srcdatasize = srcstride * prc->Height;
++            srcstride = width;
++            srcdatasize = srcstride * height;
+ 
+             srcdata = malloc(srcdatasize);
+             if (!srcdata) return E_OUTOFMEMORY;
+@@ -1078,17 +1080,32 @@ static HRESULT copypixels_to_24bppBGR(struct FormatConverter *This, const WICRec
+ 
+             if (SUCCEEDED(res))
+             {
++                INT blocks = width / 8;
++                INT remainder = width % 8;
+                 srcrow = srcdata;
+                 dstrow = pbBuffer;
+-                for (y=0; y<prc->Height; y++) {
++                for (y=0; y<height; y++)
++                {
+                     srcbyte = srcrow;
+                     dstpixel = dstrow;
+-                    for (x=0; x<prc->Width; x++)
++                    for (x=0; x<blocks; x++)
+                     {
+-                        *dstpixel++ = *srcbyte;
+-                        *dstpixel++ = *srcbyte;
+-                        *dstpixel++ = *srcbyte;
+-                        srcbyte++;
++                        dstpixel[0] = dstpixel[1] = dstpixel[2] = srcbyte[0];
++                        dstpixel[3] = dstpixel[4] = dstpixel[5] = srcbyte[1];
++                        dstpixel[6] = dstpixel[7] = dstpixel[8] = srcbyte[2];
++                        dstpixel[9] = dstpixel[10] = dstpixel[11] = srcbyte[3];
++                        dstpixel[12] = dstpixel[13] = dstpixel[14] = srcbyte[4];
++                        dstpixel[15] = dstpixel[16] = dstpixel[17] = srcbyte[5];
++                        dstpixel[18] = dstpixel[19] = dstpixel[20] = srcbyte[6];
++                        dstpixel[21] = dstpixel[22] = dstpixel[23] = srcbyte[7];
++
++                        srcbyte += 8;
++                        dstpixel += 24;
++                    }
++                    for (x=0; x<remainder; x++)
++                    {
++                        BYTE gray = *srcbyte++;
++                        set_24bppbgr_pixel(&dstpixel, gray | (gray << 8) | (gray << 16));
+                     }
+                     srcrow += srcstride;
+                     dstrow += cbStride;
+-- 
+2.49.0
+

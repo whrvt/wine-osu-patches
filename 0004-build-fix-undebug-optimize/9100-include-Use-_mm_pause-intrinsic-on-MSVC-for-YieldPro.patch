@@ -1,0 +1,38 @@
+From a9414bffaaa547f317bc32e9290d2de61e6dd20a Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 2 Feb 2025 20:29:19 -0800
+Subject: [PATCH] include: Use _mm_pause intrinsic on MSVC for YieldProcessor.
+
+---
+ include/winnt.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/include/winnt.h b/include/winnt.h
+index 9110d2ffd48..c6290ccfe9e 100644
+--- a/include/winnt.h
++++ b/include/winnt.h
+@@ -7513,6 +7513,13 @@ static FORCEINLINE unsigned char InterlockedCompareExchange128( volatile __int64
+ 
+ #endif /* _WIN64 */
+ 
++#if defined(_MSC_VER) && (defined(__i386__) || defined(__x86_64__) || __has_builtin(_mm_pause))
++
++#define YieldProcessor _mm_pause
++#pragma intrinsic(_mm_pause)
++void _mm_pause(void);
++
++#else
+ static FORCEINLINE void YieldProcessor(void)
+ {
+ #if defined(__GNUC__) || defined(__clang__)
+@@ -7525,6 +7532,7 @@ static FORCEINLINE void YieldProcessor(void)
+ #endif
+ #endif
+ }
++#endif
+ 
+ #ifdef __cplusplus
+ }
+-- 
+2.48.1
+

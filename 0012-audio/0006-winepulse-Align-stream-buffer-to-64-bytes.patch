@@ -1,0 +1,31 @@
+From 60b82ecd172eefb26a0bcdd589b8b5a411642f9c Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 27 Feb 2025 09:26:03 -0800
+Subject: [PATCH 6/7] winepulse: Align stream buffer to 64 bytes.
+
+---
+ dlls/winepulse.drv/pulse.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 09d20f3d84b..b59a88b39fb 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -1192,12 +1192,13 @@ static NTSTATUS pulse_create_stream(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (!(stream = calloc(1, sizeof(*stream))))
++    if (!(stream = aligned_alloc(64, sizeof(*stream))))
+     {
+         pulse_unlock();
+         params->result = E_OUTOFMEMORY;
+         return STATUS_SUCCESS;
+     }
++    memset(stream, 0, sizeof(*stream));
+ 
+     stream->dataflow = params->flow;
+     for (i = 0; i < ARRAY_SIZE(stream->vol); ++i)
+-- 
+2.49.0
+
