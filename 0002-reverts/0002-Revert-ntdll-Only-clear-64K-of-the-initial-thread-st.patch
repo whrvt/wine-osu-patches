@@ -1,0 +1,41 @@
+From 62c91c68dd4071fb97a5d4e5e06248d983a41372 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 4 Nov 2025 15:03:26 +0100
+Subject: [PATCH] Revert "ntdll: Only clear 64K of the initial thread stack."
+
+This reverts commit 871a52cb8b2d9688dbc100284843aa14a31d6ba0.
+Fixes osu! freezing on winewayland on KDE >= 6.5.
+---
+ dlls/ntdll/signal_i386.c   | 2 +-
+ dlls/ntdll/signal_x86_64.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/signal_i386.c b/dlls/ntdll/signal_i386.c
+index a55e50df178..7ff4ace58ad 100644
+--- a/dlls/ntdll/signal_i386.c
++++ b/dlls/ntdll/signal_i386.c
+@@ -518,7 +518,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
+                    "leal -12(%esi),%edi\n\t"
+                    /* clear the thread stack */
+                    "andl $~0xfff,%edi\n\t"   /* round down to page size */
+-                   "movl $0xf000,%ecx\n\t"
++                   "movl $0xf0000,%ecx\n\t"
+                    "subl %ecx,%edi\n\t"
+                    "movl %edi,%esp\n\t"
+                    "xorl %eax,%eax\n\t"
+diff --git a/dlls/ntdll/signal_x86_64.c b/dlls/ntdll/signal_x86_64.c
+index 3d4bd23e8ff..f145d4d1f73 100644
+--- a/dlls/ntdll/signal_x86_64.c
++++ b/dlls/ntdll/signal_x86_64.c
+@@ -1020,7 +1020,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
+                    "movq %rcx,%rbx\n\t"        /* context */
+                    /* clear the thread stack */
+                    "andq $~0xfff,%rcx\n\t"     /* round down to page size */
+-                   "leaq -0xf000(%rcx),%rdi\n\t"
++                   "leaq -0xf0000(%rcx),%rdi\n\t"
+                    "movq %rdi,%rsp\n\t"
+                    "subq %rdi,%rcx\n\t"
+                    "xorl %eax,%eax\n\t"
+-- 
+2.51.2
+

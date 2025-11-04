@@ -1,0 +1,24 @@
+From b97ce0d4dc66d08236d3b2a7fbb04f29f87248f8 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Mon, 3 Nov 2025 10:35:17 -0800
+Subject: [PATCH] mmdevapi: HACK: Always add EVENTCALLBACK to init flags.
+
+---
+ dlls/mmdevapi/client.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index 433829e65db..72cebf0dc6a 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -678,6 +678,7 @@ static HRESULT WINAPI client_Initialize(IAudioClient3 *iface, AUDCLNT_SHAREMODE
+                                  const WAVEFORMATEX *fmt, const GUID *sessionguid)
+ {
+     struct audio_client *This = impl_from_IAudioClient3(iface);
++    flags |= AUDCLNT_STREAMFLAGS_EVENTCALLBACK;
+ 
+     TRACE("(%p)->(%x, %lx, %s, %s, %p, %s)\n", This, mode, flags, wine_dbgstr_longlong(duration),
+                                                wine_dbgstr_longlong(period), fmt,
+-- 
+2.51.2
+
