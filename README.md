@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-e3c9d3ac](https://gitlab.winehq.org/wine/wine/-/tree/e3c9d3ac76b223073253667e2447e1cbc407ac97)
+wine commit: [wine-82275b13](https://gitlab.winehq.org/wine/wine/-/tree/82275b13a24613947d1da00cd85209dbfaf5465f)
 
-staging commit: [staging-317665ee](https://gitlab.winehq.org/wine/wine-staging/-/tree/317665ee20ac811ae6f48a7c16d86502db764869)
+staging commit: [staging-2d58cc0e](https://gitlab.winehq.org/wine/wine-staging/-/tree/2d58cc0eb9975536f8adf291facf327ebd5c919a)
 
-Staging exclude flags: `-W oleaut32_VarAdd -W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix`
+Staging exclude flags: `-W ntdll-Serial_Port_Detection -W oleaut32_VarAdd -W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix`
 
 # Environment variables
 
@@ -43,69 +43,6 @@ Patch: [winedmo-Add-envvar-option-to-enable-disable.patch](9000-misc-additions/w
 winedmo: Add envvar option to enable/disable.
 ```
 
-## WINEESYNC
-
-Patch: [0003-server-Create-server-objects-for-eventfd-based-synch.patch](0006-proton-esync-fsync/0003-server-Create-server-objects-for-eventfd-based-synch.patch)
-
-### Commit message
-
-```
-server: Create server objects for eventfd-based synchronization objects.
-```
-
-### Type
-
-`numeric`
-
-## WINEFSYNC
-
-Patch: [0061-server-Create-server-objects-for-futex-based-synchro.patch](0006-proton-esync-fsync/0061-server-Create-server-objects-for-futex-based-synchro.patch)
-
-### Commit message
-
-```
-server: Create server objects for futex-based synchronization objects.
-```
-
-### Type
-
-`numeric`
-
-## WINENTSYNC
-
-Patch: [0038-server-ntdll-Add-a-do_ntsync-helper.patch](0007-ntsync/0038-server-ntdll-Add-a-do_ntsync-helper.patch)
-
-### Commit message
-
-```
-server, ntdll: Add a do_ntsync helper.
-Also add WINENTSYNC=0 as a shorthand for WINE_DISABLE_FAST_SYNC=1.
-```
-
-### Description
-
-lightweight permission check, full get_linux_device breaks when done at early startup
-
-### Type
-
-`numeric`
-
-## WINE_ALERT_SIMULATE_SCHED_QUANTUM
-
-Patch: [0142-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch](0006-proton-esync-fsync/0142-ntdll-HACK-Add-WINE_ALERT_SIMULATE_SCHED_QUANTUM-opt.patch)
-
-### Commit message
-
-```
-ntdll: HACK: Add WINE_ALERT_SIMULATE_SCHED_QUANTUM option.
-And enable it for GTA 5.
-CW-Bug-Id: #21194
-```
-
-### Type
-
-`boolean`
-
 ## WINE_CUSTOM_FPS
 
 Patch: [winex11-Custom-frame-limiter-for-OpenGL.patch](9000-misc-additions/winex11-Custom-frame-limiter-for-OpenGL.patch)
@@ -127,20 +64,6 @@ Patch: [winex11-Custom-frame-limiter-for-OpenGL.patch](9000-misc-additions/winex
 ### Type
 
 `boolean`
-
-## WINE_DISABLE_FAST_SYNC
-
-Patch: [0028-server-Allow-disabling-in-process-synchronization-support.patch](0007-ntsync/0028-server-Allow-disabling-in-process-synchronization-support.patch)
-
-### Commit message
-
-```
-server: Allow disabling in-process synchronization support.
-```
-
-### Type
-
-`numeric`
 
 ## WINE_DISABLE_IME
 
@@ -216,37 +139,6 @@ Depends on Proton's WM detection. KDE seems to not be affected by this.
 Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
 ```
 
-## WINE_FSYNC_SIMULATE_SCHED_QUANTUM
-
-Patch: [0123-fsync-Add-WINE_FSYNC_SIMULATE_SCHED_QUANTUM-config-o.patch](0006-proton-esync-fsync/0123-fsync-Add-WINE_FSYNC_SIMULATE_SCHED_QUANTUM-config-o.patch)
-
-### Commit message
-
-```
-fsync: Add WINE_FSYNC_SIMULATE_SCHED_QUANTUM config option.
-And auto enable it for Uplay laucher.
-CW-Bug-Id: #20155
-```
-
-### Type
-
-`boolean`
-
-## WINE_FSYNC_YIELD_TO_WAITERS
-
-Patch: [0147-fsync-Add-WINE_FSYNC_YIELD_TO_WAITERS-option.patch](0006-proton-esync-fsync/0147-fsync-Add-WINE_FSYNC_YIELD_TO_WAITERS-option.patch)
-
-### Commit message
-
-```
-fsync: Add WINE_FSYNC_YIELD_TO_WAITERS option.
-CW-Bug-Id: #22194
-```
-
-### Type
-
-`boolean`
-
 ## WINE_INSTALL_ROOT_DEVICES
 
 Patch: [wineboot-Skip-root-device-installation-if-WINE_INSTA.patch](9000-misc-additions/wineboot-Skip-root-device-installation-if-WINE_INSTA.patch)
@@ -312,21 +204,6 @@ Windows Registry Editor Version 5.00
 @="wscript.exe \"Z:\\\\home\\\\username\\\\.local\\\\share\\\\osuconfig\\\\folderfixosu.vbs\" \"%1\""
 v3: Allow force-enabling the hacks outside of osu! with the env var WINE_SHELL32_HACKS=1
 ```
-
-## WINE_SIMULATE_ASYNC_READ
-
-Patch: [0143-ntdll-HACK-Also-simulate-async-file-read-and-IO-canc.patch](0006-proton-esync-fsync/0143-ntdll-HACK-Also-simulate-async-file-read-and-IO-canc.patch)
-
-### Commit message
-
-```
-ntdll: HACK: Also simulate async file read and IO cancellation for Immortals Fenyx Rising.
-CW-Bug-Id: #21711
-```
-
-### Type
-
-`boolean`
 
 ## WINE_STATIC_CPUFREQ
 

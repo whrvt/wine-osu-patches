@@ -1,0 +1,62 @@
+From 0b3ccd87315a513b4d9afd425c2445756ee38794 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 7 Mar 2025 19:47:29 -0600
+Subject: [PATCH] server: Move find_pointer_from_id() up.
+
+---
+ server/queue.c | 32 ++++++++++++++++----------------
+ 1 file changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/server/queue.c b/server/queue.c
+index 520659d377c..1a75289787d 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -2539,6 +2539,22 @@ struct pointer
+     union hw_input input;
+ };
+ 
++static struct pointer *find_pointer_from_id( struct desktop *desktop, unsigned int id )
++{
++    struct pointer *pointer;
++
++    LIST_FOR_EACH_ENTRY( pointer, &desktop->pointers, struct pointer, entry )
++        if (LOWORD(pointer->input.hw.wparam) == id) return pointer;
++
++    pointer = mem_alloc( sizeof(struct pointer) );
++    pointer->timeout = NULL;
++    pointer->desktop = desktop;
++    pointer->primary = list_empty( &desktop->pointers );
++    list_add_tail( &desktop->pointers, &pointer->entry );
++
++    return pointer;
++}
++
+ static void queue_pointer_message( struct pointer *pointer, int repeated );
+ 
+ static void pointer_message_timeout( void *private )
+@@ -2616,22 +2632,6 @@ static void queue_pointer_message( struct pointer *pointer, int repeated )
+     }
+ }
+ 
+-static struct pointer *find_pointer_from_id( struct desktop *desktop, unsigned int id )
+-{
+-    struct pointer *pointer;
+-
+-    LIST_FOR_EACH_ENTRY( pointer, &desktop->pointers, struct pointer, entry )
+-        if (LOWORD(pointer->input.hw.wparam) == id) return pointer;
+-
+-    pointer = mem_alloc( sizeof(struct pointer) );
+-    pointer->timeout = NULL;
+-    pointer->desktop = desktop;
+-    pointer->primary = list_empty( &desktop->pointers );
+-    list_add_tail( &desktop->pointers, &pointer->entry );
+-
+-    return pointer;
+-}
+-
+ /* queue a hardware message for a custom type of event */
+ static void queue_custom_hardware_message( struct desktop *desktop, user_handle_t win,
+                                            unsigned int origin, const union hw_input *input )
+-- 
+GitLab
+

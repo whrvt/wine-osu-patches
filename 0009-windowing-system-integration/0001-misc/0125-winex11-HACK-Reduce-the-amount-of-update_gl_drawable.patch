@@ -10,10 +10,10 @@ Temporary performance optimization hack until Remi finishes refactoring.
  1 file changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
-index e6b6213f289..67fa2286793 100644
+index c9854c1dbda..ced76738ce4 100644
 --- a/dlls/winex11.drv/init.c
 +++ b/dlls/winex11.drv/init.c
-@@ -381,13 +381,17 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+@@ -383,6 +383,7 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
  {
      struct x11drv_client_surface *surface = impl_from_client_surface( client );
      HWND hwnd = client->hwnd, toplevel = NtUserGetAncestor( hwnd, GA_ROOT );
@@ -21,7 +21,9 @@ index e6b6213f289..67fa2286793 100644
      struct x11drv_win_data *data;
      RECT rect_dst, rect;
      Drawable window;
-     HRGN region;
+@@ -390,8 +391,11 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+ 
+     TRACE( "%s\n", debugstr_client_surface( client ) );
  
 -    client_surface_update_size( hwnd, surface );
 -    client_surface_update_offscreen( hwnd, surface );
@@ -33,6 +35,7 @@ index e6b6213f289..67fa2286793 100644
  
      if (!hdc) return;
      window = X11DRV_get_whole_window( toplevel );
+
 -- 
 2.50.0
 

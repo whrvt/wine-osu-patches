@@ -1,0 +1,109 @@
+From 24a6cb4f1e16ebe12fa1e3b4bcbe26aaaa13fb4b Mon Sep 17 00:00:00 2001
+From: Matteo Bruni <mbruni@codeweavers.com>
+Date: Wed, 9 Apr 2025 19:55:36 +0200
+Subject: [PATCH] ntdll/tests: Add more NtCancelIoFile[Ex]() tests.
+
+---
+ dlls/ntdll/tests/pipe.c | 57 ++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 51 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/ntdll/tests/pipe.c b/dlls/ntdll/tests/pipe.c
+index 14a6148a2c5..64bdb7e3b66 100644
+--- a/dlls/ntdll/tests/pipe.c
++++ b/dlls/ntdll/tests/pipe.c
+@@ -569,14 +569,33 @@ static void test_nonalertable(void)
+     CloseHandle(hPipe);
+ }
+ 
+-static void test_cancelio(void)
++struct cancelio_ctx
+ {
+-    IO_STATUS_BLOCK iosb;
++    HANDLE pipe;
++    HANDLE event;
++    IO_STATUS_BLOCK *iosb;
++    BOOL null_iosb;
++};
++
++static DWORD WINAPI cancelioex_thread_func(void *arg)
++{
++    struct cancelio_ctx *ctx = arg;
+     IO_STATUS_BLOCK cancel_sb;
+-    HANDLE hEvent;
+-    HANDLE hPipe;
+     NTSTATUS res;
+ 
++    res = pNtCancelIoFileEx(ctx->pipe, ctx->null_iosb ? NULL : ctx->iosb, &cancel_sb);
++    ok(!res, "NtCancelIoFileEx returned %lx\n", res);
++
++    return 0;
++}
++
++static void test_cancelio(void)
++{
++    IO_STATUS_BLOCK cancel_sb, iosb;
++    HANDLE hEvent, hPipe, thread;
++    struct cancelio_ctx ctx;
++    NTSTATUS res, status;
++
+     hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+     ok(hEvent != INVALID_HANDLE_VALUE, "can't create event, GetLastError: %lx\n", GetLastError());
+ 
+@@ -589,9 +608,13 @@ static void test_cancelio(void)
+     ok(res == STATUS_PENDING, "NtFsControlFile returned %lx\n", res);
+ 
+     res = pNtCancelIoFile(hPipe, &cancel_sb);
++    /* Save Status first thing after the call. We want to make very unlikely
++     * that the kernel APC updating Status could be executed after the call
++     * but before peeking at Status here. */
++    status = iosb.Status;
+     ok(!res, "NtCancelIoFile returned %lx\n", res);
+ 
+-    ok(iosb.Status == STATUS_CANCELLED, "Wrong iostatus %lx\n", iosb.Status);
++    ok(status == STATUS_CANCELLED, "Wrong iostatus %lx\n", status);
+     ok(WaitForSingleObject(hEvent, 0) == 0, "hEvent not signaled\n");
+ 
+     ok(!ioapc_called, "IOAPC ran too early\n");
+@@ -616,9 +639,10 @@ static void test_cancelio(void)
+         ok(res == STATUS_PENDING, "NtFsControlFile returned %lx\n", res);
+ 
+         res = pNtCancelIoFileEx(hPipe, &iosb, &cancel_sb);
++        status = iosb.Status;
+         ok(!res, "NtCancelIoFileEx returned %lx\n", res);
+ 
+-        ok(iosb.Status == STATUS_CANCELLED, "Wrong iostatus %lx\n", iosb.Status);
++        ok(status == STATUS_CANCELLED, "Wrong iostatus %lx\n", status);
+         ok(WaitForSingleObject(hEvent, 0) == 0, "hEvent not signaled\n");
+ 
+         iosb.Status = 0xdeadbeef;
+@@ -626,6 +650,27 @@ static void test_cancelio(void)
+         ok(res == STATUS_NOT_FOUND, "NtCancelIoFileEx returned %lx\n", res);
+         ok(iosb.Status == 0xdeadbeef, "Wrong iostatus %lx\n", iosb.Status);
+ 
++        memset(&iosb, 0x55, sizeof(iosb));
++        res = listen_pipe(hPipe, hEvent, &iosb, FALSE);
++        ok(res == STATUS_PENDING, "NtFsControlFile returned %lx\n", res);
++
++        ctx.pipe = hPipe;
++        ctx.event = hEvent;
++        ctx.iosb = &iosb;
++        ctx.null_iosb = FALSE;
++        thread = CreateThread(NULL, 0, cancelioex_thread_func, &ctx, 0, NULL);
++        WaitForSingleObject(thread, INFINITE);
++        CloseHandle(thread);
++
++        memset(&iosb, 0x55, sizeof(iosb));
++        res = listen_pipe(hPipe, hEvent, &iosb, FALSE);
++        ok(res == STATUS_PENDING, "NtFsControlFile returned %lx\n", res);
++
++        ctx.null_iosb = TRUE;
++        thread = CreateThread(NULL, 0, cancelioex_thread_func, &ctx, 0, NULL);
++        WaitForSingleObject(thread, INFINITE);
++        CloseHandle(thread);
++
+         CloseHandle(hPipe);
+     }
+     else
+-- 
+GitLab
+

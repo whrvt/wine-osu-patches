@@ -1,0 +1,91 @@
+From b5fc00f059b4da5d006c2b78365e3550c3d9ae12 Mon Sep 17 00:00:00 2001
+From: Yuxuan Shui <yshui@codeweavers.com>
+Date: Thu, 23 Oct 2025 18:27:40 +0100
+Subject: [PATCH] winecrt0: Run ctors and dtors from DllMainCRTStartup.
+
+---
+ dlls/winecrt0/crt_dllmain.c | 63 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 63 insertions(+)
+
+diff --git a/dlls/winecrt0/crt_dllmain.c b/dlls/winecrt0/crt_dllmain.c
+index 181760c884a..042ff65f337 100644
+--- a/dlls/winecrt0/crt_dllmain.c
++++ b/dlls/winecrt0/crt_dllmain.c
+@@ -22,11 +22,74 @@
+ 
+ #include <stdarg.h>
+ #include <stdio.h>
++#include <process.h>
+ #include "windef.h"
+ #include "winbase.h"
+ 
++#if defined(__GNUC__)
++/* Reference: mingw-w64-crt: crt/gccmain.c */
++typedef void (*fnptr)(void);
++extern fnptr __CTOR_LIST__[];
++extern fnptr __DTOR_LIST__[];
++#elif defined(_MSC_VER)
++/* Sections named .CRT$??? in objects files are automatically merged into .CRT in the
++ * final binary during linking, sorted by the section names alphabetically. The names
++ * don't have significance to the linker but conventions do apply. */
++#pragma section(".CRT$XCA", read, write)
++#pragma section(".CRT$XCZ", read, write)
++#pragma section(".CRT$XTA", read, write)
++#pragma section(".CRT$XTZ", read, write)
++#pragma comment(linker, "/merge:.CRT=.rdata")
++__declspec(allocate(".CRT$XCA")) _PVFV __xc_a[] = { NULL };
++__declspec(allocate(".CRT$XCZ")) _PVFV __xc_z[] = { NULL };
++__declspec(allocate(".CRT$XTA")) _PVFV __xt_a[] = { NULL };
++__declspec(allocate(".CRT$XTZ")) _PVFV __xt_z[] = { NULL };
++#endif
++
++static void do_global_ctors_dtors( DWORD reason )
++{
++#if defined(__GNUC__)
++    if (reason == DLL_PROCESS_ATTACH)
++    {
++        ULONG_PTR nfns = (ULONG_PTR)__CTOR_LIST__[0], i;
++        if (nfns == (ULONG_PTR)-1)
++            for (nfns = 0; __CTOR_LIST__[nfns + 1]; nfns++);
++        for (i = nfns; i >= 1; i--) __CTOR_LIST__[i]();
++    }
++    else if (reason == DLL_PROCESS_DETACH)
++    {
++        SIZE_T i;
++        for (i = 1; __DTOR_LIST__[i]; i++) __DTOR_LIST__[i]();
++    }
++#elif defined(_MSC_VER)
++    if (reason == DLL_PROCESS_ATTACH)
++    {
++        _PVFV *current = __xc_a;
++
++        while (current < __xc_z)
++        {
++            if (*current)
++                (*current)();
++            current++;
++        }
++    }
++    else if (reason == DLL_PROCESS_DETACH)
++    {
++        _PVFV *current = __xt_a;
++
++        while (current < __xt_z)
++        {
++            if (*current)
++                (*current)();
++            current++;
++        }
++    }
++#endif
++}
++
+ BOOL WINAPI DllMainCRTStartup( HINSTANCE inst, DWORD reason, void *reserved )
+ {
++    do_global_ctors_dtors( reason );
+     return DllMain( inst, reason, reserved );
+ }
+ 
+-- 
+GitLab
+

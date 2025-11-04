@@ -19,7 +19,7 @@ index 177c7bab7d0..2a49e61f6fb 100644
      {
          /* mark the object data as uninitialized */
 +#ifndef NDEBUG
-         mark_block_uninitialized( (void *)shared, sizeof(*shared) );
+         mark_block_uninitialized( (void *)shared, shm_size );
 +#endif
          CONTAINING_RECORD( shared, shared_object_t, shm )->id = ++session.last_object_id;
      }
@@ -29,7 +29,7 @@ index 177c7bab7d0..2a49e61f6fb 100644
      SHARED_WRITE_BEGIN( &object->obj.shm, object_shm_t )
      {
 +#ifndef NDEBUG
-         mark_block_noaccess( (void *)shared, sizeof(*shared) );
+         mark_block_noaccess( (void *)shared, shm_size );
 +#endif
          CONTAINING_RECORD( shared, shared_object_t, shm )->id = 0;
      }

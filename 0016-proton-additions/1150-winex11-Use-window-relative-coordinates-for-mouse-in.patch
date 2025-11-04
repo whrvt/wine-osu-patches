@@ -1,0 +1,26 @@
+From 3179028be01df6c898d3b5a87c14ce8b0c54538d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Mon, 17 Feb 2025 13:21:00 +0100
+Subject: [PATCH 1150/2045] winex11: Use window-relative coordinates for mouse
+ input.
+
+CW-Bug-Id: #24818
+---
+ dlls/winex11.drv/mouse.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 8ccce7d6ff3..47ac3d6e079 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -598,7 +598,6 @@ static void map_event_coords( HWND hwnd, Window window, Window event_root, int x
+            x_root, y_root, input );
+ 
+     if (window == root_window) pt = root_to_virtual_screen( pt.x, pt.y );
+-    else if (event_root == root_window) pt = root_to_virtual_screen( x_root, y_root );
+     else if (!hwnd)
+     {
+         thread_data = x11drv_thread_data();
+-- 
+2.51.0
+

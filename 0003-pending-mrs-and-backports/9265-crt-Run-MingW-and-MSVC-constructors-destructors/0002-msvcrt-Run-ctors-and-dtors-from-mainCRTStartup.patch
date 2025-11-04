@@ -1,0 +1,229 @@
+From 734fa3df8ff71f4d065f50db3a719f77703e46e1 Mon Sep 17 00:00:00 2001
+From: Yuxuan Shui <yshui@codeweavers.com>
+Date: Thu, 23 Oct 2025 18:30:02 +0100
+Subject: [PATCH] msvcrt: Run ctors and dtors from mainCRTStartup.
+
+---
+ dlls/msvcr100/Makefile.in |  1 +
+ dlls/msvcr110/Makefile.in |  1 +
+ dlls/msvcr120/Makefile.in |  1 +
+ dlls/msvcr70/Makefile.in  |  1 +
+ dlls/msvcr71/Makefile.in  |  1 +
+ dlls/msvcr80/Makefile.in  |  1 +
+ dlls/msvcr90/Makefile.in  |  1 +
+ dlls/msvcrt/Makefile.in   |  1 +
+ dlls/msvcrt/crt_init.c    | 51 +++++++++++++++++++++++++++++++++++++++
+ dlls/msvcrt/crt_main.c    |  2 ++
+ dlls/msvcrt/crt_wmain.c   |  2 ++
+ dlls/ucrtbase/Makefile.in |  1 +
+ 12 files changed, 64 insertions(+)
+ create mode 100644 dlls/msvcrt/crt_init.c
+
+diff --git a/dlls/msvcr100/Makefile.in b/dlls/msvcr100/Makefile.in
+index a0a3f64d6bf..34182e69f19 100644
+--- a/dlls/msvcr100/Makefile.in
++++ b/dlls/msvcr100/Makefile.in
+@@ -10,6 +10,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcr110/Makefile.in b/dlls/msvcr110/Makefile.in
+index e6798427795..fdbcba054d4 100644
+--- a/dlls/msvcr110/Makefile.in
++++ b/dlls/msvcr110/Makefile.in
+@@ -10,6 +10,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcr120/Makefile.in b/dlls/msvcr120/Makefile.in
+index b233753fa2e..3465d77a31e 100644
+--- a/dlls/msvcr120/Makefile.in
++++ b/dlls/msvcr120/Makefile.in
+@@ -10,6 +10,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcr70/Makefile.in b/dlls/msvcr70/Makefile.in
+index 9413738ae1f..be93d88764b 100644
+--- a/dlls/msvcr70/Makefile.in
++++ b/dlls/msvcr70/Makefile.in
+@@ -9,6 +9,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcr71/Makefile.in b/dlls/msvcr71/Makefile.in
+index 6e0b855cac3..c59ce97e8e4 100644
+--- a/dlls/msvcr71/Makefile.in
++++ b/dlls/msvcr71/Makefile.in
+@@ -9,6 +9,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcr80/Makefile.in b/dlls/msvcr80/Makefile.in
+index 2a84383f79d..78accf161e9 100644
+--- a/dlls/msvcr80/Makefile.in
++++ b/dlls/msvcr80/Makefile.in
+@@ -9,6 +9,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcr90/Makefile.in b/dlls/msvcr90/Makefile.in
+index d476d2e3080..3dfc080e554 100644
+--- a/dlls/msvcr90/Makefile.in
++++ b/dlls/msvcr90/Makefile.in
+@@ -9,6 +9,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcrt/Makefile.in b/dlls/msvcrt/Makefile.in
+index aa068b62e51..a4023568d71 100644
+--- a/dlls/msvcrt/Makefile.in
++++ b/dlls/msvcrt/Makefile.in
+@@ -9,6 +9,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+diff --git a/dlls/msvcrt/crt_init.c b/dlls/msvcrt/crt_init.c
+new file mode 100644
+index 00000000000..ffaffbfd7ad
+--- /dev/null
++++ b/dlls/msvcrt/crt_init.c
+@@ -0,0 +1,51 @@
++/* Utility functions for calling MSVC/MingW ctors & dtors from mainCRTStartup. */
++
++#if 0
++#pragma makedep implib
++#endif
++
++#include <process.h>
++#include <stdlib.h>
++#include "minwindef.h"
++
++#if defined(__GNUC__)
++/* Reference: mingw-w64-crt: crt/gccmain.c */
++typedef void (*fnptr)(void);
++extern fnptr __CTOR_LIST__[];
++extern fnptr __DTOR_LIST__[];
++#elif defined(_MSC_VER)
++extern _PVFV __xc_a[];
++extern _PVFV __xc_z[];
++extern _PVFV __xt_a[];
++extern _PVFV __xt_z[];
++#endif
++
++void CDECL _initterm(_PVFV *start,_PVFV *);
++
++static __cdecl void do_global_dtors(void)
++{
++#if defined(__GNUC__)
++    SIZE_T i;
++    for (i = 1; __DTOR_LIST__[i]; i++) __DTOR_LIST__[i]();
++#elif defined(_MSC_VER)
++    _initterm(__xt_a, __xt_z);
++#endif
++}
++
++void do_global_ctors(void)
++{
++#if defined(__GNUC__)
++    ULONG_PTR nfns = (ULONG_PTR)__CTOR_LIST__[0], i;
++    if (nfns == (ULONG_PTR)-1)
++        for (nfns = 0; __CTOR_LIST__[nfns + 1]; nfns++);
++    for (i = nfns; i >= 1; i--) __CTOR_LIST__[i]();
++#elif defined(_MSC_VER)
++    _initterm(__xc_a, __xc_z);
++#endif
++
++#ifdef _UCRT
++    _crt_atexit(do_global_dtors);
++#else
++    _onexit((_onexit_t)do_global_dtors);
++#endif
++}
+diff --git a/dlls/msvcrt/crt_main.c b/dlls/msvcrt/crt_main.c
+index eb785e30bb0..5eb9e5032a0 100644
+--- a/dlls/msvcrt/crt_main.c
++++ b/dlls/msvcrt/crt_main.c
+@@ -31,6 +31,7 @@
+ #include "winternl.h"
+ 
+ int __cdecl main(int argc, char **argv, char **env);
++void do_global_ctors( void );
+ 
+ static const IMAGE_NT_HEADERS *get_nt_header( void )
+ {
+@@ -54,6 +55,7 @@ int __cdecl mainCRTStartup(void)
+     __getmainargs(&argc, &argv, &env, 0, &new_mode);
+ #endif
+     _set_app_type(get_nt_header()->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI ? _crt_gui_app : _crt_console_app);
++    do_global_ctors();
+ 
+     ret = main(argc, argv, env);
+ 
+diff --git a/dlls/msvcrt/crt_wmain.c b/dlls/msvcrt/crt_wmain.c
+index 79755d1a6e9..71cc0e48ec7 100644
+--- a/dlls/msvcrt/crt_wmain.c
++++ b/dlls/msvcrt/crt_wmain.c
+@@ -31,6 +31,7 @@
+ #include "winternl.h"
+ 
+ int __cdecl wmain(int argc, WCHAR **argv, WCHAR **env);
++void do_global_ctors(void);
+ 
+ static const IMAGE_NT_HEADERS *get_nt_header( void )
+ {
+@@ -54,6 +55,7 @@ int __cdecl wmainCRTStartup(void)
+     __wgetmainargs(&argc, &argv, &env, 0, &new_mode);
+ #endif
+     _set_app_type(get_nt_header()->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI ? _crt_gui_app : _crt_console_app);
++    do_global_ctors();
+ 
+     ret = wmain(argc, argv, env);
+ 
+diff --git a/dlls/ucrtbase/Makefile.in b/dlls/ucrtbase/Makefile.in
+index a3bb54750af..1bd1073dcf1 100644
+--- a/dlls/ucrtbase/Makefile.in
++++ b/dlls/ucrtbase/Makefile.in
+@@ -9,6 +9,7 @@ SOURCES = \
+ 	console.c \
+ 	cpp.c \
+ 	crt_gccmain.c \
++	crt_init.c \
+ 	crt_main.c \
+ 	crt_winmain.c \
+ 	crt_wmain.c \
+-- 
+GitLab
+

@@ -187,7 +187,7 @@ index 1073041f595..d88c9172806 100644
 @@ -3767,6 +3787,10 @@ static void output_programs( struct makefile *make )
          output_filenames_obj_dir( make, objs );
          output_filenames( all_libs );
-         output_filename( "$(LDFLAGS)" );
+         output_filenames( ldflags );
 +        strncpy( program2, program, sizeof( program2 ) );
 +        program2[ sizeof( program2 ) - 1] = '\0';
 +        replace_char( program2, '-', '_' );

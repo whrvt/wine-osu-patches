@@ -51,7 +51,7 @@ index fc5ea70be0e..315a66e6b91 100644
 -            when = now.QuadPart - when;
 -        }
 +            when = -when;
-+            when -= 450; /* rough overhead adjustment */
++            /* when -= 450; rough overhead adjustment (disabled for now...) */
  
 -        /* Note that we yield after establishing the desired timeout, but
 -           we only care about the result of the yield for zero timeouts */

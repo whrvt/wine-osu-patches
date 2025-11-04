@@ -5,12 +5,12 @@ index 11111111111..11111111111 100644
 @@ -1767,7 +1767,7 @@ size_t server_init_process(void)
          req->unix_tid    = get_unix_tid();
          req->reply_fd    = reply_pipe;
-         req->wait_fd     = ntdll_get_thread_data()->wait_fd[1];
+         req->wait_fd     = data->wait_fd[1];
 -        req->debug_level = (TRACE_ON(server) != 0);
 +        req->_debug_level = (TRACE_ON(server) != 0);
          wine_server_set_reply( req, supported_machines, sizeof(supported_machines) );
-         ret = wine_server_call( req );
-         pid               = reply->pid;
+         if (!(ret = wine_server_call( req )))
+         {
 diff --git a/server/main.c b/server/main.c
 index 11111111111..11111111111 100644
 --- a/server/main.c

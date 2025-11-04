@@ -65,8 +65,8 @@ index 64494de55f4..c8f9c507e7b 100644
          wow_frame->Eip    = context->Eip;
 -        wow_frame->EFlags = context->EFlags;
 +        wow_frame->EFlags = arch_flags_reg_from_user( context->EFlags, IMAGE_FILE_MACHINE_I386 );
-         wow_frame->SegCs  = cs32_sel;
-         wow_frame->SegSs  = ds64_sel;
+         wow_frame->SegCs  = context->SegCs;
+         wow_frame->SegSs  = context->SegSs;
          cpu->Flags |= WOW64_CPURESERVED_FLAG_RESET_STATE;
 diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
 index c4086fdf20d..57fc07ee78f 100644

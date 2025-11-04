@@ -53,7 +53,7 @@ index 2980c26d01a..5d7ff1c646c 100644
          output( "  {\n" );
 -        output( "    \"command\": \"%s -c -o %s %s", cmd->cmd, cmd->obj, cmd->source );
 +        output( "    \"command\": \"%s -c -o %s %s", get_absolute_cmd_path( cmd->cmd ), cmd->obj, cmd->source );
-         for (i = 0; i < cmd->args.count; i++) output( " %s", escape_cstring( cmd->args.str[i] ));
+         STRARRAY_FOR_EACH( arg, &cmd->args ) output( " %s", escape_cstring( arg ));
          output( "\",\n" );
          output( "    \"file\": \"%s\",\n", cmd->source );
 diff --git a/tools/tools.h b/tools/tools.h

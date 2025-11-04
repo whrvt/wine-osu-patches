@@ -1,0 +1,57 @@
+From 2c77596ab9cc1c767f89b4f1c752686abdd8f6ab Mon Sep 17 00:00:00 2001
+From: Matteo Bruni <mbruni@codeweavers.com>
+Date: Mon, 1 Sep 2025 18:03:41 +0200
+Subject: [PATCH] ntoskrnl/tests: Test the thread ID the cancellation routine
+ runs from.
+
+---
+ dlls/ntoskrnl.exe/tests/driver.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index 326af858260..f30c340e9bd 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -1081,12 +1081,14 @@ static void test_call_driver(DEVICE_OBJECT *device)
+ }
+ 
+ static int cancel_cnt;
++static HANDLE thread_id;
+ 
+ static void WINAPI cancel_irp(DEVICE_OBJECT *device, IRP *irp)
+ {
+     IoReleaseCancelSpinLock(irp->CancelIrql);
+     ok(irp->Cancel == TRUE, "Cancel = %x\n", irp->Cancel);
+     ok(!irp->CancelRoutine, "CancelRoutine = %p\n", irp->CancelRoutine);
++    ok(PsGetCurrentThreadId() == thread_id, "Unexpected thread_id %p\n", PsGetCurrentThreadId());
+     irp->IoStatus.Status = STATUS_CANCELLED;
+     irp->IoStatus.Information = 0;
+     cancel_cnt++;
+@@ -1095,6 +1097,7 @@ static void WINAPI cancel_irp(DEVICE_OBJECT *device, IRP *irp)
+ static void WINAPI cancel_ioctl_irp(DEVICE_OBJECT *device, IRP *irp)
+ {
+     IoReleaseCancelSpinLock(irp->CancelIrql);
++    todo_wine ok(PsGetCurrentThreadId() == thread_id, "Unexpected thread_id %p\n", PsGetCurrentThreadId());
+     irp->IoStatus.Status = STATUS_CANCELLED;
+     irp->IoStatus.Information = 0;
+     cancel_cnt++;
+@@ -1117,6 +1120,8 @@ static void test_cancel_irp(DEVICE_OBJECT *device)
+     BOOLEAN r;
+     NTSTATUS status;
+ 
++    thread_id = PsGetCurrentThreadId();
++
+     /* cancel IRP with no cancel routine */
+     irp = IoBuildAsynchronousFsdRequest(IRP_MJ_FLUSH_BUFFERS, device, NULL, 0, NULL, &iosb);
+ 
+@@ -2714,6 +2719,7 @@ static NTSTATUS WINAPI driver_IoControl(DEVICE_OBJECT *device, IRP *irp)
+             status = STATUS_SUCCESS;
+             break;
+         case IOCTL_WINETEST_TEST_CANCEL:
++            thread_id = PsGetCurrentThreadId();
+             IoSetCancelRoutine(irp, cancel_ioctl_irp);
+             IoMarkIrpPending(irp);
+             return STATUS_PENDING;
+-- 
+GitLab
+

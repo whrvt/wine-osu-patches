@@ -194,15 +194,15 @@ index 5c5bb8f0602..f63a41c7f41 100644
 @@ -1111,6 +1111,11 @@ static BOOL x11drv_surface_create( HWND hwnd, int format, struct opengl_drawable **drawable )
      gl = opengl_drawable_create( sizeof(*gl), &x11drv_surface_funcs, format, client );
      client_surface_release( client );
-     if (!gl) goto failed;
+     if (!gl) return FALSE;
 +    /* lazy to find somewhere else to put this so that it doesn't show up more than once */
 +    static unsigned int once;
 +    if (!once++ && cursor_clip_hack)
 +         MESSAGE("XWayland absolute tablet hack enabled, which disables mouse confinement, and may cause cursor glitching\n\texport WINE_ENABLE_ABS_TABLET_HACK=0 to disable.\n");
 +
-     gl->colormap = colormap;
  
      if (!(gl->drawable = pglXCreateWindow( gdi_display, fmt->fbconfig, window, NULL )))
+     {
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
 index f7c012f7a0d..f3ca4486816 100644
 --- a/dlls/winex11.drv/window.c

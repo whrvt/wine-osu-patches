@@ -1,0 +1,133 @@
+From 79ce40c32df3534f4e681320e763b3ed53b601f9 Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Fri, 31 Oct 2025 17:57:26 -0600
+Subject: [PATCH] ntdll: Fix handling jmp in epilogue unwind on x64.
+
+---
+ dlls/ntdll/tests/unwind.c | 61 +++++++++++++++++++++++++++++++++++++++
+ dlls/ntdll/unwind.c       | 16 +++-------
+ 2 files changed, 65 insertions(+), 12 deletions(-)
+
+diff --git a/dlls/ntdll/tests/unwind.c b/dlls/ntdll/tests/unwind.c
+index 3962d16f4f2..87f4ca92131 100644
+--- a/dlls/ntdll/tests/unwind.c
++++ b/dlls/ntdll/tests/unwind.c
+@@ -3092,6 +3092,64 @@ static void test_virtual_unwind_x86(void)
+     };
+ #endif
+ 
++    static const BYTE function_6_1[] =
++    {
++        0x55,                     /* 00: push %rbp */
++        0x90,                     /* 01: nop */
++        0x5d,                     /* 02: pop %rbp */
++        0xeb, 0x02,               /* 03: jmp 06 */
++        0x90,                     /* 04: nop */
++        0xc3,                     /* 05: ret */
++     };
++
++    static const BYTE function_6_2[] =
++    {
++        0x55,                     /* 00: push %rbp */
++        0x90,                     /* 01: nop */
++        0x5d,                     /* 02: pop %rbp */
++        0xeb, 0x01,               /* 03: jmp 05 */
++        0x90,                     /* 04: nop */
++        0xc3,                     /* 05: ret */
++     };
++
++    static const BYTE function_6_3[] =
++    {
++        0x55,                     /* 00: push %rbp */
++        0x90,                     /* 01: nop */
++        0x5d,                     /* 02: pop %rbp */
++        0xe9, 0x55, 0x55, 0x55, 0x55, /* 03: jmp away */
++        0x90,                     /* 07: nop */
++        0xc3,                     /* 08: ret */
++     };
++
++    static const BYTE unwind_info_6[] =
++    {
++        1,                             /* version + flags */
++        0x1,                           /* prolog size */
++        1,                             /* opcode count */
++        0,                             /* frame reg */
++
++        0x01, UWOP(PUSH_NONVOL, rbp),  /* 02: push %rbp */
++    };
++
++    static const struct results_x86 results_6_epilogue[] =
++    {
++      /* offset  rbp   handler  rip   frame   registers */
++        { 0x00,  0x00,  FALSE, 0x000, 0x000, { {rsp,0x008}, {-1,-1} }},
++        { 0x01,  0x00,  FALSE, 0x008, 0x000, { {rsp,0x010}, {rbp,0x000}, {-1,-1} }},
++        { 0x02,  0x00,  FALSE, 0x008, 0x000, { {rsp,0x010}, {rbp,0x000}, {-1,-1} }},
++        { 0x03,  0x00,  FALSE, 0x000, 0x000, { {rsp,0x008}, {-1,-1} }},
++    };
++
++    static const struct results_x86 results_6_body[] =
++    {
++      /* offset  rbp   handler  rip   frame   registers */
++        { 0x00,  0x00,  FALSE, 0x000, 0x000, { {rsp,0x008}, {-1,-1} }},
++        { 0x01,  0x00,  FALSE, 0x008, 0x000, { {rsp,0x010}, {rbp,0x000}, {-1,-1} }},
++        { 0x02,  0x00,  FALSE, 0x008, 0x000, { {rsp,0x010}, {rbp,0x000}, {-1,-1} }},
++        { 0x03,  0x00,  FALSE, 0x008, 0x000, { {rsp,0x010}, {rbp,0x000}, {-1,-1} }},
++    };
++
+     static const struct unwind_test_x86 tests[] =
+     {
+         { function_0, sizeof(function_0), unwind_info_0, results_0, ARRAY_SIZE(results_0), broken_results_0 },
+@@ -3104,6 +3162,9 @@ static void test_virtual_unwind_x86(void)
+ #if 0  /* crashes before Win10 21H2 */
+         { function_5, sizeof(function_5), NULL,          results_5, ARRAY_SIZE(results_5) },
+ #endif
++        { function_6_1, sizeof(function_6_1), unwind_info_6, results_6_epilogue, ARRAY_SIZE(results_6_epilogue) },
++        { function_6_2, sizeof(function_6_2), unwind_info_6, results_6_body, ARRAY_SIZE(results_6_body) },
++        { function_6_3, sizeof(function_6_3), unwind_info_6, results_6_epilogue, ARRAY_SIZE(results_6_epilogue) },
+     };
+     unsigned int i;
+ 
+diff --git a/dlls/ntdll/unwind.c b/dlls/ntdll/unwind.c
+index 890de64b0e6..f4bdcf3512b 100644
+--- a/dlls/ntdll/unwind.c
++++ b/dlls/ntdll/unwind.c
+@@ -1905,14 +1905,10 @@ static BOOL is_inside_epilog( BYTE *pc, ULONG64 base, const RUNTIME_FUNCTION *fu
+             return TRUE;
+         case 0xe9: /* jmp nnnn */
+             pc += 5 + *(LONG *)(pc + 1);
+-            if (pc - (BYTE *)base >= function->BeginAddress && pc - (BYTE *)base < function->EndAddress)
+-                continue;
+-            break;
++            return !(pc - (BYTE *)base >= function->BeginAddress && pc - (BYTE *)base < function->EndAddress);
+         case 0xeb: /* jmp n */
+             pc += 2 + (signed char)pc[1];
+-            if (pc - (BYTE *)base >= function->BeginAddress && pc - (BYTE *)base < function->EndAddress)
+-                continue;
+-            break;
++            return !(pc - (BYTE *)base >= function->BeginAddress && pc - (BYTE *)base < function->EndAddress);
+         case 0xf3: /* rep; ret (for amd64 prediction bug) */
+             return pc[1] == 0xc3;
+         }
+@@ -1967,17 +1963,13 @@ static void interpret_epilog( BYTE *pc, CONTEXT *context, KNONVOLATILE_CONTEXT_P
+             context->Rip = *(ULONG64 *)context->Rsp;
+             context->Rsp += sizeof(ULONG64) + *(WORD *)(pc + 1);
+             return;
++        case 0xe9: /* jmp nnnn */
++        case 0xeb: /* jmp n */
+         case 0xc3: /* ret */
+         case 0xf3: /* rep; ret */
+             context->Rip = *(ULONG64 *)context->Rsp;
+             context->Rsp += sizeof(ULONG64);
+             return;
+-        case 0xe9: /* jmp nnnn */
+-            pc += 5 + *(LONG *)(pc + 1);
+-            continue;
+-        case 0xeb: /* jmp n */
+-            pc += 2 + (signed char)pc[1];
+-            continue;
+         }
+         return;
+     }
+-- 
+GitLab
+

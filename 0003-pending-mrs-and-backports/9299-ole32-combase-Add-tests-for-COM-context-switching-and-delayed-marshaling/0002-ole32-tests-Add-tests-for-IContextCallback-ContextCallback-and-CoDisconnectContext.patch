@@ -1,0 +1,328 @@
+From 13128afe229173a26d31d4580cff9efa7afd86eb Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Tue, 28 Oct 2025 19:18:35 +0530
+Subject: [PATCH] ole32/tests: Add tests for IContextCallback::ContextCallback
+ and CoDisconnectContext.
+
+---
+ dlls/ole32/tests/compobj.c | 283 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 283 insertions(+)
+
+diff --git a/dlls/ole32/tests/compobj.c b/dlls/ole32/tests/compobj.c
+index 2c4cc566f3a..811b7936530 100644
+--- a/dlls/ole32/tests/compobj.c
++++ b/dlls/ole32/tests/compobj.c
+@@ -72,6 +72,7 @@ DEFINE_EXPECT(PostUninitialize);
+ 
+ /* functions that are not present on all versions of Windows */
+ static HRESULT (WINAPI * pCoGetObjectContext)(REFIID riid, LPVOID *ppv);
++static HRESULT (WINAPI *pCoDisconnectContext)(DWORD);
+ static HRESULT (WINAPI * pCoSwitchCallContext)(IUnknown *pObject, IUnknown **ppOldObject);
+ static HRESULT (WINAPI * pCoGetContextToken)(ULONG_PTR *token);
+ static HRESULT (WINAPI * pCoGetApartmentType)(APTTYPE *type, APTTYPEQUALIFIER *qualifier);
+@@ -4065,6 +4066,7 @@ static void init_funcs(void)
+     HMODULE hkernel32 = GetModuleHandleA("kernel32");
+ 
+     pCoGetObjectContext = (void*)GetProcAddress(hOle32, "CoGetObjectContext");
++    pCoDisconnectContext = (void *)GetProcAddress(hOle32, "CoDisconnectContext");
+     pCoSwitchCallContext = (void*)GetProcAddress(hOle32, "CoSwitchCallContext");
+     pCoGetContextToken = (void*)GetProcAddress(hOle32, "CoGetContextToken");
+     pCoGetApartmentType = (void*)GetProcAddress(hOle32, "CoGetApartmentType");
+@@ -4472,6 +4474,286 @@ static void test_oletlsdata(void)
+             "Unexpected flags %#lx.\n", flags);
+ }
+ 
++void flush_events(void)
++{
++    int diff = 200;
++    DWORD time;
++    MSG msg;
++
++    time = GetTickCount() + diff;
++    while (diff > 0)
++    {
++        if (MsgWaitForMultipleObjects(0, NULL, FALSE, 100, QS_ALLINPUT) == WAIT_TIMEOUT)
++            break;
++        while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
++            DispatchMessageA(&msg);
++        diff = time - GetTickCount();
++    }
++}
++
++/* A simple-enough interface that inherits from IUnknown, to test IContextCallback. */
++struct root_storage
++{
++    IRootStorage IRootStorage_iface;
++    ULONG_PTR token;
++    APTTYPE type;
++    APTTYPEQUALIFIER qualifier;
++    LONG ref;
++};
++
++static inline struct root_storage *impl_from_IRootStorage(IRootStorage *impl)
++{
++    return CONTAINING_RECORD(impl, struct root_storage, IRootStorage_iface);
++}
++
++static HRESULT WINAPI root_storage_QueryInterface(IRootStorage *iface, const GUID *iid, void **out)
++{
++    struct root_storage *impl = impl_from_IRootStorage(iface);
++
++    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IRootStorage))
++    {
++        IRootStorage_AddRef((*out = &impl->IRootStorage_iface));
++        return S_OK;
++    }
++
++    *out = NULL;
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI root_storage_AddRef(IRootStorage *iface)
++{
++    struct root_storage *impl = impl_from_IRootStorage(iface);
++    return InterlockedIncrement(&impl->ref);
++}
++
++static ULONG WINAPI root_storage_Release(IRootStorage *iface)
++{
++    struct root_storage *impl = impl_from_IRootStorage(iface);
++    ULONG ref = InterlockedDecrement(&impl->ref);
++
++    if (!ref) free(impl);
++    return ref;
++}
++
++static HRESULT WINAPI root_storage_SwitchToFile(IRootStorage *iface, LPOLESTR file)
++{
++    struct root_storage *impl = impl_from_IRootStorage(iface);
++    APTTYPEQUALIFIER qualifier;
++    ULONG_PTR token;
++    APTTYPE type;
++    HRESULT hr;
++
++    hr = CoGetContextToken(&token);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++    /* The call takes place inside the context the object was created in. */
++    ok(token == impl->token, "got token %#Ix != %#Ix\n", token, impl->token);
++
++    hr = CoGetApartmentType(&type, &qualifier);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++    ok(type == impl->type, "got type %d != %d\n", type, impl->type);
++    ok(qualifier == impl->qualifier, "got qualifier %d != %d\n", qualifier, impl->qualifier);
++
++    return S_OK;
++}
++
++static const struct IRootStorageVtbl root_storage_vtbl =
++{
++    root_storage_QueryInterface,
++    root_storage_AddRef,
++    root_storage_Release,
++    root_storage_SwitchToFile
++};
++
++static HRESULT root_storage_create(IRootStorage **out, ULONG_PTR token, APTTYPE type, APTTYPEQUALIFIER qualifier)
++{
++    struct root_storage *impl;
++
++    if (!(impl = calloc(1, sizeof(*impl)))) return E_OUTOFMEMORY;
++    impl->IRootStorage_iface.lpVtbl = &root_storage_vtbl;
++    impl->token = token;
++    impl->type = type;
++    impl->qualifier = qualifier;
++    impl->ref = 1;
++    *out = &impl->IRootStorage_iface;
++    return S_OK;
++}
++
++struct context_callback_data
++{
++    APTTYPE from_type;
++    APTTYPEQUALIFIER from_qualifier;
++    ULONG_PTR from_token;
++    IStream *marshaled;
++};
++
++HRESULT CALLBACK create_object_callback(ComCallData *params)
++{
++    struct context_callback_data *data;
++    APTTYPEQUALIFIER qualifier;
++    ULONG_PTR cur_token;
++    IRootStorage *obj;
++    APTTYPE type;
++    ULONG count;
++    HRESULT hr;
++
++    ok(!!params, "got params %p\n", params);
++    data = params->pUserDefined;
++    ok(!!data, "got data %p\n", data);
++
++    hr = CoGetContextToken(&cur_token);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++    /* We are now inside a new context, but the same apartment. */
++    ok(cur_token != data->from_token, "got cur_token %#Ix\n", cur_token);
++
++    hr = CoGetApartmentType(&type, &qualifier);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++    ok(type == data->from_type, "got type %d != %d\n", type, data->from_type);
++    ok(qualifier == data->from_qualifier, "got qualifier %d != %d\n", qualifier, data->from_qualifier);
++
++    hr = root_storage_create(&obj, cur_token, type, qualifier);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++
++    hr = CoMarshalInterThreadInterfaceInStream(&IID_IRootStorage, (IUnknown *)obj, &data->marshaled);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++
++    count = IRootStorage_Release(obj);
++    ok(count == 4, "got count %lu\n", count);
++
++    return S_OK;
++}
++
++HRESULT CALLBACK disconnect_context_callback(ComCallData *data)
++{
++    return pCoDisconnectContext(100);
++}
++
++struct test_marshaled_data
++{
++    IStream *marshaled;
++    COINIT from_type;
++    COINIT to_type;
++};
++
++DEFINE_GUID(CLSID_ContextSwitcher, 0x0000034e,0x0000,0x0000,0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46);
++static DWORD CALLBACK test_marshaled(void *param)
++{
++    struct test_marshaled_data *data = param;
++    WCHAR *file = wcsdup(L"foo");
++    IStream *stream = data->marshaled;
++    IRootStorage *obj;
++    ULONG count;
++    HRESULT hr;
++
++    winetest_push_context("from_type=%#x, to_type=%#x", data->from_type, data->to_type);
++
++    hr = CoInitializeEx(NULL, data->to_type);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++
++    hr = CoGetInterfaceAndReleaseStream(stream, &IID_IRootStorage, (void **)&obj);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++
++    hr = IRootStorage_SwitchToFile(obj, file);
++    ok(hr == S_OK, "got hr %#lx\n", hr);
++
++    count = IRootStorage_Release(obj);
++    ok(count == 0, "got count %lu\n", count);
++
++    winetest_pop_context();
++
++    free(file);
++    return 0;
++}
++
++static void test_IContextCallback(void)
++{
++    static const COINIT apt_types[] = {COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
++    WCHAR *file = wcsdup(L"foo");
++    HRESULT hr;
++    int i, j;
++
++    for (i = 0; i < ARRAY_SIZE(apt_types); i++)
++    {
++        for (j = 0; j < ARRAY_SIZE(apt_types); j++)
++        {
++            struct test_marshaled_data data = {NULL, apt_types[i], apt_types[j]};
++            struct context_callback_data callback_data = {0};
++            ComCallData call_data = {0};
++            IContextCallback *context;
++            IRootStorage *obj;
++            HANDLE thread;
++            DWORD ret;
++
++            winetest_push_context("from_type=%#x, to_type=%#x", apt_types[i], apt_types[j]);
++            hr = CoInitializeEx(NULL, apt_types[i]);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++
++            hr = CoGetApartmentType(&callback_data.from_type, &callback_data.from_qualifier);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++
++            hr = CoGetContextToken(&callback_data.from_token);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++
++            /* Create a new context inside this apartment. */
++            hr = CoCreateInstance(&CLSID_ContextSwitcher, NULL, CLSCTX_INPROC_SERVER, &IID_IContextCallback, (void **)&context);
++            todo_wine ok(hr == S_OK, "got hr %#lx\n", hr);
++            if (FAILED(hr))
++            {
++                CoUninitialize();
++                winetest_pop_context();
++                continue;
++            }
++
++            /* Use ContextCallback to create and marshal and object bound to the new context.
++             * All methods in this object will be called inside the new context. */
++            call_data.pUserDefined = &callback_data;
++            hr = IContextCallback_ContextCallback(context, create_object_callback, &call_data, &IID_IContextCallback, 5, NULL);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++            data.marshaled = callback_data.marshaled;
++            thread = CreateThread(NULL, 0, test_marshaled, &data, 0, NULL);
++            flush_events();
++            ret = WaitForSingleObject(thread, 100);
++            ok(!ret, "got ret %lu\n", ret);
++            CloseHandle(thread);
++
++            hr = IContextCallback_ContextCallback(context, create_object_callback, &call_data, &IID_IContextCallback, 5, NULL);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++            hr = CoGetInterfaceAndReleaseStream(callback_data.marshaled, &IID_IRootStorage, (void **)&obj);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++            /* Calls within the same apartment through the marshaled pointer will *also* be wrapped within a
++             * context-switch. */
++            hr = IRootStorage_SwitchToFile(obj, file);
++            ok(hr == S_OK, "got hr %#lx\n", hr);
++            ret = IRootStorage_Release(obj);
++            ok(ret == 0, "got ret %lu\n", ret);
++
++            if (pCoDisconnectContext)
++            {
++                hr = IContextCallback_ContextCallback(context, create_object_callback, &call_data, &IID_IContextCallback, 5, NULL);
++                ok(hr == S_OK, "got hr %#lx\n", hr);
++                hr = CoGetInterfaceAndReleaseStream(callback_data.marshaled, &IID_IRootStorage, (void **)&obj);
++                ok(hr == S_OK, "got hr %#lx\n", hr);
++                /* Disonnect the proxy from its context. */
++                hr = IContextCallback_ContextCallback(context, disconnect_context_callback, &call_data, &IID_IContextCallback, 5, NULL);
++                ok(hr == S_OK, "got hr %#lx\n", hr);
++                /* All calls should now return RPC_E_DISCONNECTED. */
++                hr = IRootStorage_SwitchToFile(obj, file);
++                ok(hr == RPC_E_DISCONNECTED, "got hr %#lx\n", hr);
++                ret = IRootStorage_Release(obj);
++                ok(ret == 0, "got ret %lu\n", ret);
++            }
++            else
++                todo_wine win_skip("CoDisconnectContext not available\n");
++
++            ret = IContextCallback_Release(context);
++            ok(ret == 0, "got ret %lu\n", ret);
++            CoUninitialize();
++            winetest_pop_context();
++        }
++    }
++
++    free(file);
++}
++
+ START_TEST(compobj)
+ {
+     init_funcs();
+@@ -4524,6 +4806,7 @@ START_TEST(compobj)
+     test_mta_usage();
+     test_CoCreateInstanceFromApp();
+     test_call_cancellation();
++    test_IContextCallback();
+ 
+     DeleteFileA( testlib );
+ }
+-- 
+GitLab
+

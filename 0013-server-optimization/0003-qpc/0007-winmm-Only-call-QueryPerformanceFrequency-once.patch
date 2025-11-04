@@ -1,16 +1,16 @@
 From 0b23c1488f302577e17dd8d1821f524959e6bcb3 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Thu, 4 Mar 2021 12:39:58 +0100
-Subject: [PATCH 7/9] winmm: Only call QueryPerformanceFrequency once.
+Subject: [PATCH 7/9] kernel32: Only call QueryPerformanceFrequency once.
 
 ---
- dlls/winmm/time.c | 5 +++--
+ dlls/kernel32/sync.c | 5 +++--
  1 file changed, 3 insertions(+), 2 deletions(-)
 
-diff --git a/dlls/winmm/time.c b/dlls/winmm/time.c
+diff --git a/dlls/kernel32/sync.c b/dlls/kernel32/sync.c
 index 11111111111..11111111111 100644
---- a/dlls/winmm/time.c
-+++ b/dlls/winmm/time.c
+--- a/dlls/kernel32/sync.c
++++ b/dlls/kernel32/sync.c
 @@ -254,10 +254,11 @@ MMRESULT WINAPI timeGetSystemTime(LPMMTIME lpTime, UINT wSize)
   */
  DWORD WINAPI timeGetTime(void)

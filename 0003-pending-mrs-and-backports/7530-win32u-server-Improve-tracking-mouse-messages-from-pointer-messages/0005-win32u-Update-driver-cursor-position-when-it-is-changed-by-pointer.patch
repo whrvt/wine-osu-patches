@@ -1,0 +1,210 @@
+From 1a48c3ed403748c61cf3a78f407371a67751968b Mon Sep 17 00:00:00 2001
+From: Paul Gofman <pgofman@codeweavers.com>
+Date: Mon, 3 Mar 2025 17:46:13 -0600
+Subject: [PATCH] win32u: Update driver cursor position when it is changed by
+ pointer.
+
+---
+ dlls/win32u/input.c | 36 +++++++++++++++++++++++++-----------
+ server/protocol.def |  2 ++
+ server/queue.c      | 36 ++++++++++++++++++++++++------------
+ 3 files changed, 51 insertions(+), 23 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index f464892cdc0..abd761972a0 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -729,27 +729,33 @@ BOOL WINAPI NtUserSetCursorPos( INT x, INT y )
+     return ret;
+ }
+ 
++static BOOL get_shared_cursor_pos( POINT *pt, DWORD *last_change )
++{
++    struct object_lock lock = OBJECT_LOCK_INIT;
++    const desktop_shm_t *desktop_shm;
++    NTSTATUS status;
++
++    while ((status = get_shared_desktop( &lock, &desktop_shm )) == STATUS_PENDING)
++    {
++        pt->x = desktop_shm->cursor.x;
++        pt->y = desktop_shm->cursor.y;
++        *last_change = desktop_shm->cursor.last_change;
++    }
++    return !status;
++}
++
+ /***********************************************************************
+  *	     NtUserGetCursorPos (win32u.@)
+  */
+ BOOL WINAPI NtUserGetCursorPos( POINT *pt )
+ {
+-    struct object_lock lock = OBJECT_LOCK_INIT;
+-    const desktop_shm_t *desktop_shm;
+     BOOL ret = TRUE;
+     DWORD last_change = 0;
+-    NTSTATUS status;
+     RECT rect;
+ 
+     if (!pt) return FALSE;
+ 
+-    while ((status = get_shared_desktop( &lock, &desktop_shm )) == STATUS_PENDING)
+-    {
+-        pt->x = desktop_shm->cursor.x;
+-        pt->y = desktop_shm->cursor.y;
+-        last_change = desktop_shm->cursor.last_change;
+-    }
+-    if (status) return FALSE;
++    if (!get_shared_cursor_pos( pt, &last_change )) return FALSE;
+ 
+     /* query new position from graphics driver if we haven't updated recently */
+     if (NtGetTickCount() - last_change > 100) ret = user_driver->pGetCursorPos( pt );
+@@ -2598,14 +2604,22 @@ BOOL WINAPI NtUserIsMouseInPointerEnabled(void)
+ 
+ void update_mouse_state_from_pointer( HWND hwnd, UINT msg, unsigned int pointer_id )
+ {
++    BOOL update_cursor_pos = FALSE;
++    DWORD last_change;
++    POINT pt = { 0 };
++
+     SERVER_START_REQ( track_mouse_from_pointer )
+     {
+         req->win = wine_server_user_handle( hwnd );
+         req->msg = msg;
+         req->pointer_id = pointer_id;
+-        wine_server_call( req );
++        if (!wine_server_call( req )) update_cursor_pos = reply->cursor_pos_updated;
+     }
+     SERVER_END_REQ;
++
++    if (!update_cursor_pos) return;
++    if (get_shared_cursor_pos( &pt, &last_change ))
++        user_driver->pSetCursorPos( pt.x, pt.y );
+ }
+ 
+ static BOOL is_captured_by_system(void)
+diff --git a/server/protocol.def b/server/protocol.def
+index 48f812b2e04..67c87d8afb5 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -2316,6 +2316,8 @@ enum message_type
+     user_handle_t   win;        /* window handle */
+     unsigned int    msg;        /* message code */
+     unsigned int    pointer_id; /* pointer id */
++@REPLY
++    int             cursor_pos_updated; /* cursor position updated */
+ @END
+ 
+ 
+diff --git a/server/queue.c b/server/queue.c
+index d6643072014..8273e24d51d 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -107,6 +107,7 @@ struct pointer_state
+     int button_msg_sent;        /* mouse button message was already sent */
+     int x;                      /* last seen pointer x coordinate */
+     int y;                      /* last seen pointer y coordinate */
++    int cursor_pos_updated;     /* updated mouse cursor position since last client tracking request */
+ };
+ 
+ struct thread_input
+@@ -2621,7 +2622,7 @@ static void queue_mouse_message_from_pointer( struct desktop *desktop, unsigned
+         queue_hardware_message( desktop, msg, 1 );
+ }
+ 
+-static void track_mouse_message_from_pointer( struct thread_input *input, unsigned int pointer_id,
++static int track_mouse_message_from_pointer( struct thread_input *input, unsigned int pointer_id,
+                                               unsigned int input_message )
+ {
+     struct pointer_state *state = &input->pointer_state;
+@@ -2631,44 +2632,47 @@ static void track_mouse_message_from_pointer( struct thread_input *input, unsign
+     struct pointer *pointer;
+     int pointer_moved;
+ 
+-    if (!input) return;
++    if (!input) return 0;
+     if (input_message == WM_POINTERUP)
+     {
+         /* hardware pointer might be destroyed at this moment so don't rely on its presence */
+-        if (pointer_id != state->pointer_id) return;
++        if (pointer_id != state->pointer_id) return 0;
+         if (!state->button_msg_sent)
+         {
+             queue_mouse_message_from_pointer( desktop, WM_MOUSEMOVE, state->x, state->y, state->pointer_win, time );
+             queue_mouse_message_from_pointer( desktop, WM_LBUTTONDOWN, state->x, state->y, state->pointer_win, time );
++            state->cursor_pos_updated = 1;
+         }
+         else if (state->x != desktop_shm->cursor.x || state->y != desktop_shm->cursor.y)
+         {
+             queue_mouse_message_from_pointer( desktop, WM_MOUSEMOVE, state->x, state->y, state->pointer_win, time );
++            state->cursor_pos_updated = 1;
+         }
+         queue_mouse_message_from_pointer( desktop, WM_LBUTTONUP, state->x, state->y, state->pointer_win, time );
+         state->pointer_id = ~0u;
+-        return;
++        return 1;
+     }
+ 
+-    if (input_message != WM_POINTERDOWN && state->pointer_id != pointer_id) return;
++    if (input_message != WM_POINTERDOWN && state->pointer_id != pointer_id) return 0;
+ 
+-    if (!(pointer = find_pointer_from_id( desktop, pointer_id, 0 ))) return;
++    if (!(pointer = find_pointer_from_id( desktop, pointer_id, 0 ))) return 0;
+     if (input_message == WM_POINTERDOWN)
+     {
+         if (state->pointer_id != pointer_id && list_count( &desktop->pointers ) > 1)
+         {
+             if (!state->button_msg_sent) state->pointer_id = ~0u;
+-            return;
++            return 0;
+         }
+         state->pointer_id = pointer_id;
+         state->pointer_win = pointer->win;
+         state->x = pointer->x;
+         state->y = pointer->y;
+         state->button_msg_sent = 0;
+-        return;
++        state->cursor_pos_updated = 0;
++        return 1;
+     }
+ 
+-    if (input_message != WM_POINTERUPDATE) return;
++    if (input_message != WM_POINTERUPDATE) return 0;
+     state->pointer_win = pointer->win;
+ 
+     pointer_moved = state->x != pointer->x || state->y != pointer->y;
+@@ -2681,14 +2685,18 @@ static void track_mouse_message_from_pointer( struct thread_input *input, unsign
+             /* TODO: emulate right button and double clicks. */
+             queue_mouse_message_from_pointer( desktop, WM_LBUTTONDOWN, state->x, state->y, state->pointer_win, time );
+             state->button_msg_sent = 1;
++            state->cursor_pos_updated = 1;
+         }
+         state->x = pointer->x;
+         state->y = pointer->y;
+     }
+     if (pointer_moved || (state->button_msg_sent
+                           && (state->x != desktop_shm->cursor.x || state->y != desktop_shm->cursor.y)))
++    {
+         queue_mouse_message_from_pointer( desktop, WM_MOUSEMOVE, state->x, state->y, state->pointer_win, time );
+-    return;
++        state->cursor_pos_updated = 1;
++    }
++    return 1;
+ }
+ 
+ static void queue_pointer_message( struct pointer *pointer, int repeated );
+@@ -4355,6 +4363,10 @@ DECL_HANDLER(track_mouse_from_pointer)
+ {
+     struct msg_queue *queue = get_current_queue();
+ 
+-    if (queue && check_queue_input_window( queue, req->win ))
+-        track_mouse_message_from_pointer( queue->input, req->pointer_id, req->msg );
++    if (queue && check_queue_input_window( queue, req->win )
++        && track_mouse_message_from_pointer( queue->input, req->pointer_id, req->msg ))
++    {
++        reply->cursor_pos_updated = queue->input->pointer_state.cursor_pos_updated;
++        queue->input->pointer_state.cursor_pos_updated = 0;
++    }
+ }
+-- 
+GitLab
+

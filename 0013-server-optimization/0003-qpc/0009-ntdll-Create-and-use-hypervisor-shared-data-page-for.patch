@@ -83,8 +83,8 @@ index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
 @@ -2077,6 +2077,7 @@ static void start_main_thread(void)
-     fsync_init();
-     esync_init();
+     dbg_init();
+     startup_info_size = server_init_process();
      virtual_map_user_shared_data();
 +    virtual_map_hypervisor_shared_data();
      init_cpu_info();
@@ -118,13 +118,13 @@ index 11111111111..11111111111 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
 @@ -168,6 +168,7 @@ extern BOOL process_exiting;
- extern HANDLE keyed_event;
+ extern int inproc_device_fd;
  extern timeout_t server_start_time;
  extern sigset_t server_block_set;
 +extern void *hypervisor_shared_data;
+ extern pthread_mutex_t fd_cache_mutex;
  extern struct _KUSER_SHARED_DATA *user_shared_data;
- extern SYSTEM_CPU_INFORMATION cpu_info;
- #ifdef __i386__
+ 
 @@ -248,6 +249,7 @@ extern NTSTATUS virtual_set_tls_information( PROCESS_TLS_INFORMATION *t );
  extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, ULONG_PTR limit_low, ULONG_PTR limit_high,
                                              SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page );
