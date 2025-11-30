@@ -36,9 +36,9 @@ index 33baed3dc23..b9e00d78cbf 100644
      NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
  
 +    cursor_clip_hack = use_cursor_clip_hack();
+     init_startup_info();
      shared_session_init();
      gdi_init();
-     sysparams_init();
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
 index d94f0da56a0..12802e99af7 100644
 --- a/dlls/win32u/input.c

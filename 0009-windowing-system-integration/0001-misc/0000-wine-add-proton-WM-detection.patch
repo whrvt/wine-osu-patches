@@ -145,10 +145,10 @@ index 0e617d4..d0c6989 100644
      SERVER_START_REQ( get_window_rectangles )
      {
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index b6255c2..41f6ee8 100644
+index 414373eaed7..0b7ea062671 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -473,11 +473,13 @@ enum x11drv_atoms
+@@ -498,11 +498,13 @@ enum x11drv_atoms
      XATOM_TEXT,
      XATOM_TIMESTAMP,
      XATOM_UTF8_STRING,
@@ -159,10 +159,10 @@ index b6255c2..41f6ee8 100644
      XATOM_WM_PROTOCOLS,
      XATOM_WM_DELETE_WINDOW,
 +    XATOM_WM_NAME,
+     XATOM_WM_HINTS,
+     XATOM_WM_NORMAL_HINTS,
      XATOM_WM_STATE,
-     XATOM_WM_TAKE_FOCUS,
-     XATOM_DndProtocol,
-@@ -488,6 +490,7 @@ enum x11drv_atoms
+@@ -516,6 +518,7 @@ enum x11drv_atoms
      XATOM__NET_STARTUP_INFO_BEGIN,
      XATOM__NET_STARTUP_INFO,
      XATOM__NET_SUPPORTED,
@@ -170,7 +170,7 @@ index b6255c2..41f6ee8 100644
      XATOM__NET_SYSTEM_TRAY_OPCODE,
      XATOM__NET_SYSTEM_TRAY_S0,
      XATOM__NET_SYSTEM_TRAY_VISUAL,
-@@ -539,6 +542,7 @@ enum x11drv_atoms
+@@ -567,6 +570,7 @@ enum x11drv_atoms
      XATOM_WCF_SYLK,
      XATOM_WCF_TIFF,
      XATOM_WCF_WAVE,
@@ -178,8 +178,8 @@ index b6255c2..41f6ee8 100644
      XATOM_image_bmp,
      XATOM_image_gif,
      XATOM_image_jpeg,
-@@ -650,6 +654,9 @@ struct x11drv_win_data
-     unsigned long configure_serial;    /* serial of last pending configure request */
+@@ -699,6 +703,9 @@ struct x11drv_win_data
+     unsigned long net_wm_icon_serial;  /* serial of last pending _NET_WM_ICON request */
  };
  
 +extern BOOL wm_is_mutter(Display *);
@@ -189,10 +189,10 @@ index b6255c2..41f6ee8 100644
  extern void release_win_data( struct x11drv_win_data *data );
  extern void set_window_parent( struct x11drv_win_data *data, Window parent );
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index e58d3af..c017485 100644
+index bb6413e2679..96e2f5118f3 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-@@ -114,11 +114,13 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -117,11 +117,13 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
      "TEXT",
      "TIMESTAMP",
      "UTF8_STRING",
@@ -203,10 +203,10 @@ index e58d3af..c017485 100644
      "WM_PROTOCOLS",
      "WM_DELETE_WINDOW",
 +    "WM_NAME",
+     "WM_HINTS",
+     "WM_NORMAL_HINTS",
      "WM_STATE",
-     "WM_TAKE_FOCUS",
-     "DndProtocol",
-@@ -129,6 +131,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -135,6 +137,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
      "_NET_STARTUP_INFO_BEGIN",
      "_NET_STARTUP_INFO",
      "_NET_SUPPORTED",
@@ -214,7 +214,7 @@ index e58d3af..c017485 100644
      "_NET_SYSTEM_TRAY_OPCODE",
      "_NET_SYSTEM_TRAY_S0",
      "_NET_SYSTEM_TRAY_VISUAL",
-@@ -180,6 +183,7 @@ static const char * const atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -186,6 +189,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
      "WCF_SYLK",
      "WCF_TIFF",
      "WCF_WAVE",

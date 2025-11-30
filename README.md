@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-82275b13](https://gitlab.winehq.org/wine/wine/-/tree/82275b13a24613947d1da00cd85209dbfaf5465f)
+wine commit: [wine-4dfbf077](https://gitlab.winehq.org/wine/wine/-/tree/4dfbf077cf708e4bbffa8e086d78d6652bbd69d8)
 
-staging commit: [staging-2d58cc0e](https://gitlab.winehq.org/wine/wine-staging/-/tree/2d58cc0eb9975536f8adf291facf327ebd5c919a)
+staging commit: [staging-54f4c57f](https://gitlab.winehq.org/wine/wine-staging/-/tree/54f4c57fd6d8724b72c091c9f714795cd763ba45)
 
-Staging exclude flags: `-W ntdll-Serial_Port_Detection -W oleaut32_VarAdd -W winedevice-Default_Drivers -W dsound-EAX -W ntdll-Junction_Points -W mountmgr-DosDevices -W ntdll-NtDevicePath -W ws2_32-af_unix`
+Staging exclude flags: `-W user32-msgbox-Support-WM_COPY-mesg -W winedevice-Default_Drivers -W dsound-EAX -W mountmgr-DosDevices`
 
 # Environment variables
 
@@ -139,6 +139,16 @@ Depends on Proton's WM detection. KDE seems to not be affected by this.
 Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
 ```
 
+## WINE_HOST_XDG_CACHE_HOME
+
+Patch: [ps0341-appwiz.cpl-Try-getting-the-cache-directory-from-an.patch](0013-server-optimization/0001-misc/ps0341-appwiz.cpl-Try-getting-the-cache-directory-from-an.patch)
+
+### Commit message
+
+```
+appwiz.cpl: Try getting the cache directory from an environment variable first.
+```
+
 ## WINE_INSTALL_ROOT_DEVICES
 
 Patch: [wineboot-Skip-root-device-installation-if-WINE_INSTA.patch](9000-misc-additions/wineboot-Skip-root-device-installation-if-WINE_INSTA.patch)
@@ -222,16 +232,6 @@ add WINE_WAYLAND_DISPLAY_INDEX
 ### Type
 
 `numeric`
-
-## XDG_CACHE_HOME
-
-Patch: [ps0341-appwiz.cpl-Try-getting-the-cache-directory-from-an.patch](0013-server-optimization/0001-misc/ps0341-appwiz.cpl-Try-getting-the-cache-directory-from-an.patch)
-
-### Commit message
-
-```
-appwiz.cpl: Try getting the cache directory from an environment variable first.
-```
 
 ## vblank_mode
 

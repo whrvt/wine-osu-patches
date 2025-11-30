@@ -35,19 +35,19 @@ index a05082e..2527ba2 100644
      freq_per_frame = freq_per_sec.QuadPart / mode.refresh_rate;
      /* Assume 20 scan lines in the vertical blank. */
 diff --git a/dlls/winex11.drv/display.c b/dlls/winex11.drv/display.c
-index 6b92e04..e9b3d88 100644
+index f891de4ba21..b9adf0d4640 100644
 --- a/dlls/winex11.drv/display.c
 +++ b/dlls/winex11.drv/display.c
-@@ -95,7 +95,7 @@ static BOOL nores_get_modes( x11drv_settings_id id, DWORD flags, DEVMODEW **new_
-     modes[0].dmPelsWidth = primary.right;
-     modes[0].dmPelsHeight = primary.bottom;
-     modes[0].dmDisplayFlags = 0;
--    modes[0].dmDisplayFrequency = 60;
-+    modes[0].dmDisplayFrequency = 600;
+@@ -95,7 +95,7 @@ static BOOL nores_get_modes( x11drv_settings_id id, DWORD flags, struct x11drv_m
+     modes[0].mode.dmPelsWidth = primary.right;
+     modes[0].mode.dmPelsHeight = primary.bottom;
+     modes[0].mode.dmDisplayFlags = 0;
+-    modes[0].mode.dmDisplayFrequency = 60;
++    modes[0].mode.dmDisplayFrequency = 600;
  
      *new_modes = modes;
      *mode_count = 1;
-@@ -131,7 +131,7 @@ static BOOL nores_get_current_mode(x11drv_settings_id id, DEVMODEW *mode)
+@@ -126,7 +126,7 @@ static BOOL nores_get_current_mode(x11drv_settings_id id, DEVMODEW *mode)
      mode->dmBitsPerPel = screen_bpp;
      mode->dmPelsWidth = primary.right;
      mode->dmPelsHeight = primary.bottom;

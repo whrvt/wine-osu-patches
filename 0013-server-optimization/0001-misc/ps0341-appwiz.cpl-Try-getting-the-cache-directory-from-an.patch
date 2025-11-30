@@ -50,7 +50,7 @@ index 11111111111..11111111111 100644
      WCHAR *cache_dir=NULL, *ret;
      size_t len, size;
  
--    xdg_dir = _wgetenv( L"XDG_CACHE_HOME" );
+-    xdg_dir = _wgetenv( L"WINE_HOST_XDG_CACHE_HOME" );
 -    if (xdg_dir && *xdg_dir)
 +    if (addon->cache_dir_env_var && (env_var = _wgetenv( addon->cache_dir_env_var )) && env_var && *env_var)
 +    {
@@ -59,7 +59,7 @@ index 11111111111..11111111111 100644
 +        lstrcatW( cache_dir, env_var );
 +        TRACE("cache dir %s\n", debugstr_w(cache_dir));
 +    }
-+    else if ((xdg_dir = _wgetenv( L"XDG_CACHE_HOME" )) && xdg_dir && *xdg_dir)
++    else if ((xdg_dir = _wgetenv( L"WINE_HOST_XDG_CACHE_HOME" )) && xdg_dir && *xdg_dir)
      {
          if (!(cache_dir = HeapAlloc( GetProcessHeap(), 0, wcslen(xdg_dir) * sizeof(WCHAR) + sizeof(L"\\\\?\\unix") ))) return NULL;
          lstrcpyW( cache_dir, L"\\\\?\\unix" );

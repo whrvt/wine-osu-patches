@@ -1,36 +1,18 @@
-From 03d8093192514b300eea40f834711ab308562acc Mon Sep 17 00:00:00 2001
+From 6d54b03f901c6af2a2e7faa0b18be44659576ec1 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Mon, 12 May 2025 14:49:01 -0600
 Subject: [PATCH] user32/tests: Add tests for NULL invalidated rect with window
  resize.
 
 ---
- dlls/user32/tests/win.c | 137 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 137 insertions(+)
+ dlls/user32/tests/win.c | 126 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 126 insertions(+)
 
 diff --git a/dlls/user32/tests/win.c b/dlls/user32/tests/win.c
-index 7d84bef71d7..8ccf2f8cdf3 100644
+index 354d6ed5ca3..061c37cfa35 100644
 --- a/dlls/user32/tests/win.c
 +++ b/dlls/user32/tests/win.c
-@@ -127,6 +127,17 @@ static void flush_events( BOOL remove_messages )
-     }
- }
- 
-+static void pump_messages(void)
-+{
-+    MSG msg;
-+
-+    while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
-+    {
-+        TranslateMessage(&msg);
-+        DispatchMessageA(&msg);
-+    }
-+}
-+
- /* check the values returned by the various parent/owner functions on a given window */
- static void check_parents( HWND hwnd, HWND ga_parent, HWND gwl_parent, HWND get_parent,
-                            HWND gw_owner, HWND ga_root, HWND ga_root_owner )
-@@ -10882,6 +10893,8 @@ static void test_update_region(void)
+@@ -10934,6 +10934,8 @@ static void test_update_region(void)
      const RECT rc = {15, 15, 40, 40};
      const POINT wnd_orig = {30, 20};
      const POINT child_orig = {10, 5};
@@ -39,7 +21,7 @@ index 7d84bef71d7..8ccf2f8cdf3 100644
  
      parent = CreateWindowExA(0, "MainWindowClass", NULL,
                  WS_VISIBLE | WS_CLIPCHILDREN,
-@@ -10939,7 +10952,131 @@ static void test_update_region(void)
+@@ -10991,7 +10993,131 @@ static void test_update_region(void)
  
      DeleteObject(rgn1);
      DeleteObject(rgn2);
