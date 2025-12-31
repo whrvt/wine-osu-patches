@@ -1,16 +1,3 @@
-diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
-index 11111111111..11111111111 100644
---- a/dlls/ntdll/unix/env.c
-+++ b/dlls/ntdll/unix/env.c
-@@ -1884,7 +1884,7 @@ static void init_peb( RTL_USER_PROCESS_PARAMETERS *params, void *module )
-         NtCurrentTeb()->Tib.ExceptionList = (void *)((char *)NtCurrentTeb() + teb_offset);
-         wow_peb = (PEB32 *)((char *)peb + page_size);
-         set_thread_id( NtCurrentTeb(), GetCurrentProcessId(), GetCurrentThreadId() );
--        ERR( "starting %s in experimental wow64 mode\n", debugstr_us(&params->ImagePathName) );
-+        WARN( "starting %s in experimental wow64 mode\n", debugstr_us(&params->ImagePathName) );
-         break;
-     case IMAGE_FILE_MACHINE_AMD64:
-         if (main_image_info.Machine == current_machine) break;
 diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
 index 11111111111..11111111111 100644
 --- a/dlls/kernelbase/debug.c

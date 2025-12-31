@@ -4,22 +4,29 @@ Date: Thu, 20 Nov 2025 21:48:25 -0800
 Subject: [PATCH] include: Allow force-disabling compiler exceptions.
 
 ---
- include/excpt.h | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ include/excpt.h | 2 ++
+ 1 file changed, 2 insertions(+)
 
 diff --git a/include/excpt.h b/include/excpt.h
-index 17c7409c636..59fc2475abd 100644
+index 55de1ab0779..54328389e95 100644
 --- a/include/excpt.h
 +++ b/include/excpt.h
-@@ -38,7 +38,7 @@ typedef enum _EXCEPTION_DISPOSITION
+@@ -37,6 +37,7 @@ typedef enum _EXCEPTION_DISPOSITION
+ #define EXCEPTION_CONTINUE_SEARCH        0
  #define EXCEPTION_CONTINUE_EXECUTION    -1
  
- 
--#if !defined(USE_COMPILER_EXCEPTIONS) && defined(_MSC_VER) && !defined(__i386__) && !defined(__arm__) && (!defined(__clang_major__) || __clang_major__ >= 19)
-+#if !defined(NO_COMPILER_EXCEPTIONS) && !defined(USE_COMPILER_EXCEPTIONS) && defined(_MSC_VER) && !defined(__i386__) && !defined(__arm__) && (!defined(__clang_major__) || __clang_major__ >= 19)
++#ifndef NO_COMPILER_EXCEPTIONS
+ #if !defined(USE_COMPILER_EXCEPTIONS) && defined(_MSC_VER)
+ #if !defined(__clang_major__) || \
+     (defined(__x86_64__) && !defined(__arm64ec__) && __clang_major__ >= 19) || \
+@@ -45,6 +46,7 @@ typedef enum _EXCEPTION_DISPOSITION
  #define USE_COMPILER_EXCEPTIONS
  #endif
+ #endif
++#endif
  
+ #ifdef USE_COMPILER_EXCEPTIONS
+ #define GetExceptionCode    _exception_code
 -- 
 2.51.2
 

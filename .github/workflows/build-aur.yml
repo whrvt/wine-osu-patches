@@ -138,10 +138,10 @@ jobs:
         sudo -u builder bash << EOF
         if ! paru --version 1>/dev/null; then
           cd ${{ env.PARU_CACHE }}/clone
-          if [ ! -d "paru-bin" ]; then
-            git clone https://aur.archlinux.org/paru-bin.git
+          if [ ! -d "paru" ]; then
+            git clone https://aur.archlinux.org/paru.git
           fi
-          cd paru-bin
+          cd paru
           makepkg -si --noconfirm --nocheck
         else
           echo "paru already installed, skipping build"

@@ -1,10 +1,10 @@
 # Patchset context
 
-wine commit: [wine-4dfbf077](https://gitlab.winehq.org/wine/wine/-/tree/4dfbf077cf708e4bbffa8e086d78d6652bbd69d8)
+wine commit: [wine-a82d717c](https://gitlab.winehq.org/wine/wine/-/tree/a82d717ce63965bec9a06eb1452b3d09b78a6021)
 
-staging commit: [staging-54f4c57f](https://gitlab.winehq.org/wine/wine-staging/-/tree/54f4c57fd6d8724b72c091c9f714795cd763ba45)
+staging commit: [staging-52bc59da](https://gitlab.winehq.org/wine/wine-staging/-/tree/52bc59da118fa2b9584b5e54c416bbb055306e00)
 
-Staging exclude flags: `-W user32-msgbox-Support-WM_COPY-mesg -W winedevice-Default_Drivers -W dsound-EAX -W mountmgr-DosDevices`
+Staging exclude flags: `-W winedevice-Default_Drivers -W dsound-EAX -W mountmgr-DosDevices`
 
 # Environment variables
 

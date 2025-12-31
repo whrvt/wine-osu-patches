@@ -1,0 +1,175 @@
+From dfc04172c8f08854304c444d678ee33f446604ed Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Thu, 30 Oct 2025 15:20:49 +0530
+Subject: [PATCH] combase/tests: Add tests for Ro{Get,Set}ErrorReportingFlags.
+
+---
+ dlls/combase/tests/roapi.c | 145 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 145 insertions(+)
+
+diff --git a/dlls/combase/tests/roapi.c b/dlls/combase/tests/roapi.c
+index e4100cb11bc..6ba30ad87a7 100644
+--- a/dlls/combase/tests/roapi.c
++++ b/dlls/combase/tests/roapi.c
+@@ -639,6 +639,150 @@ static void test_RoGetErrorReportingFlags(void)
+     ok(flags == RO_ERROR_REPORTING_USESETERRORINFO, "Got unexpected flag %#x.\n", flags);
+ }
+ 
++static const RO_ERROR_REPORTING_FLAGS test_flags[] = {
++    RO_ERROR_REPORTING_SUPPRESSEXCEPTIONS,
++    RO_ERROR_REPORTING_FORCEEXCEPTIONS,
++    RO_ERROR_REPORTING_FORCEEXCEPTIONS,
++    RO_ERROR_REPORTING_USESETERRORINFO,
++    RO_ERROR_REPORTING_SUPPRESSSETERRORINFO
++};
++
++#define set_error_reporting_flags(f) set_error_reporting_flags_(__LINE__, f)
++static void set_error_reporting_flags_(int line, UINT32 flags)
++{
++    UINT32 new_flags = ~flags;
++    HRESULT hr;
++
++    hr = RoSetErrorReportingFlags(flags);
++    ok_(__FILE__, line)(hr == S_OK, "RoSetErrorReportingFlags failed, hr %#lx.\n", hr);
++    hr = RoGetErrorReportingFlags(&new_flags);
++    ok_(__FILE__, line)(hr == S_OK, "RoGetErrorReportingFlags failed, hr %#lx.\n", hr);
++    todo_wine_if(flags != RO_ERROR_REPORTING_USESETERRORINFO)
++    ok_(__FILE__, line)(new_flags == flags, "Got unexpected flags %#x != %#x.\n", new_flags, flags);
++}
++
++struct test_error_reporting_flags_params
++{
++    HANDLE event1;
++    HANDLE event2;
++};
++
++/* Flags are not apartment/thread local. */
++static DWORD CALLBACK test_thread_RoSetErrorReportingFlags(void *param)
++{
++    struct test_error_reporting_flags_params *data = param;
++    UINT32 flags = 0xdeadbeef;
++    HRESULT hr;
++    DWORD ret;
++    int i;
++
++    hr = RoInitialize(RO_INIT_SINGLETHREADED);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++
++    for (i = 0; i < ARRAY_SIZE(test_flags); i++)
++    {
++        winetest_push_context("flags=%#x", test_flags[i]);
++        ret = WaitForSingleObject(data->event1, 500);
++        ok(!ret, "WaitForSingleObject failed, error %lu.\n", ret);
++
++        set_error_reporting_flags(test_flags[i]);
++        ret = SetEvent(data->event2);
++        ok(ret, "SetEvent failed, error %lu.\n", GetLastError());
++
++        /* Wait for the parent thread to reset flags to RO_ERROR_REPORTING_NONE. */
++        ret = WaitForSingleObject(data->event1, 500);
++        ok(!ret, "WaitForSingleObject failed, error %lu.\n", ret);
++        flags = 0xdeadbeef;
++        hr = RoGetErrorReportingFlags(&flags);
++        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++        todo_wine ok(flags == RO_ERROR_REPORTING_NONE, "Got unexpected flags %#.x\n", flags);
++        winetest_pop_context();
++    }
++
++    RoUninitialize();
++    return 0;
++}
++
++static void test_RoSetErrorReportingFlags(void)
++{
++    struct test_error_reporting_flags_params data;
++    RO_INIT_TYPE type;
++    HANDLE thread;
++    UINT32 flags;
++    DWORD ret, i;
++    HRESULT hr;
++
++    /* Pass non-existent flags */
++    hr = RoSetErrorReportingFlags(RO_ERROR_REPORTING_USESETERRORINFO | 0x80);
++    todo_wine ok(hr == E_INVALIDARG, "Got unexpected hr %#lx.\n", hr);
++
++    set_error_reporting_flags(RO_ERROR_REPORTING_NONE);
++
++    data.event1 = CreateEventW(NULL, FALSE, FALSE, NULL);
++    ok(!!data.event1, "CreateEventW failed, error %lu.\n", GetLastError());
++    data.event2 = CreateEventW(NULL, FALSE, FALSE, NULL);
++    ok(!!data.event2, "CreateEventW failed, error %lu.\n", GetLastError());
++
++    for (type = RO_INIT_SINGLETHREADED; type < RO_INIT_MULTITHREADED; type++)
++    {
++        winetest_push_context("type=%d", type);
++
++        thread = CreateThread(NULL, 0, test_thread_RoSetErrorReportingFlags, &data, 0, NULL);
++        ok(!!thread, "CreateThread failed, error %lu.\n", GetLastError());
++
++        for (i = 0; i < ARRAY_SIZE(test_flags); i++)
++        {
++            winetest_push_context("flags=%#x", test_flags[i]);
++            hr = RoInitialize(type);
++            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++
++            /* Flags don't change on apartment uninitialization.*/
++            flags = 0xdeadbeef;
++            hr = RoGetErrorReportingFlags(&flags);
++            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++            todo_wine ok(flags == RO_ERROR_REPORTING_NONE, "Got unexpected flags %#x.\n", flags);
++
++            ret = SetEvent(data.event1);
++            ok(ret, "SetEvent failed, error %lu.\n", GetLastError());
++            /* Wait for the other thread to call RoSetErrorReportingFlags. */
++            ret = WaitForSingleObject(data.event2, 500);
++            ok(!ret, "WaitForSingleObject failed, error %lu.\n", ret);
++
++            /* RoSetErrorReportingFlags on the other thread should reflect here as well. */
++            flags = 0xdeadbeef;
++            hr = RoGetErrorReportingFlags(&flags);
++            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++            todo_wine_if(test_flags[i] != RO_ERROR_REPORTING_USESETERRORINFO)
++            ok(flags == test_flags[i], "Got unexpected flags %#x\n", flags);
++
++            /* Reset flags to RO_ERROR_REPORTING_NONE */
++            set_error_reporting_flags(RO_ERROR_REPORTING_NONE);
++            ret = SetEvent(data.event1);
++            ok(ret, "SetEvent failed, error %lu.\n", GetLastError());
++
++            RoUninitialize();
++
++            /* Flags don't change on apartment uninitialization. */
++            hr = RoGetErrorReportingFlags(&flags);
++            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++            todo_wine
++            ok(flags == RO_ERROR_REPORTING_NONE, "Got unexpected flags %#x.\n", flags);
++            winetest_pop_context();
++        }
++
++        ret = WaitForSingleObject(thread, 100);
++        ok(!ret, "WaitForSingleObject failed, error %lu.\n", ret);
++        CloseHandle(thread);
++        winetest_pop_context();
++    }
++
++    CloseHandle(data.event1);
++    CloseHandle(data.event2);
++
++    /* Restore the default error reporting flags. */
++    set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO);
++}
++
+ START_TEST(roapi)
+ {
+     BOOL ret;
+@@ -649,6 +793,7 @@ START_TEST(roapi)
+     test_ActivationFactories();
+     test_RoGetAgileReference();
+     test_RoGetErrorReportingFlags();
++    test_RoSetErrorReportingFlags();
+ 
+     SetLastError(0xdeadbeef);
+     ret = DeleteFileW(L"wine.combase.test.dll");
+-- 
+GitLab
+

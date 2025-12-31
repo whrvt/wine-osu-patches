@@ -1,0 +1,134 @@
+From 55cdc9c437b15ec084d3ba99850cd77526c160c2 Mon Sep 17 00:00:00 2001
+From: Yuxuan Shui <yshui@codeweavers.com>
+Date: Wed, 3 Dec 2025 12:41:41 +0000
+Subject: [PATCH] winecrtend: Add a staticlib for holding ctor/dtor section
+ pointers.
+
+These pointers are needed to run constructors/destructors from mainCRTStartup and DllMainCRTStartup,
+which are in libmsvcrt.a and libwinecrt0.a. And since libwinecrt0.a depends on crt, we can't put
+these into libwinecrt0.a. On the other hand some libraries don't link against libmsvcrt.a, so
+putting these pointers into libmsvcrt.a isn't a very good idea either.
+
+This commit adds a separate staticlib for this that both libmsvcrt.a and libwinecrt0.a can depend
+on.
+---
+ configure                   |  2 ++
+ configure.ac                |  1 +
+ dlls/winecrtend/Makefile.in |  3 +++
+ dlls/winecrtend/init.c      | 28 ++++++++++++++++++++++++++++
+ tools/makedep.c             |  2 ++
+ tools/winegcc/winegcc.c     |  1 +
+ 6 files changed, 37 insertions(+)
+ create mode 100644 dlls/winecrtend/Makefile.in
+ create mode 100644 dlls/winecrtend/init.c
+
+diff --git a/configure b/configure
+index 01538eefdc2..a859c58c903 100755
+--- a/configure
++++ b/configure
+@@ -1543,6 +1543,7 @@ enable_winebth_sys
+ enable_winebus_sys
+ enable_winecoreaudio_drv
+ enable_winecrt0
++enable_winecrtend
+ enable_wined3d
+ enable_winedmo
+ enable_winegstreamer
+@@ -23219,6 +23220,7 @@ wine_fn_config_makefile dlls/winebth.sys enable_winebth_sys
+ wine_fn_config_makefile dlls/winebus.sys enable_winebus_sys
+ wine_fn_config_makefile dlls/winecoreaudio.drv enable_winecoreaudio_drv
+ wine_fn_config_makefile dlls/winecrt0 enable_winecrt0
++wine_fn_config_makefile dlls/winecrtend enable_winecrtend
+ wine_fn_config_makefile dlls/wined3d enable_wined3d
+ wine_fn_config_makefile dlls/winedmo enable_winedmo
+ wine_fn_config_makefile dlls/winegstreamer enable_winegstreamer
+diff --git a/configure.ac b/configure.ac
+index 06a3a820e4c..d3d27cff36f 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -3359,6 +3359,7 @@ WINE_CONFIG_MAKEFILE(dlls/winebth.sys)
+ WINE_CONFIG_MAKEFILE(dlls/winebus.sys)
+ WINE_CONFIG_MAKEFILE(dlls/winecoreaudio.drv)
+ WINE_CONFIG_MAKEFILE(dlls/winecrt0)
++WINE_CONFIG_MAKEFILE(dlls/winecrtend)
+ WINE_CONFIG_MAKEFILE(dlls/wined3d)
+ WINE_CONFIG_MAKEFILE(dlls/winedmo)
+ WINE_CONFIG_MAKEFILE(dlls/winegstreamer)
+diff --git a/dlls/winecrtend/Makefile.in b/dlls/winecrtend/Makefile.in
+new file mode 100644
+index 00000000000..bf09dcca8cc
+--- /dev/null
++++ b/dlls/winecrtend/Makefile.in
+@@ -0,0 +1,3 @@
++STATICLIB = libwinecrtend.a
++
++SOURCES = init.c
+diff --git a/dlls/winecrtend/init.c b/dlls/winecrtend/init.c
+new file mode 100644
+index 00000000000..caf82cbbd1a
+--- /dev/null
++++ b/dlls/winecrtend/init.c
+@@ -0,0 +1,28 @@
++#include <process.h>
++
++#if defined(_MSC_VER)
++#define _CRTALLOC(x) __declspec(allocate(x))
++#elif defined(__GNUC__)
++#define _CRTALLOC(x) __attribute__ ((section (x), used))
++#endif
++
++#if defined(_MSC_VER)
++/* Instructions for the linker to merge .CRT$??? in objects files into .CRT in the
++ * final binary during linking, sorted by the section names alphabetically. The names
++ * don't have significance to the linker but conventions do apply. */
++#pragma section(".CRT$XIA", read, write)
++#pragma section(".CRT$XIZ", read, write)
++#pragma section(".CRT$XCA", read, write)
++#pragma section(".CRT$XCZ", read, write)
++#pragma section(".CRT$XTA", read, write)
++#pragma section(".CRT$XTZ", read, write)
++#pragma comment(linker, "/merge:.CRT=.rdata")
++#endif
++
++_CRTALLOC(".CRT$XIA") _PIFV __xi_a[] = { NULL };
++_CRTALLOC(".CRT$XIZ") _PIFV __xi_z[] = { NULL };
++_CRTALLOC(".CRT$XCA") _PVFV __xc_a[] = { NULL };
++_CRTALLOC(".CRT$XCZ") _PVFV __xc_z[] = { NULL };
++_CRTALLOC(".CRT$XTA") _PVFV __xt_a[] = { NULL };
++_CRTALLOC(".CRT$XTZ") _PVFV __xt_z[] = { NULL };
++
+diff --git a/tools/makedep.c b/tools/makedep.c
+index 4e73894c933..02180dc58ef 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -2281,6 +2281,7 @@ static struct strarray get_default_imports( const struct makefile *make, struct
+         STRARRAY_FOR_EACH( imp, &imports ) if (!strcmp( imp, "winecrt0" )) return ret;
+         strarray_add( &ret, "winecrt0" );
+         if (compiler_rt) strarray_add( &ret, compiler_rt );
++        strarray_add( &ret, "winecrtend" );
+         return ret;
+     }
+ 
+@@ -2295,6 +2296,7 @@ static struct strarray get_default_imports( const struct makefile *make, struct
+ 
+     strarray_add( &ret, "kernel32" );
+     strarray_add( &ret, "ntdll" );
++    strarray_add( &ret, "winecrtend" );
+     return ret;
+ }
+ 
+diff --git a/tools/winegcc/winegcc.c b/tools/winegcc/winegcc.c
+index 7458fb08773..d757f53a2f7 100644
+--- a/tools/winegcc/winegcc.c
++++ b/tools/winegcc/winegcc.c
+@@ -1333,6 +1333,7 @@ static void build(struct strarray input_files, const char *output)
+         if (is_win16_app) add_library(lib_dirs, &files, "kernel");
+         add_library(lib_dirs, &files, "kernel32");
+         add_library(lib_dirs, &files, "ntdll");
++        add_library(lib_dirs, &files, "winecrtend");
+     }
+ 
+     /* set default entry point, if needed */
+-- 
+GitLab
+

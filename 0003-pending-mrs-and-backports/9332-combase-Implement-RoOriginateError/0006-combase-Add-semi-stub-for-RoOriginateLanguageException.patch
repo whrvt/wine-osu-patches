@@ -1,0 +1,106 @@
+From 6bb4e1919d131392dda3bef14682059785ac6699 Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Sun, 2 Nov 2025 12:47:21 +0530
+Subject: [PATCH] combase: Add semi-stub for RoOriginateLanguageException.
+
+---
+ dlls/combase/roapi.c       |  4 ++--
+ dlls/combase/tests/roapi.c | 24 ++++++++++++------------
+ 2 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
+index 57001eb14a4..10a826b6dbc 100644
+--- a/dlls/combase/roapi.c
++++ b/dlls/combase/roapi.c
+@@ -736,8 +736,8 @@ HRESULT WINAPI SetRestrictedErrorInfo(IRestrictedErrorInfo *info)
+  */
+ BOOL WINAPI RoOriginateLanguageException(HRESULT error, HSTRING message, IUnknown *language_exception)
+ {
+-    FIXME("%#lx, %s, %p: stub\n", error, debugstr_hstring(message), language_exception);
+-    return FALSE;
++    FIXME("%#lx, %s, %p: semi-stub\n", error, debugstr_hstring(message), language_exception);
++    return RoOriginateError(error, message);
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/combase/tests/roapi.c b/dlls/combase/tests/roapi.c
+index c1c51cd59da..28cc37e064b 100644
+--- a/dlls/combase/tests/roapi.c
++++ b/dlls/combase/tests/roapi.c
+@@ -1021,11 +1021,11 @@ static void test_error_reporting(void)
+        test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], NULL, NULL);
+-       todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
++       ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+        todo_wine_if(debugger)
+        ok(exception_caught == debugger, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
+ 
+        /* A NULL string with a non-zero length is accepted. */
+@@ -1062,11 +1062,11 @@ static void test_error_reporting(void)
+        test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
+-       todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
++       ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+        todo_wine_if(debugger)
+        ok(exception_caught == debugger, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        if(hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
+ 
+        set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO | RO_ERROR_REPORTING_FORCEEXCEPTIONS);
+@@ -1099,10 +1099,10 @@ static void test_error_reporting(void)
+        test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
+-       todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        if(hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
+ 
+        exception_caught = FALSE;
+@@ -1146,10 +1146,10 @@ static void test_error_reporting(void)
+        }
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
+-       todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        if(hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message_nul, NULL);
+        WindowsDeleteString(msg);
+ 
+@@ -1176,7 +1176,7 @@ static void test_error_reporting(void)
+     ok(!r_info, "Got unexpected r_info %p\n", r_info);
+     exception_caught = FALSE;
+     ret = RoOriginateLanguageException(E_FAIL, NULL, NULL);
+-    todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
++    ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+     ok(!exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+     hr = GetRestrictedErrorInfo(&r_info);
+     ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+@@ -1190,7 +1190,7 @@ static void test_error_reporting(void)
+     hr = GetRestrictedErrorInfo(&r_info);
+     ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+     ret = RoOriginateLanguageException(E_FAIL, NULL, NULL);
+-    todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
++    ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+     hr = GetRestrictedErrorInfo(&r_info);
+     ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+ 
+-- 
+GitLab
+

@@ -1,1 +1,1 @@
--W user32-msgbox-Support-WM_COPY-mesg -W winedevice-Default_Drivers -W dsound-EAX -W mountmgr-DosDevices
+-W winedevice-Default_Drivers -W dsound-EAX -W mountmgr-DosDevices

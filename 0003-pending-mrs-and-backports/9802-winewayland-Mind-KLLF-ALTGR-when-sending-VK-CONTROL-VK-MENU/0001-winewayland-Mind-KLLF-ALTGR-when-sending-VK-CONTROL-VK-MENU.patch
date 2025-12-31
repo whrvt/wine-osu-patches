@@ -1,0 +1,100 @@
+From 87cca17d5168f3be21a22b7e91f307d98bb9d945 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 19 Dec 2025 12:46:31 +0100
+Subject: [PATCH] winewayland: Mind KLLF_ALTGR when sending VK_CONTROL +
+ VK_MENU.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=58640
+---
+ dlls/winewayland.drv/wayland_keyboard.c | 33 ++++++++++++++++++++-----
+ 1 file changed, 27 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_keyboard.c b/dlls/winewayland.drv/wayland_keyboard.c
+index 648b7f9cc2f..051217a5d6d 100644
+--- a/dlls/winewayland.drv/wayland_keyboard.c
++++ b/dlls/winewayland.drv/wayland_keyboard.c
+@@ -343,7 +343,7 @@ static inline LANGID langid_from_xkb_layout(const char *layout, size_t layout_le
+ 
+     FIXME("Unknown layout language %s\n", debugstr_a(layout));
+     return MAKELANGID(LANG_NEUTRAL, SUBLANG_CUSTOM_UNSPECIFIED);
+-};
++}
+ 
+ static HKL get_layout_hkl(struct layout *layout, LCID locale)
+ {
+@@ -351,6 +351,23 @@ static HKL get_layout_hkl(struct layout *layout, LCID locale)
+     else return (HKL)(UINT_PTR)MAKELONG(locale, 0xf000 | layout->layout_id);
+ }
+ 
++static WORD get_locale_flags(HKL hkl)
++{
++    struct layout *layout;
++    WORD flags;
++
++    pthread_mutex_lock(&xkb_layouts_mutex);
++
++    LIST_FOR_EACH_ENTRY(layout, &xkb_layouts, struct layout, entry)
++        if (hkl == get_layout_hkl(layout, LOWORD(hkl))) break;
++    if (&layout->entry == &xkb_layouts) flags = 0;
++    else flags = LOWORD(layout->tables.fLocaleFlags);
++
++    pthread_mutex_unlock(&xkb_layouts_mutex);
++
++    return flags;
++}
++
+ static void add_xkb_layout(const char *xkb_layout, struct xkb_keymap *xkb_keymap,
+                             xkb_layout_index_t xkb_group, LANGID lang)
+ {
+@@ -362,6 +379,7 @@ static void add_xkb_layout(const char *xkb_layout, struct xkb_keymap *xkb_keymap
+     VSC_LPWSTR *names_entry, *names_ext_entry;
+     VSC_VK *vsc2vk_e0_entry, *vsc2vk_e1_entry;
+     VK_TO_WCHARS8 *vk2wchars_entry;
++    const xkb_keysym_t *keysym;
+     struct layout *layout;
+     const USHORT *scan2vk;
+     WCHAR *names_str;
+@@ -378,7 +396,6 @@ static void add_xkb_layout(const char *xkb_layout, struct xkb_keymap *xkb_keymap
+ 
+     for (names_len = 0, keyc = min_keycode; keyc <= max_keycode; keyc++)
+     {
+-        const xkb_keysym_t *keysym;
+         if (!xkb_keymap_key_get_syms_by_level(xkb_keymap, keyc, xkb_group, 0, &keysym)) continue;
+         names_len += xkb_keysym_get_name(*keysym, NULL, 0) + 1;
+     }
+@@ -419,7 +436,12 @@ static void add_xkb_layout(const char *xkb_layout, struct xkb_keymap *xkb_keymap
+     layout->tables.pVSCtoVK_E1 = layout->vsc2vk_e1;
+     layout->tables.pCharModifiers = &layout->modifiers;
+     layout->tables.pVkToWcharTable = layout->vk_to_wchar_table;
+-    layout->tables.fLocaleFlags = MAKELONG(KLLF_ALTGR, KBD_VERSION);
++
++    if (!xkb_keymap_key_get_syms_by_level(xkb_keymap, KEY_RIGHTALT + 8, xkb_group, 0, &keysym) ||
++        *keysym == XKB_KEY_ISO_Level3_Shift)
++        layout->tables.fLocaleFlags = MAKELONG(KLLF_ALTGR, KBD_VERSION);
++    else
++        layout->tables.fLocaleFlags = MAKELONG(0, KBD_VERSION);
+ 
+     layout->vk_to_wchar_table[0].pVkToWchars = (VK_TO_WCHARS1 *)layout->vk_to_wchars8;
+     layout->vk_to_wchar_table[0].cbSize = sizeof(*layout->vk_to_wchars8);
+@@ -452,7 +474,6 @@ static void add_xkb_layout(const char *xkb_layout, struct xkb_keymap *xkb_keymap
+     for (keyc = min_keycode; keyc <= max_keycode; keyc++)
+     {
+         WORD scan = key2scan(keyc - 8);
+-        const xkb_keysym_t *keysym;
+         VSC_LPWSTR *entry;
+         char name[256];
+ 
+@@ -828,8 +849,8 @@ static void keyboard_handle_key(void *data, struct wl_keyboard *wl_keyboard,
+ 
+     TRACE_(key)("serial=%u hwnd=%p key=%d scan=%#x state=%#x\n", serial, hwnd, key, scan, state);
+ 
+-    /* NOTE: Windows normally sends VK_CONTROL + VK_MENU only if the layout has KLLF_ALTGR */
+-    if (key == KEY_RIGHTALT) send_right_control(hwnd, state);
++    if (key == KEY_RIGHTALT && (get_locale_flags(keyboard_hkl) & KLLF_ALTGR))
++        send_right_control(hwnd, state);
+ 
+     input.type = INPUT_KEYBOARD;
+     input.ki.wScan = (scan & 0x300) ? scan + 0xdf00 : scan;
+-- 
+GitLab
+

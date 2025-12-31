@@ -72,9 +72,9 @@ index d94f0da56a0..12802e99af7 100644
  BOOL WINAPI NtUserClipCursor( const RECT *rect )
  {
 +    if (cursor_clip_hack) rect = NULL;
+     UINT dpi = get_thread_dpi();
      RECT new_rect;
      BOOL ret;
- 
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
 index 68117bef6c3..d480b54aafa 100644
 --- a/dlls/win32u/win32u_private.h

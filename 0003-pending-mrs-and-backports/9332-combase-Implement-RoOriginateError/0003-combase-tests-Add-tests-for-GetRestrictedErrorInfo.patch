@@ -1,0 +1,88 @@
+From 5d28494fb2e3c476797cfbf49f1c96b79bf06f4f Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Sat, 1 Nov 2025 14:19:49 +0530
+Subject: [PATCH] combase/tests: Add tests for GetRestrictedErrorInfo.
+
+---
+ dlls/combase/tests/roapi.c | 58 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 58 insertions(+)
+
+diff --git a/dlls/combase/tests/roapi.c b/dlls/combase/tests/roapi.c
+index 3f49399632f..ae9101dd5a3 100644
+--- a/dlls/combase/tests/roapi.c
++++ b/dlls/combase/tests/roapi.c
+@@ -784,6 +784,63 @@ static void test_RoSetErrorReportingFlags(void)
+     set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO);
+ }
+ 
++static void test_GetRestrictedErrorInfo(void)
++{
++    IRestrictedErrorInfo *r_info, *r_info2;
++    ICreateErrorInfo *create_info;
++    IErrorInfo *info;
++    ULONG count;
++    HRESULT hr;
++    BOOL ret;
++
++    /* Clear the current error object, if any. */
++    hr = SetErrorInfo(0, NULL);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++
++    hr = GetRestrictedErrorInfo(&r_info);
++    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++
++    /* The ICreateErrorInfo object returned by CreateErrorInfo does not supoprt IRestrictedErrorInfo. */
++    hr = CreateErrorInfo(&create_info);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    hr = ICreateErrorInfo_QueryInterface(create_info, &IID_IErrorInfo, (void **)&info);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    ICreateErrorInfo_Release(create_info);
++    hr = SetErrorInfo(0, info);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    /* GetRestrictedErrorInfo should return S_FALSE if the error object does not support IRestrictedErrorInfo. */
++    hr = GetRestrictedErrorInfo(&r_info);
++    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    /* Nonetheless, GetRestrictedErrorInfo will still clear the current error. */
++    count = IErrorInfo_Release(info);
++    todo_wine ok(count == 0, "Got unexpected count %lu.\n", count);
++    hr = GetErrorInfo(0, &info);
++    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    if (hr == S_OK) IErrorInfo_Release(info);
++
++    /* IRestrictedErrorInfo objects can only be created by the Ro* error reporting methods. */
++    ret = RoOriginateError(E_INVALIDARG, NULL);
++    todo_wine ok(ret, "RoOriginateError failed.\n");
++    hr = GetRestrictedErrorInfo(&r_info);
++    todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    if (hr == S_OK)
++    {
++        hr = IRestrictedErrorInfo_QueryInterface(r_info, &IID_IErrorInfo, (void **)&info);
++        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++        IRestrictedErrorInfo_Release(r_info);
++        hr = SetErrorInfo(0, info);
++        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++        IErrorInfo_Release(info);
++        hr = GetRestrictedErrorInfo(&r_info2);
++        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++        ok(r_info2 == r_info, "Got unexpected r_info2 %p != %p.\n", r_info2, r_info);
++        count = IRestrictedErrorInfo_Release(r_info2);
++        ok(count == 0, "Got unexpected count %lu.\n", count);
++    }
++    else
++        SetErrorInfo(0, NULL);
++}
++
+ /* Return the system-supplied description of an HRESULT code. If there isn't one, we only check whether error
+  * descriptions are not empty strings. */
+ static BOOL get_hresult_message(HRESULT code, WCHAR *buf, ULONG len)
+@@ -1164,6 +1221,7 @@ START_TEST(roapi)
+     test_RoGetAgileReference();
+     test_RoGetErrorReportingFlags();
+     test_RoSetErrorReportingFlags();
++    test_GetRestrictedErrorInfo();
+     test_error_reporting();
+ 
+     SetLastError(0xdeadbeef);
+-- 
+GitLab
+

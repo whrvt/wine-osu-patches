@@ -1,0 +1,709 @@
+From b68f3d6b036f4b6a914ce54bbc9a20d66cf4a4dc Mon Sep 17 00:00:00 2001
+From: Vibhav Pant <vibhavp@gmail.com>
+Date: Sat, 1 Nov 2025 13:36:14 +0530
+Subject: [PATCH] combase: Implement RoOriginateError(W) and
+ GetRestrictedErrorInfo.
+
+---
+ dlls/combase/combase_private.h |   3 +
+ dlls/combase/errorinfo.c       |  33 ++--
+ dlls/combase/roapi.c           | 309 ++++++++++++++++++++++++++++++++-
+ dlls/combase/tests/roapi.c     | 137 +++++++--------
+ 4 files changed, 391 insertions(+), 91 deletions(-)
+
+diff --git a/dlls/combase/combase_private.h b/dlls/combase/combase_private.h
+index ca79356e8eb..03c776c3935 100644
+--- a/dlls/combase/combase_private.h
++++ b/dlls/combase/combase_private.h
+@@ -261,3 +261,6 @@ HRESULT ipid_get_dispatch_params(const IPID *ipid, struct apartment **stub_apt,
+         IID *iid, IUnknown **iface);
+ HRESULT ipid_get_dest_context(const IPID *ipid, MSHCTX *dest_context, void **dest_context_data);
+ HRESULT start_apartment_remote_unknown(struct apartment *apt);
++
++HRESULT set_error_info(IErrorInfo *error_info);
++HRESULT get_error_info(IErrorInfo **error_info);
+diff --git a/dlls/combase/errorinfo.c b/dlls/combase/errorinfo.c
+index 9383e8d5a72..4ae9dfb1c5c 100644
+--- a/dlls/combase/errorinfo.c
++++ b/dlls/combase/errorinfo.c
+@@ -340,17 +340,14 @@ HRESULT WINAPI CreateErrorInfo(ICreateErrorInfo **ret)
+     return S_OK;
+ }
+ 
+-/***********************************************************************
+- *                GetErrorInfo    (combase.@)
+- */
+-HRESULT WINAPI GetErrorInfo(ULONG reserved, IErrorInfo **error_info)
++HRESULT get_error_info(IErrorInfo **error_info)
+ {
+     struct tlsdata *tlsdata;
+     HRESULT hr;
+ 
+-    TRACE("%lu, %p\n", reserved, error_info);
++    TRACE("%p\n", error_info);
+ 
+-    if (reserved || !error_info)
++    if (!error_info)
+         return E_INVALIDARG;
+ 
+     if (FAILED(hr = com_get_tlsdata(&tlsdata)))
+@@ -369,17 +366,20 @@ HRESULT WINAPI GetErrorInfo(ULONG reserved, IErrorInfo **error_info)
+ }
+ 
+ /***********************************************************************
+- *               SetErrorInfo    (combase.@)
++ *                GetErrorInfo    (combase.@)
+  */
+-HRESULT WINAPI SetErrorInfo(ULONG reserved, IErrorInfo *error_info)
++HRESULT WINAPI GetErrorInfo(ULONG reserved, IErrorInfo **error_info)
++{
++    TRACE("%lu, %p\n", reserved, error_info);
++    return reserved ? E_INVALIDARG : get_error_info(error_info);
++}
++
++HRESULT set_error_info(IErrorInfo *error_info)
+ {
+     struct tlsdata *tlsdata;
+     HRESULT hr;
+ 
+-    TRACE("%lu, %p\n", reserved, error_info);
+-
+-    if (reserved)
+-        return E_INVALIDARG;
++    TRACE("%p\n", error_info);
+ 
+     if (FAILED(hr = com_get_tlsdata(&tlsdata)))
+         return hr;
+@@ -393,3 +393,12 @@ HRESULT WINAPI SetErrorInfo(ULONG reserved, IErrorInfo *error_info)
+ 
+     return S_OK;
+ }
++
++/***********************************************************************
++ *               SetErrorInfo    (combase.@)
++ */
++HRESULT WINAPI SetErrorInfo(ULONG reserved, IErrorInfo *error_info)
++{
++    TRACE("%lu, %p\n", reserved, error_info);
++    return reserved ? E_INVALIDARG : set_error_info(error_info);
++}
+diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
+index 5745099ae4f..57001eb14a4 100644
+--- a/dlls/combase/roapi.c
++++ b/dlls/combase/roapi.c
+@@ -27,6 +27,7 @@
+ 
+ #include "combase_private.h"
+ 
++#include "wine/exception.h"
+ #include "wine/debug.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(combase);
+@@ -493,13 +494,232 @@ HRESULT WINAPI RoRegisterActivationFactories(HSTRING *classes, PFNGETACTIVATIONF
+     return S_OK;
+ }
+ 
++struct restricted_error_info
++{
++    IRestrictedErrorInfo IRestrictedErrorInfo_iface;
++    IErrorInfo IErrorInfo_iface;
++    BSTR description;
++    BSTR restricted_description;
++    HRESULT code;
++    LONG ref;
++};
++
++static inline struct restricted_error_info *impl_from_IRestrictedErrorInfo(IRestrictedErrorInfo *iface)
++{
++    return CONTAINING_RECORD(iface, struct restricted_error_info, IRestrictedErrorInfo_iface);
++}
++
++static HRESULT WINAPI restricted_error_info_QueryInterface(IRestrictedErrorInfo *iface, REFIID iid, void **out)
++{
++    struct restricted_error_info *impl = impl_from_IRestrictedErrorInfo(iface);
++
++    TRACE("(%p, %s, %p)\n", iface, debugstr_guid(iid), out);
++
++    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IRestrictedErrorInfo))
++    {
++        IRestrictedErrorInfo_AddRef((*out = &impl->IRestrictedErrorInfo_iface));
++        return S_OK;
++    }
++    if (IsEqualGUID(iid, &IID_IErrorInfo))
++    {
++        IErrorInfo_AddRef((*out = &impl->IErrorInfo_iface));
++        return S_OK;
++    }
++
++    *out = NULL;
++    FIXME("%s not implemented, returning E_NOINTERFACE.", debugstr_guid(iid));
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI restricted_error_info_AddRef(IRestrictedErrorInfo *iface)
++{
++    struct restricted_error_info *impl = impl_from_IRestrictedErrorInfo(iface);
++    TRACE("(%p)\n", iface);
++    return InterlockedIncrement(&impl->ref);
++}
++
++static ULONG WINAPI restricted_error_info_Release(IRestrictedErrorInfo *iface)
++{
++    struct restricted_error_info *impl = impl_from_IRestrictedErrorInfo(iface);
++    ULONG ref = InterlockedDecrement(&impl->ref);
++
++    TRACE("(%p)\n", iface);
++
++    if (!ref)
++    {
++        SysFreeString(impl->description);
++        SysFreeString(impl->restricted_description);
++        free(impl);
++    }
++    return ref;
++}
++
++static HRESULT WINAPI restricted_error_info_GetErrorDetails(IRestrictedErrorInfo *iface, BSTR *ret_desc, HRESULT *code,
++                                                            BSTR *ret_restricted_desc, BSTR *sid)
++{
++    struct restricted_error_info *impl = impl_from_IRestrictedErrorInfo(iface);
++    BSTR desc, restricted_desc;
++
++    TRACE("(%p, %p, %p, %p, %p)\n", iface, ret_desc, code, ret_restricted_desc, sid);
++
++    /* There are no terminating NUL characters, so we can use SysStringLen. */
++    if (!(desc = SysAllocStringLen(impl->description, SysStringLen(impl->description)))) return E_OUTOFMEMORY;
++    if (!(restricted_desc = SysAllocStringLen(impl->restricted_description, SysStringLen(impl->restricted_description))))
++    {
++        SysFreeString(desc);
++        return E_OUTOFMEMORY;
++    }
++    *code = impl->code;
++    *ret_desc = desc;
++    *ret_restricted_desc = restricted_desc;
++
++    return S_OK;
++}
++
++static HRESULT WINAPI restricted_error_info_GetReference(IRestrictedErrorInfo *iface, BSTR *reference)
++{
++    FIXME("(%p, %p): semi-stub!\n", iface, reference);
++    *reference = NULL;
++    return S_OK;
++}
++
++static IRestrictedErrorInfoVtbl restricted_error_info_vtbl =
++{
++    /* IUnknown */
++    restricted_error_info_QueryInterface,
++    restricted_error_info_AddRef,
++    restricted_error_info_Release,
++    /* IRestrictedErrorInfo */
++    restricted_error_info_GetErrorDetails,
++    restricted_error_info_GetReference,
++};
++
++static inline struct restricted_error_info *impl_from_IErrorInfo(IErrorInfo *iface)
++{
++    return CONTAINING_RECORD(iface, struct restricted_error_info, IErrorInfo_iface);
++}
++
++static HRESULT WINAPI error_info_QueryInterface(IErrorInfo *iface, REFIID iid, void **out)
++{
++    struct restricted_error_info *impl = impl_from_IErrorInfo(iface);
++    TRACE("(%p, %s, %p)\n", iface, debugstr_guid(iid), out);
++    return IRestrictedErrorInfo_QueryInterface(&impl->IRestrictedErrorInfo_iface, iid, out);
++}
++
++static ULONG WINAPI error_info_AddRef(IErrorInfo *iface)
++{
++    struct restricted_error_info *impl = impl_from_IErrorInfo(iface);
++    TRACE("(%p)\n", iface);
++    return IRestrictedErrorInfo_AddRef(&impl->IRestrictedErrorInfo_iface);
++}
++
++static ULONG WINAPI error_info_Release(IErrorInfo *iface)
++{
++    struct restricted_error_info *impl = impl_from_IErrorInfo(iface);
++    TRACE("(%p)\n", iface);
++    return IRestrictedErrorInfo_Release(&impl->IRestrictedErrorInfo_iface);
++}
++
++static HRESULT WINAPI error_info_GetDescription(IErrorInfo *iface, BSTR *description)
++{
++    struct restricted_error_info *impl = impl_from_IErrorInfo(iface);
++
++    TRACE("(%p, %p)\n", iface, description);
++
++    *description = SysAllocStringLen(impl->description, SysStringLen(impl->description));
++    return *description ? S_OK : E_OUTOFMEMORY;
++}
++
++static HRESULT WINAPI error_info_GetGUID(IErrorInfo *iface, GUID *guid)
++{
++    TRACE("(%p, %p)\n", iface, guid);
++    memset(guid, 0, sizeof(*guid));
++    return S_OK;
++}
++
++static HRESULT WINAPI error_info_GetHelpContext(IErrorInfo *iface, DWORD *context)
++{
++    TRACE("(%p, %p)\n", iface, context);
++    *context = 0;
++    return S_OK;
++}
++
++static HRESULT WINAPI error_info_GetHelpFile(IErrorInfo *iface, BSTR *file)
++{
++    TRACE("(%p, %p)\n", iface, file);
++    *file = NULL;
++    return S_OK;
++}
++
++static HRESULT WINAPI error_info_GetSource(IErrorInfo *iface, BSTR *source)
++{
++    TRACE("(%p, %p)\n", iface, source);
++    *source = NULL;
++    return S_OK;
++}
++
++static const IErrorInfoVtbl error_info_vtbl =
++{
++    /* IUnknown */
++    error_info_QueryInterface,
++    error_info_AddRef,
++    error_info_Release,
++    /* IErrorInfo */
++    error_info_GetGUID,
++    error_info_GetSource,
++    error_info_GetDescription,
++    error_info_GetHelpFile,
++    error_info_GetHelpContext
++};
++
++HRESULT restricted_error_info_create(HRESULT code, ULONG len_msg, const WCHAR *message, ULONG len_desc,
++                                     const WCHAR *desc, IErrorInfo **info)
++{
++    struct restricted_error_info *impl;
++
++    if (!(impl = calloc(1, sizeof(*impl)))) return E_OUTOFMEMORY;
++
++    impl->IRestrictedErrorInfo_iface.lpVtbl = &restricted_error_info_vtbl;
++    impl->IErrorInfo_iface.lpVtbl = &error_info_vtbl;
++    impl->code = code;
++    if (!(impl->description = SysAllocStringLen(desc, len_desc)))
++    {
++        free(impl);
++        return E_OUTOFMEMORY;
++    }
++    /* If the caller did not provide a message, use the description. */
++    if (!len_msg)
++    {
++        message = impl->description;
++        len_msg = len_desc;
++    }
++    if (!(impl->restricted_description = SysAllocStringLen(message, len_msg)))
++    {
++        SysFreeString(impl->description);
++        free(impl);
++        return E_OUTOFMEMORY;
++    }
++    *info = &impl->IErrorInfo_iface;
++    return S_OK;
++}
++
+ /***********************************************************************
+  *      GetRestrictedErrorInfo (combase.@)
+  */
+ HRESULT WINAPI GetRestrictedErrorInfo(IRestrictedErrorInfo **info)
+ {
+-    FIXME( "(%p)\n", info );
+-    return E_NOTIMPL;
++    IErrorInfo *error_info;
++    HRESULT hr;
++
++    TRACE("(%p)\n", info);
++
++    *info = NULL;
++    hr = get_error_info(&error_info);
++    if (hr != S_OK) return hr;
++
++    hr = IErrorInfo_QueryInterface(error_info, &IID_IRestrictedErrorInfo, (void **)info);
++    IErrorInfo_Release(error_info);
++    return FAILED(hr) ? S_FALSE : S_OK;
+ }
+ 
+ /***********************************************************************
+@@ -525,8 +745,19 @@ BOOL WINAPI RoOriginateLanguageException(HRESULT error, HSTRING message, IUnknow
+  */
+ BOOL WINAPI RoOriginateError(HRESULT error, HSTRING message)
+ {
+-    FIXME("%#lx, %s: stub\n", error, debugstr_hstring(message));
+-    return FALSE;
++    const WCHAR *buf;
++    UINT32 len;
++
++    TRACE("%#lx, %s\n", error, debugstr_hstring(message));
++
++    buf = WindowsGetStringRawBuffer(message, &len);
++    return RoOriginateErrorW(error, len, buf);
++}
++
++static LONG WINAPI rooriginate_handler(EXCEPTION_POINTERS *ptrs)
++{
++    EXCEPTION_RECORD *rec = ptrs->ExceptionRecord;
++    return (rec->ExceptionCode == EXCEPTION_RO_ORIGINATEERROR) ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH;
+ }
+ 
+ /***********************************************************************
+@@ -534,8 +765,74 @@ BOOL WINAPI RoOriginateError(HRESULT error, HSTRING message)
+  */
+ BOOL WINAPI RoOriginateErrorW(HRESULT error, UINT max_len, const WCHAR *message)
+ {
+-    FIXME("%#lx, %u, %p: stub\n", error, max_len, message);
+-    return FALSE;
++    BOOL set_error, raise_exception, ret = TRUE;
++    UINT32 flags, len_msg = 0, len_desc;
++    WCHAR desc[512];
++
++    TRACE("%#lx, %u, %p\n", error, max_len, message);
++
++    if (SUCCEEDED(error)) return FALSE;
++    RoGetErrorReportingFlags(&flags); /* RoGetErrorReportingFlags is infalliable with a valid pointer. */
++    /* We call SetErrorInfo if USESETERRORINFO is set and SUPPRESSSETERRORINFO is *not* set. */
++    set_error = flags & RO_ERROR_REPORTING_USESETERRORINFO && !(flags & RO_ERROR_REPORTING_SUPPRESSSETERRORINFO);
++    /* We raise a structured exception if a debugger is present and SUPPRESSEXCEPTIONS is not set.
++     * However, FORCEEXCEPTIONS being set will always cause an exception to be raised. */
++    raise_exception = (IsDebuggerPresent() && !(flags & RO_ERROR_REPORTING_SUPPRESSEXCEPTIONS)) ||
++                      (flags & RO_ERROR_REPORTING_FORCEEXCEPTIONS);
++    if (set_error || raise_exception)
++    {
++        /* Get the HRESULT description. */
++        if (!(len_desc = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, 0, desc, ARRAY_SIZE(desc), NULL)))
++            len_desc = swprintf(desc, ARRAY_SIZE(desc), L"Error code '%#lx'.\r\n", error);
++        /* If the caller provided a message, find the terminating NUL and truncate it to 512 characters. */
++        if (message)
++        {
++            max_len = max_len ? min(max_len, 512) : 512;
++            while (len_msg < max_len && message[len_msg]) len_msg++;
++        }
++    }
++    if (set_error)
++    {
++        IErrorInfo *info = NULL;
++        HRESULT hr;
++
++        if (FAILED(restricted_error_info_create(error, len_msg, message, len_desc, desc, &info)))
++            ret = FALSE;
++        /* If restricted_error_info_create failed, this clears the current error object. */
++        if (FAILED(hr = set_error_info(info)))
++        {
++            FIXME("Failed to set current error: %#lx\n", hr);
++            if (info) IErrorInfo_Release(info);
++            ret = FALSE;
++        }
++    }
++    if (raise_exception)
++    {
++        const WCHAR *src = len_msg ? message : desc;
++        ULONG len = len_msg ? len_msg : len_desc;
++        WCHAR *str;
++
++        if (!(str = malloc(sizeof(WCHAR) * (len + 1)))) return ret;
++        memcpy(str, src, len * sizeof(WCHAR));
++        str[len] = L'\0';
++
++        __TRY
++        {
++            ULONG_PTR args[3];
++
++            args[0] = error;
++            args[1] = len;
++            args[2] = (ULONG_PTR)str;
++            RaiseException(EXCEPTION_RO_ORIGINATEERROR, 0, 3, args);
++        }
++        __EXCEPT(rooriginate_handler)
++        {
++        }
++        __ENDTRY;
++        free(str);
++    }
++
++    return ret;
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/combase/tests/roapi.c b/dlls/combase/tests/roapi.c
+index d761932a601..c1c51cd59da 100644
+--- a/dlls/combase/tests/roapi.c
++++ b/dlls/combase/tests/roapi.c
+@@ -795,7 +795,7 @@ static void test_GetRestrictedErrorInfo(void)
+     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+ 
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+ 
+     /* The ICreateErrorInfo object returned by CreateErrorInfo does not supoprt IRestrictedErrorInfo. */
+     hr = CreateErrorInfo(&create_info);
+@@ -807,35 +807,29 @@ static void test_GetRestrictedErrorInfo(void)
+     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+     /* GetRestrictedErrorInfo should return S_FALSE if the error object does not support IRestrictedErrorInfo. */
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+     /* Nonetheless, GetRestrictedErrorInfo will still clear the current error. */
+     count = IErrorInfo_Release(info);
+-    todo_wine ok(count == 0, "Got unexpected count %lu.\n", count);
++    ok(count == 0, "Got unexpected count %lu.\n", count);
+     hr = GetErrorInfo(0, &info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+-    if (hr == S_OK) IErrorInfo_Release(info);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+ 
+     /* IRestrictedErrorInfo objects can only be created by the Ro* error reporting methods. */
+     ret = RoOriginateError(E_INVALIDARG, NULL);
+-    todo_wine ok(ret, "RoOriginateError failed.\n");
++    ok(ret, "RoOriginateError failed.\n");
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-    if (hr == S_OK)
+-    {
+-        hr = IRestrictedErrorInfo_QueryInterface(r_info, &IID_IErrorInfo, (void **)&info);
+-        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-        IRestrictedErrorInfo_Release(r_info);
+-        hr = SetErrorInfo(0, info);
+-        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-        IErrorInfo_Release(info);
+-        hr = GetRestrictedErrorInfo(&r_info2);
+-        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-        ok(r_info2 == r_info, "Got unexpected r_info2 %p != %p.\n", r_info2, r_info);
+-        count = IRestrictedErrorInfo_Release(r_info2);
+-        ok(count == 0, "Got unexpected count %lu.\n", count);
+-    }
+-    else
+-        SetErrorInfo(0, NULL);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    hr = IRestrictedErrorInfo_QueryInterface(r_info, &IID_IErrorInfo, (void **)&info);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    IRestrictedErrorInfo_Release(r_info);
++    hr = SetErrorInfo(0, info);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    IErrorInfo_Release(info);
++    hr = GetRestrictedErrorInfo(&r_info2);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    ok(r_info2 == r_info, "Got unexpected r_info2 %p != %p.\n", r_info2, r_info);
++    count = IRestrictedErrorInfo_Release(r_info2);
++    ok(count == 0, "Got unexpected count %lu.\n", count);
+ }
+ 
+ /* Return the system-supplied description of an HRESULT code. If there isn't one, we only check whether error
+@@ -1020,12 +1014,11 @@ static void test_error_reporting(void)
+        exp_len = wcslen(default_msg);
+        exp_msg = default_msg[0] ? default_msg : NULL;
+        ret = RoOriginateError(test_codes[i], NULL);
+-       todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
+-       todo_wine_if(debugger)
++       ok(ret, "RoOriginateError returned %d.\n", ret);
+        ok(exception_caught == debugger, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], NULL, NULL);
+        todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+@@ -1038,23 +1031,22 @@ static void test_error_reporting(void)
+        /* A NULL string with a non-zero length is accepted. */
+        exception_caught = FALSE;
+        ret = RoOriginateError(test_codes[i], NULL);
+-       todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
+-       todo_wine_if(debugger)
++       ok(ret, "RoOriginateError returned %d.\n", ret);
+        ok(exception_caught == debugger, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
+ 
+        /* RO_ERROR_REPORTING_FORCEEXCEPTIONS overrides RO_ERROR_REPORTING_SUPPRESSEXCEPTIONS */
+        set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO | RO_ERROR_REPORTING_SUPPRESSEXCEPTIONS |
+                                  RO_ERROR_REPORTING_FORCEEXCEPTIONS);
+        exception_caught = FALSE;
+        ret = RoOriginateErrorW(test_codes[i], 0, NULL);
+-       todo_wine ok(ret, "RoOriginateErrorW returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateErrorW returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], NULL, NULL);
+ 
+        set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO);
+        exception_caught = FALSE;
+@@ -1063,12 +1055,11 @@ static void test_error_reporting(void)
+        /* RoOriginateError with a custom error message. */
+        WindowsCreateStringReference(message, wcslen(message), &hstr_hdr, &msg);
+        ret = RoOriginateError(test_codes[i], msg);
+-       todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
+-       todo_wine_if(debugger)
++       ok(ret, "RoOriginateError returned %d.\n", ret);
+        ok(exception_caught == debugger, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
+        todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+@@ -1081,19 +1072,19 @@ static void test_error_reporting(void)
+        set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO | RO_ERROR_REPORTING_FORCEEXCEPTIONS);
+        exception_caught = FALSE;
+        ret = RoOriginateErrorW(test_codes[i], wcslen(message), message);
+-       todo_wine ok(ret, "RoOriginateErrorW returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateErrorW returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
+ 
+        exception_caught = FALSE;
+        ret = RoOriginateErrorW(test_codes[i], 0, message);
+-       todo_wine ok(ret, "RoOriginateErrorW returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateErrorW returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message, NULL);
+ 
+        /* Error messages longer than 512 characters are truncated. */
+        exception_caught = FALSE;
+@@ -1101,11 +1092,11 @@ static void test_error_reporting(void)
+        exp_msg = message_trunc;
+        WindowsCreateStringReference(message_large, wcslen(message_large), &hstr_hdr, &msg);
+        ret = RoOriginateError(test_codes[i], msg);
+-       todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateError returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
+        exception_caught = FALSE;
+        ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
+        todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+@@ -1116,19 +1107,19 @@ static void test_error_reporting(void)
+ 
+        exception_caught = FALSE;
+        ret = RoOriginateErrorW(test_codes[i], wcslen(message_large), message_large);
+-       todo_wine ok(ret, "RoOriginateErrorW returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateErrorW returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
+ 
+        exception_caught = FALSE;
+        ret = RoOriginateErrorW(test_codes[i], 0, message_large);
+-       todo_wine ok(ret, "RoOriginateErrorW returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateErrorW returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message_trunc, NULL);
+ 
+        /* RoOriginateError with a custom error message containing an embedded NUL. */
+        exception_caught = FALSE;
+@@ -1140,12 +1131,12 @@ static void test_error_reporting(void)
+        hr = WindowsPromoteStringBuffer(hstr_buf, &msg);
+        ok(hr == S_OK, "Got unexpected hr %#lx\n", hr);
+        ret = RoOriginateError(test_codes[i], msg);
+-       todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateError returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        /* MSDN says that RoOriginateError uses SetErrorInfo to set the error object for the current thread, so we
+         * should be able to get it through GetErrorInfo as well. */
+        hr = GetErrorInfo(0, &info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        if (hr == S_OK)
+        {
+            hr = IErrorInfo_QueryInterface(info, &IID_IRestrictedErrorInfo, (void **)&r_info);
+@@ -1164,11 +1155,11 @@ static void test_error_reporting(void)
+ 
+        exception_caught = FALSE;
+        ret = RoOriginateErrorW(test_codes[i], ARRAY_SIZE(message_nul), message_nul);
+-       todo_wine ok(ret, "RoOriginateErrorW returned %d.\n", ret);
+-       todo_wine ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
++       ok(ret, "RoOriginateErrorW returned %d.\n", ret);
++       ok(exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+        hr = GetRestrictedErrorInfo(&r_info);
+-       todo_wine ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+-       if (hr == S_OK) test_IRestrictedErrorInfo(r_info, test_codes[i], message_nul, NULL);
++       ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++       test_IRestrictedErrorInfo(r_info, test_codes[i], message_nul, NULL);
+ 
+        winetest_pop_context();
+    }
+@@ -1177,31 +1168,31 @@ static void test_error_reporting(void)
+     exception_caught = FALSE;
+     set_error_reporting_flags(RO_ERROR_REPORTING_NONE | RO_ERROR_REPORTING_SUPPRESSEXCEPTIONS);
+     ret = RoOriginateError(E_FAIL, NULL);
+-    todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
++    ok(ret, "RoOriginateError returned %d.\n", ret);
+     ok(!exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+     r_info = (IRestrictedErrorInfo *)0xdeadbeef;
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+-    todo_wine ok(!r_info, "Got unexpected r_info %p\n", r_info);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    ok(!r_info, "Got unexpected r_info %p\n", r_info);
+     exception_caught = FALSE;
+     ret = RoOriginateLanguageException(E_FAIL, NULL, NULL);
+     todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+     ok(!exception_caught, "Got unexpected exception_caught %d.\n", exception_caught);
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+     ret = RtlRemoveVectoredExceptionHandler(handler);
+     ok(ret, "RtlRemoveVectoredExceptionHandler returned %d.\n", ret);
+ 
+     /* RO_ERROR_REPORTING_SUPPRESSSETERRORINFO overrides RO_ERROR_REPORTING_USESETERRORINFO. */
+     set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO | RO_ERROR_REPORTING_SUPPRESSSETERRORINFO);
+     ret = RoOriginateError(E_FAIL, NULL);
+-    todo_wine ok(ret, "RoOriginateError returned %d.\n", ret);
++    ok(ret, "RoOriginateError returned %d.\n", ret);
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+     ret = RoOriginateLanguageException(E_FAIL, NULL, NULL);
+     todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
+     hr = GetRestrictedErrorInfo(&r_info);
+-    todo_wine ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
++    ok(hr == S_FALSE, "Got unexpected hr %#lx.\n", hr);
+ 
+     /* Restore the default flags. */
+     set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO);
+-- 
+GitLab
+
