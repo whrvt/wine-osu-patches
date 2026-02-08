@@ -1,0 +1,58 @@
+From 64dfc1d5a4e7e50254878e978985fc3456caf262 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Tue, 30 May 2023 09:19:30 +0200
+Subject: [PATCH] server: Reset reported_events if socket gets reused.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=53574
+---
+ dlls/ws2_32/tests/sock.c | 21 +++++++++++++++++++++
+ server/sock.c            |  1 +
+ 2 files changed, 22 insertions(+)
+
+diff --git a/dlls/ws2_32/tests/sock.c b/dlls/ws2_32/tests/sock.c
+index 8d589c63ea3..301b37f3ddd 100644
+--- a/dlls/ws2_32/tests/sock.c
++++ b/dlls/ws2_32/tests/sock.c
+@@ -6875,6 +6875,27 @@ static void test_connect_events(struct event_test_ctx *ctx)
+     closesocket(server);
+ 
+     closesocket(listener);
++
++    /* Reusing socket, with connection refused. */
++
++    destaddr = addr;
++    destaddr.sin_port = htons(12345);
++
++    client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
++    ok(client != -1, "failed to create socket, error %u\n", WSAGetLastError());
++
++    select_events(ctx, client, FD_ACCEPT | FD_CLOSE | FD_CONNECT | FD_OOB | FD_READ | FD_WRITE);
++    check_events(ctx, 0, 0, 0);
++
++    ret = connect(client, (struct sockaddr*)&destaddr, sizeof(destaddr));
++    ok(ret == SOCKET_ERROR, "expected SOCKET_ERROR, got %d\n", ret);
++    check_events(ctx, MAKELONG(FD_CONNECT, WSAECONNREFUSED), 0, 4000);
++
++    ret = connect(client, (struct sockaddr*)&destaddr, sizeof(destaddr));
++    ok(ret == SOCKET_ERROR, "expected SOCKET_ERROR, got %d\n", ret);
++    check_events(ctx, MAKELONG(FD_CONNECT, WSAECONNREFUSED), 0, 4000);
++
++    closesocket(client);
+ }
+ 
+ /* perform a blocking recv() even on a nonblocking socket */
+diff --git a/server/sock.c b/server/sock.c
+index 7785d3c7706..22855d29ca6 100644
+--- a/server/sock.c
++++ b/server/sock.c
+@@ -2734,6 +2734,7 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+ 
+             case SOCK_UNCONNECTED:
+             case SOCK_CONNECTIONLESS:
++                if (sock->type == WS_SOCK_STREAM) sock->reported_events = 0;
+                 break;
+         }
+ 
+-- 
+GitLab
+

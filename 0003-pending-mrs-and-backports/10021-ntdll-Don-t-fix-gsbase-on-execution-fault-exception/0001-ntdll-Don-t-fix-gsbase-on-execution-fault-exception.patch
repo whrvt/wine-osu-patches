@@ -1,0 +1,91 @@
+From 1dfb4427205900378da8b8bacfb0df0849bb6712 Mon Sep 17 00:00:00 2001
+From: Piotr Caban <piotr@codeweavers.com>
+Date: Tue, 3 Feb 2026 12:55:01 +0100
+Subject: [PATCH] ntdll: Don't fix gsbase on execution fault exception.
+
+Fixes Diablo II: Resurrected infinite gsbase fixup loop on Intel Mac.
+---
+ dlls/ntdll/tests/exception.c    | 26 +++++++++++++++++++++++++-
+ dlls/ntdll/unix/signal_x86_64.c |  1 +
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/tests/exception.c b/dlls/ntdll/tests/exception.c
+index 24b4215315f..dfc1581492e 100644
+--- a/dlls/ntdll/tests/exception.c
++++ b/dlls/ntdll/tests/exception.c
+@@ -2782,6 +2782,7 @@ static const struct exception
+     NTSTATUS alt_status;    /* alternative status code */
+     DWORD    alt_nb_params; /* alternative number of parameters */
+     ULONG64  alt_params[4]; /* alternative parameters */
++    DWORD    access;
+ } exceptions[] =
+ {
+ /* 0 */
+@@ -2941,6 +2942,11 @@ static const struct exception
+         0x30, 0x00, 0x00, 0x00,
+         0xc3 },                                /* ret */
+       8, 0, STATUS_SUCCESS, 0 },
++    { { 0x65, 0x48, 0x8b, 0x04, 0x25,          /* movq %gs:0x30,%rax (NtCurrentTeb) */
++        0x30, 0x00, 0x00, 0x00,
++        0xc3 },                                /* ret */
++      0, 0, STATUS_ACCESS_VIOLATION, 2, { EXCEPTION_EXECUTE_FAULT },
++      0, 0, { 0 }, PAGE_READONLY },
+ };
+ 
+ static int got_exception;
+@@ -3065,6 +3071,17 @@ static DWORD WINAPI prot_fault_handler( EXCEPTION_RECORD *rec, ULONG64 frame,
+         goto skip_params;
+     }
+ 
++    if (except->nb_params == 2 && except->params[0] == EXCEPTION_EXECUTE_FAULT)
++    {
++        ok( rec->ExceptionInformation[0] == except->params[0],
++            "Wrong parameter 0: %Ix/%Ix\n",
++            rec->ExceptionInformation[0], except->params[0] );
++        ok( rec->ExceptionInformation[1] == (DWORD_PTR)code_mem + except->offset,
++            "Wrong parameter 1: %Ix/%Ix\n",
++            rec->ExceptionInformation[1], (DWORD_PTR)code_mem + except->offset);
++        goto skip_params;
++    }
++
+     if (except->alt_status == 0 || rec->ExceptionCode != except->alt_status)
+     {
+         for (i = 0; i < rec->NumberParameters; i++)
+@@ -3083,6 +3100,13 @@ static DWORD WINAPI prot_fault_handler( EXCEPTION_RECORD *rec, ULONG64 frame,
+ skip_params:
+     winetest_pop_context();
+ 
++    if (except->access == PAGE_READONLY)
++    {
++        DWORD old_prot;
++
++        VirtualProtect(code_mem, 1, PAGE_EXECUTE_READ, &old_prot);
++    }
++
+     context->Rip = (DWORD_PTR)code_mem + except->offset + except->length;
+     return ExceptionContinueExecution;
+ }
+@@ -3518,7 +3542,7 @@ static void test_prot_fault(void)
+     {
+         got_exception = 0;
+         run_exception_test(prot_fault_handler, &exceptions[i], &exceptions[i].code,
+-                           sizeof(exceptions[i].code), 0);
++                           sizeof(exceptions[i].code), exceptions[i].access);
+         ok( got_exception == (exceptions[i].status != 0),
+             "%u: bad exception count %d\n", i, got_exception );
+     }
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 62be4809aaa..0c62e8a1ad4 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2308,6 +2308,7 @@ static inline BOOL check_invalid_gsbase( ucontext_t *ucontext )
+     ULONG_PTR cur_gsbase = 0;
+ 
+     if (CS_sig(ucontext) != cs64_sel) return FALSE;
++    if (((ERROR_sig(ucontext) >> 1) & 0x09) == EXCEPTION_EXECUTE_FAULT) return FALSE;
+ 
+ #ifdef __linux__
+     if (user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE])
+-- 
+GitLab
+

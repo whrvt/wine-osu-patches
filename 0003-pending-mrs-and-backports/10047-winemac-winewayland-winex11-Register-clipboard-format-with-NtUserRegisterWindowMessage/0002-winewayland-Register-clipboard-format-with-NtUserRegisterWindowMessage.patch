@@ -1,0 +1,31 @@
+From 59a1742cb5bb25e0119da9a7f0687539cb99c117 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Sat, 7 Feb 2026 17:23:12 +0100
+Subject: [PATCH] winewayland: Register clipboard format with
+ NtUserRegisterWindowMessage.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=59257
+---
+ dlls/winewayland.drv/wayland_data_device.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_data_device.c b/dlls/winewayland.drv/wayland_data_device.c
+index e36c0cc9229..1a2cd27fe80 100644
+--- a/dlls/winewayland.drv/wayland_data_device.c
++++ b/dlls/winewayland.drv/wayland_data_device.c
+@@ -268,9 +268,9 @@ static struct data_device_format *data_device_format_for_mime_type(const char *m
+ 
+ static ATOM register_clipboard_format(const WCHAR *name)
+ {
+-    ATOM atom;
+-    if (NtAddAtom(name, lstrlenW(name) * sizeof(WCHAR), &atom)) return 0;
+-    return atom;
++    UNICODE_STRING name_str;
++    RtlInitUnicodeString(&name_str, name);
++    return NtUserRegisterWindowMessage(&name_str);
+ }
+ 
+ /**********************************************************************
+-- 
+GitLab
+

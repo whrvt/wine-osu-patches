@@ -59,7 +59,7 @@ index d2a6d5700d4..1437f402ffe 100644
 +        WCHAR buffer[2];
 +        const WCHAR *p, *name = NtCurrentTeb()->Peb->ProcessParameters->ImagePathName.Buffer;
 +        if (GetEnvironmentVariableW(L"WINE_SHELL32_HACKS", buffer, ARRAY_SIZE(buffer)) && !wcscmp(buffer, L"1"))
-+            return (ret = 1);
++            return (cache = 1);
 +        if ((p = wcsrchr(name, '/')))
 +            name = p + 1;
 +        if ((p = wcsrchr(name, '\\')))

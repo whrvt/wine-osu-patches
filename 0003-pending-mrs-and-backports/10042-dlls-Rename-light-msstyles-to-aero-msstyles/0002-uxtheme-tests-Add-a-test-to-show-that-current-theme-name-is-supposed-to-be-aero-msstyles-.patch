@@ -1,0 +1,31 @@
+From 4ed1a295a5fa1d25722b2878f73ba106f494b46f Mon Sep 17 00:00:00 2001
+From: Dmitry Timoshkov <dmitry@baikal.ru>
+Date: Fri, 6 Feb 2026 17:54:48 +0300
+Subject: [PATCH] uxtheme/tests: Add a test to show that current theme name is
+ supposed to be "aero.msstyles".
+
+Signed-off-by: Dmitry Timoshkov <dmitry@baikal.ru>
+---
+ dlls/uxtheme/tests/system.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/dlls/uxtheme/tests/system.c b/dlls/uxtheme/tests/system.c
+index 1e3daee7a07..d5eac85646c 100644
+--- a/dlls/uxtheme/tests/system.c
++++ b/dlls/uxtheme/tests/system.c
+@@ -861,7 +861,12 @@ static void test_GetCurrentThemeName(void)
+     hRes = GetCurrentThemeName(currentTheme, ARRAY_SIZE(currentTheme), currentColor,
+                                ARRAY_SIZE(currentColor), currentSize,  ARRAY_SIZE(currentSize));
+     if (bThemeActive)
++    {
++        WCHAR *p;
+         ok( hRes == S_OK, "Expected S_OK, got 0x%08lx\n", hRes);
++        p = wcsrchr(currentTheme, '\\');
++        ok(p && !wcsicmp(p+1, L"aero.msstyles"), "got %s\n", debugstr_w(currentTheme));
++    }
+     else
+         ok( hRes == E_PROP_ID_UNSUPPORTED, "Expected E_PROP_ID_UNSUPPORTED, got 0x%08lx\n", hRes);
+ }
+-- 
+GitLab
+

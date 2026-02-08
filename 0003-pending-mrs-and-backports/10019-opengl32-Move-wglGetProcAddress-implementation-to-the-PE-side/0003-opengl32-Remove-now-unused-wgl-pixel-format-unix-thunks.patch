@@ -1,0 +1,329 @@
+From 9a28f634dd4cc585bc155c297142ea2e7ec2b4df Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Thu, 5 Feb 2026 11:30:25 +0100
+Subject: [PATCH] opengl32: Remove now unused wgl pixel format unix thunks.
+
+---
+ dlls/opengl32/make_opengl   |  6 +--
+ dlls/opengl32/unix_thunks.c | 90 -------------------------------------
+ dlls/opengl32/unixlib.h     | 39 ----------------
+ dlls/opengl32/wgl.c         | 44 ------------------
+ 4 files changed, 3 insertions(+), 176 deletions(-)
+
+diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
+index 99b5325bb0a..a78ccce005b 100755
+--- a/dlls/opengl32/make_opengl
++++ b/dlls/opengl32/make_opengl
+@@ -147,6 +147,7 @@ my %manual_win_functions =
+     (
+      "glDebugEntry" => 1,
+      "wglChoosePixelFormat" => 1,
++     "wglChoosePixelFormatARB" => 1,
+      "wglCreateLayerContext" => 1,
+      "wglDescribeLayerPlane" => 1,
+      "wglDescribePixelFormat" => 1,
+@@ -157,6 +158,8 @@ my %manual_win_functions =
+      "wglGetExtensionsStringARB" => 1,
+      "wglGetExtensionsStringEXT" => 1,
+      "wglGetLayerPaletteEntries" => 1,
++     "wglGetPixelFormatAttribfvARB" => 1,
++     "wglGetPixelFormatAttribivARB" => 1,
+      "wglRealizeLayerPalette" => 1,
+      "wglSetLayerPaletteEntries" => 1,
+      "wglSwapLayerBuffers" => 1,
+@@ -173,15 +176,12 @@ my %manual_win_thunks =
+      "glGetString" => 1,
+      "glGetStringi" => 1,
+      "glImportSyncEXT" => 1,
+-     "wglChoosePixelFormatARB" => 1,
+      "wglCreateContext" => 1,
+      "wglCreateContextAttribsARB" => 1,
+      "wglCreatePbufferARB" => 1,
+      "wglDeleteContext" => 1,
+      "wglDestroyPbufferARB" => 1,
+      "wglGetPixelFormat" => 1,
+-     "wglGetPixelFormatAttribfvARB" => 1,
+-     "wglGetPixelFormatAttribivARB" => 1,
+      "wglGetProcAddress" => 1,
+      "wglMakeContextCurrentARB" => 1,
+      "wglMakeCurrent" => 1,
+diff --git a/dlls/opengl32/unix_thunks.c b/dlls/opengl32/unix_thunks.c
+index 7b3774e0613..d4dca9dbd47 100644
+--- a/dlls/opengl32/unix_thunks.c
++++ b/dlls/opengl32/unix_thunks.c
+@@ -30340,15 +30340,6 @@ static NTSTATUS ext_wglBindTexImageARB( void *args )
+     return STATUS_SUCCESS;
+ }
+ 
+-static NTSTATUS ext_wglChoosePixelFormatARB( void *args )
+-{
+-    struct wglChoosePixelFormatARB_params *params = args;
+-    const struct opengl_funcs *funcs = get_dc_funcs( params->hdc );
+-    if (!funcs || !funcs->p_wglChoosePixelFormatARB) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = funcs->p_wglChoosePixelFormatARB( params->hdc, params->piAttribIList, params->pfAttribFList, params->nMaxFormats, params->piFormats, params->nNumFormats );
+-    return STATUS_SUCCESS;
+-}
+-
+ static NTSTATUS ext_wglCreateContextAttribsARB( void *args )
+ {
+     struct wglCreateContextAttribsARB_params *params = args;
+@@ -30394,24 +30385,6 @@ static NTSTATUS ext_wglGetPbufferDCARB( void *args )
+     return STATUS_SUCCESS;
+ }
+ 
+-static NTSTATUS ext_wglGetPixelFormatAttribfvARB( void *args )
+-{
+-    struct wglGetPixelFormatAttribfvARB_params *params = args;
+-    const struct opengl_funcs *funcs = get_dc_funcs( params->hdc );
+-    if (!funcs || !funcs->p_wglGetPixelFormatAttribfvARB) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = funcs->p_wglGetPixelFormatAttribfvARB( params->hdc, params->iPixelFormat, params->iLayerPlane, params->nAttributes, params->piAttributes, params->pfValues );
+-    return STATUS_SUCCESS;
+-}
+-
+-static NTSTATUS ext_wglGetPixelFormatAttribivARB( void *args )
+-{
+-    struct wglGetPixelFormatAttribivARB_params *params = args;
+-    const struct opengl_funcs *funcs = get_dc_funcs( params->hdc );
+-    if (!funcs || !funcs->p_wglGetPixelFormatAttribivARB) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = funcs->p_wglGetPixelFormatAttribivARB( params->hdc, params->iPixelFormat, params->iLayerPlane, params->nAttributes, params->piAttributes, params->piValues );
+-    return STATUS_SUCCESS;
+-}
+-
+ static NTSTATUS ext_wglGetSwapIntervalEXT( void *args )
+ {
+     struct wglGetSwapIntervalEXT_params *params = args;
+@@ -33604,14 +33577,11 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     ext_glWriteMaskEXT,
+     ext_wglAllocateMemoryNV,
+     ext_wglBindTexImageARB,
+-    ext_wglChoosePixelFormatARB,
+     ext_wglCreateContextAttribsARB,
+     ext_wglCreatePbufferARB,
+     ext_wglDestroyPbufferARB,
+     ext_wglFreeMemoryNV,
+     ext_wglGetPbufferDCARB,
+-    ext_wglGetPixelFormatAttribfvARB,
+-    ext_wglGetPixelFormatAttribivARB,
+     ext_wglGetSwapIntervalEXT,
+     ext_wglMakeContextCurrentARB,
+     ext_wglQueryCurrentRendererIntegerWINE,
+@@ -86574,25 +86544,6 @@ static NTSTATUS wow64_ext_wglBindTexImageARB( void *args )
+     return STATUS_SUCCESS;
+ }
+ 
+-static NTSTATUS wow64_ext_wglChoosePixelFormatARB( void *args )
+-{
+-    struct
+-    {
+-        PTR32 teb;
+-        PTR32 hdc;
+-        PTR32 piAttribIList;
+-        PTR32 pfAttribFList;
+-        UINT nMaxFormats;
+-        PTR32 piFormats;
+-        PTR32 nNumFormats;
+-        BOOL ret;
+-    } *params = args;
+-    const struct opengl_funcs *funcs = get_dc_funcs( ULongToPtr(params->hdc) );
+-    if (!funcs || !funcs->p_wglChoosePixelFormatARB) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = funcs->p_wglChoosePixelFormatARB( ULongToPtr(params->hdc), ULongToPtr(params->piAttribIList), ULongToPtr(params->pfAttribFList), params->nMaxFormats, ULongToPtr(params->piFormats), ULongToPtr(params->nNumFormats) );
+-    return STATUS_SUCCESS;
+-}
+-
+ static NTSTATUS wow64_ext_wglCreateContextAttribsARB( void *args )
+ {
+     struct
+@@ -86670,44 +86621,6 @@ static NTSTATUS wow64_ext_wglGetPbufferDCARB( void *args )
+     return STATUS_SUCCESS;
+ }
+ 
+-static NTSTATUS wow64_ext_wglGetPixelFormatAttribfvARB( void *args )
+-{
+-    struct
+-    {
+-        PTR32 teb;
+-        PTR32 hdc;
+-        int iPixelFormat;
+-        int iLayerPlane;
+-        UINT nAttributes;
+-        PTR32 piAttributes;
+-        PTR32 pfValues;
+-        BOOL ret;
+-    } *params = args;
+-    const struct opengl_funcs *funcs = get_dc_funcs( ULongToPtr(params->hdc) );
+-    if (!funcs || !funcs->p_wglGetPixelFormatAttribfvARB) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = funcs->p_wglGetPixelFormatAttribfvARB( ULongToPtr(params->hdc), params->iPixelFormat, params->iLayerPlane, params->nAttributes, ULongToPtr(params->piAttributes), ULongToPtr(params->pfValues) );
+-    return STATUS_SUCCESS;
+-}
+-
+-static NTSTATUS wow64_ext_wglGetPixelFormatAttribivARB( void *args )
+-{
+-    struct
+-    {
+-        PTR32 teb;
+-        PTR32 hdc;
+-        int iPixelFormat;
+-        int iLayerPlane;
+-        UINT nAttributes;
+-        PTR32 piAttributes;
+-        PTR32 piValues;
+-        BOOL ret;
+-    } *params = args;
+-    const struct opengl_funcs *funcs = get_dc_funcs( ULongToPtr(params->hdc) );
+-    if (!funcs || !funcs->p_wglGetPixelFormatAttribivARB) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = funcs->p_wglGetPixelFormatAttribivARB( ULongToPtr(params->hdc), params->iPixelFormat, params->iLayerPlane, params->nAttributes, ULongToPtr(params->piAttributes), ULongToPtr(params->piValues) );
+-    return STATUS_SUCCESS;
+-}
+-
+ static NTSTATUS wow64_ext_wglGetSwapIntervalEXT( void *args )
+ {
+     struct
+@@ -89981,14 +89894,11 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+     wow64_ext_glWriteMaskEXT,
+     wow64_ext_wglAllocateMemoryNV,
+     wow64_ext_wglBindTexImageARB,
+-    wow64_ext_wglChoosePixelFormatARB,
+     wow64_ext_wglCreateContextAttribsARB,
+     wow64_ext_wglCreatePbufferARB,
+     wow64_ext_wglDestroyPbufferARB,
+     wow64_ext_wglFreeMemoryNV,
+     wow64_ext_wglGetPbufferDCARB,
+-    wow64_ext_wglGetPixelFormatAttribfvARB,
+-    wow64_ext_wglGetPixelFormatAttribivARB,
+     wow64_ext_wglGetSwapIntervalEXT,
+     wow64_ext_wglMakeContextCurrentARB,
+     wow64_ext_wglQueryCurrentRendererIntegerWINE,
+diff --git a/dlls/opengl32/unixlib.h b/dlls/opengl32/unixlib.h
+index a41771ea362..09340fce5d6 100644
+--- a/dlls/opengl32/unixlib.h
++++ b/dlls/opengl32/unixlib.h
+@@ -25689,18 +25689,6 @@ struct wglBindTexImageARB_params
+     BOOL ret;
+ };
+ 
+-struct wglChoosePixelFormatARB_params
+-{
+-    TEB *teb;
+-    HDC hdc;
+-    const int *piAttribIList;
+-    const FLOAT *pfAttribFList;
+-    UINT nMaxFormats;
+-    int *piFormats;
+-    UINT *nNumFormats;
+-    BOOL ret;
+-};
+-
+ struct wglCreateContextAttribsARB_params
+ {
+     TEB *teb;
+@@ -25741,30 +25729,6 @@ struct wglGetPbufferDCARB_params
+     HDC ret;
+ };
+ 
+-struct wglGetPixelFormatAttribfvARB_params
+-{
+-    TEB *teb;
+-    HDC hdc;
+-    int iPixelFormat;
+-    int iLayerPlane;
+-    UINT nAttributes;
+-    const int *piAttributes;
+-    FLOAT *pfValues;
+-    BOOL ret;
+-};
+-
+-struct wglGetPixelFormatAttribivARB_params
+-{
+-    TEB *teb;
+-    HDC hdc;
+-    int iPixelFormat;
+-    int iLayerPlane;
+-    UINT nAttributes;
+-    const int *piAttributes;
+-    int *piValues;
+-    BOOL ret;
+-};
+-
+ struct wglGetSwapIntervalEXT_params
+ {
+     TEB *teb;
+@@ -28958,14 +28922,11 @@ enum unix_funcs
+     unix_glWriteMaskEXT,
+     unix_wglAllocateMemoryNV,
+     unix_wglBindTexImageARB,
+-    unix_wglChoosePixelFormatARB,
+     unix_wglCreateContextAttribsARB,
+     unix_wglCreatePbufferARB,
+     unix_wglDestroyPbufferARB,
+     unix_wglFreeMemoryNV,
+     unix_wglGetPbufferDCARB,
+-    unix_wglGetPixelFormatAttribfvARB,
+-    unix_wglGetPixelFormatAttribivARB,
+     unix_wglGetSwapIntervalEXT,
+     unix_wglMakeContextCurrentARB,
+     unix_wglQueryCurrentRendererIntegerWINE,
+diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
+index ee8384bc658..e8fb929f127 100644
+--- a/dlls/opengl32/wgl.c
++++ b/dlls/opengl32/wgl.c
+@@ -1093,28 +1093,6 @@ BOOL WINAPI wglChoosePixelFormatARB( HDC hdc, const int *attribs_int, const FLOA
+ 
+     wgl_formats = get_pixel_formats( hdc, &num_wgl_formats, &num_wgl_onscreen_formats );
+ 
+-    /* If the driver doesn't yet provide ARB attrib information in
+-     * wgl_pixel_format, fall back to an explicit call. */
+-    if (num_wgl_formats && !wgl_formats[0].pixel_type)
+-    {
+-        struct wglChoosePixelFormatARB_params args =
+-        {
+-            .teb = NtCurrentTeb(),
+-            .hdc = hdc,
+-            .piAttribIList = attribs_int,
+-            .pfAttribFList = attribs_float,
+-            .nMaxFormats = max_formats,
+-            .piFormats = formats,
+-            .nNumFormats = num_formats
+-        };
+-        NTSTATUS status;
+-
+-        if ((status = UNIX_CALL( wglChoosePixelFormatARB, &args )))
+-            WARN( "wglChoosePixelFormatARB returned %#lx\n", status );
+-
+-        return args.ret;
+-    }
+-
+     /* Gather, validate and deduplicate all attributes */
+     for (i = 0; attribs_int && attribs_int[i]; i += 2)
+     {
+@@ -1197,28 +1175,6 @@ BOOL WINAPI wglGetPixelFormatAttribivARB( HDC hdc, int index, int plane, UINT co
+ 
+     formats = get_pixel_formats( hdc, &num_formats, &num_onscreen_formats );
+ 
+-    /* If the driver doesn't yet provide ARB attrib information in
+-     * wgl_pixel_format, fall back to an explicit call. */
+-    if (num_formats && !formats[0].pixel_type)
+-    {
+-        struct wglGetPixelFormatAttribivARB_params args =
+-        {
+-            .teb = NtCurrentTeb(),
+-            .hdc = hdc,
+-            .iPixelFormat = index,
+-            .iLayerPlane = plane,
+-            .nAttributes = count,
+-            .piAttributes = attributes,
+-            .piValues = values
+-        };
+-        NTSTATUS status;
+-
+-        if ((status = UNIX_CALL( wglGetPixelFormatAttribivARB, &args )))
+-            WARN( "wglGetPixelFormatAttribivARB returned %#lx\n", status );
+-
+-        return args.ret;
+-    }
+-
+     if (!count) return TRUE;
+     if (count == 1 && attributes[0] == WGL_NUMBER_PIXEL_FORMATS_ARB)
+     {
+-- 
+GitLab
+

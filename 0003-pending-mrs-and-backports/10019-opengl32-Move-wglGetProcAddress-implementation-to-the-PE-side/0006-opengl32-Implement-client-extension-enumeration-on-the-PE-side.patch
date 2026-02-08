@@ -1,0 +1,327 @@
+From 1b251874d03d4b7b61ae2632fa0c8c0d140368e5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Tue, 3 Feb 2026 11:22:53 +0100
+Subject: [PATCH] opengl32: Implement client extension enumeration on the PE
+ side.
+
+---
+ dlls/opengl32/make_opengl    |  1 -
+ dlls/opengl32/unix_thunks.c  |  4 +-
+ dlls/opengl32/unix_thunks.h  |  1 -
+ dlls/opengl32/unix_wgl.c     | 86 +++---------------------------------
+ dlls/opengl32/wgl.c          | 66 +++++++++++++++++++++++++++
+ include/wine/opengl_driver.h |  2 +
+ 6 files changed, 77 insertions(+), 83 deletions(-)
+
+diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
+index dbdfb3ecbf7..79e493f3871 100755
+--- a/dlls/opengl32/make_opengl
++++ b/dlls/opengl32/make_opengl
+@@ -214,7 +214,6 @@ my %manual_unix_thunks =
+      "glGetInteger64v" => 1,
+      "glGetIntegerv" => 1,
+      "glGetString" => 1,
+-     "glGetStringi" => 1,
+      "glGetUnsignedBytevEXT" => 1,
+      "glImportSyncEXT" => 1,
+      "glNamedFramebufferDrawBuffer" => 1,
+diff --git a/dlls/opengl32/unix_thunks.c b/dlls/opengl32/unix_thunks.c
+index d4dca9dbd47..3660a55d16e 100644
+--- a/dlls/opengl32/unix_thunks.c
++++ b/dlls/opengl32/unix_thunks.c
+@@ -12301,7 +12301,7 @@ static NTSTATUS ext_glGetStringi( void *args )
+     struct glGetStringi_params *params = args;
+     const struct opengl_funcs *funcs = params->teb->glTable;
+     if (!funcs->p_glGetStringi) return STATUS_NOT_IMPLEMENTED;
+-    params->ret = wrap_glGetStringi( params->teb, params->name, params->index );
++    params->ret = funcs->p_glGetStringi( params->name, params->index );
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -55009,7 +55009,7 @@ static NTSTATUS wow64_ext_glGetStringi( void *args )
+     const GLubyte *ret;
+     const struct opengl_funcs *funcs = teb->glTable;
+     if (!funcs->p_glGetStringi) return STATUS_NOT_IMPLEMENTED;
+-    ret = wrap_glGetStringi( teb, params->name, params->index );
++    ret = funcs->p_glGetStringi( params->name, params->index );
+     return return_wow64_string( ret, &params->ret );
+ }
+ 
+diff --git a/dlls/opengl32/unix_thunks.h b/dlls/opengl32/unix_thunks.h
+index 2c0824e0268..a86626520f4 100644
+--- a/dlls/opengl32/unix_thunks.h
++++ b/dlls/opengl32/unix_thunks.h
+@@ -34,7 +34,6 @@ extern void wrap_glFramebufferDrawBuffersEXT( TEB *teb, GLuint framebuffer, GLsi
+ extern void wrap_glFramebufferReadBufferEXT( TEB *teb, GLuint framebuffer, GLenum mode );
+ extern void wrap_glGetFramebufferParameterivEXT( TEB *teb, GLuint framebuffer, GLenum pname, GLint *params );
+ extern void wrap_glGetInteger64v( TEB *teb, GLenum pname, GLint64 *data );
+-extern const GLubyte *wrap_glGetStringi( TEB *teb, GLenum name, GLuint index );
+ extern void wrap_glGetUnsignedBytevEXT( TEB *teb, GLenum pname, GLubyte *data );
+ extern GLsync wrap_glImportSyncEXT( TEB *teb, GLenum external_sync_type, GLintptr external_sync, GLbitfield flags, GLsync handle );
+ extern void wrap_glNamedFramebufferDrawBuffer( TEB *teb, GLuint framebuffer, GLenum buf );
+diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
+index d2f0312ad97..452af04b22f 100644
+--- a/dlls/opengl32/unix_wgl.c
++++ b/dlls/opengl32/unix_wgl.c
+@@ -653,61 +653,6 @@ static BOOL is_extension_supported( struct context *ctx, const char *extension )
+                     sizeof(ctx->extension_array[0]), string_array_cmp ) != NULL;
+ }
+ 
+-static char *append_extension( char *ptr, const char *name )
+-{
+-    size_t size = strlen( name );
+-    memcpy( ptr, name, size );
+-    ptr += size;
+-    *ptr++ = ' ';
+-    return ptr;
+-}
+-
+-/* build the extension string by filtering out the disabled extensions */
+-static GLubyte *filter_extensions( struct context *ctx, const char *extensions, const struct opengl_funcs *funcs )
+-{
+-    const char *end, **extra;
+-    size_t size;
+-    char *p, *str;
+-
+-    size = strlen( extensions ) + 2;
+-    if (funcs->p_glImportMemoryWin32HandleEXT) size += strlen( "GL_EXT_memory_object_win32" ) + 1;
+-    if (funcs->p_glImportSemaphoreWin32HandleEXT) size += strlen( "GL_EXT_semaphore_win32" ) + 1;
+-    for (extra = legacy_extensions; *extra; extra++) size += strlen( *extra ) + 1;
+-    if (!(p = str = malloc( size ))) return NULL;
+-
+-    TRACE( "GL_EXTENSIONS:\n" );
+-
+-    for (;;)
+-    {
+-        while (*extensions == ' ') extensions++;
+-        if (!*extensions) break;
+-
+-        if (!(end = strchr( extensions, ' ' ))) end = extensions + strlen( extensions );
+-        memcpy( p, extensions, end - extensions );
+-        p[end - extensions] = 0;
+-
+-        if (is_extension_supported( ctx, p ))
+-        {
+-            TRACE( "++ %s\n", p );
+-            p += end - extensions;
+-            *p++ = ' ';
+-        }
+-        else
+-        {
+-            TRACE( "-- %s (disabled in context)\n", p );
+-        }
+-        extensions = end;
+-    }
+-
+-    if (funcs->p_glImportMemoryWin32HandleEXT) p = append_extension( p, "GL_EXT_memory_object_win32" );
+-    if (funcs->p_glImportSemaphoreWin32HandleEXT) p = append_extension( p, "GL_EXT_semaphore_win32" );
+-    for (extra = legacy_extensions; *extra; extra++) p = append_extension( p, *extra );
+-
+-    if (p != str) --p;
+-    *p = 0;
+-    return (GLubyte *)str;
+-}
+-
+ /* Check if any GL extension from the list is supported */
+ static BOOL is_any_extension_supported( struct context *ctx, const char *extension )
+ {
+@@ -809,9 +754,6 @@ static BOOL get_integer( TEB *teb, GLenum pname, GLint *data )
+ 
+     switch (pname)
+     {
+-    case GL_NUM_EXTENSIONS:
+-        *data = ctx->extension_count;
+-        return TRUE;
+     case GL_DRAW_FRAMEBUFFER_BINDING:
+         if (!draw->draw_fbo) break;
+         *data = ctx->draw_fbo;
+@@ -860,12 +802,6 @@ const GLubyte *wrap_glGetString( TEB *teb, GLenum name )
+             const char *renderer = funcs->p_wglQueryCurrentRendererStringWINE( WGL_RENDERER_DEVICE_ID_WINE );
+             return renderer ? (const GLubyte *)renderer : ret;
+         }
+-        if (name == GL_EXTENSIONS)
+-        {
+-            struct context *ctx = get_current_context( teb, NULL, NULL );
+-            GLubyte **extensions = &ctx->extensions;
+-            if (*extensions || (*extensions = filter_extensions( ctx, (const char *)ret, funcs ))) return *extensions;
+-        }
+         else if (name == GL_VERSION)
+         {
+             struct context *ctx = get_current_context( teb, NULL, NULL );
+@@ -876,20 +812,6 @@ const GLubyte *wrap_glGetString( TEB *teb, GLenum name )
+     return ret;
+ }
+ 
+-const GLubyte *wrap_glGetStringi( TEB *teb, GLenum name, GLuint index )
+-{
+-    const struct opengl_funcs *funcs = teb->glTable;
+-
+-    if (name == GL_EXTENSIONS)
+-    {
+-        struct context *ctx = get_current_context( teb, NULL, NULL );
+-        if (index < ctx->extension_count) return (const GLubyte *)ctx->extension_array[index];
+-        index = -1;
+-    }
+-
+-    return funcs->p_glGetStringi( name, index );
+-}
+-
+ static int registry_entry_cmp( const void *a, const void *b )
+ {
+     const struct registry_entry *entry_a = a, *entry_b = b;
+@@ -1236,6 +1158,7 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+     DWORD tid = HandleToULong(teb->ClientId.UniqueThread);
+     size_t size = ARRAYSIZE(legacy_extensions) - 1, count = 0;
+     const char *version, *rest = "", **extensions, *compat;
++    USHORT *ptr;
+     GLint num;
+     int i, j;
+ 
+@@ -1381,7 +1304,12 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+         ctx->extension_count = j;
+     }
+ 
+-    if (TRACE_ON(opengl)) for (i = 0; i < count; i++) TRACE( "++ %s\n", extensions[i] );
++    dump_extensions( "Client", client->extensions );
++
++    ptr = client->compat_extensions;
++    for (enum opengl_extension *ext = parsed_extensions; *ext != GL_EXTENSION_COUNT; ext++)
++        if (client->extensions[*ext]) *ptr++ = *ext;
++    *ptr = GL_EXTENSION_COUNT;
+ }
+ 
+ BOOL wrap_wglMakeCurrent( TEB *teb, HDC hdc, HGLRC client_context )
+diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
+index d781eedfbfa..c8e2f858482 100644
+--- a/dlls/opengl32/wgl.c
++++ b/dlls/opengl32/wgl.c
+@@ -277,6 +277,7 @@ struct context
+ {
+     struct opengl_client_context base;
+     struct handle_table syncs;
++    char *extensions;
+ };
+ 
+ static struct context *context_from_opengl_client_context( struct opengl_client_context *base )
+@@ -322,6 +323,7 @@ static void free_client_context( struct handle_entry *ptr )
+ {
+     struct context *context = context_from_opengl_client_context( ptr->context );
+     free_handle( &contexts, ptr );
++    free( context->extensions );
+     free( context );
+ }
+ 
+@@ -2010,6 +2012,19 @@ void WINAPI glGetIntegerv( GLenum name, GLint *data )
+     case GL_MINOR_VERSION:
+         *data = ctx->base.minor_version;
+         return;
++    case GL_NUM_EXTENSIONS:
++    {
++        UINT count = 0;
++        for (UINT i = 0; i < ARRAY_SIZE(all_extensions); i++)
++        {
++            if (strncmp( all_extensions[i].name, "GL_", 3 )) continue;
++            if (ctx->base.extensions[i]) count++;
++        }
++        if (ctx->base.extensions[WGL_EXT_extensions_string]) count++;
++        if (ctx->base.extensions[WGL_EXT_swap_control]) count++;
++        *data = count;
++        return;
++    }
+     }
+ 
+     if ((status = UNIX_CALL( glGetIntegerv, &args ))) WARN( "glGetIntegerv returned %#lx\n", status );
+@@ -2027,9 +2042,25 @@ const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
+ #ifndef _WIN64
+     GLubyte *wow64_str = NULL;
+ #endif
++    struct context *ctx;
+ 
+     TRACE( "name %d, index %d\n", name, index );
+ 
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return NULL;
++
++    switch (name)
++    {
++    case GL_EXTENSIONS:
++        for (UINT i = 0; i < ARRAY_SIZE(all_extensions); i++)
++        {
++            if (strncmp( all_extensions[i].name, "GL_", 3 ) || !all_extensions[i].exposed) continue;
++            if (ctx->base.extensions[i] && !index--) return (const GLubyte *)all_extensions[i].name;
++        }
++        if (ctx->base.extensions[WGL_EXT_extensions_string] && !index--) return (const GLubyte *)"WGL_EXT_extensions_string";
++        if (ctx->base.extensions[WGL_EXT_swap_control] && !index--) return (const GLubyte *)"WGL_EXT_swap_control";
++        return NULL;
++    }
++
+ #ifndef _WIN64
+     if (UNIX_CALL( glGetStringi, &args ) == STATUS_BUFFER_TOO_SMALL) args.ret = wow64_str = malloc( (size_t)args.ret );
+ #endif
+@@ -2047,6 +2078,7 @@ const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
+ const GLubyte * WINAPI glGetString( GLenum name )
+ {
+     struct glGetString_params args = { .teb = NtCurrentTeb(), .name = name };
++    struct context *ctx;
+     NTSTATUS status;
+ #ifndef _WIN64
+     GLubyte *wow64_str = NULL;
+@@ -2054,6 +2086,40 @@ const GLubyte * WINAPI glGetString( GLenum name )
+ 
+     TRACE( "name %d\n", name );
+ 
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return NULL;
++
++    switch (name)
++    {
++    case GL_EXTENSIONS:
++        if (*ctx->base.compat_extensions == GL_EXTENSION_COUNT)
++        {
++            set_gl_error( GL_INVALID_ENUM );
++            return NULL;
++        }
++        if (!ctx->extensions)
++        {
++            const USHORT *indexes = ctx->base.compat_extensions;
++            UINT size = 0;
++            char *ptr;
++
++            for (UINT i = 0; indexes[i] != GL_EXTENSION_COUNT; i++) size += all_extensions[indexes[i]].len + 1;
++            if (ctx->base.extensions[GL_EXT_memory_object_win32]) size += strlen( "GL_EXT_memory_object_win32 " );
++            if (ctx->base.extensions[GL_EXT_semaphore_win32]) size += strlen( "GL_EXT_semaphore_win32 " );
++            if (ctx->base.extensions[WGL_EXT_extensions_string]) size += strlen( "WGL_EXT_extensions_string " );
++            if (ctx->base.extensions[WGL_EXT_swap_control]) size += strlen( "WGL_EXT_swap_control " );
++            if (!(ptr = ctx->extensions = malloc( size ))) return NULL;
++
++            for (UINT i = 0; indexes[i] != GL_EXTENSION_COUNT; i++) ptr += sprintf( ptr, "%s ", all_extensions[indexes[i]].name );
++            if (ctx->base.extensions[GL_EXT_memory_object_win32]) ptr += sprintf( ptr, "GL_EXT_memory_object_win32 " );
++            if (ctx->base.extensions[GL_EXT_semaphore_win32]) ptr += sprintf( ptr, "GL_EXT_semaphore_win32 " );
++            if (ctx->base.extensions[WGL_EXT_extensions_string]) ptr += sprintf( ptr, "WGL_EXT_extensions_string " );
++            if (ctx->base.extensions[WGL_EXT_swap_control]) ptr += sprintf( ptr, "WGL_EXT_swap_control " );
++            if (ptr != ctx->extensions) ptr[-1] = 0;
++        }
++
++        return (const GLubyte *)ctx->extensions;
++    }
++
+ #ifndef _WIN64
+     if (UNIX_CALL( glGetString, &args ) == STATUS_BUFFER_TOO_SMALL) args.ret = wow64_str = malloc( (size_t)args.ret );
+ #endif
+diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
+index f73ff11f023..4c852a9b52a 100644
+--- a/include/wine/opengl_driver.h
++++ b/include/wine/opengl_driver.h
+@@ -77,9 +77,11 @@ struct opengl_client_context
+     int                         major_version;
+     int                         minor_version;
+     BOOLEAN                     extensions[GL_EXTENSION_COUNT];         /* exposed client extensions */
++    UINT16                      compat_extensions[GL_EXTENSION_COUNT];  /* compat extension indexes */
+ };
+ 
+ /* make sure client context size stays small */
++C_ASSERT( ARRAY_SIZE(((struct opengl_client_context *)0)->compat_extensions) <= 0x10000 );
+ C_ASSERT( sizeof(struct opengl_client_context) <= 0x1000 );
+ 
+ static inline struct opengl_client_context *opengl_client_context_from_client( HGLRC client_context )
+-- 
+GitLab
+
