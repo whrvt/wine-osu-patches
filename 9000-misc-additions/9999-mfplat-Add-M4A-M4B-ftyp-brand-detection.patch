@@ -1,0 +1,36 @@
+From 91e7a48c4cb50afe545c67e618b1f846e4deae13 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 25 Feb 2026 09:56:38 +0100
+Subject: [PATCH] mfplat: Add M4A/M4B ftyp brand detection.
+
+osu! beatmaps sometimes contain .m4a files renamed to .mp3, breaking audio playback on Wine.
+Adding such ftyp to the resolver is enough for them to play correctly.
+---
+ dlls/mfplat/main.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/dlls/mfplat/main.c b/dlls/mfplat/main.c
+index 01d9d2ddd89..8d45cd4131f 100644
+--- a/dlls/mfplat/main.c
++++ b/dlls/mfplat/main.c
+@@ -6214,6 +6214,8 @@ static HRESULT resolver_get_bytestream_url_hint(IMFByteStream *stream, WCHAR con
+     static const unsigned char mp4_magic[]    = {0x00,0x00,0x00,0x00, 'f', 't', 'y', 'p', 'M', 'S', 'N', 'V',0x00,0x00,0x00,0x00};
+     static const unsigned char mp42magic[]    = {0x00,0x00,0x00,0x00, 'f', 't', 'y', 'p', 'm', 'p', '4', '2',0x00,0x00,0x00,0x00};
+     static const unsigned char mp4vmagic[]    = {0x00,0x00,0x00,0x00, 'f', 't', 'y', 'p', 'M', '4', 'V', ' ',0x00,0x00,0x00,0x00};
++    static const unsigned char m4amagic[]     = {0x00,0x00,0x00,0x00, 'f', 't', 'y', 'p', 'M', '4', 'A', ' ',0x00,0x00,0x00,0x00};
++    static const unsigned char m4bmagic[]     = {0x00,0x00,0x00,0x00, 'f', 't', 'y', 'p', 'M', '4', 'B', ' ',0x00,0x00,0x00,0x00};
+     static const unsigned char mp4mask[]      = {0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00};
+     static const unsigned char mp3magic[]     = {0xff,0xf2,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+     static const unsigned char mp3mask[]      = {0xff,0xf6,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+@@ -6233,6 +6235,8 @@ static HRESULT resolver_get_bytestream_url_hint(IMFByteStream *stream, WCHAR con
+         { mp42magic, L".mp4", mp4mask },
+         { mp4_magic, L".mp4", mp4mask },
+         { mp4vmagic, L".m4v", mp4mask },
++        { m4amagic,  L".m4a", mp4mask },
++        { m4bmagic,  L".m4a", mp4mask },
+         { mp3magic, L".mp3", mp3mask },
+         { idv2_3_magic, L".mp3", idv2_3_mask },
+     };
+-- 
+2.53.0
+

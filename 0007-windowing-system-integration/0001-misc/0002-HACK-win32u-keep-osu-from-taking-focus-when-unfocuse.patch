@@ -1,4 +1,4 @@
-From 2ef281dbd3d3f99d971d80725d890e944a2abc4b Mon Sep 17 00:00:00 2001
+From d99ffe855766f674074462213991e80be1500b08 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 12 Mar 2025 20:15:28 +0100
 Subject: [PATCH] HACK: win32u: keep osu! from taking focus when unfocused on
@@ -7,15 +7,15 @@ Subject: [PATCH] HACK: win32u: keep osu! from taking focus when unfocused on
 Depends on Proton's WM detection. KDE seems to not be affected by this.
 Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
 ---
-dlls/win32u/window.c | 24 ++++++++++++++++++++++++
- 1 file changed, 24 insertions(+)
+ dlls/win32u/window.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index e4ca25a9521..73888ed4115 100644
+index be709f9b2e6..12e29d3c3c8 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -31,6 +31,8 @@
- #include "ntuser_private.h"
+@@ -32,6 +32,8 @@
+ #include "wine/opengl_driver.h"
  #include "wine/server.h"
  #include "wine/debug.h"
 +#include "ntuser.h"
@@ -23,7 +23,7 @@ index e4ca25a9521..73888ed4115 100644
  
  WINE_DEFAULT_DEBUG_CHANNEL(win);
  
-@@ -3730,6 +3732,19 @@ done:
+@@ -3805,6 +3807,19 @@ done:
      return after;
  }
  
@@ -43,7 +43,7 @@ index e4ca25a9521..73888ed4115 100644
  /* NtUserSetWindowPos implementation */
  BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
  {
-@@ -3738,9 +3753,18 @@ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+@@ -3813,9 +3828,17 @@ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
      struct window_rects old_rects, new_rects;
      UINT orig_flags, context;
      BOOL ret = FALSE;
@@ -52,9 +52,8 @@ index e4ca25a9521..73888ed4115 100644
      orig_flags = winpos->flags;
  
 +    /* osu! hack: fix osu! taking focus over other apps on certain WMs (ex. i3, sway) and xFCE */
-+    /* GNOME: game will mostly behave as borderless, to fix Mutter stacking issues..*/
 +    /* can also be forced with: WINE_ENABLE_OSU_FOCUS_FIX=1 */
-+    if (wm == WINE_WM_X11_MUTTER || (osu_focus_hack(wm) && winpos->hwndInsertAfter == HWND_NOTOPMOST && (get_window_long(winpos->hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST)))
++    if ((osu_focus_hack(wm) && winpos->hwndInsertAfter == HWND_NOTOPMOST && (get_window_long(winpos->hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST)))
 +    {
 +        winpos->flags |= SWP_NOACTIVATE | SWP_NOZORDER;
 +    }
@@ -63,5 +62,5 @@ index e4ca25a9521..73888ed4115 100644
      if (!(winpos->flags & SWP_NOZORDER))
      {
 -- 
-2.49.0
+2.53.0
 
