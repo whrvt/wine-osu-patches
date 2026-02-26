@@ -1,0 +1,297 @@
+From 92a302437b44793810d96653098346eaaafc307a Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Mon, 10 Mar 2025 11:18:43 +0100
+Subject: [PATCH 42/48] include: Fix RTL_PATH_TYPE names.
+
+(cherry picked from commit b8667c135d76b416de46dd435c917834757626cc)
+
+CW-Bug-Id: #26492
+---
+ dlls/kernel32/profile.c      |  2 +-
+ dlls/kernelbase/file.c       |  2 +-
+ dlls/ntdll/actctx.c          |  2 +-
+ dlls/ntdll/loader.c          |  8 +++---
+ dlls/ntdll/path.c            | 52 ++++++++++++++++++------------------
+ dlls/ntoskrnl.exe/ntoskrnl.c |  2 +-
+ include/winternl.h           | 23 ++++++++--------
+ 7 files changed, 45 insertions(+), 46 deletions(-)
+
+diff --git a/dlls/kernel32/profile.c b/dlls/kernel32/profile.c
+index f65790ecc92..657be47a200 100644
+--- a/dlls/kernel32/profile.c
++++ b/dlls/kernel32/profile.c
+@@ -738,7 +738,7 @@ static BOOL PROFILE_Open( LPCWSTR filename, BOOL write_access )
+     if (!filename)
+         filename = L"win.ini";
+ 
+-    if ((RtlDetermineDosPathNameType_U(filename) == RELATIVE_PATH) &&
++    if ((RtlDetermineDosPathNameType_U(filename) == RtlPathTypeRelative) &&
+         !wcschr(filename, '\\') && !wcschr(filename, '/'))
+     {
+         WCHAR windirW[MAX_PATH];
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index 2386f900c01..d29bde83abc 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -101,7 +101,7 @@ static const WCHAR *get_machine_wow64_dir( WORD machine )
+  */
+ static inline BOOL contains_path( const WCHAR *name )
+ {
+-    if (RtlDetermineDosPathNameType_U( name ) != RELATIVE_PATH) return TRUE;
++    if (RtlDetermineDosPathNameType_U( name ) != RtlPathTypeRelative) return TRUE;
+     if (name[0] != '.') return FALSE;
+     if (name[1] == '/' || name[1] == '\\') return TRUE;
+     return (name[1] == '.' && (name[2] == '/' || name[2] == '\\'));
+diff --git a/dlls/ntdll/actctx.c b/dlls/ntdll/actctx.c
+index a4581d05b91..a3f017353e1 100644
+--- a/dlls/ntdll/actctx.c
++++ b/dlls/ntdll/actctx.c
+@@ -5319,7 +5319,7 @@ NTSTATUS WINAPI RtlCreateActivationContext( HANDLE *handle, const void *ptr )
+         BOOLEAN ret;
+ 
+         if (pActCtx->dwFlags & ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID &&
+-            RtlDetermineDosPathNameType_U(pActCtx->lpSource) == RELATIVE_PATH)
++            RtlDetermineDosPathNameType_U(pActCtx->lpSource) == RtlPathTypeRelative)
+         {
+             DWORD dir_len, source_len;
+ 
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index e24a6e86910..b48dc7bfa46 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -2719,7 +2719,7 @@ static NTSTATUS get_dll_load_path_search_flags( LPCWSTR module, DWORD flags, WCH
+     if (flags & LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR)
+     {
+         DWORD type = RtlDetermineDosPathNameType_U( module );
+-        if (type != ABSOLUTE_DRIVE_PATH && type != ABSOLUTE_PATH && type != DEVICE_PATH && type != UNC_PATH)
++        if (type != RtlPathTypeDriveAbsolute && type != RtlPathTypeRooted && type != RtlPathTypeLocalDevice && type != RtlPathTypeUncAbsolute)
+             return STATUS_INVALID_PARAMETER;
+         mod_end = get_module_path_end( module );
+         len += (mod_end - module) + 1;
+@@ -3409,7 +3409,7 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, UNI
+         }
+     }
+ 
+-    if (RtlDetermineDosPathNameType_U( libname ) == RELATIVE_PATH)
++    if (RtlDetermineDosPathNameType_U( libname ) == RtlPathTypeRelative)
+     {
+         status = search_dll_file( load_path, libname, nt_name, pwm, mapping, image_info, id );
+         if (status == STATUS_DLL_NOT_FOUND)
+@@ -4951,9 +4951,9 @@ NTSTATUS WINAPI LdrAddDllDirectory( const UNICODE_STRING *dir, void **cookie )
+     OBJECT_ATTRIBUTES attr;
+     DWORD len;
+     struct dll_dir_entry *ptr;
+-    DOS_PATHNAME_TYPE type = RtlDetermineDosPathNameType_U( dir->Buffer );
++    RTL_PATH_TYPE type = RtlDetermineDosPathNameType_U( dir->Buffer );
+ 
+-    if (type != ABSOLUTE_PATH && type != ABSOLUTE_DRIVE_PATH && type != UNC_PATH)
++    if (type != RtlPathTypeRooted && type != RtlPathTypeDriveAbsolute && type != RtlPathTypeUncAbsolute)
+         return STATUS_INVALID_PARAMETER;
+ 
+     status = RtlDosPathNameToNtPathName_U_WithStatus( dir->Buffer, &nt_name, NULL, NULL );
+diff --git a/dlls/ntdll/path.c b/dlls/ntdll/path.c
+index dda6ba4ee53..22d7d963c4a 100644
+--- a/dlls/ntdll/path.c
++++ b/dlls/ntdll/path.c
+@@ -36,21 +36,21 @@ WINE_DEFAULT_DEBUG_CHANNEL(file);
+ /***********************************************************************
+  *             RtlDetermineDosPathNameType_U   (NTDLL.@)
+  */
+-DOS_PATHNAME_TYPE WINAPI RtlDetermineDosPathNameType_U( PCWSTR path )
++RTL_PATH_TYPE WINAPI RtlDetermineDosPathNameType_U( PCWSTR path )
+ {
+     if (IS_SEPARATOR(path[0]))
+     {
+-        if (!IS_SEPARATOR(path[1])) return ABSOLUTE_PATH;       /* "/foo" */
+-        if (path[2] != '.' && path[2] != '?') return UNC_PATH;  /* "//foo" */
+-        if (IS_SEPARATOR(path[3])) return DEVICE_PATH;          /* "//./foo" or "//?/foo" */
+-        if (path[3]) return UNC_PATH;                           /* "//.foo" or "//?foo" */
+-        return UNC_DOT_PATH;                                    /* "//." or "//?" */
++        if (!IS_SEPARATOR(path[1])) return RtlPathTypeRooted;                   /* "/foo" */
++        if (path[2] != '.' && path[2] != '?') return RtlPathTypeUncAbsolute;    /* "//foo" */
++        if (IS_SEPARATOR(path[3])) return RtlPathTypeLocalDevice;               /* "//./foo" or "//?/foo" */
++        if (path[3]) return RtlPathTypeUncAbsolute;                             /* "//.foo" or "//?foo" */
++        return RtlPathTypeRootLocalDevice;                                      /* "//." or "//?" */
+     }
+     else
+     {
+-        if (!path[0] || path[1] != ':') return RELATIVE_PATH;   /* "foo" */
+-        if (IS_SEPARATOR(path[2])) return ABSOLUTE_DRIVE_PATH;  /* "c:/foo" */
+-        return RELATIVE_DRIVE_PATH;                             /* "c:foo" */
++        if (!path[0] || path[1] != ':') return RtlPathTypeRelative; /* "foo" */
++        if (IS_SEPARATOR(path[2])) return RtlPathTypeDriveAbsolute; /* "c:/foo" */
++        return RtlPathTypeDriveRelative;                            /* "c:foo" */
+     }
+ }
+ 
+@@ -78,15 +78,15 @@ ULONG WINAPI RtlIsDosDeviceName_U( PCWSTR dos_name )
+ 
+     switch(RtlDetermineDosPathNameType_U( dos_name ))
+     {
+-    case INVALID_PATH:
+-    case UNC_PATH:
++    case RtlPathTypeUnknown:
++    case RtlPathTypeUncAbsolute:
+         return 0;
+-    case DEVICE_PATH:
++    case RtlPathTypeLocalDevice:
+         if (!wcsicmp( dos_name, L"\\\\.\\CON" ))
+             return MAKELONG( sizeof(conW), 4 * sizeof(WCHAR) );  /* 4 is length of \\.\ prefix */
+         return 0;
+-    case ABSOLUTE_DRIVE_PATH:
+-    case RELATIVE_DRIVE_PATH:
++    case RtlPathTypeDriveAbsolute:
++    case RtlPathTypeDriveRelative:
+         start = dos_name + 2;  /* skip drive letter */
+         break;
+     default:
+@@ -271,11 +271,11 @@ NTSTATUS WINAPI RtlDosPathNameToNtPathName_U_WithStatus(const WCHAR *dos_path, U
+     wcscpy(ntpath->Buffer, L"\\??\\");
+     switch (RtlDetermineDosPathNameType_U(ptr))
+     {
+-    case UNC_PATH: /* \\foo */
++    case RtlPathTypeUncAbsolute: /* \\foo */
+         offset = 2;
+         wcscat(ntpath->Buffer, L"UNC\\");
+         break;
+-    case DEVICE_PATH: /* \\.\foo */
++    case RtlPathTypeLocalDevice: /* \\.\foo */
+         offset = 4;
+         break;
+     default:
+@@ -361,10 +361,10 @@ ULONG WINAPI RtlDosSearchPath_U(LPCWSTR paths, LPCWSTR search, LPCWSTR ext,
+                                 ULONG buffer_size, LPWSTR buffer, 
+                                 LPWSTR* file_part)
+ {
+-    DOS_PATHNAME_TYPE type = RtlDetermineDosPathNameType_U(search);
++    RTL_PATH_TYPE type = RtlDetermineDosPathNameType_U(search);
+     ULONG len = 0;
+ 
+-    if (type == RELATIVE_PATH)
++    if (type == RtlPathTypeRelative)
+     {
+         ULONG allocated = 0, needed, filelen;
+         WCHAR *name = NULL;
+@@ -535,16 +535,16 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
+ 
+     switch (RtlDetermineDosPathNameType_U(name))
+     {
+-    case UNC_PATH:              /* \\foo   */
++    case RtlPathTypeUncAbsolute:    /* \\foo   */
+         ptr = skip_unc_prefix( name );
+         mark = (ptr - name);
+         break;
+ 
+-    case DEVICE_PATH:           /* \\.\foo */
++    case RtlPathTypeLocalDevice:    /* \\.\foo */
+         mark = 4;
+         break;
+ 
+-    case ABSOLUTE_DRIVE_PATH:   /* c:\foo  */
++    case RtlPathTypeDriveAbsolute:  /* c:\foo  */
+         reqsize = sizeof(WCHAR);
+         tmp[0] = name[0];
+         ins_str = tmp;
+@@ -552,7 +552,7 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
+         mark = 3;
+         break;
+ 
+-    case RELATIVE_DRIVE_PATH:   /* c:foo   */
++    case RtlPathTypeDriveRelative:  /* c:foo   */
+         dep = 2;
+         if (wcsnicmp( name, cd->Buffer, 2 ))
+         {
+@@ -601,7 +601,7 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
+         }
+         /* fall through */
+ 
+-    case RELATIVE_PATH:         /* foo     */
++    case RtlPathTypeRelative:   /* foo     */
+         reqsize = cd->Length;
+         ins_str = cd->Buffer;
+         if (cd->Buffer[1] != ':')
+@@ -612,7 +612,7 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
+         else mark = 3;
+         break;
+ 
+-    case ABSOLUTE_PATH:         /* \xxx    */
++    case RtlPathTypeRooted:     /* \xxx    */
+         if (name[0] == '/')  /* may be a Unix path */
+         {
+             char *unix_name;
+@@ -667,7 +667,7 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
+         }
+         break;
+ 
+-    case UNC_DOT_PATH:         /* \\.     */
++    case RtlPathTypeRootLocalDevice:    /* \\.     */
+         reqsize = 4 * sizeof(WCHAR);
+         dep = 3;
+         tmp[0] = '\\';
+@@ -678,7 +678,7 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
+         mark = 4;
+         break;
+ 
+-    case INVALID_PATH:
++    case RtlPathTypeUnknown:
+         goto done;
+     }
+ 
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index ffff9e23887..41cfcef3fa8 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -3978,7 +3978,7 @@ static HMODULE load_driver( const WCHAR *driver_name, const UNICODE_STRING *keyn
+             HeapFree( GetProcessHeap(), 0, path );
+             path = str;
+         }
+-        else if (RtlDetermineDosPathNameType_U( path ) == RELATIVE_PATH)
++        else if (RtlDetermineDosPathNameType_U( path ) == RtlPathTypeRelative)
+         {
+             str = get_windir_path( path );
+             HeapFree( GetProcessHeap(), 0, path );
+diff --git a/include/winternl.h b/include/winternl.h
+index 87577cdb723..f43fe2482ca 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -2464,18 +2464,17 @@ typedef struct _MEMORY_RANGE_ENTRY
+ } MEMORY_RANGE_ENTRY, *PMEMORY_RANGE_ENTRY;
+ 
+ 
+-/* return type of RtlDetermineDosPathNameType_U (FIXME: not the correct names) */
+-typedef enum
++typedef enum _RTL_PATH_TYPE
+ {
+-    INVALID_PATH = 0,
+-    UNC_PATH,              /* "//foo" */
+-    ABSOLUTE_DRIVE_PATH,   /* "c:/foo" */
+-    RELATIVE_DRIVE_PATH,   /* "c:foo" */
+-    ABSOLUTE_PATH,         /* "/foo" */
+-    RELATIVE_PATH,         /* "foo" */
+-    DEVICE_PATH,           /* "//./foo" */
+-    UNC_DOT_PATH           /* "//." */
+-} DOS_PATHNAME_TYPE;
++    RtlPathTypeUnknown = 0,
++    RtlPathTypeUncAbsolute,     /* "//foo" */
++    RtlPathTypeDriveAbsolute,   /* "c:/foo" */
++    RtlPathTypeDriveRelative,   /* "c:foo" */
++    RtlPathTypeRooted,          /* "/foo" */
++    RtlPathTypeRelative,        /* "foo" */
++    RtlPathTypeLocalDevice,     /* "//./foo" */
++    RtlPathTypeRootLocalDevice  /* "//." */
++} RTL_PATH_TYPE;
+ 
+ 
+ /***********************************************************************
+@@ -4939,7 +4938,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlDestroyHandleTable(RTL_HANDLE_TABLE *);
+ NTSYSAPI HANDLE    WINAPI RtlDestroyHeap(HANDLE);
+ NTSYSAPI void      WINAPI RtlDestroyProcessParameters(RTL_USER_PROCESS_PARAMETERS*);
+ NTSYSAPI NTSTATUS  WINAPI RtlDestroyQueryDebugBuffer(PDEBUG_BUFFER);
+-NTSYSAPI DOS_PATHNAME_TYPE WINAPI RtlDetermineDosPathNameType_U(PCWSTR);
++NTSYSAPI RTL_PATH_TYPE WINAPI RtlDetermineDosPathNameType_U(PCWSTR);
+ NTSYSAPI BOOLEAN   WINAPI RtlDllShutdownInProgress(void);
+ NTSYSAPI BOOLEAN   WINAPI RtlDoesFileExists_U(LPCWSTR);
+ NTSYSAPI BOOLEAN   WINAPI RtlDosPathNameToNtPathName_U(PCWSTR,PUNICODE_STRING,PWSTR*,CURDIR*);
+-- 
+2.53.0
+

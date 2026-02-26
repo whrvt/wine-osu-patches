@@ -1,0 +1,48 @@
+From ca9b0ac8f6662f3241f16d9cfa1e9ddce43b1321 Mon Sep 17 00:00:00 2001
+From: Alexandre Julliard <julliard@winehq.org>
+Date: Mon, 16 Jun 2025 13:31:58 +0200
+Subject: [PATCH 08/48] ntdll: Use NtOpenFile to open nls files in the system
+ directory.
+
+(cherry picked from commit 52b7892e1dba3311ad9f8508848210503628bfd1)
+
+CW-Bug-Id: #26492
+---
+ dlls/ntdll/unix/env.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
+index 1add6fdc872..508b4b0875d 100644
+--- a/dlls/ntdll/unix/env.c
++++ b/dlls/ntdll/unix/env.c
+@@ -148,11 +148,12 @@ static void *read_nls_file( const char *name )
+ 
+ static NTSTATUS open_nls_data_file( const char *path, const WCHAR *sysdir, HANDLE *file )
+ {
+-    NTSTATUS status = STATUS_OBJECT_NAME_NOT_FOUND;
++    NTSTATUS status;
++    IO_STATUS_BLOCK io;
+     OBJECT_ATTRIBUTES attr;
+     UNICODE_STRING valueW;
+     WCHAR buffer[64];
+-    char *p, *ntpath;
++    char *p;
+ 
+     wcscpy( buffer, system_dir );
+     p = strrchr( path, '/' ) + 1;
+@@ -164,11 +165,7 @@ static NTSTATUS open_nls_data_file( const char *path, const WCHAR *sysdir, HANDL
+                              FILE_OPEN, FILE_SYNCHRONOUS_IO_ALERT, NULL, 0 );
+     if (status != STATUS_NO_SUCH_FILE) return status;
+ 
+-    if ((status = nt_to_unix_file_name( &attr, &ntpath, FILE_OPEN ))) return status;
+-    status = open_unix_file( file, ntpath, GENERIC_READ, &attr, 0, FILE_SHARE_READ,
+-                             FILE_OPEN, FILE_SYNCHRONOUS_IO_ALERT, NULL, 0 );
+-    free( ntpath );
+-    return status;
++    return NtOpenFile( file, GENERIC_READ, &attr, &io, FILE_SHARE_READ, FILE_SYNCHRONOUS_IO_ALERT );
+ }
+ 
+ static NTSTATUS get_nls_section_name( UINT type, UINT id, WCHAR name[32] )
+-- 
+2.53.0
+

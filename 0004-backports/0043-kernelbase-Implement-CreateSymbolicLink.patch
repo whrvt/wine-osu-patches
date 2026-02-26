@@ -1,0 +1,476 @@
+From 07fcf3270d6b2f8de7eb1c47825e00c5ab5abe7f Mon Sep 17 00:00:00 2001
+From: "Erich E. Hoover" <erich.e.hoover@gmail.com>
+Date: Wed, 13 Mar 2019 16:02:05 -0600
+Subject: [PATCH 43/48] kernelbase: Implement CreateSymbolicLink().
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=44948
+(cherry picked from commit 86a1ff043fb416e02d8bc7e487c3013357a1816f)
+
+CW-Bug-Id: #26492
+---
+ dlls/kernel32/path.c           | 12 ++++-
+ dlls/kernel32/tests/file.c     | 30 +++++------
+ dlls/kernelbase/file.c         | 95 ++++++++++++++++++++++++++++++++--
+ dlls/msvcp120/tests/msvcp120.c | 75 ++++++++++++---------------
+ dlls/msvcp140/tests/msvcp140.c | 63 ++++++++++------------
+ 5 files changed, 178 insertions(+), 97 deletions(-)
+
+diff --git a/dlls/kernel32/path.c b/dlls/kernel32/path.c
+index f4bdc08b87e..49c4c6437a8 100644
+--- a/dlls/kernel32/path.c
++++ b/dlls/kernel32/path.c
+@@ -463,8 +463,16 @@ WCHAR * CDECL wine_get_dos_file_name( LPCSTR str )
+  */
+ BOOLEAN WINAPI CreateSymbolicLinkA(LPCSTR link, LPCSTR target, DWORD flags)
+ {
+-    FIXME("(%s %s %ld): stub\n", debugstr_a(link), debugstr_a(target), flags);
+-    return TRUE;
++    WCHAR *linkW, *targetW;
++    BOOL ret;
++
++    if (!(linkW = FILE_name_AtoW( link, FALSE ))) return FALSE;
++    if (!(targetW = FILE_name_AtoW( target, TRUE ))) return FALSE;
++
++    ret = CreateSymbolicLinkW( linkW, targetW, flags );
++
++    HeapFree( GetProcessHeap(), 0, targetW );
++    return ret;
+ }
+ 
+ /*************************************************************************
+diff --git a/dlls/kernel32/tests/file.c b/dlls/kernel32/tests/file.c
+index 7f60c93b165..c8b6bb589ff 100644
+--- a/dlls/kernel32/tests/file.c
++++ b/dlls/kernel32/tests/file.c
+@@ -6611,19 +6611,21 @@ static void test_symbolic_link(void)
+     ok( ret == TRUE, "got error %lu\n", GetLastError() );
+     ret = LookupPrivilegeValueA( NULL, "SeCreateSymbolicLinkPrivilege", &luid );
+     todo_wine ok( ret == TRUE, "got error %lu\n", GetLastError() );
+-
+-    privs.PrivilegeCount = 1;
+-    privs.Privileges[0].Luid = luid;
+-    privs.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+-    ret = AdjustTokenPrivileges( token, FALSE, &privs, 0, NULL, NULL );
+-    ok( ret == TRUE, "got error %lu\n", GetLastError() );
+-    if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)
++    if (ret)
+     {
+-        todo_wine win_skip( "Insufficient permissions to perform symlink tests.\n" );
++        privs.PrivilegeCount = 1;
++        privs.Privileges[0].Luid = luid;
++        privs.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
++        ret = AdjustTokenPrivileges( token, FALSE, &privs, 0, NULL, NULL );
++        ok( ret == TRUE, "got error %lu\n", GetLastError() );
++        if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)
++        {
++            win_skip( "Insufficient permissions to perform symlink tests.\n" );
++            CloseHandle( token );
++            return;
++        }
+         CloseHandle( token );
+-        return;
+     }
+-    CloseHandle( token );
+ 
+     GetTempPathW( ARRAY_SIZE( temp_path ), temp_path );
+ 
+@@ -6632,10 +6634,8 @@ static void test_symbolic_link(void)
+ 
+     SetLastError( 0xdeadbeef );
+     ret = CreateSymbolicLinkW( path, path2, TRUE );
+-    todo_wine ok( ret == TRUE, "got %d\n", ret );
++    ok( ret == TRUE, "got %d\n", ret );
+     todo_wine ok( !GetLastError(), "got error %lu\n", GetLastError() );
+-    if (!ret)
+-        return;
+ 
+     ret = GetFileAttributesW( path );
+     ok( ret == (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT), "got attrs %#x\n", ret );
+@@ -6677,7 +6677,7 @@ static void test_symbolic_link(void)
+     SetLastError( 0xdeadbeef );
+     ret = CreateSymbolicLinkW( path, L".\\target", TRUE );
+     ok( ret == TRUE, "got %d\n", ret );
+-    ok( !GetLastError(), "got error %lu\n", GetLastError() );
++    todo_wine ok( !GetLastError(), "got error %lu\n", GetLastError() );
+ 
+     ret = GetFileAttributesW( path );
+     ok( ret == (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT), "got attrs %#x\n", ret );
+@@ -6719,7 +6719,7 @@ static void test_symbolic_link(void)
+     swprintf( path, ARRAY_SIZE(path), L"%s/testsymlink", temp_path );
+     ret = CreateSymbolicLinkW( path, L".\\target\\", FALSE );
+     ok( ret == TRUE, "got %d\n", ret );
+-    ok( !GetLastError(), "got error %lu\n", GetLastError() );
++    todo_wine ok( !GetLastError(), "got error %lu\n", GetLastError() );
+ 
+     ret = GetFileAttributesW( path );
+     ok( ret == (FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_REPARSE_POINT), "got attrs %#x\n", ret );
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index d29bde83abc..3c6fd378ac8 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -37,6 +37,7 @@
+ #include "ddk/ntddk.h"
+ #include "ddk/ntddser.h"
+ #include "ioringapi.h"
++#include "ddk/ntifs.h"
+ 
+ #include "kernelbase.h"
+ #include "wine/exception.h"
+@@ -961,10 +962,98 @@ done:
+ /*************************************************************************
+  *	CreateSymbolicLinkW   (kernelbase.@)
+  */
+-BOOLEAN WINAPI /* DECLSPEC_HOTPATCH */ CreateSymbolicLinkW( LPCWSTR link, LPCWSTR target, DWORD flags )
++BOOLEAN WINAPI DECLSPEC_HOTPATCH CreateSymbolicLinkW( const WCHAR *link, const WCHAR *target, DWORD flags )
+ {
+-    FIXME( "(%s %s %ld): stub\n", debugstr_w(link), debugstr_w(target), flags );
+-    return TRUE;
++    unsigned int target_len = wcslen( target );
++    ULONG options = FILE_OPEN_REPARSE_POINT;
++    UNICODE_STRING nt_link, nt_target;
++    REPARSE_DATA_BUFFER *data;
++    OBJECT_ATTRIBUTES attr;
++    IO_STATUS_BLOCK io;
++    unsigned int size;
++    BOOL is_relative;
++    NTSTATUS status;
++    HANDLE file;
++
++    TRACE( "link %s, target %s, flags %#lx\n", debugstr_w(link), debugstr_w(target), flags );
++
++    if (flags & ~(SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE))
++        FIXME( "ignoring unknown flags %#lx\n", flags );
++
++    status = RtlDosPathNameToNtPathName_U_WithStatus( link, &nt_link, NULL, NULL );
++    if (status) return set_ntstatus( status );
++
++    is_relative = RtlDetermineDosPathNameType_U( target ) == RtlPathTypeRelative;
++
++    if (!is_relative)
++    {
++        status = RtlDosPathNameToNtPathName_U_WithStatus( target, &nt_target, NULL, NULL );
++        if (status)
++        {
++            RtlFreeUnicodeString( &nt_link );
++            return set_ntstatus( status );
++        }
++    }
++
++    size = offsetof( REPARSE_DATA_BUFFER, SymbolicLinkReparseBuffer.PathBuffer );
++    if (is_relative)
++        size += (target_len + 1) * sizeof(WCHAR);
++    else
++        size += nt_target.Length + sizeof(WCHAR);
++    size += (target_len + 1) * sizeof(WCHAR);
++    if (!(data = HeapAlloc( GetProcessHeap(), 0, size )))
++    {
++        if (!is_relative) RtlFreeUnicodeString( &nt_target );
++        RtlFreeUnicodeString( &nt_link );
++        return set_ntstatus( status );
++    }
++
++    data->ReparseTag = IO_REPARSE_TAG_SYMLINK;
++    data->ReparseDataLength = size - offsetof( REPARSE_DATA_BUFFER, SymbolicLinkReparseBuffer );
++    data->Reserved = 0;
++    data->SymbolicLinkReparseBuffer.SubstituteNameOffset = 0;
++    data->SymbolicLinkReparseBuffer.PrintNameLength = target_len * sizeof(WCHAR);
++    if (is_relative)
++    {
++        data->SymbolicLinkReparseBuffer.Flags = SYMLINK_FLAG_RELATIVE;
++        data->SymbolicLinkReparseBuffer.SubstituteNameLength = target_len * sizeof(WCHAR);
++        data->SymbolicLinkReparseBuffer.PrintNameOffset = (target_len + 1) * sizeof(WCHAR);
++        memcpy( data->SymbolicLinkReparseBuffer.PathBuffer,
++                target, (target_len + 1) * sizeof(WCHAR) );
++        memcpy( data->SymbolicLinkReparseBuffer.PathBuffer + target_len + 1,
++                target, (target_len + 1) * sizeof(WCHAR) );
++    }
++    else
++    {
++        data->SymbolicLinkReparseBuffer.Flags = 0;
++        data->SymbolicLinkReparseBuffer.SubstituteNameLength = nt_target.Length;
++        data->SymbolicLinkReparseBuffer.PrintNameOffset = nt_target.Length + sizeof(WCHAR);
++        memcpy( data->SymbolicLinkReparseBuffer.PathBuffer,
++                nt_target.Buffer, nt_target.Length + sizeof(WCHAR) );
++        memcpy( data->SymbolicLinkReparseBuffer.PathBuffer + (nt_target.Length / sizeof(WCHAR)) + 1,
++                target, (target_len + 1) * sizeof(WCHAR) );
++        RtlFreeUnicodeString( &nt_target );
++    }
++
++
++    if (flags & SYMBOLIC_LINK_FLAG_DIRECTORY)
++        options |= FILE_DIRECTORY_FILE;
++    else
++        options |= FILE_NON_DIRECTORY_FILE;
++
++    InitializeObjectAttributes( &attr, &nt_link, OBJ_CASE_INSENSITIVE, 0, NULL );
++    status = NtCreateFile( &file, GENERIC_WRITE, &attr, &io, NULL, 0, 0, FILE_CREATE, options, NULL, 0 );
++    RtlFreeUnicodeString( &nt_link );
++    if (status)
++    {
++        HeapFree( GetProcessHeap(), 0, data );
++        return set_ntstatus( status );
++    }
++
++    status = NtDeviceIoControlFile( file, NULL, NULL, NULL, &io, FSCTL_SET_REPARSE_POINT, data, size, NULL, 0 );
++    HeapFree( GetProcessHeap(), 0, data );
++    NtClose( file );
++    return set_ntstatus( status );
+ }
+ 
+ 
+diff --git a/dlls/msvcp120/tests/msvcp120.c b/dlls/msvcp120/tests/msvcp120.c
+index 26bbf5b6535..82e43a38d59 100644
+--- a/dlls/msvcp120/tests/msvcp120.c
++++ b/dlls/msvcp120/tests/msvcp120.c
+@@ -1646,15 +1646,14 @@ static void test_tr2_sys__Stat(void)
+         char const *path;
+         enum file_type ret;
+         int err_code;
+-        int is_todo;
+     } tests[] = {
+-        { NULL, status_unknown, ERROR_INVALID_PARAMETER, FALSE },
+-        { "tr2_test_dir",    directory_file, ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir\\f1",  regular_file, ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir\\not_exist_file  ", file_not_found, ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir\\??invalid_name>>", file_not_found, ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir\\f1_link" ,   regular_file, ERROR_SUCCESS, TRUE },
+-        { "tr2_test_dir\\dir_link", directory_file, ERROR_SUCCESS, TRUE },
++        { NULL, status_unknown, ERROR_INVALID_PARAMETER },
++        { "tr2_test_dir",    directory_file, ERROR_SUCCESS },
++        { "tr2_test_dir\\f1",  regular_file, ERROR_SUCCESS },
++        { "tr2_test_dir\\not_exist_file  ", file_not_found, ERROR_SUCCESS },
++        { "tr2_test_dir\\??invalid_name>>", file_not_found, ERROR_SUCCESS },
++        { "tr2_test_dir\\f1_link" ,   regular_file, ERROR_SUCCESS },
++        { "tr2_test_dir\\dir_link", directory_file, ERROR_SUCCESS },
+     };
+ 
+     CreateDirectoryA("tr2_test_dir", NULL);
+@@ -1697,16 +1696,14 @@ static void test_tr2_sys__Stat(void)
+     for(i=0; i<ARRAY_SIZE(tests); i++) {
+         err_code = 0xdeadbeef;
+         val = p_tr2_sys__Stat(tests[i].path, &err_code);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(tests[i].ret == val, "tr2_sys__Stat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
++        ok(tests[i].ret == val, "tr2_sys__Stat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
+         ok(tests[i].err_code == err_code, "tr2_sys__Stat(): test %d err_code expect: %d, got %d\n",
+                 i+1, tests[i].err_code, err_code);
+ 
+         /* test tr2_sys__Lstat */
+         err_code = 0xdeadbeef;
+         val = p_tr2_sys__Lstat(tests[i].path, &err_code);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(tests[i].ret == val, "tr2_sys__Lstat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
++        ok(tests[i].ret == val, "tr2_sys__Lstat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
+         ok(tests[i].err_code == err_code, "tr2_sys__Lstat(): test %d err_code expect: %d, got %d\n",
+                 i+1, tests[i].err_code, err_code);
+     }
+@@ -1721,8 +1718,8 @@ static void test_tr2_sys__Stat(void)
+     ok(ERROR_SUCCESS == err_code, "tr2_sys__Lstat_wchar(): err_code expect ERROR_SUCCESS, got %d\n", err_code);
+ 
+     if(ret) {
+-        todo_wine ok(DeleteFileA("tr2_test_dir/f1_link"), "expect tr2_test_dir/f1_link to exist\n");
+-        todo_wine ok(RemoveDirectoryA("tr2_test_dir/dir_link"), "expect tr2_test_dir/dir_link to exist\n");
++        ok(DeleteFileA("tr2_test_dir/f1_link"), "expect tr2_test_dir/f1_link to exist\n");
++        ok(RemoveDirectoryA("tr2_test_dir/dir_link"), "expect tr2_test_dir/dir_link to exist\n");
+     }
+     ok(DeleteFileA("tr2_test_dir/f1"), "expect tr2_test_dir/f1 to exist\n");
+     ok(RemoveDirectoryA("tr2_test_dir"), "expect tr2_test_dir to exist\n");
+@@ -1951,16 +1948,15 @@ static void test_tr2_sys__Symlink(void)
+         char const *existing_path;
+         char const *new_path;
+         int last_error;
+-        MSVCP_bool is_todo;
+     } tests[] = {
+-        { "f1", "f1_link", ERROR_SUCCESS, FALSE },
+-        { "f1", "tr2_test_dir\\f1_link", ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir\\f1_link", "tr2_test_dir\\f1_link_link", ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir", "dir_link", ERROR_SUCCESS, FALSE },
+-        { NULL, "NULL_link", ERROR_INVALID_PARAMETER, FALSE },
+-        { "f1", NULL, ERROR_INVALID_PARAMETER, FALSE },
+-        { "not_exist",  "not_exist_link", ERROR_SUCCESS, FALSE },
+-        { "f1", "not_exist_dir\\f1_link", ERROR_PATH_NOT_FOUND, TRUE }
++        { "f1", "f1_link", ERROR_SUCCESS },
++        { "f1", "tr2_test_dir\\f1_link", ERROR_SUCCESS },
++        { "tr2_test_dir\\f1_link", "tr2_test_dir\\f1_link_link", ERROR_SUCCESS },
++        { "tr2_test_dir", "dir_link", ERROR_SUCCESS },
++        { NULL, "NULL_link", ERROR_INVALID_PARAMETER },
++        { "f1", NULL, ERROR_INVALID_PARAMETER },
++        { "not_exist",  "not_exist_link", ERROR_SUCCESS },
++        { "f1", "not_exist_dir\\f1_link", ERROR_PATH_NOT_FOUND }
+     };
+ 
+     ret = p_tr2_sys__Make_dir("tr2_test_dir");
+@@ -1985,18 +1981,17 @@ static void test_tr2_sys__Symlink(void)
+         }
+ 
+         ok(errno == 0xdeadbeef, "tr2_sys__Symlink(): test %d errno expect 0xdeadbeef, got %d\n", i+1, errno);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(ret == tests[i].last_error, "tr2_sys__Symlink(): test %d expect: %d, got %d\n", i+1, tests[i].last_error, ret);
++        ok(ret == tests[i].last_error, "tr2_sys__Symlink(): test %d expect: %d, got %d\n", i+1, tests[i].last_error, ret);
+         if(ret == ERROR_SUCCESS)
+             ok(p_tr2_sys__File_size(tests[i].new_path) == 0, "tr2_sys__Symlink(): expect 0, got %s\n", wine_dbgstr_longlong(p_tr2_sys__File_size(tests[i].new_path)));
+     }
+ 
+     ok(DeleteFileA("f1"), "expect f1 to exist\n");
+-    todo_wine ok(DeleteFileA("f1_link"), "expect f1_link to exist\n");
+-    todo_wine ok(DeleteFileA("tr2_test_dir/f1_link"), "expect tr2_test_dir/f1_link to exist\n");
+-    todo_wine ok(DeleteFileA("tr2_test_dir/f1_link_link"), "expect tr2_test_dir/f1_link_link to exist\n");
+-    todo_wine ok(DeleteFileA("not_exist_link"), "expect not_exist_link to exist\n");
+-    todo_wine ok(DeleteFileA("dir_link"), "expect dir_link to exist\n");
++    ok(DeleteFileA("f1_link"), "expect f1_link to exist\n");
++    ok(DeleteFileA("tr2_test_dir/f1_link"), "expect tr2_test_dir/f1_link to exist\n");
++    ok(DeleteFileA("tr2_test_dir/f1_link_link"), "expect tr2_test_dir/f1_link_link to exist\n");
++    ok(DeleteFileA("not_exist_link"), "expect not_exist_link to exist\n");
++    ok(DeleteFileA("dir_link"), "expect dir_link to exist\n");
+     ret = p_tr2_sys__Remove_dir("tr2_test_dir");
+     ok(ret == 1, "tr2_sys__Remove_dir(): expect 1 got %d\n", ret);
+ }
+@@ -2010,15 +2005,14 @@ static void test_tr2_sys__Unlink(void)
+     struct {
+         char const *path;
+         int last_error;
+-        MSVCP_bool is_todo;
+     } tests[] = {
+-        { "tr2_test_dir\\f1_symlink", ERROR_SUCCESS, TRUE },
+-        { "tr2_test_dir\\f1_link", ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir\\f1", ERROR_SUCCESS, FALSE },
+-        { "tr2_test_dir", ERROR_ACCESS_DENIED, FALSE },
+-        { "not_exist", ERROR_FILE_NOT_FOUND, FALSE },
+-        { "not_exist_dir\\not_exist_file", ERROR_PATH_NOT_FOUND, FALSE },
+-        { NULL, ERROR_PATH_NOT_FOUND, FALSE }
++        { "tr2_test_dir\\f1_symlink", ERROR_SUCCESS },
++        { "tr2_test_dir\\f1_link", ERROR_SUCCESS },
++        { "tr2_test_dir\\f1", ERROR_SUCCESS },
++        { "tr2_test_dir", ERROR_ACCESS_DENIED },
++        { "not_exist", ERROR_FILE_NOT_FOUND },
++        { "not_exist_dir\\not_exist_file", ERROR_PATH_NOT_FOUND },
++        { NULL, ERROR_PATH_NOT_FOUND }
+     };
+ 
+     GetCurrentDirectoryA(MAX_PATH, current_path);
+@@ -2047,9 +2041,8 @@ static void test_tr2_sys__Unlink(void)
+     for(i=0; i<ARRAY_SIZE(tests); i++) {
+         errno = 0xdeadbeef;
+         ret = p_tr2_sys__Unlink(tests[i].path);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(ret == tests[i].last_error, "tr2_sys__Unlink(): test %d expect: %d, got %d\n",
+-                    i+1, tests[i].last_error, ret);
++        ok(ret == tests[i].last_error, "tr2_sys__Unlink(): test %d expect: %d, got %d\n",
++           i+1, tests[i].last_error, ret);
+         ok(errno == 0xdeadbeef, "tr2_sys__Unlink(): test %d errno expect: 0xdeadbeef, got %d\n", i+1, ret);
+     }
+ 
+diff --git a/dlls/msvcp140/tests/msvcp140.c b/dlls/msvcp140/tests/msvcp140.c
+index 376718ee982..365dbbe13f6 100644
+--- a/dlls/msvcp140/tests/msvcp140.c
++++ b/dlls/msvcp140/tests/msvcp140.c
+@@ -988,16 +988,15 @@ static void test_Stat(void)
+         WCHAR const *path;
+         enum file_type ret;
+         int perms;
+-        int is_todo;
+     } tests[] = {
+-        { NULL, file_not_found, 0xdeadbeef, FALSE },
+-        { L"wine_test_dir", directory_file, 0777, FALSE },
+-        { L"wine_test_dir/f1", regular_file, 0777, FALSE },
+-        { L"wine_test_dir/f2", regular_file, 0555, FALSE },
+-        { L"wine_test_dir/ne", file_not_found, 0xdeadbeef, FALSE },
+-        { L"wine_test_dir\\??invalid_name>>", file_not_found, 0xdeadbeef, FALSE },
+-        { L"wine_test_dir\\f1_link", regular_file, 0777, TRUE },
+-        { L"wine_test_dir\\dir_link", directory_file, 0777, TRUE },
++        { NULL, file_not_found, 0xdeadbeef },
++        { L"wine_test_dir", directory_file, 0777 },
++        { L"wine_test_dir/f1", regular_file, 0777 },
++        { L"wine_test_dir/f2", regular_file, 0555 },
++        { L"wine_test_dir/ne", file_not_found, 0xdeadbeef },
++        { L"wine_test_dir\\??invalid_name>>", file_not_found, 0xdeadbeef },
++        { L"wine_test_dir\\f1_link", regular_file, 0777 },
++        { L"wine_test_dir\\dir_link", directory_file, 0777 },
+     };
+ 
+     GetCurrentDirectoryW(MAX_PATH, origin_path);
+@@ -1055,26 +1054,20 @@ static void test_Stat(void)
+     for(i=0; i<ARRAY_SIZE(tests); i++) {
+         perms = 0xdeadbeef;
+         val = p_Stat(tests[i].path, &perms);
+-        todo_wine_if(tests[i].is_todo) {
+-            ok(tests[i].ret == val, "_Stat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
+-            ok(tests[i].perms == perms, "_Stat(): test %d perms expect: 0%o, got 0%o\n",
+-                    i+1, tests[i].perms, perms);
+-        }
++        ok(tests[i].ret == val, "_Stat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
++        ok(tests[i].perms == perms, "_Stat(): test %d perms expect: 0%o, got 0%o\n",
++                i+1, tests[i].perms, perms);
+         val = p_Stat(tests[i].path, NULL);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(tests[i].ret == val, "_Stat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
++        ok(tests[i].ret == val, "_Stat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
+ 
+         /* test _Lstat */
+         perms = 0xdeadbeef;
+         val = p_Lstat(tests[i].path, &perms);
+-        todo_wine_if(tests[i].is_todo) {
+-            ok(tests[i].ret == val, "_Lstat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
+-            ok(tests[i].perms == perms, "_Lstat(): test %d perms expect: 0%o, got 0%o\n",
+-                    i+1, tests[i].perms, perms);
+-        }
++        ok(tests[i].ret == val, "_Lstat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
++        ok(tests[i].perms == perms, "_Lstat(): test %d perms expect: 0%o, got 0%o\n",
++                i+1, tests[i].perms, perms);
+         val = p_Lstat(tests[i].path, NULL);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(tests[i].ret == val, "_Lstat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
++        ok(tests[i].ret == val, "_Lstat(): test %d expect: %d, got %d\n", i+1, tests[i].ret, val);
+     }
+ 
+     GetSystemDirectoryW(sys_path, MAX_PATH);
+@@ -1086,9 +1079,9 @@ static void test_Stat(void)
+     ok(perms == expected_perms, "_Stat(): perms expect: 0%o, got 0%o\n", expected_perms, perms);
+ 
+     if(ret) {
+-        todo_wine ok(DeleteFileW(L"wine_test_dir\\f1_link"),
++        ok(DeleteFileW(L"wine_test_dir\\f1_link"),
+                 "expect wine_test_dir/f1_link to exist\n");
+-        todo_wine ok(RemoveDirectoryW(L"wine_test_dir\\dir_link"),
++        ok(RemoveDirectoryW(L"wine_test_dir\\dir_link"),
+                 "expect wine_test_dir/dir_link to exist\n");
+     }
+     ok(DeleteFileW(L"wine_test_dir/f1"), "expect wine_test_dir/f1 to exist\n");
+@@ -1207,15 +1200,14 @@ static void test_Unlink(void)
+     struct {
+         WCHAR const *path;
+         int last_error;
+-        MSVCP_bool is_todo;
+     } tests[] = {
+-        { L"wine_test_dir\\f1_symlink", ERROR_SUCCESS, TRUE },
+-        { L"wine_test_dir\\f1_link", ERROR_SUCCESS, FALSE },
+-        { L"wine_test_dir\\f1", ERROR_SUCCESS, FALSE },
+-        { L"wine_test_dir", ERROR_ACCESS_DENIED, FALSE },
+-        { L"not_exist", ERROR_FILE_NOT_FOUND, FALSE },
+-        { L"not_exist_dir\\not_exist_file", ERROR_PATH_NOT_FOUND, FALSE },
+-        { NULL, ERROR_PATH_NOT_FOUND, FALSE }
++        { L"wine_test_dir\\f1_symlink", ERROR_SUCCESS },
++        { L"wine_test_dir\\f1_link", ERROR_SUCCESS },
++        { L"wine_test_dir\\f1", ERROR_SUCCESS },
++        { L"wine_test_dir", ERROR_ACCESS_DENIED },
++        { L"not_exist", ERROR_FILE_NOT_FOUND },
++        { L"not_exist_dir\\not_exist_file", ERROR_PATH_NOT_FOUND },
++        { NULL, ERROR_PATH_NOT_FOUND }
+     };
+ 
+     GetCurrentDirectoryW(MAX_PATH, current_path);
+@@ -1244,9 +1236,8 @@ static void test_Unlink(void)
+     for(i=0; i<ARRAY_SIZE(tests); i++) {
+         errno = 0xdeadbeef;
+         ret = p_Unlink(tests[i].path);
+-        todo_wine_if(tests[i].is_todo)
+-            ok(ret == tests[i].last_error, "_Unlink(): test %d expect: %d, got %d\n",
+-                    i+1, tests[i].last_error, ret);
++        ok(ret == tests[i].last_error, "_Unlink(): test %d expect: %d, got %d\n",
++           i+1, tests[i].last_error, ret);
+         ok(errno == 0xdeadbeef, "_Unlink(): test %d errno expect: 0xdeadbeef, got %d\n", i+1, ret);
+     }
+ 
+-- 
+2.53.0
+

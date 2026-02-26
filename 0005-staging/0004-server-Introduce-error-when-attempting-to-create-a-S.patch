@@ -1,0 +1,30 @@
+From 14178de49065db1f63972c6b9d6f3a27bceace9a Mon Sep 17 00:00:00 2001
+From: Ally Sommers <dropbear.sh@gmail.com>
+Date: Tue, 16 May 2023 02:20:55 -0700
+Subject: [PATCH 4/5] server: Introduce error when attempting to create a
+ SOCK_DGRAM AF_UNIX socket.
+
+---
+ server/sock.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/server/sock.c b/server/sock.c
+index 61e14d33084..725bd637b84 100644
+--- a/server/sock.c
++++ b/server/sock.c
+@@ -1900,6 +1900,12 @@ static int init_socket( struct sock *sock, int family, int type, int protocol )
+         return -1;
+     }
+ 
++    if (unix_family == AF_UNIX && unix_type == SOCK_DGRAM)
++    {
++        set_win32_error(WSAEAFNOSUPPORT);
++        return -1;
++    }
++
+     sockfd = socket( unix_family, unix_type, unix_protocol );
+ #ifdef linux
+     if (sockfd == -1 && errno == EPERM && unix_type == SOCK_RAW
+-- 
+2.53.0
+

@@ -1,0 +1,190 @@
+From efbdd8d6ee9aab04bcc34b08843ce41f43bf984a Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Thu, 16 Oct 2025 22:45:22 -0500
+Subject: [PATCH 20/48] server: Implement FSCTL_GET_REPARSE_POINT.
+
+(cherry picked from commit ee4d2f2b4ac9bf15008fe36b5a67591ed5be527a)
+
+CW-Bug-Id: #26492
+---
+ dlls/ntdll/tests/file.c | 32 ++++++++++----------
+ dlls/ntdll/unix/file.c  |  9 ------
+ server/fd.c             | 65 +++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 81 insertions(+), 25 deletions(-)
+
+diff --git a/dlls/ntdll/tests/file.c b/dlls/ntdll/tests/file.c
+index 483529a258e..91c4d61c23e 100644
+--- a/dlls/ntdll/tests/file.c
++++ b/dlls/ntdll/tests/file.c
+@@ -6293,22 +6293,22 @@ static void test_reparse_points(void)
+     memset( data2, 0xcc, data_size + 1 );
+     io.Information = 1;
+     status = NtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, data2, sizeof(REPARSE_GUID_DATA_BUFFER) - 1 );
+-    todo_wine ok( status == STATUS_BUFFER_TOO_SMALL, "got %#lx\n", status );
++    ok( status == STATUS_BUFFER_TOO_SMALL, "got %#lx\n", status );
+     ok( io.Information == 1, "got size %#Ix\n", io.Information );
+     status = NtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, data2, sizeof(REPARSE_GUID_DATA_BUFFER) );
+-    todo_wine ok( status == STATUS_BUFFER_OVERFLOW, "got %#lx\n", status );
+-    todo_wine ok( io.Information == sizeof(REPARSE_GUID_DATA_BUFFER), "expected size %#Ix, got %#Ix\n", data_size, io.Information );
+-    todo_wine ok( !memcmp( data, data2, sizeof(REPARSE_GUID_DATA_BUFFER) ), "buffers didn't match\n" );
++    ok( status == STATUS_BUFFER_OVERFLOW, "got %#lx\n", status );
++    ok( io.Information == sizeof(REPARSE_GUID_DATA_BUFFER), "expected size %#Ix, got %#Ix\n", data_size, io.Information );
++    ok( !memcmp( data, data2, sizeof(REPARSE_GUID_DATA_BUFFER) ), "buffers didn't match\n" );
+     status = NtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, data2, data_size - 1);
+-    todo_wine ok( status == STATUS_BUFFER_OVERFLOW, "got %#lx\n", status );
+-    todo_wine ok( io.Information == data_size - 1, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
+-    todo_wine ok( !memcmp( data, data2, data_size - 1 ), "buffers didn't match\n" );
++    ok( status == STATUS_BUFFER_OVERFLOW, "got %#lx\n", status );
++    ok( io.Information == data_size - 1, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
++    ok( !memcmp( data, data2, data_size - 1 ), "buffers didn't match\n" );
+ 
+     io.Information = 1;
+     status = NtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, data2, data_size + 1);
+-    todo_wine ok( !status, "got %#lx\n", status );
+-    todo_wine ok( io.Information == data_size, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
+-    todo_wine ok( !memcmp( data, data2, data_size ), "buffers didn't match\n" );
++    ok( !status, "got %#lx\n", status );
++    ok( io.Information == data_size, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
++    ok( !memcmp( data, data2, data_size ), "buffers didn't match\n" );
+ 
+     status = NtQueryInformationFile( handle, &io, &tag_info, sizeof(tag_info), FileAttributeTagInformation );
+     ok( !status, "got %#lx\n", status );
+@@ -6702,9 +6702,9 @@ static void test_reparse_points(void)
+ 
+     io.Information = 1;
+     status = NtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, guid_data2, data_size + 1);
+-    todo_wine ok( !status, "got %#lx\n", status );
+-    todo_wine ok( io.Information == data_size, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
+-    todo_wine ok( !memcmp( guid_data, guid_data2, data_size ), "buffers didn't match\n" );
++    ok( !status, "got %#lx\n", status );
++    ok( io.Information == data_size, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
++    ok( !memcmp( guid_data, guid_data2, data_size ), "buffers didn't match\n" );
+ 
+     RtlInitUnicodeString( &nameW, L"testreparse_customdir\\file" );
+     status = NtCreateFile( &handle2, GENERIC_ALL, &attr, &io, NULL, 0, 0, FILE_OPEN, 0, NULL, 0 );
+@@ -6737,9 +6737,9 @@ static void test_reparse_points(void)
+     {
+         io.Information = 1;
+         status = NtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, guid_data2, data_size + 1);
+-        todo_wine ok( !status, "got %#lx\n", status );
+-        todo_wine ok( io.Information == data_size, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
+-        todo_wine ok( !memcmp( guid_data, guid_data2, data_size ), "buffers didn't match\n" );
++        ok( !status, "got %#lx\n", status );
++        ok( io.Information == data_size, "expected size %#Ix, got %#Ix\n", data_size, io.Information );
++        ok( !memcmp( guid_data, guid_data2, data_size ), "buffers didn't match\n" );
+ 
+         RtlInitUnicodeString( &nameW, L"testreparse_customdir" );
+         status = NtOpenFile( &handle2, GENERIC_READ, &attr, &io, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 0 );
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index 67e20cc125f..63104f68366 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -6703,15 +6703,6 @@ NTSTATUS WINAPI NtFsControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE ap
+         break;
+     }
+ 
+-    case FSCTL_GET_REPARSE_POINT:
+-        if (out_buffer && out_size)
+-        {
+-            FIXME("FSCTL_GET_REPARSE_POINT semi-stub\n");
+-            status = STATUS_NOT_A_REPARSE_POINT;
+-        }
+-        else status = STATUS_INVALID_USER_BUFFER;
+-        break;
+-
+     case FSCTL_GET_OBJECT_ID:
+     {
+         FILE_OBJECTID_BUFFER *info = out_buffer;
+diff --git a/server/fd.c b/server/fd.c
+index a89d2bf8d36..9043ff7eda6 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -2475,6 +2475,23 @@ static int xattr_fset( int filedes, const char *name, const void *value, size_t
+ #endif
+ }
+ 
++static int xattr_fget( int filedes, const char *name, void *value, size_t size )
++{
++#ifdef HAVE_SYS_XATTR_H
++# ifdef XATTR_ADDITIONAL_OPTIONS
++    return fgetxattr( filedes, name, value, size, 0, 0 );
++# else
++    return fgetxattr( filedes, name, value, size );
++# endif
++#elif defined(HAVE_SYS_EXTATTR_H)
++    return extattr_get_fd( filedes, EXTATTR_NAMESPACE_USER, &name[XATTR_USER_PREFIX_LEN],
++                           value, size );
++#else
++    errno = ENOSYS;
++    return -1;
++#endif
++}
++
+ static int xattr_fremove( int filedes, const char *name )
+ {
+ #ifdef HAVE_SYS_XATTR_H
+@@ -2541,6 +2558,50 @@ static void set_reparse_point( struct fd *fd, struct async *async )
+     }
+ }
+ 
++static void get_reparse_point( struct fd *fd, struct async *async )
++{
++    /* we can't just allocate get_reply_max_size() here;
++     * Linux won't return any data if the size is too small */
++    char buffer[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
++    int ret;
++
++    if (!fd->unix_name)
++    {
++        set_error( STATUS_OBJECT_TYPE_MISMATCH );
++        return;
++    }
++
++    if (!get_reply_max_size())
++    {
++        set_error( STATUS_INVALID_USER_BUFFER );
++        return;
++    }
++
++    if (fd->unix_name[strlen( fd->unix_name ) - 1] != '?')
++    {
++        set_error( STATUS_NOT_A_REPARSE_POINT );
++        return;
++    }
++
++    if (get_reply_max_size() < sizeof(REPARSE_GUID_DATA_BUFFER))
++    {
++        set_error( STATUS_BUFFER_TOO_SMALL );
++        return;
++    }
++
++    ret = xattr_fget( fd->unix_fd, XATTR_REPARSE, buffer, sizeof(buffer) );
++    if (ret >= 0)
++    {
++        if (ret > get_reply_max_size())
++        {
++            set_error( STATUS_BUFFER_OVERFLOW );
++            ret = get_reply_max_size();
++        }
++        set_reply_data( buffer, ret );
++    }
++    else file_set_error();
++}
++
+ static void delete_reparse_point( struct fd *fd, struct async *async )
+ {
+     const REPARSE_DATA_BUFFER *data = get_req_data();
+@@ -2695,6 +2756,10 @@ void default_fd_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+         set_reparse_point( fd, async );
+         break;
+ 
++    case FSCTL_GET_REPARSE_POINT:
++        get_reparse_point( fd, async );
++        break;
++
+     case FSCTL_DELETE_REPARSE_POINT:
+         delete_reparse_point( fd, async );
+         break;
+-- 
+2.53.0
+

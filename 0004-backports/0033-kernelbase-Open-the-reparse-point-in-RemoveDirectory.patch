@@ -1,0 +1,29 @@
+From 7e6fe5e67ea07996b0f278bf01d0a7e3e5b69914 Mon Sep 17 00:00:00 2001
+From: "Erich E. Hoover" <erich.e.hoover@gmail.com>
+Date: Mon, 7 Jul 2025 15:07:06 -0500
+Subject: [PATCH 33/48] kernelbase: Open the reparse point in
+ RemoveDirectory().
+
+(cherry picked from commit 0372e8d6eae198d2f90032cef3bfcc9842874758)
+
+CW-Bug-Id: #26492
+---
+ dlls/kernelbase/file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index 3622b9d268e..88a057ae139 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -3584,7 +3584,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH RemoveDirectoryW( LPCWSTR path )
+     InitializeObjectAttributes( &attr, &nt_name, OBJ_CASE_INSENSITIVE, 0, NULL );
+     status = NtOpenFile( &handle, DELETE | SYNCHRONIZE, &attr, &io,
+                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+-                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
++                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT );
+     RtlFreeUnicodeString( &nt_name );
+ 
+     if (!status)
+-- 
+2.53.0
+

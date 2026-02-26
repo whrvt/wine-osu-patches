@@ -1,0 +1,46 @@
+From 5ffcbe9577fc927b5d7b9dadfe0696437b15904f Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Thu, 3 Jul 2025 18:47:07 -0500
+Subject: [PATCH 14/48] kernelbase: Use FILE_NON_DIRECTORY_FILE in
+ ReOpenFile().
+
+(cherry picked from commit 607c91dd4031c9e974faf3499b717ec1ca0b7e4d)
+
+CW-Bug-Id: #26492
+---
+ dlls/kernel32/tests/file.c | 5 ++---
+ dlls/kernelbase/file.c     | 2 +-
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/kernel32/tests/file.c b/dlls/kernel32/tests/file.c
+index 8fdafa62f85..7f60c93b165 100644
+--- a/dlls/kernel32/tests/file.c
++++ b/dlls/kernel32/tests/file.c
+@@ -5096,9 +5096,8 @@ static void test_ReOpenFile(void)
+     file = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+     ok(file != INVALID_HANDLE_VALUE, "got error %lu\n", GetLastError());
+     new = pReOpenFile(file, GENERIC_READ, FILE_SHARE_READ, FILE_FLAG_BACKUP_SEMANTICS);
+-    todo_wine ok(new == INVALID_HANDLE_VALUE, "expected failure\n");
+-    todo_wine ok(GetLastError() == ERROR_ACCESS_DENIED, "got error %lu\n", GetLastError());
+-    CloseHandle(new);
++    ok(new == INVALID_HANDLE_VALUE, "expected failure\n");
++    ok(GetLastError() == ERROR_ACCESS_DENIED, "got error %lu\n", GetLastError());
+     CloseHandle(file);
+ 
+     ret = RemoveDirectoryA(filename);
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index 276681295f1..04a615adf9e 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -3459,7 +3459,7 @@ HANDLE WINAPI DECLSPEC_HOTPATCH ReOpenFile( HANDLE handle, DWORD access, DWORD s
+     }
+ 
+     status = NtCreateFile( &file, access | SYNCHRONIZE | FILE_READ_ATTRIBUTES, &attr, &io, NULL,
+-                           0, sharing, FILE_OPEN, get_nt_file_options( attributes ), NULL, 0 );
++                           0, sharing, FILE_OPEN, FILE_NON_DIRECTORY_FILE | get_nt_file_options( attributes ), NULL, 0 );
+     if (!set_ntstatus( status ))
+         return INVALID_HANDLE_VALUE;
+     return file;
+-- 
+2.53.0
+

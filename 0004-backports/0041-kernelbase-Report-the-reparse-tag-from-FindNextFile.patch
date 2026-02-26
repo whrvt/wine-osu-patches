@@ -1,0 +1,87 @@
+From a3e6a6b5c5027d1d15290f27c169baa212f24b32 Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Mon, 7 Jul 2025 17:10:45 -0500
+Subject: [PATCH 41/48] kernelbase: Report the reparse tag from FindNextFile().
+
+(cherry picked from commit 221f03e447d5c583412d0288a6200045ba84d800)
+
+CW-Bug-Id: #26492
+---
+ dlls/kernelbase/file.c  | 12 ++++++------
+ dlls/ntdll/tests/file.c |  2 +-
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index c91224146af..2386f900c01 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -62,7 +62,7 @@ typedef struct
+ 
+ #define FIND_FIRST_MAGIC  0xc0ffee11
+ 
+-static const UINT max_entry_size = offsetof( FILE_BOTH_DIRECTORY_INFORMATION, FileName[256] );
++static const UINT max_entry_size = offsetof( FILE_ID_EXTD_BOTH_DIRECTORY_INFORMATION, FileName[256] );
+ 
+ const WCHAR windows_dir[] = L"C:\\windows";
+ const WCHAR system_dir[] = L"C:\\windows\\system32";
+@@ -1287,7 +1287,7 @@ HANDLE WINAPI DECLSPEC_HOTPATCH FindFirstFileExW( LPCWSTR filename, FINDEX_INFO_
+         {
+             RtlInitUnicodeString( &mask_str, fixedup_mask );
+             status = NtQueryDirectoryFile( info->handle, 0, NULL, NULL, &io, info->data, info->data_size,
+-                                           FileBothDirectoryInformation, FALSE, &mask_str, TRUE );
++                                           FileIdExtdBothDirectoryInformation, FALSE, &mask_str, TRUE );
+         }
+         if (fixedup_mask != mask) HeapFree( GetProcessHeap(), 0, fixedup_mask );
+         if (status)
+@@ -1387,7 +1387,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FindNextFileA( HANDLE handle, WIN32_FIND_DATAA *da
+ BOOL WINAPI DECLSPEC_HOTPATCH FindNextFileW( HANDLE handle, WIN32_FIND_DATAW *data )
+ {
+     FIND_FIRST_INFO *info = handle;
+-    FILE_BOTH_DIR_INFORMATION *dir_info;
++    FILE_ID_EXTD_BOTH_DIRECTORY_INFORMATION *dir_info;
+     BOOL ret = FALSE;
+     NTSTATUS status;
+ 
+@@ -1410,7 +1410,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FindNextFileW( HANDLE handle, WIN32_FIND_DATAW *da
+ 
+             if (info->data_size)
+                 status = NtQueryDirectoryFile( info->handle, 0, NULL, NULL, &io, info->data, info->data_size,
+-                                               FileBothDirectoryInformation, FALSE, NULL, FALSE );
++                                               FileIdExtdBothDirectoryInformation, FALSE, NULL, FALSE );
+             else
+                 status = STATUS_NO_MORE_FILES;
+ 
+@@ -1427,7 +1427,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FindNextFileW( HANDLE handle, WIN32_FIND_DATAW *da
+             info->data_pos = 0;
+         }
+ 
+-        dir_info = (FILE_BOTH_DIR_INFORMATION *)(info->data + info->data_pos);
++        dir_info = (FILE_ID_EXTD_BOTH_DIRECTORY_INFORMATION *)(info->data + info->data_pos);
+ 
+         if (dir_info->NextEntryOffset) info->data_pos += dir_info->NextEntryOffset;
+         else info->data_pos = info->data_len;
+@@ -1447,7 +1447,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FindNextFileW( HANDLE handle, WIN32_FIND_DATAW *da
+         data->ftLastWriteTime  = *(FILETIME *)&dir_info->LastWriteTime;
+         data->nFileSizeHigh    = dir_info->EndOfFile.QuadPart >> 32;
+         data->nFileSizeLow     = (DWORD)dir_info->EndOfFile.QuadPart;
+-        data->dwReserved0      = 0;
++        data->dwReserved0      = dir_info->ReparsePointTag;
+         data->dwReserved1      = 0;
+ 
+         memcpy( data->cFileName, dir_info->FileName, dir_info->FileNameLength );
+diff --git a/dlls/ntdll/tests/file.c b/dlls/ntdll/tests/file.c
+index b3d25c3f139..7c640d225ae 100644
+--- a/dlls/ntdll/tests/file.c
++++ b/dlls/ntdll/tests/file.c
+@@ -6451,7 +6451,7 @@ static void test_reparse_points(void)
+     ok( find_handle != INVALID_HANDLE_VALUE, "got error %lu\n", GetLastError() );
+     ok( find_data.dwFileAttributes == (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT),
+         "got attributes %#lx\n", find_data.dwFileAttributes );
+-    todo_wine ok( find_data.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT, "got tag %#lx\n", find_data.dwReserved0 );
++    ok( find_data.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT, "got tag %#lx\n", find_data.dwReserved0 );
+     FindClose( find_handle );
+ 
+     /* Test using the reparse point as a parent.
+-- 
+2.53.0
+

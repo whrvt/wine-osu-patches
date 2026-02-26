@@ -1,0 +1,32 @@
+From e7eb8dbdf2fd39678c9126ecfd4402c30000b6cb Mon Sep 17 00:00:00 2001
+From: "Erich E. Hoover" <erich.e.hoover@gmail.com>
+Date: Mon, 7 Jul 2025 15:08:04 -0500
+Subject: [PATCH 32/48] kernelbase: Open the reparse point in DeleteFile().
+
+(cherry picked from commit 999a85a0559d34572a81aa92c53159b20840e23b)
+
+CW-Bug-Id: #26492
+---
+ dlls/kernelbase/file.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/kernelbase/file.c b/dlls/kernelbase/file.c
+index 22a6b22df6f..3622b9d268e 100644
+--- a/dlls/kernelbase/file.c
++++ b/dlls/kernelbase/file.c
+@@ -1000,9 +1000,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH DeleteFileW( LPCWSTR path )
+     }
+ 
+     InitializeObjectAttributes( &attr, &nameW, OBJ_CASE_INSENSITIVE, 0, NULL );
+-    status = NtCreateFile(&hFile, SYNCHRONIZE | DELETE, &attr, &io, NULL, 0,
+-			  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+-			  FILE_OPEN, FILE_DELETE_ON_CLOSE | FILE_NON_DIRECTORY_FILE, NULL, 0);
++    status = NtCreateFile( &hFile, SYNCHRONIZE | DELETE, &attr, &io, NULL, 0,
++                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
++                           FILE_DELETE_ON_CLOSE | FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, NULL, 0 );
+     if (status == STATUS_SUCCESS) status = NtClose(hFile);
+ 
+     RtlFreeUnicodeString( &nameW );
+-- 
+2.53.0
+

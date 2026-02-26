@@ -1,0 +1,26 @@
+From b591d55385b92885bc3d242ce97a408d38021221 Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Mon, 26 Jan 2026 13:23:47 -0600
+Subject: [PATCH 09/48] get_nt_and_unix_names() EAC fix
+
+CW-Bug-Id: #26492
+---
+ dlls/ntdll/unix/loadorder.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/loadorder.c b/dlls/ntdll/unix/loadorder.c
+index 2157f85556d..6710be209e6 100644
+--- a/dlls/ntdll/unix/loadorder.c
++++ b/dlls/ntdll/unix/loadorder.c
+@@ -446,7 +446,7 @@ enum loadorder get_load_order( const UNICODE_STRING *nt_name )
+         eac_unix_name.Length = eac_unix_name.MaximumLength = wcslen(eac_unix_name.Buffer) * sizeof(WCHAR);
+         InitializeObjectAttributes(&attr, &eac_unix_name, 0, NULL, NULL);
+ 
+-        if (!(status = nt_to_unix_file_name(&attr, &unix_path, FILE_OPEN)))
++        if (!(status = get_nt_and_unix_names(&attr, &eac_unix_name, &unix_path, FILE_OPEN)))
+         {
+             free(unix_path);
+             free(eac_unix_name.Buffer);
+-- 
+2.53.0
+
