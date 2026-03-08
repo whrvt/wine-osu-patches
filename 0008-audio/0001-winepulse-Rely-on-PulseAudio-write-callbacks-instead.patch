@@ -1,8 +1,8 @@
-From d0a1b15d700612aca00f8c18f12a5347e5add393 Mon Sep 17 00:00:00 2001
+From 9a5b867200231f2830613568875cf69ac96a3519 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
-Subject: [PATCH 1/7] winepulse: Rely on PulseAudio write callbacks instead of a
- timer loop.
+Subject: [PATCH 01/10] winepulse: Rely on PulseAudio write callbacks instead
+ of a timer loop.
 
 Reverting a patch from Andrew Eikum.
 ---
@@ -10,7 +10,7 @@ Reverting a patch from Andrew Eikum.
  1 file changed, 334 insertions(+), 316 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 4069fd3c24f..34a22a3143d 100644
+index e06d4b132b2..fc66f604714 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -73,13 +73,10 @@ struct pulse_stream
@@ -29,7 +29,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
      INT64 clock_lastpos, clock_written;
  
-@@ -366,15 +363,25 @@ static void pulse_attr_update(pa_stream *s, void *user) {
+@@ -377,15 +374,25 @@ static void pulse_attr_update(pa_stream *s, void *user) {
  }
  
  static void pulse_underflow_callback(pa_stream *s, void *userdata)
@@ -58,7 +58,7 @@ index 4069fd3c24f..34a22a3143d 100644
  }
  
  static void pulse_op_cb(pa_stream *s, int success, void *user)
-@@ -1039,9 +1046,13 @@ static HRESULT pulse_spec_from_waveformat(struct pulse_stream *stream, const WAV
+@@ -1052,9 +1059,13 @@ static HRESULT pulse_spec_from_waveformat(struct pulse_stream *stream, const WAV
      return S_OK;
  }
  
@@ -73,7 +73,7 @@ index 4069fd3c24f..34a22a3143d 100644
      int ret;
      char buffer[64];
      static LONG number;
-@@ -1062,8 +1073,7 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+@@ -1075,8 +1086,7 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
  
      /* PulseAudio will fill in correct values */
      attr.minreq = attr.fragsize = period_bytes;
@@ -83,7 +83,7 @@ index 4069fd3c24f..34a22a3143d 100644
      attr.prebuf = pa_frame_size(&stream->ss);
      dump_attr(&attr);
  
-@@ -1076,7 +1086,9 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+@@ -1089,7 +1099,9 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
      if (stream->dataflow == eRender)
          ret = pa_stream_connect_playback(stream->stream, pulse_name, &attr, flags|PA_STREAM_VARIABLE_RATE, NULL, NULL);
      else
@@ -94,7 +94,7 @@ index 4069fd3c24f..34a22a3143d 100644
      if (ret < 0) {
          WARN("Returns %i\n", ret);
          return AUDCLNT_E_ENDPOINT_CREATE_FAILED;
-@@ -1087,9 +1099,11 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+@@ -1100,9 +1112,11 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
          return AUDCLNT_E_ENDPOINT_CREATE_FAILED;
  
      if (stream->dataflow == eRender) {
@@ -107,7 +107,7 @@ index 4069fd3c24f..34a22a3143d 100644
      return S_OK;
  }
  
-@@ -1120,7 +1134,7 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1133,7 +1147,7 @@ static NTSTATUS pulse_create_stream(void *args)
  {
      struct create_stream_params *params = args;
      struct pulse_stream *stream;
@@ -116,7 +116,7 @@ index 4069fd3c24f..34a22a3143d 100644
      HRESULT hr;
      char *name;
  
-@@ -1165,53 +1179,57 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1178,53 +1192,57 @@ static NTSTATUS pulse_create_stream(void *args)
                                                                 stream->ss.rate,
                                                                 10000000);
  
@@ -208,7 +208,7 @@ index 4069fd3c24f..34a22a3143d 100644
          }
      }
  
-@@ -1220,7 +1238,9 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1233,7 +1251,9 @@ static NTSTATUS pulse_create_stream(void *args)
  
  exit:
      if (FAILED(params->result = hr)) {
@@ -219,7 +219,7 @@ index 4069fd3c24f..34a22a3143d 100644
          if (stream->stream) {
              pa_stream_disconnect(stream->stream);
              pa_stream_unref(stream->stream);
-@@ -1238,12 +1258,6 @@ static NTSTATUS pulse_release_stream(void *args)
+@@ -1251,12 +1271,6 @@ static NTSTATUS pulse_release_stream(void *args)
      struct pulse_stream *stream = handle_get_stream(params->stream);
      SIZE_T size;
  
@@ -232,7 +232,7 @@ index 4069fd3c24f..34a22a3143d 100644
      pulse_lock();
      if (PA_STREAM_IS_GOOD(pa_stream_get_state(stream->stream))) {
          pa_stream_disconnect(stream->stream);
-@@ -1268,7 +1282,18 @@ static NTSTATUS pulse_release_stream(void *args)
+@@ -1281,7 +1295,18 @@ static NTSTATUS pulse_release_stream(void *args)
      return STATUS_SUCCESS;
  }
  
@@ -252,7 +252,7 @@ index 4069fd3c24f..34a22a3143d 100644
  {
      const float *vol = stream->vol;
      UINT32 i, channels, mute = 0;
-@@ -1285,7 +1310,7 @@ static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32
+@@ -1298,7 +1323,7 @@ static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32
          if (vol[i] == 0.0f)
              mute++;
      }
@@ -261,7 +261,7 @@ index 4069fd3c24f..34a22a3143d 100644
      {
          silence_buffer(stream->ss.format, buffer, bytes);
          goto write;
-@@ -1404,127 +1429,130 @@ static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32
+@@ -1417,127 +1442,130 @@ static int write_buffer(const struct pulse_stream *stream, BYTE *buffer, UINT32
      }
  
  write:
@@ -485,7 +485,7 @@ index 4069fd3c24f..34a22a3143d 100644
                  rem -= copy;
  
                  if (copy < src_len)
-@@ -1536,10 +1564,7 @@ static void pulse_read(struct pulse_stream *stream)
+@@ -1549,10 +1577,7 @@ static void pulse_read(struct pulse_stream *stream)
                          stream->peek_buffer_len = src_len;
                      }
  
@@ -497,7 +497,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
                      stream->peek_len = src_len - copy;
                      stream->peek_ofs = 0;
-@@ -1549,111 +1574,59 @@ static void pulse_read(struct pulse_stream *stream)
+@@ -1562,111 +1587,59 @@ static void pulse_read(struct pulse_stream *stream)
              }
          }
  
@@ -648,7 +648,7 @@ index 4069fd3c24f..34a22a3143d 100644
  static NTSTATUS pulse_start(void *args)
  {
      struct start_params *params = args;
-@@ -1683,8 +1656,6 @@ static NTSTATUS pulse_start(void *args)
+@@ -1696,8 +1669,6 @@ static NTSTATUS pulse_start(void *args)
          return STATUS_SUCCESS;
      }
  
@@ -657,7 +657,7 @@ index 4069fd3c24f..34a22a3143d 100644
      if (pa_stream_is_corked(stream->stream))
      {
          if (!wait_pa_operation_complete(pa_stream_cork(stream->stream, 0, pulse_op_cb, &success)))
-@@ -1696,7 +1667,8 @@ static NTSTATUS pulse_start(void *args)
+@@ -1709,7 +1680,8 @@ static NTSTATUS pulse_start(void *args)
      if (SUCCEEDED(params->result))
      {
          stream->started = TRUE;
@@ -667,7 +667,7 @@ index 4069fd3c24f..34a22a3143d 100644
      }
      pulse_unlock();
      return STATUS_SUCCESS;
-@@ -1768,21 +1740,19 @@ static NTSTATUS pulse_reset(void *args)
+@@ -1781,21 +1753,19 @@ static NTSTATUS pulse_reset(void *args)
      {
          /* If there is still data in the render buffer it needs to be removed from the server */
          int success = 0;
@@ -695,7 +695,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
          if ((p = stream->locked_ptr))
          {
-@@ -1821,7 +1791,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+@@ -1834,7 +1804,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
  
  static UINT32 pulse_render_padding(struct pulse_stream *stream)
  {
@@ -704,7 +704,7 @@ index 4069fd3c24f..34a22a3143d 100644
  }
  
  static UINT32 pulse_capture_padding(struct pulse_stream *stream)
-@@ -1833,15 +1803,16 @@ static UINT32 pulse_capture_padding(struct pulse_stream *stream)
+@@ -1846,15 +1816,16 @@ static UINT32 pulse_capture_padding(struct pulse_stream *stream)
          stream->locked_ptr = packet;
          list_remove(&packet->entry);
      }
@@ -724,7 +724,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
      pulse_lock();
      if (!pulse_stream_valid(stream))
-@@ -1866,30 +1837,45 @@ static NTSTATUS pulse_get_render_buffer(void *args)
+@@ -1879,30 +1850,45 @@ static NTSTATUS pulse_get_render_buffer(void *args)
          return STATUS_SUCCESS;
      }
  
@@ -782,7 +782,7 @@ index 4069fd3c24f..34a22a3143d 100644
      }
  
      silence_buffer(stream->ss.format, *params->data, bytes);
-@@ -1901,16 +1887,15 @@ static NTSTATUS pulse_get_render_buffer(void *args)
+@@ -1914,16 +1900,15 @@ static NTSTATUS pulse_get_render_buffer(void *args)
  
  static void pulse_wrap_buffer(struct pulse_stream *stream, BYTE *buffer, UINT32 written_bytes)
  {
@@ -802,7 +802,7 @@ index 4069fd3c24f..34a22a3143d 100644
          memcpy(stream->local_buffer, buffer + chunk_bytes, written_bytes - chunk_bytes);
      }
  }
-@@ -1919,53 +1904,83 @@ static NTSTATUS pulse_release_render_buffer(void *args)
+@@ -1932,53 +1917,83 @@ static NTSTATUS pulse_release_render_buffer(void *args)
  {
      struct release_render_buffer_params *params = args;
      struct pulse_stream *stream = handle_get_stream(params->stream);
@@ -911,7 +911,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
      pulse_unlock();
      params->result = S_OK;
-@@ -1995,14 +2010,14 @@ static NTSTATUS pulse_get_capture_buffer(void *args)
+@@ -2008,14 +2023,14 @@ static NTSTATUS pulse_get_capture_buffer(void *args)
      pulse_capture_padding(stream);
      if ((packet = stream->locked_ptr))
      {
@@ -928,7 +928,7 @@ index 4069fd3c24f..34a22a3143d 100644
              else
                  *params->devpos = stream->clock_written / pa_frame_size(&stream->ss);
          }
-@@ -2040,11 +2055,11 @@ static NTSTATUS pulse_release_capture_buffer(void *args)
+@@ -2053,11 +2068,11 @@ static NTSTATUS pulse_release_capture_buffer(void *args)
      {
          ACPacket *packet = stream->locked_ptr;
          stream->locked_ptr = NULL;
@@ -943,7 +943,7 @@ index 4069fd3c24f..34a22a3143d 100644
          list_add_tail(&stream->packet_free_head, &packet->entry);
      }
      stream->locked = 0;
-@@ -2343,11 +2358,15 @@ static NTSTATUS pulse_get_latency(void *args)
+@@ -2356,11 +2371,15 @@ static NTSTATUS pulse_get_latency(void *args)
          return STATUS_SUCCESS;
      }
      attr = pa_stream_get_buffer_attr(stream->stream);
@@ -961,7 +961,7 @@ index 4069fd3c24f..34a22a3143d 100644
      pulse_unlock();
      TRACE("Latency: %u ms\n", (unsigned)(*params->latency / 10000));
      params->result = S_OK;
-@@ -2387,7 +2406,7 @@ static NTSTATUS pulse_get_next_packet_size(void *args)
+@@ -2400,7 +2419,7 @@ static NTSTATUS pulse_get_next_packet_size(void *args)
      pulse_lock();
      pulse_capture_padding(stream);
      if (stream->locked_ptr)
@@ -970,7 +970,7 @@ index 4069fd3c24f..34a22a3143d 100644
      else
          *params->frames = 0;
      pulse_unlock();
-@@ -2430,7 +2449,7 @@ static NTSTATUS pulse_get_position(void *args)
+@@ -2443,7 +2462,7 @@ static NTSTATUS pulse_get_position(void *args)
          return STATUS_SUCCESS;
      }
  
@@ -979,7 +979,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
      if (stream->share == AUDCLNT_SHAREMODE_EXCLUSIVE || params->device)
          *params->pos /= pa_frame_size(&stream->ss);
-@@ -2521,12 +2540,11 @@ static NTSTATUS pulse_set_sample_rate(void *args)
+@@ -2534,12 +2553,11 @@ static NTSTATUS pulse_set_sample_rate(void *args)
          wait_pa_operation_complete(pa_stream_flush(stream->stream, pulse_op_cb, &success));
  
      stream->clock_lastpos = stream->clock_written = 0;
@@ -995,7 +995,7 @@ index 4069fd3c24f..34a22a3143d 100644
  
  exit:
      pulse_unlock();
-@@ -2651,7 +2669,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+@@ -2664,7 +2682,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      pulse_start,
      pulse_stop,
      pulse_reset,
@@ -1004,7 +1004,7 @@ index 4069fd3c24f..34a22a3143d 100644
      pulse_get_render_buffer,
      pulse_release_render_buffer,
      pulse_get_capture_buffer,
-@@ -3150,7 +3168,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+@@ -3163,7 +3181,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
      pulse_start,
      pulse_stop,
      pulse_reset,
@@ -1014,5 +1014,5 @@ index 4069fd3c24f..34a22a3143d 100644
      pulse_release_render_buffer,
      pulse_wow64_get_capture_buffer,
 -- 
-2.49.0
+2.53.0
 

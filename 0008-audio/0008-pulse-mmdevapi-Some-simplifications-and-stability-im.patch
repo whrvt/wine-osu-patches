@@ -1,7 +1,7 @@
-From 1e65e385165ea0dfcd45059739ce06253521b87f Mon Sep 17 00:00:00 2001
+From 1ee870becdbc860f44d0539be86b6df97ec8ad10 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 29 Aug 2025 11:19:36 -0700
-Subject: [PATCH] pulse,mmdevapi: Some simplifications and stability
+Subject: [PATCH 08/10] pulse,mmdevapi: Some simplifications and stability
  improvements to the low latency patches.
 
 ---
@@ -187,5 +187,5 @@ index 333ddb22746..e8523fd56c5 100644
      stream->duration = params->duration;
  
 -- 
-2.50.1
+2.53.0
 

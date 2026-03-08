@@ -1,7 +1,7 @@
-From 98a609ebd773867df81fa3770a642d92f3b812ce Mon Sep 17 00:00:00 2001
+From 51e681396282ffef525c57c0a942cc6005986e1b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:21:12 -0700
-Subject: [PATCH 3/7] winepulse: Try memlocking the audio buffer.
+Subject: [PATCH 03/10] winepulse: Try memlocking the audio buffer.
 
 But allow disabling it with WINE_PULSE_MEMLOCK=0.
 ---
@@ -9,7 +9,7 @@ But allow disabling it with WINE_PULSE_MEMLOCK=0.
  1 file changed, 19 insertions(+)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index ba0c42f1173..af231d307df 100644
+index d2328419fa1..fd9f410d119 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -115,6 +115,7 @@ static pthread_mutex_t pulse_mutex;
@@ -45,7 +45,7 @@ index ba0c42f1173..af231d307df 100644
  
      pthread_mutexattr_init(&attr);
      pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT);
-@@ -255,6 +267,10 @@ static NTSTATUS pulse_process_attach(void *args)
+@@ -256,6 +268,10 @@ static NTSTATUS pulse_process_attach(void *args)
      }
  #endif
  
@@ -56,7 +56,7 @@ index ba0c42f1173..af231d307df 100644
      return STATUS_SUCCESS;
  }
  
-@@ -1203,6 +1219,8 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1216,6 +1232,8 @@ static NTSTATUS pulse_create_stream(void *args)
                  if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
                                              zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
                      hr = E_OUTOFMEMORY;
@@ -65,7 +65,7 @@ index ba0c42f1173..af231d307df 100644
              }
          }
          else {
-@@ -1791,6 +1809,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+@@ -1804,6 +1822,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
          return FALSE;
  
      stream->tmp_buffer_bytes = bytes;
@@ -74,5 +74,5 @@ index ba0c42f1173..af231d307df 100644
  }
  
 -- 
-2.49.0
+2.53.0
 

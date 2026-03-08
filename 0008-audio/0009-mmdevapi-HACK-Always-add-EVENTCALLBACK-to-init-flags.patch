@@ -1,7 +1,7 @@
-From b97ce0d4dc66d08236d3b2a7fbb04f29f87248f8 Mon Sep 17 00:00:00 2001
+From ba72f9f9d00a7bee10ca21efb0c1048902aee0dd Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 3 Nov 2025 10:35:17 -0800
-Subject: [PATCH] mmdevapi: HACK: Always add EVENTCALLBACK to init flags.
+Subject: [PATCH 09/10] mmdevapi: HACK: Always add EVENTCALLBACK to init flags.
 
 ---
  dlls/mmdevapi/client.c | 1 +
@@ -20,5 +20,5 @@ index 433829e65db..72cebf0dc6a 100644
      TRACE("(%p)->(%x, %lx, %s, %s, %p, %s)\n", This, mode, flags, wine_dbgstr_longlong(duration),
                                                 wine_dbgstr_longlong(period), fmt,
 -- 
-2.51.2
+2.53.0
 

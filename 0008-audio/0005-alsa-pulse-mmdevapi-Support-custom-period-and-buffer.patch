@@ -1,9 +1,10 @@
-From 439d55277e1eb98a1f241ca781b3e4d0d548f9f7 Mon Sep 17 00:00:00 2001
+From 77d8f826256ffa07e5f6d60cb391140cbfc1c32a Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
-Subject: [PATCH 5/7] alsa,pulse,mmdevapi: Support custom period and buffer sizes, and respect PulseAudio settings.
+Subject: [PATCH 05/10] alsa,pulse,mmdevapi: Support custom period and buffer
+ sizes, and respect PulseAudio settings.
 
-Relevant environment variables are: 
+Relevant environment variables are:
 ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)
 STAGING_AUDIO_PERIOD (units: usecs*10)
 STAGING_AUDIO_DURATION (units: usecs*10)
@@ -200,10 +201,10 @@ index 5bd1d71d837..480041418f0 100644
              WARN("Recover failed: %d (%s)\n", ret, snd_strerror(ret));
              return;
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 735d16bbdc3..eed8cd6392f 100644
+index 47b760c594c..1f1b5ef221f 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -747,8 +747,9 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -758,8 +758,9 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
      pa_channel_map map;
      pa_sample_spec ss;
      pa_buffer_attr attr;
@@ -214,7 +215,7 @@ index 735d16bbdc3..eed8cd6392f 100644
  
      if (pulse_name && !pulse_name[0])
          pulse_name = NULL;
-@@ -795,7 +796,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -806,7 +807,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
          pa_stream_unref(stream);
  
      if (length)
@@ -229,7 +230,7 @@ index 735d16bbdc3..eed8cd6392f 100644
  
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
      wfx->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-@@ -1162,6 +1169,8 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1175,6 +1182,8 @@ static NTSTATUS pulse_create_stream(void *args)
  {
      struct create_stream_params *params = args;
      struct pulse_stream *stream;
@@ -238,7 +239,7 @@ index 735d16bbdc3..eed8cd6392f 100644
      unsigned int i;
      HRESULT hr;
      char *name;
-@@ -1200,6 +1209,18 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1213,6 +1222,18 @@ static NTSTATUS pulse_create_stream(void *args)
      if (FAILED(hr))
          goto exit;
  
@@ -258,5 +259,5 @@ index 735d16bbdc3..eed8cd6392f 100644
      stream->duration = params->duration;
  
 -- 
-2.49.0
+2.53.0
 
