@@ -1,0 +1,103 @@
+From 9ec69cd215b99f1252431e932db5341d0c7174cc Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 10 Sep 2024 07:23:38 -0700
+Subject: [PATCH 18/18] winex11: Force disable glXWaitForSbcOML (AMD) on
+ Wayland to circumvent Xwayland locking FPS to the monitor's refresh rate.
+
+It will prevent ingame vsync from working properly, but the environment variable
+vblank_mode != 0 can override-disable this behavior.
+---
+ dlls/winex11.drv/event.c  | 12 ++++++++----
+ dlls/winex11.drv/opengl.c |  3 ++-
+ dlls/winex11.drv/x11drv.h | 12 ++++++++++++
+ 3 files changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index 2a0507dd47d..c09548f5e4b 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1511,8 +1511,9 @@ static void handle_xembed_protocol( HWND hwnd, XClientMessageEvent *event )
+ /**********************************************************************
+  *              handle_dnd_protocol
+  */
+-static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
++static void handle_dnd_protocol( HWND hwnd, XEvent *xev )
+ {
++    XClientMessageEvent *event = &xev->xclient;
+     unsigned long count, remaining;
+     Window root, child;
+     int root_x, root_y, format;
+@@ -1551,8 +1552,9 @@ static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
+  *
+  * Handle an XdndEnter event.
+  */
+-static void handle_xdnd_enter_event( HWND hWnd, XClientMessageEvent *event )
++static void handle_xdnd_enter_event( HWND hWnd, XEvent *xev )
+ {
++    XClientMessageEvent *event = &xev->xclient;
+     struct format_entry *data;
+     unsigned long count = 0;
+     Atom *xdndtypes;
+@@ -1652,8 +1654,9 @@ static long drop_effect_to_xdnd_action( UINT effect )
+ }
+ 
+ 
+-static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
++static void handle_xdnd_position_event( HWND hwnd, XEvent *xev )
+ {
++    XClientMessageEvent *event = &xev->xclient;
+     XClientMessageEvent e;
+     POINT point;
+     UINT effect;
+@@ -1683,8 +1686,9 @@ static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
+ }
+ 
+ 
+-static void handle_xdnd_drop_event( HWND hwnd, XClientMessageEvent *event )
++static void handle_xdnd_drop_event( HWND hwnd, XEvent *xev )
+ {
++    XClientMessageEvent *event = &xev->xclient;
+     XClientMessageEvent e;
+     UINT effect;
+ 
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 895d3815e7c..1f82574113a 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -740,7 +740,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
+ 
+     if (has_extension( glxExtensions, "GLX_OML_sync_control" ))
+     {
+-        pglXWaitForSbcOML = pglXGetProcAddressARB( (const GLubyte *)"glXWaitForSbcOML" );
++        if (!disable_glXWaitForSbcOML())
++            pglXWaitForSbcOML = pglXGetProcAddressARB( (const GLubyte *)"glXWaitForSbcOML" );
+         pglXSwapBuffersMscOML = pglXGetProcAddressARB( (const GLubyte *)"glXSwapBuffersMscOML" );
+     }
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 1294de11d8d..95cef5c92ed 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -1003,7 +1003,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+     dst->bottom = min( src1->bottom, src2->bottom );
+     return !IsRectEmpty( dst );
+ }
++static inline BOOL disable_glXWaitForSbcOML(void)
++{
++    const char *override_env = getenv("vblank_mode");
++    if (override_env)
++        if (*override_env != '\0' && *override_env != '0')
++            return FALSE;
++        else
++            return TRUE;
++
++    if (!getenv("WAYLAND_DISPLAY")) return FALSE;
+ 
++    return TRUE;
++}
+ /* registry helpers */
+ 
+ extern HKEY open_hkcu_key( const char *name );
+-- 
+2.53.0
+

@@ -1,0 +1,59 @@
+From 2423411ff1411e5542803155d61c7ee9d0db104a Mon Sep 17 00:00:00 2001
+From: Piotr Caban <piotr@codeweavers.com>
+Date: Tue, 21 Sep 2021 15:51:35 +0200
+Subject: [PATCH 28/51] server: Don't wait for low level hook result when
+ queuing hardware message.
+
+Without the change graphic drivers are blocking until low level hooks
+are processed when injecting keyboard and mouse events. Causes 2-seconds
+(timeout) freeze in GtaV.
+
+Signed-off-by: Piotr Caban <piotr@codeweavers.com>
+---
+ server/queue.c | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/server/queue.c b/server/queue.c
+index 1bb078de992..8c253b9c7f1 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -2323,7 +2323,12 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
+         /* specify a sender only when sending the last message */
+         if (!(flags & ((1 << ARRAY_SIZE( messages )) - 1)))
+         {
+-            if (!(wait = send_hook_ll_message( desktop, msg, WH_MOUSE_LL, wparam, sender )))
++            if (origin == IMO_HARDWARE)
++            {
++                if (!send_hook_ll_message( desktop, msg, WH_MOUSE_LL, wparam, NULL ))
++                    queue_hardware_message( desktop, msg, 0 );
++            }
++            else if (!(wait = send_hook_ll_message( desktop, msg, WH_MOUSE_LL, wparam, sender )))
+                 queue_hardware_message( desktop, msg, 0 );
+         }
+         else if (!send_hook_ll_message( desktop, msg, WH_MOUSE_LL, wparam, NULL ))
+@@ -2365,7 +2370,7 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
+     lparam_t lparam = input->kbd.scan << 16;
+     unsigned int flags = 0;
+     BOOL unicode = input->kbd.flags & KEYEVENTF_UNICODE;
+-    int wait;
++    int wait = 0;
+ 
+     if (!(time = input->kbd.time)) time = get_tick_count();
+ 
+@@ -2514,7 +2519,12 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
+     msg->wparam = vkey;
+     msg->lparam = (flags << 16) | lparam | 1u /* repeat count */;
+ 
+-    if (!(wait = send_hook_ll_message( desktop, msg, WH_KEYBOARD_LL, lparam | hook_vkey, sender )))
++    if (origin == IMO_HARDWARE)
++    {
++        if (!(wait = send_hook_ll_message( desktop, msg, WH_KEYBOARD_LL, lparam | hook_vkey, NULL )))
++            queue_hardware_message( desktop, msg, 1 );
++    }
++    else if (!(wait = send_hook_ll_message( desktop, msg, WH_KEYBOARD_LL, lparam | hook_vkey, sender )))
+         queue_hardware_message( desktop, msg, 1 );
+ 
+     return wait;
+-- 
+2.53.0
+

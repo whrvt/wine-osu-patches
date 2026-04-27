@@ -1,0 +1,25 @@
+From a76ac031e1e5597923f6f319dccdc6ac08d2e9d5 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 18 Apr 2026 01:17:08 +0200
+Subject: [PATCH 09/46] include: Decrease min. timer interval.
+
+---
+ include/winuser.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/winuser.h b/include/winuser.h
+index 32b07b387a1..ccf530be229 100644
+--- a/include/winuser.h
++++ b/include/winuser.h
+@@ -2690,7 +2690,7 @@ typedef struct tagMINIMIZEDMETRICS {
+ #define PM_QS_SENDMESSAGE (QS_SENDMESSAGE << 16)
+ 
+ /* SetTimer() limits */
+-#define USER_TIMER_MINIMUM 0x0000000A
++#define USER_TIMER_MINIMUM 0x00000005
+ #define USER_TIMER_MAXIMUM 0x7FFFFFFF
+ 
+ /* SetCoalescableTimer() tolerances */
+-- 
+2.53.0
+

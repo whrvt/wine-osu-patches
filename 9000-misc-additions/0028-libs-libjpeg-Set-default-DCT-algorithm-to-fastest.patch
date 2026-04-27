@@ -1,0 +1,24 @@
+From 7bcd484336c9e482817970e073ab33171a699460 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Tue, 2 May 2023 01:36:12 +0200
+Subject: [PATCH 28/46] libs/libjpeg: Set default DCT algorithm to fastest.
+
+---
+ libs/jpeg/jconfig.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/libs/jpeg/jconfig.h b/libs/jpeg/jconfig.h
+index 2d05a3b0902..9f18c71751b 100644
+--- a/libs/jpeg/jconfig.h
++++ b/libs/jpeg/jconfig.h
+@@ -17,6 +17,7 @@
+ /* #undef NEED_SHORT_EXTERNAL_NAMES */
+ /* Define this if you get warnings about undefined structures. */
+ /* #undef INCOMPLETE_TYPES_BROKEN */
++#define JDCT_DEFAULT JDCT_FASTEST
+ 
+ /* Define "boolean" as unsigned char, not enum, on Windows systems. */
+ #ifdef _WIN32
+-- 
+2.53.0
+

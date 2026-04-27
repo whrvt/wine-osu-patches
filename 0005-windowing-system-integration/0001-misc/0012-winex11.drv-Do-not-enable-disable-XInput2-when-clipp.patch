@@ -1,0 +1,35 @@
+From 4015475d1505effa9869c14db0d35acb19047c02 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 22 Apr 2022 23:12:33 +0200
+Subject: [PATCH 12/18] winex11.drv: Do not enable/disable XInput2 when
+ clipping.
+
+---
+ dlls/winex11.drv/mouse.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 872e10389ef..51cc92ebbed 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -496,9 +496,6 @@ static BOOL grab_clipping_window( const RECT *clip )
+         return TRUE;
+     }
+ 
+-    /* enable XInput2 unless we are already clipping */
+-    if (!data->clipping_cursor) x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );
+-
+     TRACE( "clipping to %s win %lx\n", wine_dbgstr_rect(clip), clip_window );
+ 
+     if (!data->clipping_cursor && clip_window_mapped) XUnmapWindow( data->display, clip_window );
+@@ -531,7 +528,6 @@ static BOOL grab_clipping_window( const RECT *clip )
+ 
+     if (!clipping_cursor)
+     {
+-        x11drv_xinput2_disable( data->display, DefaultRootWindow( data->display ) );
+         return FALSE;
+     }
+     clip_rect = *clip;
+-- 
+2.53.0
+

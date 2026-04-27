@@ -1,0 +1,96 @@
+From 9751a62d2e4ade6a981a4bbbcaa6a21342ef3b75 Mon Sep 17 00:00:00 2001
+From: Mark Harmstone <mark@harmstone.com>
+Date: Sat, 27 Mar 2021 19:47:28 +0000
+Subject: [PATCH 13/51] ntdll: Add stub for RtlLCIDToCultureName.
+
+This is a series of patches to support MUI, Microsoft's resource
+direction feature introduced with Vista. I'm not sure whether this
+should be staging or not...
+
+With these patches, modern versions of Notepad will work, at least up to
+1909 or so (which requires some stuff to do with shcore). You will need
+to have en-US\notepad.exe.mui placed relative to the main EXE.
+
+See https://bugs.winehq.org/show_bug.cgi?id=43670 - I couldn't actually
+get Paint to work as it fails with some (unrelated?) Ribbon stuff, but
+YMMV.
+
+Signed-off-by: Mark Harmstone <mark@harmstone.com>
+---
+ dlls/ntdll/Makefile.in |  1 +
+ dlls/ntdll/mui.c       | 38 ++++++++++++++++++++++++++++++++++++++
+ dlls/ntdll/ntdll.spec  |  1 +
+ 3 files changed, 40 insertions(+)
+ create mode 100644 dlls/ntdll/mui.c
+
+diff --git a/dlls/ntdll/Makefile.in b/dlls/ntdll/Makefile.in
+index 2d0d3f69ad5..7d24e23830e 100644
+--- a/dlls/ntdll/Makefile.in
++++ b/dlls/ntdll/Makefile.in
+@@ -29,6 +29,7 @@ SOURCES = \
+ 	locale.c \
+ 	math.c \
+ 	misc.c \
++	mui.c \
+ 	path.c \
+ 	printf.c \
+ 	process.c \
+diff --git a/dlls/ntdll/mui.c b/dlls/ntdll/mui.c
+new file mode 100644
+index 00000000000..4a9af642f47
+--- /dev/null
++++ b/dlls/ntdll/mui.c
+@@ -0,0 +1,38 @@
++/*
++ * MUI functions
++ *
++ * Copyright 2021 Mark Harmstone
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#include <stdarg.h>
++
++#include "winternl.h"
++#include "wine/debug.h"
++
++WINE_DEFAULT_DEBUG_CHANNEL(mui);
++
++/***********************************************************************
++ *           RtlLCIDToCultureName (NTDLL.@)
++ *
++ * Return the text name of a numeric language ID.
++ */
++BOOLEAN WINAPI RtlLCIDToCultureName( LCID lcid, PUNICODE_STRING string )
++{
++    FIXME("(%04x, %p)\n", lcid, string);
++
++    return FALSE;
++}
+diff --git a/dlls/ntdll/ntdll.spec b/dlls/ntdll/ntdll.spec
+index f396c334e2d..dcba6dc6c7c 100644
+--- a/dlls/ntdll/ntdll.spec
++++ b/dlls/ntdll/ntdll.spec
+@@ -881,6 +881,7 @@
+ @ stdcall -arch=win32 -ret64 RtlLargeIntegerShiftRight(int64 long)
+ @ stdcall -arch=win32 -ret64 RtlLargeIntegerSubtract(int64 int64)
+ @ stdcall RtlLargeIntegerToChar(ptr long long ptr)
++@ stdcall RtlLCIDToCultureName(long ptr)
+ @ stdcall RtlLcidToLocaleName(long ptr long long)
+ @ stdcall RtlLeaveCriticalSection(ptr)
+ @ stdcall RtlLengthRequiredSid(long)
+-- 
+2.53.0
+

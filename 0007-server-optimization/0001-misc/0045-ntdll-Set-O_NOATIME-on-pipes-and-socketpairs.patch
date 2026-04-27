@@ -1,0 +1,98 @@
+From d48396b73afff83e4315cbbcb557921cca15b92b Mon Sep 17 00:00:00 2001
+From: Torge Matthies <tmatthies@codeweavers.com>
+Date: Thu, 14 Sep 2023 23:32:06 +0200
+Subject: [PATCH 45/51] ntdll: Set O_NOATIME on pipes and socketpairs.
+
+Signed-off-by: Torge Matthies <tmatthies@codeweavers.com>
+---
+ dlls/ntdll/unix/process.c | 16 ++++++++++++++++
+ dlls/ntdll/unix/server.c  | 11 ++++++++++-
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 67e2f3713d7..a67deaccb18 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -73,6 +73,10 @@
+ WINE_DEFAULT_DEBUG_CHANNEL(process);
+ 
+ 
++#ifndef O_NOATIME
++#define O_NOATIME 0x40000
++#endif
++
+ static ULONG execute_flags = MEM_EXECUTE_OPTION_DISABLE;
+ 
+ static UINT process_error_mode;
+@@ -480,6 +484,10 @@ NTSTATUS WINAPI __wine_unix_spawnvp( char * const argv[], int wait )
+         fcntl( fd[0], F_SETFD, FD_CLOEXEC );
+         fcntl( fd[1], F_SETFD, FD_CLOEXEC );
+     }
++#ifdef __linux__
++    fcntl( fd[0], F_SETFL, O_NOATIME );
++    fcntl( fd[1], F_SETFL, O_NOATIME );
++#endif
+ 
+     if (!(pid = fork()))
+     {
+@@ -576,6 +584,10 @@ static NTSTATUS fork_and_exec( OBJECT_ATTRIBUTES *attr, const char *unix_name, i
+         fcntl( fd[0], F_SETFD, FD_CLOEXEC );
+         fcntl( fd[1], F_SETFD, FD_CLOEXEC );
+     }
++#ifdef __linux__
++    fcntl( fd[0], F_SETFL, O_NOATIME );
++    fcntl( fd[1], F_SETFL, O_NOATIME );
++#endif
+ 
+     if (wine_server_handle_to_fd( params->hStdInput, FILE_READ_DATA, &stdin_fd, NULL ) &&
+         isatty(0) && is_unix_console_handle( params->hStdInput ))
+@@ -812,6 +824,10 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
+         setsockopt( socketfd[0], SOL_SOCKET, SO_PASSCRED, &enable, sizeof(enable) );
+     }
+ #endif
++#ifdef __linux__
++    fcntl( socketfd[0], F_SETFL, O_NOATIME );
++    fcntl( socketfd[1], F_SETFL, O_NOATIME );
++#endif
+ 
+     wine_server_send_fd( socketfd[1] );
+ 
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index d2cfb4368ad..5c0e0ea8e23 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -109,6 +109,10 @@ WINE_DECLARE_DEBUG_CHANNEL(syscall);
+ #define MSG_CMSG_CLOEXEC 0
+ #endif
+ 
++#ifndef O_NOATIME
++#define O_NOATIME 0x40000
++#endif
++
+ #define SOCKETNAME "socket"        /* name of the socket file */
+ #define LOCKNAME   "lock"          /* name of the lock file */
+ 
+@@ -1306,7 +1310,7 @@ int server_pipe( int fd[2] )
+ 
+     if (have_pipe2)
+     {
+-        if (!(ret = pipe2( fd, O_CLOEXEC ))) return ret;
++        if (!(ret = pipe2( fd, O_CLOEXEC ))) goto done;
+         if (errno == ENOSYS || errno == EINVAL) have_pipe2 = FALSE;  /* don't try again */
+     }
+ #endif
+@@ -1315,6 +1319,11 @@ int server_pipe( int fd[2] )
+         fcntl( fd[0], F_SETFD, FD_CLOEXEC );
+         fcntl( fd[1], F_SETFD, FD_CLOEXEC );
+     }
++done:
++#ifdef __linux__
++    fcntl( fd[0], F_SETFL, O_NOATIME );
++    fcntl( fd[1], F_SETFL, O_NOATIME );
++#endif
+     return ret;
+ }
+ 
+-- 
+2.53.0
+

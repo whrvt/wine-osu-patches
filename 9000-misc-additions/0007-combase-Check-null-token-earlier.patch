@@ -1,0 +1,35 @@
+From 6bf3c30928768541b8a80f6506f17af19561c458 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Tue, 10 Sep 2024 11:21:17 -0700
+Subject: [PATCH 07/46] combase: Check null token earlier.
+
+---
+ dlls/combase/combase.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/combase/combase.c b/dlls/combase/combase.c
+index 413f7c3a54f..4c3a854d072 100644
+--- a/dlls/combase/combase.c
++++ b/dlls/combase/combase.c
+@@ -2717,6 +2717,8 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
+ 
+     TRACE("%p\n", token);
+ 
++    if(!token) return E_POINTER;
++
+     if (!InternalIsProcessInitialized())
+     {
+         ERR("apartment not initialised\n");
+@@ -2726,9 +2728,6 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
+     if (FAILED(hr = com_get_tlsdata(&tlsdata)))
+         return hr;
+ 
+-    if (!token)
+-        return E_POINTER;
+-
+     if (!tlsdata->context_token)
+     {
+         struct thread_context *context;
+-- 
+2.53.0
+

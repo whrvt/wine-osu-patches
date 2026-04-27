@@ -1,0 +1,25 @@
+From 26ab982e41800b12b3e14901b447371a735cd4b1 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 17 Apr 2026 23:22:18 +0200
+Subject: [PATCH 08/18] winex11: Fix child window styles for osu! editor.
+
+---
+ dlls/winex11.drv/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 147e183e9c5..dc384473de0 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -600,7 +600,7 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style
+     unsigned long ret = 0;
+ 
+     if (ex_style & WS_EX_TOOLWINDOW) return 0;
+-    if ((ex_style & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED) return 0;
++    if (!((style & WS_CAPTION) == WS_CAPTION) && (ex_style & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED) return 0;
+ 
+     if ((style & WS_CAPTION) == WS_CAPTION)
+     {
+-- 
+2.53.0
+

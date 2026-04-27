@@ -1,0 +1,71 @@
+From 459f91aa94e86ba4e2863c6b1e7601dca5d5c5fd Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 18 Apr 2026 01:06:45 +0200
+Subject: [PATCH 02/46] winex11/win32u: Default virtual desktop to 600hz.
+
+---
+ dlls/win32u/sysparams.c    | 4 ++--
+ dlls/wined3d/directx.c     | 2 +-
+ dlls/winex11.drv/display.c | 4 ++--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index 6490dcba446..cfe51b74732 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -2110,7 +2110,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
+ static DEVMODEW *get_virtual_modes( const DEVMODEW *initial, const DEVMODEW *maximum,
+                                     const DEVMODEW *host_modes, UINT host_modes_count, UINT32 *modes_count )
+ {
+-    UINT depths[] = {8, 16, initial->dmBitsPerPel}, freqs[] = {60, -1}, sizes_count, i, j, f, count = 0;
++    UINT depths[] = {8, 16, initial->dmBitsPerPel}, freqs[] = {600, -1}, sizes_count, i, j, f, count = 0;
+     DEVMODEW *modes = NULL;
+     SIZE *screen_sizes;
+     BOOL vertical;
+@@ -2764,7 +2764,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
+     if (!read_source_mode( source->key, ENUM_CURRENT_SETTINGS, &current ))
+     {
+         current = ctx->primary;
+-        current.dmDisplayFrequency = 60;
++        current.dmDisplayFrequency = 600;
+         current.dmPelsWidth = initial.dmPelsWidth;
+         current.dmPelsHeight = initial.dmPelsHeight;
+     }
+diff --git a/dlls/wined3d/directx.c b/dlls/wined3d/directx.c
+index 16500e8e855..76e25a8ac6c 100644
+--- a/dlls/wined3d/directx.c
++++ b/dlls/wined3d/directx.c
+@@ -1840,7 +1840,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d_output *outp
+     if (FAILED(wined3d_output_get_display_mode(output, &mode, NULL)))
+         return WINED3DERR_INVALIDCALL;
+     if (mode.refresh_rate == DEFAULT_REFRESH_RATE)
+-        mode.refresh_rate = 60;
++        mode.refresh_rate = 600;
+ 
+     freq_per_frame = freq_per_sec.QuadPart / mode.refresh_rate;
+     /* Assume 20 scan lines in the vertical blank. */
+diff --git a/dlls/winex11.drv/display.c b/dlls/winex11.drv/display.c
+index 2eaf03001f4..f2c3c22a673 100644
+--- a/dlls/winex11.drv/display.c
++++ b/dlls/winex11.drv/display.c
+@@ -94,7 +94,7 @@ static BOOL nores_get_modes( x11drv_settings_id id, DWORD flags, struct x11drv_m
+     modes[0].mode.dmPelsWidth = primary.right;
+     modes[0].mode.dmPelsHeight = primary.bottom;
+     modes[0].mode.dmDisplayFlags = 0;
+-    modes[0].mode.dmDisplayFrequency = 60;
++    modes[0].mode.dmDisplayFrequency = 600;
+ 
+     *new_modes = modes;
+     *mode_count = 1;
+@@ -125,7 +125,7 @@ static BOOL nores_get_current_mode(x11drv_settings_id id, DEVMODEW *mode)
+     mode->dmBitsPerPel = screen_bpp;
+     mode->dmPelsWidth = primary.right;
+     mode->dmPelsHeight = primary.bottom;
+-    mode->dmDisplayFrequency = 60;
++    mode->dmDisplayFrequency = 600;
+     return TRUE;
+ }
+ 
+-- 
+2.53.0
+

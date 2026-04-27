@@ -1,0 +1,28 @@
+From c46a78a8eaad8fa071348a5696383ea6828d845e Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Fri, 22 Nov 2024 10:31:07 -0800
+Subject: [PATCH 05/14] configure: Enforce 4-byte stack alignment on clang for
+ PE builds.
+
+Same as -mpreferred-stack-boundary=2 for gcc.
+Clang interprets this as "n" bytes, while gcc uses "2^n" bytes.
+https://linux.kernel.narkive.com/y7hAplfS/patch-x86-build-specify-stack-alignment-for-clang
+---
+ configure.ac | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/configure.ac b/configure.ac
+index 1d8787ed5fd..d9d0cb82912 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -623,6 +623,7 @@ This is an error since --enable-archs=$wine_arch was requested.])])
+ 
+     case $wine_arch in
+       i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])
++            WINE_TRY_PE_CFLAGS([-mstack-alignment=4])
+             WINE_TRY_PE_CFLAGS([-mpreferred-stack-boundary=2])
+             WINE_TRY_PE_CFLAGS([-mlong-double-64])
+             WINE_TRY_PE_CFLAGS([-Wl,--disable-stdcall-fixup],
+-- 
+2.53.0
+

@@ -1,0 +1,41 @@
+From 94ef882c8e2b7b885eddb9a905e8e382e661eea9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Fri, 15 May 2020 12:59:44 +0200
+Subject: [PATCH 07/12] dxgi: Add fallback to D3D10CoreRegisterLayers.
+
+If D3D11CoreRegisterLayers is not found in module.
+---
+ dlls/dxgi/dxgi_main.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/dxgi/dxgi_main.c b/dlls/dxgi/dxgi_main.c
+index ca1fb525535..b3d2a3ea72e 100644
+--- a/dlls/dxgi/dxgi_main.c
++++ b/dlls/dxgi/dxgi_main.c
+@@ -103,8 +103,8 @@ static HRESULT register_d3d10core_layers(HMODULE d3d10core)
+ 
+     if (!dxgi_main.d3d10core)
+     {
+-        HRESULT hr;
+-        HRESULT (WINAPI *d3d11core_register_layers)(void);
++        HRESULT hr = E_FAIL;
++        HRESULT (WINAPI *register_layers)(void);
+         HMODULE mod;
+         BOOL ret;
+ 
+@@ -114,8 +114,10 @@ static HRESULT register_d3d10core_layers(HMODULE d3d10core)
+             return E_FAIL;
+         }
+ 
+-        d3d11core_register_layers = (void *)GetProcAddress(mod, "D3D11CoreRegisterLayers");
+-        hr = d3d11core_register_layers();
++        if ((register_layers = (void *)GetProcAddress(mod, "D3D11CoreRegisterLayers")) ||
++            (register_layers = (void *)GetProcAddress(mod, "D3D10CoreRegisterLayers")))
++            hr = register_layers();
++
+         if (FAILED(hr))
+         {
+             ERR("Failed to register d3d11 layers, returning %#lx.\n", hr);
+-- 
+2.53.0
+

@@ -1,0 +1,36 @@
+From 4ad0bbbc49442bfe33ffb3819df35f5c12722428 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sat, 18 Apr 2026 01:27:06 +0200
+Subject: [PATCH 35/46] ntdll: Quieten SYSTEM_PERFORMANCE_INFORMATION.
+
+---
+ dlls/ntdll/unix/system.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
+index 72c749b223f..a4d5725131e 100644
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -3293,7 +3293,6 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+     case SystemPerformanceInformation:  /* 2 */
+     {
+         SYSTEM_PERFORMANCE_INFORMATION spi;
+-        static BOOL fixme_written = FALSE;
+ 
+         get_performance_info( &spi );
+         len = sizeof(spi);
+@@ -3303,10 +3302,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+             else memcpy( info, &spi, len);
+         }
+         else ret = STATUS_INFO_LENGTH_MISMATCH;
+-        if(!fixme_written) {
+-            FIXME("info_class SYSTEM_PERFORMANCE_INFORMATION\n");
+-            fixme_written = TRUE;
+-        }
++        WARN("info_class SYSTEM_PERFORMANCE_INFORMATION\n");
+         break;
+     }
+ 
+-- 
+2.53.0
+
