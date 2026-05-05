@@ -1,0 +1,55 @@
+From 191fe4800cd2897d4ecab267f73230c5abed3828 Mon Sep 17 00:00:00 2001
+From: Haoyang Chen <chenhaoyang@kylinos.cn>
+Date: Tue, 21 Nov 2023 16:35:10 +0800
+Subject: [PATCH 2/2] gdi32/tests: Add some tests for SetWindowExtEx and
+ SetViewportExtEx.
+
+---
+ dlls/gdi32/tests/mapping.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/dlls/gdi32/tests/mapping.c b/dlls/gdi32/tests/mapping.c
+index 78c83907a7e..192c87c33b6 100644
+--- a/dlls/gdi32/tests/mapping.c
++++ b/dlls/gdi32/tests/mapping.c
+@@ -487,6 +487,23 @@ static void test_SetViewportExt(HDC hdc, LONG cx, LONG cy, LONG expected_vp_cx,
+         viewportOrg.x, viewportOrg.y, viewportOrgAfter.x, viewportOrgAfter.y);
+ }
+ 
++static void test_SetWindowExtEx(INT vp_cx, INT vp_cy, INT cx, INT cy, INT expect_cx, INT expect_cy)
++{
++    SIZE viewportExt = {0};
++    HDC hdc = GetDC(0);
++
++    SetMapMode(hdc, MM_ISOTROPIC);
++
++    SetViewportExtEx(hdc, vp_cx, vp_cy, NULL);
++    SetWindowExtEx(hdc, cx, cy, NULL);
++    GetViewportExtEx(hdc, &viewportExt);
++
++    ok(viewportExt.cx == expect_cx && viewportExt.cy == expect_cy, "Expected %dx%d got %ldx%ld\n",
++            expect_cx, expect_cy, viewportExt.cx,  viewportExt.cy);
++
++    ReleaseDC(0, hdc);
++}
++
+ static void test_isotropic_mapping(void)
+ {
+     SIZE win, vp;
+@@ -524,6 +541,13 @@ static void test_isotropic_mapping(void)
+     test_SetWindowExt(hdc, 4 * win.cx, -4 * win.cy, -vp.cx, -vp.cy);
+     
+     ReleaseDC(0, hdc);
++
++    test_SetWindowExtEx(400, 600, 400*2, 600*2, 400, 600);
++    test_SetWindowExtEx(500, 500, 1234, 4567, 500*1234/4567, 500);
++    test_SetWindowExtEx(500, 500, 1234, 600, 500, 500*600/1234);
++    test_SetWindowExtEx(500, 500, 1234, 1234, 500, 500);
++    test_SetWindowExtEx(-500, 500, 111, 111, -500, 500);
++    test_SetWindowExtEx(500, -500, 1500, 1500, 500, -500);
+ }
+ 
+ static void test_setvirtualresolution(void)
+-- 
+2.54.0
+

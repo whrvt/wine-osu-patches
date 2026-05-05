@@ -1,0 +1,52 @@
+From 8a0f977c18f6770d30b2dfb5b01fc1e2e12653e0 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Fri, 17 Apr 2026 23:07:59 +0200
+Subject: [PATCH 06/19] HACK: winex11: Use Xshape fallback for Mutter.
+
+Patch to workaround commit https://github.com/wine-mirror/wine/commit/35193586.
+Without this, Mutter (GNOME X11/Wayland+XWayland) force-enables VSync on osu! due to
+the compositor not being disabled, even in fullscreen
+
+Co-authored-by: William Horvath <william@horvath.blog>
+---
+ dlls/winex11.drv/window.c | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 8a15478b86d..71fa79ff8c4 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2259,7 +2259,9 @@ Window get_dummy_parent(void)
+         attrib.colormap = default_colormap;
+ 
+ #ifdef HAVE_LIBXSHAPE
++        if (!X11DRV_HasWindowManager( "Mutter" ))
+         {
++            TRACE("Not using Xshape fallback, WM isn't Mutter.\n");
+             static XRectangle empty_rect;
+             dummy_parent = XCreateWindow( gdi_display, root_window, 0, 0, 1, 1, 0,
+                                           default_visual.depth, InputOutput, default_visual.visual,
+@@ -2269,11 +2271,15 @@ Window get_dummy_parent(void)
+             XShapeCombineRectangles( gdi_display, dummy_parent, ShapeInput, 0, 0, &empty_rect, 1,
+                                      ShapeSet, YXBanded );
+         }
+-#else
+-        dummy_parent = XCreateWindow( gdi_display, root_window, -1, -1, 1, 1, 0, default_visual.depth,
+-                                      InputOutput, default_visual.visual,
+-                                      CWColormap | CWBorderPixel | CWOverrideRedirect, &attrib );
+-        WARN("Xshape support is not compiled in. Applications under XWayland may have poor performance.\n");
++        else
++        {
++#endif
++            dummy_parent = XCreateWindow( gdi_display, root_window, -1, -1, 1, 1, 0, default_visual.depth,
++                                          InputOutput, default_visual.visual,
++                                          CWColormap | CWBorderPixel | CWOverrideRedirect, &attrib );
++            FIXME("Using Xshape fallback. Either your WM is Mutter, or Xshape support was not compiled in.\n");
++#ifdef HAVE_LIBXSHAPE
++        }
+ #endif
+         XChangeProperty( gdi_display, dummy_parent, x11drv_atom(_NET_WM_WINDOW_OPACITY),
+                          XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&opacity, 1 );
+-- 
+2.54.0
+

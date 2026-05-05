@@ -1,0 +1,31 @@
+From cf9cb035eb3b7f6193e70c1c877257677d714bcd Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 2 Apr 2025 00:58:56 -0700
+Subject: [PATCH 06/47] combase: Return S_OK for
+ RoGetParameterizedTypeInstanceIID.
+
+Fixes osu! crashing with Wine version hidden.
+---
+ dlls/combase/roapi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
+index f4f7c0aac26..6e4ff5a3206 100644
+--- a/dlls/combase/roapi.c
++++ b/dlls/combase/roapi.c
+@@ -212,10 +212,10 @@ HRESULT WINAPI RoGetParameterizedTypeInstanceIID(UINT32 name_element_count, cons
+                                                  const IRoMetaDataLocator *meta_data_locator, GUID *iid,
+                                                  ROPARAMIIDHANDLE *hiid)
+ {
+-    FIXME("stub: %d %p %p %p %p\n", name_element_count, name_elements, meta_data_locator, iid, hiid);
++    WARN("stub: %d %p %p %p %p\n", name_element_count, name_elements, meta_data_locator, iid, hiid);
+     if (iid) *iid = GUID_NULL;
+     if (hiid) *hiid = INVALID_HANDLE_VALUE;
+-    return E_NOTIMPL;
++    return S_OK;
+ }
+ 
+ /***********************************************************************
+-- 
+2.54.0
+

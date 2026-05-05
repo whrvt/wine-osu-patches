@@ -1,0 +1,103 @@
+From 871bfb918cc77f0f014ce7f1fbb262485777f354 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 29 Jan 2025 23:57:29 -0800
+Subject: [PATCH 12/14] makedep: Use absolute paths for the compile_commands
+ compiler.
+
+---
+ tools/makedep.c | 29 ++++++++++++++++++++++++++++-
+ tools/tools.h   | 31 +++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+), 1 deletion(-)
+
+diff --git a/tools/makedep.c b/tools/makedep.c
+index 84d3d06e1c5..8962f0fe58b 100644
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -804,6 +804,33 @@ static char *get_line( FILE *file )
+     }
+ }
+ 
++/*******************************************************************
++ *         get_absolute_cmd_path
++ */
++static char *get_absolute_cmd_path( const char *cmd )
++{
++    struct strarray tokens;
++    char *result = NULL;
++    unsigned int i;
++
++    if (!cmd || !*cmd) return NULL;
++
++    tokens = strarray_fromstring( cmd, " " );
++    if (!tokens.count) return NULL;
++
++    result = build_absolute_path( tokens.str[0] );
++    for (i = 1; i < tokens.count; i++)
++    {
++        char *abs_path = build_absolute_path( tokens.str[i] );
++        char *new_result = strmake( "%s %s", result, abs_path );
++        free( result );
++        free( abs_path );
++        result = new_result;
++    }
++
++    return result;
++}
++
+ 
+ /*******************************************************************
+  *         hash_filename
+@@ -4512,7 +4539,7 @@ static void output_compile_commands( const char *dest )
+     LIST_FOR_EACH_ENTRY( cmd, &compile_commands, struct compile_command, entry )
+     {
+         output( "  {\n" );
+-        output( "    \"command\": \"%s -c -o %s %s", cmd->cmd, cmd->obj, cmd->source );
++        output( "    \"command\": \"%s -c -o %s %s", get_absolute_cmd_path( cmd->cmd ), cmd->obj, cmd->source );
+         STRARRAY_FOR_EACH( arg, &cmd->args ) output( " %s", escape_cstring( arg ));
+         output( "\",\n" );
+         output( "    \"file\": \"%s\",\n", cmd->source );
+diff --git a/tools/tools.h b/tools/tools.h
+index 224a738ddb8..7db80ab06e8 100644
+--- a/tools/tools.h
++++ b/tools/tools.h
+@@ -414,6 +414,37 @@ static inline char *build_relative_path( const char *base, const char *from, con
+     return ret;
+ }
+ 
++/* return the absolute path to a given relative path */
++static inline char *build_absolute_path( const char *file )
++{
++    char abs_path[PATH_MAX];
++    struct strarray path;
++    struct stat st;
++    unsigned int i;
++
++    if (!file || !file[0]) return xstrdup( file );
++
++    if (file[0] == '/') return xstrdup( file );
++
++    if (getcwd( abs_path, sizeof(abs_path) ) &&
++        strlen(abs_path) + strlen(file) + 2 < sizeof(abs_path))
++    {
++        strcat( abs_path, "/" );
++        strcat( abs_path, file );
++        if (!stat( abs_path, &st )) return xstrdup( abs_path );
++    }
++
++    path = strarray_frompath( getenv( "PATH" ) );
++    for (i = 0; i < path.count; i++)
++    {
++        char *path_file = strmake( "%s/%s", path.str[i], file );
++        if (!stat( path_file, &st )) return path_file;
++        free( path_file );
++    }
++
++    return xstrdup( file );
++}
++
+ /* temp files management */
+ 
+ extern const char *temp_dir;
+-- 
+2.54.0
+

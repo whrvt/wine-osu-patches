@@ -1,0 +1,78 @@
+From 1f70659ad5d2fe86fe84cecdcae4b7197964ad55 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 4 May 2026 23:41:09 +0200
+Subject: [PATCH 13/13] server/user32: Backport more raw input changes from
+ Proton.
+
+---
+ dlls/user32/input.c | 4 +++-
+ server/queue.c      | 4 +++-
+ server/user.h       | 1 +
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/user32/input.c b/dlls/user32/input.c
+index d375a4be782..3efce24a66c 100644
+--- a/dlls/user32/input.c
++++ b/dlls/user32/input.c
+@@ -31,6 +31,7 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(win);
+ WINE_DECLARE_DEBUG_CHANNEL(keyboard);
++WINE_DECLARE_DEBUG_CHANNEL(rawinput);
+ 
+ /***********************************************************************
+  *           get_locale_kbd_layout
+@@ -452,6 +453,7 @@ BOOL WINAPI UnloadKeyboardLayout( HKL layout )
+ 
+ static DWORD CALLBACK devnotify_window_callbackW(HANDLE handle, DWORD flags, DEV_BROADCAST_HDR *header)
+ {
++    TRACE_(rawinput)("handle %p, flags %#lx, header %p\n", handle, flags, header);
+     SendMessageTimeoutW(handle, WM_DEVICECHANGE, flags, (LPARAM)header, SMTO_ABORTIFHUNG, 2000, NULL);
+     return 0;
+ }
+@@ -538,7 +540,7 @@ HDEVNOTIFY WINAPI RegisterDeviceNotificationW( HANDLE handle, void *filter, DWOR
+     DEV_BROADCAST_HDR *header = filter;
+     device_notify_callback callback;
+ 
+-    TRACE("handle %p, filter %p, flags %#lx\n", handle, filter, flags);
++    TRACE_(rawinput)("handle %p, filter %p, flags %#lx\n", handle, filter, flags);
+ 
+     if (flags & ~(DEVICE_NOTIFY_SERVICE_HANDLE | DEVICE_NOTIFY_ALL_INTERFACE_CLASSES))
+     {
+diff --git a/server/queue.c b/server/queue.c
+index 8bbbefaa25d..b5b3aaa84c9 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -2339,7 +2339,8 @@ static void key_repeat_timeout( void *private )
+     struct desktop *desktop = private;
+ 
+     desktop->key_repeat.timeout = NULL;
+-    queue_keyboard_message( desktop, desktop->key_repeat.win, &desktop->key_repeat.input, IMO_HARDWARE, NULL, 1, 0 );
++    queue_keyboard_message( desktop, desktop->key_repeat.win, &desktop->key_repeat.input,
++                            IMO_HARDWARE, NULL, 1, desktop->key_repeat.flags );
+ }
+ 
+ static void stop_key_repeat( struct desktop *desktop )
+@@ -2468,6 +2469,7 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
+         {
+             timeout_t timeout = repeat ? desktop->key_repeat.period : desktop->key_repeat.delay;
+             desktop->key_repeat.input = *input;
++            desktop->key_repeat.flags = send_flags;
+             desktop->key_repeat.input.kbd.time = 0;
+             desktop->key_repeat.win = win;
+             if (desktop->key_repeat.timeout) remove_timeout_user( desktop->key_repeat.timeout );
+diff --git a/server/user.h b/server/user.h
+index 060e54ec775..86fa0c19960 100644
+--- a/server/user.h
++++ b/server/user.h
+@@ -57,6 +57,7 @@ struct key_repeat
+     timeout_t            delay;            /* auto-repeat delay */
+     timeout_t            period;           /* auto-repeat period */
+     union hw_input       input;            /* the input to repeat */
++    unsigned int         flags;            /* the queue_keyboard_message flags */
+     user_handle_t        win;              /* target window for input event */
+     struct timeout_user *timeout;          /* timeout for repeat */
+ };
+-- 
+2.54.0
+

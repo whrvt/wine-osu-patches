@@ -1,0 +1,25 @@
+From d0832676532fc51cd1509107f4b346ae16f002ed Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sun, 16 Mar 2025 17:31:41 -0700
+Subject: [PATCH 07/10] dsound: Divide default buffer length by a factor of 8.
+
+---
+ dlls/dsound/dsound_main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/dsound/dsound_main.c b/dlls/dsound/dsound_main.c
+index 8936b437ba2..22cc664797a 100644
+--- a/dlls/dsound/dsound_main.c
++++ b/dlls/dsound/dsound_main.c
+@@ -80,7 +80,7 @@ GUID *DSOUND_renderer_guids;
+ GUID *DSOUND_capture_guids;
+ 
+ /* All default settings, you most likely don't want to touch these, see wiki on UsefulRegistryKeys */
+-int ds_hel_buflen = 32768 * 2;
++int ds_hel_buflen = 4096 * 2;
+ 
+ /*
+  * Get a config key from either the app-specific or the default config
+-- 
+2.54.0
+

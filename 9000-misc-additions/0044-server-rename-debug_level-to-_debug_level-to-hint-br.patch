@@ -1,0 +1,99 @@
+From 98f429b4b604b1ff2d65264c930b9e859cd7af52 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sat, 18 Apr 2026 01:32:40 +0200
+Subject: [PATCH 44/47] server: rename debug_level to _debug_level to hint
+ branch predictor
+
+---
+ dlls/ntdll/unix/server.c | 2 +-
+ server/main.c            | 6 +++---
+ server/object.h          | 7 ++++++-
+ server/protocol.def      | 2 +-
+ server/thread.c          | 2 +-
+ 5 files changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index 08c9c6db052..e955e261f3b 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -1718,7 +1718,7 @@ size_t server_init_process(void)
+         req->unix_tid    = get_unix_tid();
+         req->reply_fd    = reply_pipe;
+         req->wait_fd     = data->wait_fd[1];
+-        req->debug_level = (TRACE_ON(server) != 0);
++        req->_debug_level = (TRACE_ON(server) != 0);
+         wine_server_set_reply( req, supported_machines, sizeof(supported_machines) );
+         if (!(ret = wine_server_call( req )))
+         {
+diff --git a/server/main.c b/server/main.c
+index ee0e8addecb..f8214e5d3cb 100644
+--- a/server/main.c
++++ b/server/main.c
+@@ -44,7 +44,7 @@
+ #include "fsync.h"
+ 
+ /* command-line options */
+-int debug_level = 0;
++int _debug_level = 0;
+ int foreground = 0;
+ timeout_t master_socket_timeout = 0; /* master socket timeout, default is 3 seconds */
+ const char *server_argv0;
+@@ -73,9 +73,9 @@ static void option_callback( int optc, char *optarg )
+     {
+     case 'd':
+         if (optarg && isdigit(*optarg))
+-            debug_level = atoi( optarg );
++            _debug_level = atoi( optarg );
+         else
+-            debug_level++;
++            _debug_level++;
+         break;
+     case 'f':
+         foreground = 1;
+diff --git a/server/object.h b/server/object.h
+index 99832ff3077..879d0322b16 100644
+--- a/server/object.h
++++ b/server/object.h
+@@ -345,7 +345,12 @@ extern struct object *create_symlink( struct object *root, const struct unicode_
+ /* global variables */
+ 
+   /* command-line options */
+-extern int debug_level;
++extern int _debug_level;
++#ifdef __GNUC__
++#define debug_level (__builtin_expect(_debug_level, 0))
++#else
++#define debug_level _debug_level
++#endif
+ extern int foreground;
+ extern timeout_t master_socket_timeout;
+ extern const char *server_argv0;
+diff --git a/server/protocol.def b/server/protocol.def
+index ccb27e398cd..0e3b21c7a74 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -1151,7 +1151,7 @@ typedef volatile struct
+ @REQ(init_first_thread)
+     int          unix_pid;     /* Unix pid of new process */
+     int          unix_tid;     /* Unix tid of new thread */
+-    int          debug_level;  /* new debug level */
++    int          _debug_level;  /* new debug level */
+     int          reply_fd;     /* fd for reply pipe */
+     int          wait_fd;      /* fd for blocking calls pipe */
+ @REPLY
+diff --git a/server/thread.c b/server/thread.c
+index 25835076e32..fdd4256e6dc 100644
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -1793,7 +1793,7 @@ DECL_HANDLER(init_first_thread)
+ 
+     set_thread_base_priority( current, current->base_priority );
+ 
+-    debug_level = max( debug_level, req->debug_level );
++    _debug_level = max( debug_level, req->_debug_level );
+ 
+     reply->pid          = get_process_id( process );
+     reply->tid          = get_thread_id( current );
+-- 
+2.54.0
+
