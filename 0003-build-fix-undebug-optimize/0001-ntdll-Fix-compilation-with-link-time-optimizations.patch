@@ -1,4 +1,4 @@
-From 4a6bef8f26250f10598f43937e046e3a5f6e3f99 Mon Sep 17 00:00:00 2001
+From 97fb3908380a765b897da9435c8a882f7780fd9f Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 02:00:00 +0200
 Subject: [PATCH 01/14] ntdll: Fix compilation with link-time optimizations.
@@ -13,57 +13,57 @@ Rebased from an original patch by Torge Matthies.
  5 files changed, 9 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/ntdll/unix/signal_arm.c b/dlls/ntdll/unix/signal_arm.c
-index bd6785ccd6a..42364903732 100644
+index 60b34c2d8bd..59d97cdeca3 100644
 --- a/dlls/ntdll/unix/signal_arm.c
 +++ b/dlls/ntdll/unix/signal_arm.c
-@@ -1111,7 +1111,7 @@ void signal_init_process(void)
+@@ -1103,7 +1103,7 @@ void signal_init_process(void)
  /***********************************************************************
   *           init_syscall_frame
   */
 -void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
 +__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
  {
-     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
-     CONTEXT *ctx, context = { CONTEXT_ALL };
+     struct thread_data *data = get_thread_data();
+     struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
-index b60e9f52876..b89023585e9 100644
+index 536834955b3..d7d5d50ff20 100644
 --- a/dlls/ntdll/unix/signal_arm64.c
 +++ b/dlls/ntdll/unix/signal_arm64.c
-@@ -1431,7 +1431,7 @@ void syscall_dispatcher_return_slowpath(void)
+@@ -1451,7 +1451,7 @@ void syscall_dispatcher_return_slowpath(void)
  /***********************************************************************
   *           init_syscall_frame
   */
 -void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
 +__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
  {
-     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
-     CONTEXT *ctx, context = { CONTEXT_ALL };
+     struct thread_data *data = get_thread_data();
+     struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
-index 59be0f0771f..bd31e9b33b6 100644
+index e105dd00bb6..9744274cfcb 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
-@@ -2435,7 +2435,7 @@ void signal_init_process(void)
+@@ -2419,7 +2419,7 @@ void signal_init_process(void)
  /***********************************************************************
   *           init_syscall_frame
   */
 -void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
 +__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
  {
-     struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
-     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
+     struct thread_data *data = get_thread_data();
+     struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index c321b98c4ed..1fd9fe6049c 100644
+index 50539d54126..a9654f1b7ce 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -2817,7 +2817,7 @@ void signal_init_process(void)
+@@ -2828,7 +2828,7 @@ void signal_init_process(void)
  /***********************************************************************
   *           init_syscall_frame
   */
 -void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
 +__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
  {
-     struct amd64_thread_data *thread_data = (struct amd64_thread_data *)&teb->GdiTebBatch;
-     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
+     struct thread_data *data = get_thread_data();
+     struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/loader/preloader.c b/loader/preloader.c
 index ce82a9f296f..b1003cae723 100644
 --- a/loader/preloader.c
@@ -114,5 +114,5 @@ index ce82a9f296f..b1003cae723 100644
      long i, *pargc;
      char **argv, **p;
 -- 
-2.53.0
+2.54.0
 

@@ -1,14 +1,14 @@
-From 3097d08b381332c0ef2e6ecd845c95894b00323d Mon Sep 17 00:00:00 2001
+From 39c9ff377bc56e80904699e32d68e67db14e31b5 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:22:08 +0200
-Subject: [PATCH 15/46] appwiz: Add env. vars to skip mono/gecko installation.
+Subject: [PATCH 15/47] appwiz: Add env. vars to skip mono/gecko installation.
 
 ---
  dlls/appwiz.cpl/addons.c | 12 ++++++++++--
  1 file changed, 10 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/appwiz.cpl/addons.c b/dlls/appwiz.cpl/addons.c
-index cf2068bd62c..dd968979d77 100644
+index 76e369c9160..5deab3dc5ae 100644
 --- a/dlls/appwiz.cpl/addons.c
 +++ b/dlls/appwiz.cpl/addons.c
 @@ -75,6 +75,7 @@ typedef struct {
@@ -57,5 +57,5 @@ index cf2068bd62c..dd968979d77 100644
  
      /*
 -- 
-2.53.0
+2.54.0
 

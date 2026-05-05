@@ -1,17 +1,17 @@
-From 49d06da6448137a3c675eb5f8702acaf8692a57f Mon Sep 17 00:00:00 2001
+From 52b151d6232340f50599687905c09f495ca93836 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 10 Nov 2020 13:04:45 +0100
-Subject: [PATCH 36/46] secur32: Disable CHACHA20-POLY1305 ciphersuites.
+Subject: [PATCH 36/47] secur32: Disable CHACHA20-POLY1305 ciphersuites.
 
 ---
  dlls/secur32/schannel_gnutls.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/secur32/schannel_gnutls.c b/dlls/secur32/schannel_gnutls.c
-index ca7e82bbbde..e0eb9705dbd 100644
+index b95d8875d65..e42dc596a45 100644
 --- a/dlls/secur32/schannel_gnutls.c
 +++ b/dlls/secur32/schannel_gnutls.c
-@@ -433,7 +433,7 @@ static int pull_timeout(gnutls_transport_ptr_t transport, unsigned int timeout)
+@@ -434,7 +434,7 @@ static int pull_timeout(gnutls_transport_ptr_t transport, unsigned int timeout)
  
  static NTSTATUS set_priority(schan_credentials *cred, gnutls_session_t session)
  {
@@ -21,5 +21,5 @@ index ca7e82bbbde..e0eb9705dbd 100644
      const struct protocol_priority_flag *protocols =
          server ? server_protocol_priority_flags : client_protocol_priority_flags;
 -- 
-2.53.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From aacf2902f7cfb2f4b1418a836b7da04283be701d Mon Sep 17 00:00:00 2001
+From d0832676532fc51cd1509107f4b346ae16f002ed Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 16 Mar 2025 17:31:41 -0700
 Subject: [PATCH 07/10] dsound: Divide default buffer length by a factor of 8.
@@ -21,5 +21,5 @@ index 8936b437ba2..22cc664797a 100644
  /*
   * Get a config key from either the app-specific or the default config
 -- 
-2.53.0
+2.54.0
 

@@ -1,7 +1,7 @@
-From 74de2358a910b9cb60c7371bfc12068fe74b06a0 Mon Sep 17 00:00:00 2001
+From 55c27158c38a668a1c175f6a491407bbe25bfe36 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Mon, 22 Jul 2024 18:17:42 -0600
-Subject: [PATCH 39/46] win32u: Account for overhang in background fill in
+Subject: [PATCH 39/47] win32u: Account for overhang in background fill in
  NtGdiExtTextOutW().
 
 CW-Bug-Id: #23750
@@ -10,7 +10,7 @@ CW-Bug-Id: #23750
  1 file changed, 38 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/win32u/font.c b/dlls/win32u/font.c
-index f9d2d4bc34c..ee51f8ca69b 100644
+index eb589443ede..d3f1a53b8a5 100644
 --- a/dlls/win32u/font.c
 +++ b/dlls/win32u/font.c
 @@ -5795,11 +5795,12 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
@@ -104,5 +104,5 @@ index f9d2d4bc34c..ee51f8ca69b 100644
                  text_box.bottom = y + tm.tmDescent;
  
 -- 
-2.53.0
+2.54.0
 

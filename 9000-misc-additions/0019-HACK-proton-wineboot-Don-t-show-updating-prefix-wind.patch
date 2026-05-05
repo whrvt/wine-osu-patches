@@ -1,7 +1,7 @@
-From d51ae1c6f0209648646e94f3cecedaaabdcd57e9 Mon Sep 17 00:00:00 2001
+From 468a8550a39891f6170f669f45c437ff4020f046 Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Mon, 22 Jan 2018 14:35:51 -0600
-Subject: [PATCH 19/46] HACK: proton: wineboot: Don't show "updating prefix"
+Subject: [PATCH 19/47] HACK: proton: wineboot: Don't show "updating prefix"
  window.
 
 ---
@@ -94,5 +94,5 @@ index fa0b7e4bec6..0971ca7fcbb 100644
          install_root_pnp_devices();
          update_user_profile();
 -- 
-2.53.0
+2.54.0
 

@@ -1,7 +1,7 @@
-From ae8995382b00cd18dbe54d258f6544079eb39fa6 Mon Sep 17 00:00:00 2001
+From 8b026fdb3d5fed573e9b0e93ae23f022e823bb46 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Sat, 12 Dec 2020 22:36:59 +0100
-Subject: [PATCH 05/46] Avoid winemenubuilder to startup explorer.exe.
+Subject: [PATCH 05/47] Avoid winemenubuilder to startup explorer.exe.
 
 Because its session seems not interactive and fails later
 to create windows.
@@ -13,7 +13,7 @@ to create windows.
  2 files changed, 30 insertions(+)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index 4ac679aecf0..261aa130dcf 100644
+index 7e60c2c1149..2e58b3cb25b 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
 @@ -26,6 +26,7 @@
@@ -24,7 +24,7 @@ index 4ac679aecf0..261aa130dcf 100644
  #include "wine/server.h"
  
  WINE_DEFAULT_DEBUG_CHANNEL(win);
-@@ -3037,6 +3038,24 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+@@ -3045,6 +3046,24 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
                        guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7] );
              NtAddAtom( bufferW, asciiz_to_unicode( bufferW, buffer ) - sizeof(WCHAR), &atom );
              NtUserSetProp( hwnd, wine_display_device_guidW, ULongToHandle( atom ) );
@@ -72,5 +72,5 @@ index 553a47b8806..01d3c10945f 100644
      if (FAILED(hr))
      {
 -- 
-2.53.0
+2.54.0
 

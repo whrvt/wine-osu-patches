@@ -1,4 +1,4 @@
-From a44d6a165bce59e4e3693c1e62632a28018ef93b Mon Sep 17 00:00:00 2001
+From 3023de7f4d08d3e7558d3bc6ce446fada88434af Mon Sep 17 00:00:00 2001
 From: Alexey Prokhin <alexey@prokhin.ru>
 Date: Wed, 17 Oct 2018 19:55:27 +0300
 Subject: [PATCH 4/8] winex11.drv: Ignore clip_reset when trying to clip the
@@ -12,7 +12,7 @@ CW-Bug-Id: #21879
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
-index 7c986641968..efc7b6769b4 100644
+index e12a73f33fb..8d0512b46c5 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
 @@ -2682,7 +2682,7 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
@@ -25,5 +25,5 @@ index 7c986641968..efc7b6769b4 100644
  
      if (!grab_fullscreen)
 -- 
-2.53.0
+2.54.0
 

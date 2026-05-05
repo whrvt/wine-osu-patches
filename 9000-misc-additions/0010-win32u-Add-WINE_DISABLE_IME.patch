@@ -1,7 +1,7 @@
-From 11eed935a322f0049c2c1cef34be6bbbe09acebe Mon Sep 17 00:00:00 2001
+From 48ecbfce3791410316401842d16f8b7badf239d8 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:17:43 +0200
-Subject: [PATCH 10/46] win32u: Add WINE_DISABLE_IME.
+Subject: [PATCH 10/47] win32u: Add WINE_DISABLE_IME.
 
 ---
  dlls/win32u/imm.c              | 3 ++-
@@ -9,10 +9,10 @@ Subject: [PATCH 10/46] win32u: Add WINE_DISABLE_IME.
  2 files changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/win32u/imm.c b/dlls/win32u/imm.c
-index f585b80a383..34cc0b7a693 100644
+index 95209686c06..c46b25be19f 100644
 --- a/dlls/win32u/imm.c
 +++ b/dlls/win32u/imm.c
-@@ -290,7 +290,8 @@ BOOL register_imm_window( HWND hwnd )
+@@ -293,7 +293,8 @@ BOOL register_imm_window( HWND hwnd )
  
      TRACE( "(%p)\n", hwnd );
  
@@ -23,12 +23,12 @@ index f585b80a383..34cc0b7a693 100644
  
      thread_data = get_imm_thread_data();
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index 103ca12ae35..a4c587377ec 100644
+index 965b55c9a0a..e0823718a3b 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-@@ -775,7 +775,8 @@ NTSTATUS __wine_unix_lib_init(void)
-     XkbUseExtension( gdi_display, NULL, NULL );
-     X11DRV_InitKeyboard( gdi_display );
+@@ -686,7 +686,8 @@ NTSTATUS __wine_unix_lib_init(void)
+ 
+     x11drv_init_keyboard( gdi_display );
      X11DRV_InitMouse( gdi_display );
 -    if (use_xim) use_xim = xim_init( input_style );
 +    const char *e = getenv("WINE_DISABLE_IME");
@@ -37,5 +37,5 @@ index 103ca12ae35..a4c587377ec 100644
  
      init_icm_profile();
 -- 
-2.53.0
+2.54.0
 

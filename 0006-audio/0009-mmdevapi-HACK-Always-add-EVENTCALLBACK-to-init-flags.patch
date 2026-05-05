@@ -1,4 +1,4 @@
-From 6dbcac395a9bbf6ac49d04a1674e0258c14cf01c Mon Sep 17 00:00:00 2001
+From 58442aa6cbafc881815ec65e833b2468c27e2374 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 3 Nov 2025 10:35:17 -0800
 Subject: [PATCH 09/10] mmdevapi: HACK: Always add EVENTCALLBACK to init flags.
@@ -20,5 +20,5 @@ index d09c5e8db42..a537716fcf6 100644
      TRACE("(%p)->(%x, %lx, %s, %s, %p, %s)\n", This, mode, flags, wine_dbgstr_longlong(duration),
                                                 wine_dbgstr_longlong(period), fmt,
 -- 
-2.53.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From 245dd604b91eeebc11bb854b2f206f3cf293fcb1 Mon Sep 17 00:00:00 2001
+From 372fe98d8ca688ef063ead1e6cc2257ee831bc7d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 26 Sep 2024 05:12:47 -0700
 Subject: [PATCH 04/10] winepulse: Specify the buffer to try memlocking.
@@ -56,5 +56,5 @@ index ddd6f39fcc8..0b02d940caa 100644
  }
  
 -- 
-2.53.0
+2.54.0
 

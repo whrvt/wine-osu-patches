@@ -1,7 +1,7 @@
-From af214aa4c2596148a16b779b421c9ae58586a197 Mon Sep 17 00:00:00 2001
+From 0741798f75fb665e265dc305d37b9b9b790a922b Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:03:53 +0200
-Subject: [PATCH 01/46] windowscodecs: Add 8bpp-copy-support.
+Subject: [PATCH 01/47] windowscodecs: Add 8bpp-copy-support.
 
 Rebase of old patch.
 ---
@@ -81,5 +81,5 @@ index 1783e0eb7ac..93f58607f8d 100644
          if (prc)
          {
 -- 
-2.53.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From 5b756b0fac6e6eedcbe967d31dc14772679ccadb Mon Sep 17 00:00:00 2001
+From 2e9a925c774756e3b5ccc87456ff5c2473edf824 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:21:12 -0700
 Subject: [PATCH 03/10] winepulse: Try memlocking the audio buffer.
@@ -74,5 +74,5 @@ index 11db0c47a82..ddd6f39fcc8 100644
  }
  
 -- 
-2.53.0
+2.54.0
 

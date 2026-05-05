@@ -1,7 +1,7 @@
-From 459f91aa94e86ba4e2863c6b1e7601dca5d5c5fd Mon Sep 17 00:00:00 2001
+From a54495fbaf623c79942c3a8f83020ee4497d2ce0 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:06:45 +0200
-Subject: [PATCH 02/46] winex11/win32u: Default virtual desktop to 600hz.
+Subject: [PATCH 02/47] winex11/win32u: Default virtual desktop to 600hz.
 
 ---
  dlls/win32u/sysparams.c    | 4 ++--
@@ -10,7 +10,7 @@ Subject: [PATCH 02/46] winex11/win32u: Default virtual desktop to 600hz.
  3 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index 6490dcba446..cfe51b74732 100644
+index 00fe10f30ca..42b05fa4837 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
 @@ -2110,7 +2110,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
@@ -67,5 +67,5 @@ index 2eaf03001f4..f2c3c22a673 100644
  }
  
 -- 
-2.53.0
+2.54.0
 

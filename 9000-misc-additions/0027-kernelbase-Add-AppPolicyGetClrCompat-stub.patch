@@ -1,7 +1,7 @@
-From b01f00cd56f66428dca6810196fdc0761e221b80 Mon Sep 17 00:00:00 2001
+From c061e7ba2312cc18bc5f1376e477ee8e9a532c08 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 27 Dec 2024 11:45:15 -0800
-Subject: [PATCH 27/46] kernelbase: Add AppPolicyGetClrCompat stub.
+Subject: [PATCH 27/47] kernelbase: Add AppPolicyGetClrCompat stub.
 
 ---
  dlls/kernelbase/kernelbase.spec |  2 +-
@@ -10,7 +10,7 @@ Subject: [PATCH 27/46] kernelbase: Add AppPolicyGetClrCompat stub.
  3 files changed, 22 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
-index f879be67037..7a812c4f971 100644
+index 2c5906a29c2..51751e8e946 100644
 --- a/dlls/kernelbase/kernelbase.spec
 +++ b/dlls/kernelbase/kernelbase.spec
 @@ -42,7 +42,7 @@
@@ -47,10 +47,10 @@ index 456bcf5e7d7..294b40311fa 100644
   *          AppPolicyGetMediaFoundationCodecLoading (KERNELBASE.@)
   */
 diff --git a/include/appmodel.h b/include/appmodel.h
-index cab001f60c7..d060322e03b 100644
+index fba40d3f2ed..efdcfe66216 100644
 --- a/include/appmodel.h
 +++ b/include/appmodel.h
-@@ -22,6 +22,13 @@
+@@ -62,6 +62,13 @@
  extern "C" {
  #endif
  
@@ -64,7 +64,7 @@ index cab001f60c7..d060322e03b 100644
  typedef enum AppPolicyMediaFoundationCodecLoading
  {
      AppPolicyMediaFoundationCodecLoading_All       = 0,
-@@ -84,6 +91,7 @@ typedef struct PACKAGE_ID
+@@ -124,6 +131,7 @@ typedef struct PACKAGE_ID
  }
  PACKAGE_ID;
  
@@ -73,5 +73,5 @@ index cab001f60c7..d060322e03b 100644
  LONG WINAPI AppPolicyGetProcessTerminationMethod(HANDLE token, AppPolicyProcessTerminationMethod *policy);
  LONG WINAPI AppPolicyGetShowDeveloperDiagnostic(HANDLE token, AppPolicyShowDeveloperDiagnostic *policy);
 -- 
-2.53.0
+2.54.0
 

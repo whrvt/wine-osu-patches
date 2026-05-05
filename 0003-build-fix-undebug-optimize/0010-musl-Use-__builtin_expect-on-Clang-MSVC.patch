@@ -1,4 +1,4 @@
-From 1a36784905de04e53beb62eeba2c5bcf2f875aa7 Mon Sep 17 00:00:00 2001
+From 721bc35520ae6ec9fc282e33649f795df48d1515 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 8 Jan 2025 22:33:17 -0800
 Subject: [PATCH 10/14] musl: Use __builtin_expect on Clang MSVC.
@@ -21,5 +21,5 @@ index d49cc478bd3..0bc53b32dda 100644
  #define predict_false(x) __builtin_expect(x, 0)
  #else
 -- 
-2.53.0
+2.54.0
 

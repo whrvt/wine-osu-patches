@@ -1,7 +1,7 @@
-From 8ea8bae2d39810c86a5912f720ad9383a952186f Mon Sep 17 00:00:00 2001
+From cf9cb035eb3b7f6193e70c1c877257677d714bcd Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 2 Apr 2025 00:58:56 -0700
-Subject: [PATCH 06/46] combase: Return S_OK for
+Subject: [PATCH 06/47] combase: Return S_OK for
  RoGetParameterizedTypeInstanceIID.
 
 Fixes osu! crashing with Wine version hidden.
@@ -27,5 +27,5 @@ index f4f7c0aac26..6e4ff5a3206 100644
  
  /***********************************************************************
 -- 
-2.53.0
+2.54.0
 

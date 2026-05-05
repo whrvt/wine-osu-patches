@@ -1,7 +1,7 @@
-From 7bcd484336c9e482817970e073ab33171a699460 Mon Sep 17 00:00:00 2001
+From ba61aa22549168770b4525619778df1809b713a4 Mon Sep 17 00:00:00 2001
 From: Torge Matthies <tmatthies@codeweavers.com>
 Date: Tue, 2 May 2023 01:36:12 +0200
-Subject: [PATCH 28/46] libs/libjpeg: Set default DCT algorithm to fastest.
+Subject: [PATCH 28/47] libs/libjpeg: Set default DCT algorithm to fastest.
 
 ---
  libs/jpeg/jconfig.h | 1 +
@@ -20,5 +20,5 @@ index 2d05a3b0902..9f18c71751b 100644
  /* Define "boolean" as unsigned char, not enum, on Windows systems. */
  #ifdef _WIN32
 -- 
-2.53.0
+2.54.0
 

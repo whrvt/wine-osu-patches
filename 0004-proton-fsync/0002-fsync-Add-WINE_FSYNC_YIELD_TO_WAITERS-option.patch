@@ -1,4 +1,4 @@
-From 7dc421dd4c5db1a74d684fbde831b9ef5c9a45bb Mon Sep 17 00:00:00 2001
+From f0b9a0adea5bb19630a419445cb0e7463a950c1f Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Thu, 27 Apr 2023 17:32:38 -0600
 Subject: [PATCH 2/6] fsync: Add WINE_FSYNC_YIELD_TO_WAITERS option.
@@ -10,10 +10,10 @@ CW-Bug-Id: #22194
  2 files changed, 8 insertions(+)
 
 diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
-index 7d4ca20ad4b..9cfd91f5385 100644
+index f350b76d5ef..25e8ecc8f81 100644
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -75,6 +75,7 @@ int main_argc = 0;
+@@ -76,6 +76,7 @@ int main_argc = 0;
  char **main_argv = NULL;
  WCHAR **main_wargv = NULL;
  BOOL fsync_simulate_sched_quantum = FALSE;
@@ -21,7 +21,7 @@ index 7d4ca20ad4b..9cfd91f5385 100644
  
  static LCID user_lcid, system_lcid;
  static LANGID user_ui_language;
-@@ -842,6 +843,12 @@ void init_environment(void)
+@@ -843,6 +844,12 @@ void init_environment(void)
          fsync_simulate_sched_quantum = !!strstr( main_argv[1], "Ubisoft Game Launcher\\upc.exe" );
      if (fsync_simulate_sched_quantum)
          ERR( "HACK: Simulating sched quantum in fsync.\n" );
@@ -35,10 +35,10 @@ index 7d4ca20ad4b..9cfd91f5385 100644
  
  
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index e67a0ba1ef6..3b3cb7c6d87 100644
+index d35862f5411..aaa482f8c36 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -206,6 +206,7 @@ extern int main_argc;
+@@ -212,6 +212,7 @@ extern int main_argc;
  extern char **main_argv;
  extern WCHAR **main_wargv;
  extern BOOL fsync_simulate_sched_quantum;
@@ -47,5 +47,5 @@ index e67a0ba1ef6..3b3cb7c6d87 100644
  extern unsigned int supported_machines_count;
  extern USHORT supported_machines[8];
 -- 
-2.53.0
+2.54.0
 

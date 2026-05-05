@@ -1,7 +1,7 @@
-From cbb2549e185b4c39fc5553815db9f6478f051c27 Mon Sep 17 00:00:00 2001
+From 4ab195065704a16fc6cef831183a81be08901566 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:19:07 +0200
-Subject: [PATCH 11/46] kernelbase/wineboot: Downgrade some debug messages.
+Subject: [PATCH 11/47] kernelbase/wineboot: Downgrade some debug messages.
 
 ---
  dlls/kernelbase/debug.c      | 2 +-
@@ -9,10 +9,10 @@ Subject: [PATCH 11/46] kernelbase/wineboot: Downgrade some debug messages.
  2 files changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
-index 318cfa5b1de..2f350427919 100644
+index 235384c28f8..b96b965dc9b 100644
 --- a/dlls/kernelbase/debug.c
 +++ b/dlls/kernelbase/debug.c
-@@ -863,7 +863,7 @@ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerRegisterRuntimeExceptionModule( const
+@@ -861,7 +861,7 @@ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerRegisterRuntimeExceptionModule( const
   */
  HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerSetFlags( DWORD flags )
  {
@@ -38,5 +38,5 @@ index 7c814d19826..fa0b7e4bec6 100644
          WINE_TRACE( "Done processing cmd %lu.\n", i );
      }
 -- 
-2.53.0
+2.54.0
 

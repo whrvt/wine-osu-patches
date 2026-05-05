@@ -1,7 +1,7 @@
-From 8539bb6e8022d546ec970cee8b3eaff42efce1c9 Mon Sep 17 00:00:00 2001
+From 343eb8b085ddf9b9e9246229889831dd5f4b4a4a Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 8 Sep 2024 02:15:12 -0700
-Subject: [PATCH 41/46] winebus: Fake-load driver if EnableWinebus isn't set to
+Subject: [PATCH 41/47] winebus: Fake-load driver if EnableWinebus isn't set to
  1.
 
 The registry key checked is a DWORD in HKLM\System\CurrentControlSet\Services\winebus.
@@ -55,5 +55,5 @@ index 0132297a4a6..7d38058f294 100644
      return STATUS_SUCCESS;
  }
 -- 
-2.53.0
+2.54.0
 

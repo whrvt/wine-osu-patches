@@ -1,17 +1,17 @@
-From d031b42bd76c96cf4ec18331b372d15e27ef932c Mon Sep 17 00:00:00 2001
+From 4bec208fb0d3e9bf6bd423e40626310580240239 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:28:44 +0200
-Subject: [PATCH 38/46] winex11: Uninit winattrs fix.
+Subject: [PATCH 38/47] winex11: Uninit winattrs fix.
 
 ---
  dlls/winex11.drv/window.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 84d3b323d37..d21fa0a1e67 100644
+index 91b5a2c7214..fd1345de421 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2903,7 +2903,7 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
+@@ -2790,7 +2790,7 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
          static const WCHAR winsta0[] = {'W','i','n','S','t','a','0',0};
          struct x11drv_thread_data *data = x11drv_init_thread_data();
          WCHAR winstation_name[64];
@@ -21,5 +21,5 @@ index 84d3b323d37..d21fa0a1e67 100644
          if (NtUserGetObjectInformation( NtUserGetProcessWindowStation(), UOI_NAME, winstation_name,
                                          sizeof(winstation_name), NULL ))
 -- 
-2.53.0
+2.54.0
 

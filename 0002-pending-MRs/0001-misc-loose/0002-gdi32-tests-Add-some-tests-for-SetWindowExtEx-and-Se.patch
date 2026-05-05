@@ -1,4 +1,4 @@
-From 8d02997e2f350a2773b029e5adbd4fab16cdd92d Mon Sep 17 00:00:00 2001
+From 191fe4800cd2897d4ecab267f73230c5abed3828 Mon Sep 17 00:00:00 2001
 From: Haoyang Chen <chenhaoyang@kylinos.cn>
 Date: Tue, 21 Nov 2023 16:35:10 +0800
 Subject: [PATCH 2/2] gdi32/tests: Add some tests for SetWindowExtEx and
@@ -51,5 +51,5 @@ index 78c83907a7e..192c87c33b6 100644
  
  static void test_setvirtualresolution(void)
 -- 
-2.53.0
+2.54.0
 

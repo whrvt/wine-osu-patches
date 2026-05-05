@@ -1,7 +1,7 @@
-From 96f9449f210c6e594ecf88b63df36f0d60785e60 Mon Sep 17 00:00:00 2001
+From fc4fb3c4ead8865a96da380708629c3bc5fb2156 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:29:50 +0200
-Subject: [PATCH 42/46] wineusb usb annoyances
+Subject: [PATCH 42/47] wineusb usb annoyances
 
 ---
  dlls/winebus.sys/bus_udev.c | 8 +++++++-
@@ -62,5 +62,5 @@ index 806c197e18a..b2f635b0c31 100644
      }
  
 -- 
-2.53.0
+2.54.0
 

@@ -1,19 +1,19 @@
-From 1131dc4b894d80c67a22b1d30cdd4062adf11fea Mon Sep 17 00:00:00 2001
+From 6ce00c213ceb2b86fbf648e9b8236029a0379efe Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Mar 2025 03:19:56 -0700
-Subject: [PATCH 14/46] gdiplus: FORCEINLINE header funcs
+Subject: [PATCH 14/47] gdiplus: FORCEINLINE header funcs
 
 ---
  dlls/gdiplus/gdiplus_private.h | 22 +++++++++++-----------
  1 file changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/gdiplus/gdiplus_private.h b/dlls/gdiplus/gdiplus_private.h
-index 9d0a166fdeb..5786ce49f3e 100644
+index cc5f823214b..db1bb6214e8 100644
 --- a/dlls/gdiplus/gdiplus_private.h
 +++ b/dlls/gdiplus/gdiplus_private.h
-@@ -153,22 +153,22 @@ extern GpStatus get_region_hrgn(struct region_element *element, const RECT *boun
+@@ -169,22 +169,22 @@ extern GpStatus get_hatch_data(GpHatchStyle hatchstyle, const unsigned char **re
  
- extern GpStatus get_hatch_data(GpHatchStyle hatchstyle, const unsigned char **result);
+ extern GpStatus region_element_to_spans(const struct region_element *element, const RECT *bounds, struct span_list *spans);
  
 -static inline INT gdip_round(REAL x)
 +static FORCEINLINE INT gdip_round(REAL x)
@@ -38,7 +38,7 @@ index 9d0a166fdeb..5786ce49f3e 100644
  {
      BYTE b, g, r, a;
      BYTE bg_alpha, fg_alpha;
-@@ -192,7 +192,7 @@ static inline ARGB color_over(ARGB bg, ARGB fg)
+@@ -208,7 +208,7 @@ static inline ARGB color_over(ARGB bg, ARGB fg)
  }
  
  /* fg is premult, bg and return value are not */
@@ -47,7 +47,7 @@ index 9d0a166fdeb..5786ce49f3e 100644
  {
      BYTE b, g, r, a;
      BYTE bg_alpha, fg_alpha;
-@@ -631,14 +631,14 @@ struct memory_buffer
+@@ -647,14 +647,14 @@ struct memory_buffer
      INT size, pos;
  };
  
@@ -64,7 +64,7 @@ index 9d0a166fdeb..5786ce49f3e 100644
  {
      if (mbuf->size - mbuf->pos >= size)
      {
-@@ -687,22 +687,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
+@@ -703,22 +703,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
  
  void get_log_fontW(const GpFont *, GpGraphics *, LOGFONTW *);
  
@@ -92,5 +92,5 @@ index 9d0a166fdeb..5786ce49f3e 100644
      rect->X = x;
      rect->Y = y;
 -- 
-2.53.0
+2.54.0
 

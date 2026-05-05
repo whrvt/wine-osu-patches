@@ -1,4 +1,4 @@
-From 0a4c36d2f09057717174b572157972b466d8d708 Mon Sep 17 00:00:00 2001
+From 871bfb918cc77f0f014ce7f1fbb262485777f354 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 29 Jan 2025 23:57:29 -0800
 Subject: [PATCH 12/14] makedep: Use absolute paths for the compile_commands
@@ -10,7 +10,7 @@ Subject: [PATCH 12/14] makedep: Use absolute paths for the compile_commands
  2 files changed, 59 insertions(+), 1 deletion(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 5208b4c8f0e..6431577ff46 100644
+index 84d3d06e1c5..8962f0fe58b 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
 @@ -804,6 +804,33 @@ static char *get_line( FILE *file )
@@ -57,10 +57,10 @@ index 5208b4c8f0e..6431577ff46 100644
          output( "\",\n" );
          output( "    \"file\": \"%s\",\n", cmd->source );
 diff --git a/tools/tools.h b/tools/tools.h
-index 5cbe6bc5d42..97d3596a21e 100644
+index 224a738ddb8..7db80ab06e8 100644
 --- a/tools/tools.h
 +++ b/tools/tools.h
-@@ -415,6 +415,37 @@ static inline char *build_relative_path( const char *base, const char *from, con
+@@ -414,6 +414,37 @@ static inline char *build_relative_path( const char *base, const char *from, con
      return ret;
  }
  
@@ -99,5 +99,5 @@ index 5cbe6bc5d42..97d3596a21e 100644
  
  extern const char *temp_dir;
 -- 
-2.53.0
+2.54.0
 

@@ -1,7 +1,7 @@
-From 3d75117ba23331f9677a59bd3972371238d76b4b Mon Sep 17 00:00:00 2001
+From 9e9c8d86271df1888c37a613f673f43817c11338 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 30 Nov 2021 10:38:13 +0100
-Subject: [PATCH 17/46] HACK: proton: server: Close desktop immediately when
+Subject: [PATCH 17/47] HACK: proton: server: Close desktop immediately when
  last user is removed.
 
 This should speed up prefix shutdown by 1s, making it only depend on
@@ -14,10 +14,10 @@ CW-Bug-Id: #19584
  2 files changed, 2 insertions(+), 11 deletions(-)
 
 diff --git a/server/user.h b/server/user.h
-index 060e54ec775..016eb8a9d01 100644
+index 86fa0c19960..319ec24e8e5 100644
 --- a/server/user.h
 +++ b/server/user.h
-@@ -77,7 +77,6 @@ struct desktop
+@@ -78,7 +78,6 @@ struct desktop
      struct hook_table   *global_hooks;     /* table of global hooks on this desktop */
      struct list          hotkeys;          /* list of registered hotkeys */
      struct list          pointers;         /* list of active pointers */
@@ -26,7 +26,7 @@ index 060e54ec775..016eb8a9d01 100644
      process_id_t         foreground_pid;   /* id of the foreground process */
      unsigned int         users;            /* processes and threads using this desktop */
 diff --git a/server/winstation.c b/server/winstation.c
-index 4329f9f4384..d1b40f8d0c7 100644
+index e5eb6f66148..921e7449b94 100644
 --- a/server/winstation.c
 +++ b/server/winstation.c
 @@ -295,7 +295,6 @@ static struct desktop *create_desktop( const struct unicode_str *name, unsigned
@@ -77,5 +77,5 @@ index 4329f9f4384..d1b40f8d0c7 100644
  
  /* remove a thread from the list of threads attached to a desktop */
 -- 
-2.53.0
+2.54.0
 

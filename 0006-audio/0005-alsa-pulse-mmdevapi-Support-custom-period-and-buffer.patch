@@ -1,4 +1,4 @@
-From 5ebad534d7c20f22f8c9c1aa645e010f3772aa7b Mon Sep 17 00:00:00 2001
+From d64eda17b65c84b0c04b96bb777abaeae1e6100f Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
 Subject: [PATCH 05/10] alsa,pulse,mmdevapi: Support custom period and buffer
@@ -259,5 +259,5 @@ index 0b02d940caa..551a7247904 100644
      stream->duration = params->duration;
  
 -- 
-2.53.0
+2.54.0
 

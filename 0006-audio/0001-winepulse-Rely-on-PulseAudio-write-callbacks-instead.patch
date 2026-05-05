@@ -1,4 +1,4 @@
-From 07fe123d9fafdf5f9927cfd79f5cb14242c5de32 Mon Sep 17 00:00:00 2001
+From 93378a4517531ef9a1b98e473b219e31615e86ec Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
 Subject: [PATCH 01/10] winepulse: Rely on PulseAudio write callbacks instead
@@ -1014,5 +1014,5 @@ index d576a31ef00..1302b4a5edc 100644
      pulse_release_render_buffer,
      pulse_wow64_get_capture_buffer,
 -- 
-2.53.0
+2.54.0
 

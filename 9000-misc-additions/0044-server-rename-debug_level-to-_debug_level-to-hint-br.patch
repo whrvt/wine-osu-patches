@@ -1,7 +1,7 @@
-From 12704a8aee0a0cd5b3ab421c7b326cc876733bce Mon Sep 17 00:00:00 2001
+From 98f429b4b604b1ff2d65264c930b9e859cd7af52 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:32:40 +0200
-Subject: [PATCH 44/46] server: rename debug_level to _debug_level to hint
+Subject: [PATCH 44/47] server: rename debug_level to _debug_level to hint
  branch predictor
 
 ---
@@ -13,10 +13,10 @@ Subject: [PATCH 44/46] server: rename debug_level to _debug_level to hint
  5 files changed, 12 insertions(+), 7 deletions(-)
 
 diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index b863c382eea..3ae9e86e61a 100644
+index 08c9c6db052..e955e261f3b 100644
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
-@@ -1729,7 +1729,7 @@ size_t server_init_process(void)
+@@ -1718,7 +1718,7 @@ size_t server_init_process(void)
          req->unix_tid    = get_unix_tid();
          req->reply_fd    = reply_pipe;
          req->wait_fd     = data->wait_fd[1];
@@ -26,7 +26,7 @@ index b863c382eea..3ae9e86e61a 100644
          if (!(ret = wine_server_call( req )))
          {
 diff --git a/server/main.c b/server/main.c
-index 0827d61d41c..13da01930b1 100644
+index ee0e8addecb..f8214e5d3cb 100644
 --- a/server/main.c
 +++ b/server/main.c
 @@ -44,7 +44,7 @@
@@ -51,10 +51,10 @@ index 0827d61d41c..13da01930b1 100644
      case 'f':
          foreground = 1;
 diff --git a/server/object.h b/server/object.h
-index 4b96a40e6c9..b832635ac9b 100644
+index 99832ff3077..879d0322b16 100644
 --- a/server/object.h
 +++ b/server/object.h
-@@ -352,7 +352,12 @@ extern struct object *create_symlink( struct object *root, const struct unicode_
+@@ -345,7 +345,12 @@ extern struct object *create_symlink( struct object *root, const struct unicode_
  /* global variables */
  
    /* command-line options */
@@ -69,10 +69,10 @@ index 4b96a40e6c9..b832635ac9b 100644
  extern timeout_t master_socket_timeout;
  extern const char *server_argv0;
 diff --git a/server/protocol.def b/server/protocol.def
-index da36c6f6a02..6499377e1ba 100644
+index ccb27e398cd..0e3b21c7a74 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -1152,7 +1152,7 @@ typedef volatile struct
+@@ -1151,7 +1151,7 @@ typedef volatile struct
  @REQ(init_first_thread)
      int          unix_pid;     /* Unix pid of new process */
      int          unix_tid;     /* Unix tid of new thread */
@@ -82,10 +82,10 @@ index da36c6f6a02..6499377e1ba 100644
      int          wait_fd;      /* fd for blocking calls pipe */
  @REPLY
 diff --git a/server/thread.c b/server/thread.c
-index 3cbbe6fd631..9e84b120a79 100644
+index 25835076e32..fdd4256e6dc 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -1810,7 +1810,7 @@ DECL_HANDLER(init_first_thread)
+@@ -1793,7 +1793,7 @@ DECL_HANDLER(init_first_thread)
  
      set_thread_base_priority( current, current->base_priority );
  
@@ -95,5 +95,5 @@ index 3cbbe6fd631..9e84b120a79 100644
      reply->pid          = get_process_id( process );
      reply->tid          = get_thread_id( current );
 -- 
-2.53.0
+2.54.0
 

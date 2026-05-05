@@ -1,7 +1,7 @@
-From 6f378e40b30293b22e6c5b088185a3cedfd69154 Mon Sep 17 00:00:00 2001
+From b143bb37bc5a89b8691f337a4d62d7478706e58a Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 15 Dec 2024 17:22:38 -0800
-Subject: [PATCH 20/46] HACK: shell32: Strip hardcoded explorer/notepad prefix
+Subject: [PATCH 20/47] HACK: shell32: Strip hardcoded explorer/notepad prefix
  from osu!'s shell open calls.
 
 This allows osu! to open the screenshot folder by clicking
@@ -134,7 +134,7 @@ index d2a6d5700d4..1437f402ffe 100644
              sei_tmp.fMask, sei_tmp.hwnd, debugstr_w(sei_tmp.lpVerb),
              debugstr_w(sei_tmp.lpFile), debugstr_w(sei_tmp.lpParameters),
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index 92f22bce9c7..0120154a211 100644
+index c5116132839..efd13646069 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
 @@ -72,6 +72,7 @@ AddReg=\
@@ -166,5 +166,5 @@ index 92f22bce9c7..0120154a211 100644
  HKLM,System\CurrentControlSet\Control\ContentIndex\Language\Neutral,"WBreakerClass",,"{369647e0-17b0-11ce-9950-00aa004bbb1f}"
  HKLM,System\CurrentControlSet\Control\ContentIndex\Language\Neutral,"StemmerClass",,""
 -- 
-2.53.0
+2.54.0
 

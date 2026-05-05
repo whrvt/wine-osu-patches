@@ -1,7 +1,7 @@
-From 13187b48434429484fd4dc9979de49fbc6eb2ff2 Mon Sep 17 00:00:00 2001
+From 9bdfc705e2a4f9bd901c928a13be57eef22d17dd Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Mon, 6 Aug 2018 08:06:03 -0500
-Subject: [PATCH 18/46] HACK: proton: server: Set default timeout to 0
+Subject: [PATCH 18/47] HACK: proton: server: Set default timeout to 0
 
 The Steam client will be waiting for the wineserver to exit to set up
 some environment variables, so make it wait as short as possible.
@@ -10,7 +10,7 @@ some environment variables, so make it wait as short as possible.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/server/main.c b/server/main.c
-index bfabed7c181..0827d61d41c 100644
+index 5ef9fd00dd8..ee0e8addecb 100644
 --- a/server/main.c
 +++ b/server/main.c
 @@ -46,7 +46,7 @@
@@ -23,5 +23,5 @@ index bfabed7c181..0827d61d41c 100644
  
  /* parse-line args */
 -- 
-2.53.0
+2.54.0
 

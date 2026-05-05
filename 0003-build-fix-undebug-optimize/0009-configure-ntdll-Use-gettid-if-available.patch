@@ -1,4 +1,4 @@
-From 68f93aaf2519b4ba51dca3919ab622360798f0d2 Mon Sep 17 00:00:00 2001
+From c9faf051d42a762e6c4b714df518eb36e202214b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 29 Dec 2024 23:23:41 -0800
 Subject: [PATCH 09/14] configure, ntdll: Use gettid() if available.
@@ -9,10 +9,10 @@ Subject: [PATCH 09/14] configure, ntdll: Use gettid() if available.
  2 files changed, 3 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index d9d0cb82912..849dc394877 100644
+index 8c183f01682..d43e5abb9e1 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -2136,6 +2136,7 @@ AC_CHECK_FUNCS(\
+@@ -2114,6 +2114,7 @@ AC_CHECK_FUNCS(\
  	getauxval \
  	getifaddrs \
  	getrandom \
@@ -21,10 +21,10 @@ index d9d0cb82912..849dc394877 100644
  	memfd_create \
  	pipe2 \
 diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index 58297787c31..cd9d72a7b18 100644
+index 686835d4a98..aba0a612faa 100644
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
-@@ -1571,6 +1571,8 @@ static int get_unix_tid(void)
+@@ -1572,6 +1572,8 @@ static int get_unix_tid(void)
      int ret = -1;
  #ifdef HAVE_PTHREAD_GETTHREADID_NP
      ret = pthread_getthreadid_np();
@@ -34,5 +34,5 @@ index 58297787c31..cd9d72a7b18 100644
      ret = syscall( __NR_gettid );
  #elif defined(__sun)
 -- 
-2.53.0
+2.54.0
 

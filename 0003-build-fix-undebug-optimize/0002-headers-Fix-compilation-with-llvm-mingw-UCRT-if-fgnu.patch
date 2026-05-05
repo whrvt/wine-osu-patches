@@ -1,4 +1,4 @@
-From ae548ccec06735090718a0d6f4a8dc7efbae5ef8 Mon Sep 17 00:00:00 2001
+From 5381c572f016f7db4109c75a40ecaf4cb37a34dd Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 31 Dec 2024 14:35:39 -0800
 Subject: [PATCH 02/14] headers: Fix compilation with llvm-mingw UCRT if
@@ -40,5 +40,5 @@ index 7b7997b2ad0..6c830d9a239 100644
  #define HAVE_SSE2_INTRINSICS 1
  #endif
 -- 
-2.53.0
+2.54.0
 

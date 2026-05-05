@@ -1,4 +1,4 @@
-From d5c32cb84b214fb6426ac68801d118c2c9e4368e Mon Sep 17 00:00:00 2001
+From ba80c8bfe142c8340e81705cbcd2d12cc75e98bd Mon Sep 17 00:00:00 2001
 From: Billy Laws <blaws05@gmail.com>
 Date: Thu, 16 Jan 2025 20:13:21 +0000
 Subject: [PATCH 03/14] include: Use inline assembly for TEB access with clang.
@@ -22,5 +22,5 @@ index 3381b65d932..d701d5355b4 100644
  {
      struct _TEB *teb;
 -- 
-2.53.0
+2.54.0
 

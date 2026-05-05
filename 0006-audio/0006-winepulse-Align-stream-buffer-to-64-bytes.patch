@@ -1,4 +1,4 @@
-From d9f6a3569ba4642d9cd41cb9124c199f22f4f2bc Mon Sep 17 00:00:00 2001
+From 8c2842d8970a03a7aa938b70f96c9a8c2e74b95b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Feb 2025 09:26:03 -0800
 Subject: [PATCH 06/10] winepulse: Align stream buffer to 64 bytes.
@@ -27,5 +27,5 @@ index 551a7247904..debb5697513 100644
      stream->dataflow = params->flow;
      for (i = 0; i < ARRAY_SIZE(stream->vol); ++i)
 -- 
-2.53.0
+2.54.0
 

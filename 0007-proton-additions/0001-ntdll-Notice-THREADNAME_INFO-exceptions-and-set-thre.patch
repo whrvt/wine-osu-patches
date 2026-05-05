@@ -1,0 +1,67 @@
+From abc308c70ae928b98766365bf032c6efd55519f6 Mon Sep 17 00:00:00 2001
+From: Andrew Eikum <aeikum@codeweavers.com>
+Date: Mon, 18 Jun 2018 07:56:35 -0500
+Subject: [PATCH 01/13] ntdll: Notice THREADNAME_INFO exceptions and set thread
+ name on Linux
+
+Patch by Zeb.
+---
+ dlls/ntdll/unix/thread.c | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index a469c3df8db..8122c8510b1 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -61,6 +61,9 @@
+ #ifdef HAVE_LIBPROCSTAT_H
+ #include <libprocstat.h>
+ #endif
++#ifdef HAVE_PRCTL
++#include <sys/prctl.h>
++#endif
+ 
+ #ifdef __APPLE__
+ #include <mach/mach.h>
+@@ -1542,6 +1545,16 @@ void wait_suspend( CONTEXT *context )
+ }
+ 
+ 
++/* "How to: Set a Thread Name in Native Code"
++ * https://msdn.microsoft.com/en-us/library/xcb2z8hs.aspx */
++typedef struct tagTHREADNAME_INFO
++{
++   DWORD   dwType;     /* Must be 0x1000 */
++   LPCSTR  szName;     /* Pointer to name - limited to 9 bytes (8 characters + terminator) */
++   DWORD   dwThreadID; /* Thread ID (-1 = caller thread) */
++   DWORD   dwFlags;    /* Reserved for future use.  Must be zero. */
++} THREADNAME_INFO;
++
+ /**********************************************************************
+  *           send_debug_event
+  *
+@@ -1563,6 +1576,21 @@ NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_c
+     for (i = 0; i < min( rec->NumberParameters, EXCEPTION_MAXIMUM_PARAMETERS ); i++)
+         params[i] = rec->ExceptionInformation[i];
+ 
++    if (rec->ExceptionCode == 0x406d1388)
++    {
++        const THREADNAME_INFO *threadname = (const THREADNAME_INFO *)rec->ExceptionInformation;
++
++        if (threadname->dwThreadID == -1)
++        {
++#ifdef HAVE_PRCTL
++#ifndef PR_SET_NAME
++# define PR_SET_NAME 15
++#endif
++            prctl( PR_SET_NAME, threadname->szName );
++#endif
++        }
++    }
++
+     SERVER_START_REQ( queue_exception_event )
+     {
+         req->first   = first_chance;
+-- 
+2.54.0
+

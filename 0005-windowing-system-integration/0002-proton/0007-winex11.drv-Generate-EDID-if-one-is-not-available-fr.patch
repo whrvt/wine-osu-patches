@@ -1,4 +1,4 @@
-From c445c9c84cd10a69616e61947002aed8897d6669 Mon Sep 17 00:00:00 2001
+From cffa0bbb046a08ffbb6d8a91de03ee7b16732858 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 1 Mar 2022 22:11:17 +0300
 Subject: [PATCH 7/8] winex11.drv: Generate EDID if one is not available from
@@ -177,5 +177,5 @@ index b147b952cab..f764ee45235 100644
      free( monitors );
  }
 -- 
-2.53.0
+2.54.0
 

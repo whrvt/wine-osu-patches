@@ -1,4 +1,4 @@
-From 71d25c570825d138f0a5706575b8b140f15d7a52 Mon Sep 17 00:00:00 2001
+From 60850a35e41e36948c976cdb58e79632897ab20c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 30 Dec 2024 02:14:28 -0800
 Subject: [PATCH 08/14] server: Disable debug features if NDEBUG is defined.
@@ -93,5 +93,5 @@ index dc15da64518..99832ff3077 100644
  extern void *memdup( const void *data, size_t len ) __WINE_ALLOC_SIZE(2) __WINE_DEALLOC(free);
  extern void *alloc_object( const struct object_ops *ops );
 -- 
-2.53.0
+2.54.0
 

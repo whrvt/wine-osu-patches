@@ -1,7 +1,7 @@
-From 33cc9d49ac31b5ba9b1ce0f8de527588000d7941 Mon Sep 17 00:00:00 2001
+From 137b29fd6994cd2d6e89be1d819ec518863497ab Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 5 Dec 2024 18:11:18 -0800
-Subject: [PATCH 40/46] wineboot: Skip root device installation if
+Subject: [PATCH 40/47] wineboot: Skip root device installation if
  WINE_INSTALL_ROOT_DEVICES isn't in the environment.
 
 osu! doesn't need any of them.
@@ -32,5 +32,5 @@ index 0971ca7fcbb..a365f9edc03 100644
  
          TRACE( "wine: configuration in %s has been updated.\n", debugstr_w(prettyprint_configdir()) );
 -- 
-2.53.0
+2.54.0
 

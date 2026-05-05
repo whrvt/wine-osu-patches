@@ -1,7 +1,7 @@
-From 06834d77798447e07fd7b36dbac6f8df14de914e Mon Sep 17 00:00:00 2001
+From d23db3d0452037b9d2ba3b7e3ee6889381fec2ec Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 29 Jun 2025 09:31:03 -0700
-Subject: [PATCH 29/46] ntdll: Null-terminate unix_name in
+Subject: [PATCH 29/47] ntdll: Null-terminate unix_name in
  nt_to_unix_file_name.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -13,10 +13,10 @@ Otherwise we can print garbage data like L"Reference" not found in .'ï¿½ï¿½ï¿½'ï
  1 file changed, 1 insertion(+)
 
 diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
-index f1da6fafe98..84b5a4185b4 100644
+index cfd34d74697..6a35bc954e5 100644
 --- a/dlls/ntdll/unix/file.c
 +++ b/dlls/ntdll/unix/file.c
-@@ -3853,6 +3853,7 @@ static NTSTATUS nt_to_unix_file_name_internal( OBJECT_ATTRIBUTES *attr, UNICODE_
+@@ -3859,6 +3859,7 @@ static NTSTATUS nt_to_unix_file_name_internal( OBJECT_ATTRIBUTES *attr, UNICODE_
      unix_len = name_len * 3 + MAX_DIR_ENTRY_LEN + 3;
      if (!(unix_name = malloc( unix_len ))) return STATUS_NO_MEMORY;
      unix_name[0] = '.';
@@ -25,5 +25,5 @@ index f1da6fafe98..84b5a4185b4 100644
      if (!(status = server_get_unix_fd( attr->RootDirectory, 0, &root_fd, &needs_close, &type, NULL )))
      {
 -- 
-2.53.0
+2.54.0
 

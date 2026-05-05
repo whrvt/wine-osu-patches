@@ -1,4 +1,4 @@
-From 46332f81fe23fec95677b6064c0b95d386dea16c Mon Sep 17 00:00:00 2001
+From 91dc6eec0e5f05099c3bfa33a7738688d31dd5a6 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 6 Feb 2025 08:30:08 -0800
 Subject: [PATCH 07/14] include: Prefer builtin atomics.
@@ -63,5 +63,5 @@ index a0e3b579573..424baaa5c4b 100644
  #else
      __WINE_ATOMIC_STORE_RELEASE( dest, &value );
 -- 
-2.53.0
+2.54.0
 

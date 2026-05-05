@@ -1,7 +1,7 @@
-From 70eadaa70ea698a11a119816ec0c04a38f16f174 Mon Sep 17 00:00:00 2001
+From bf39757b064caa48f6a623089a21311c3b30e1b4 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 7 Jan 2025 04:12:20 -0800
-Subject: [PATCH 16/46] HACK: ntdll: Unconditionally save/restore x87 FPU
+Subject: [PATCH 16/47] HACK: ntdll: Unconditionally save/restore x87 FPU
  control word in the unix call dispatchers.
 
 Workaround for thread suspension issue in osu! causing rounding mode to
@@ -12,10 +12,10 @@ remain stuck in a bad state after returning from Unix code.
  2 files changed, 4 insertions(+)
 
 diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
-index 73334d47c3b..a5f8c3035ee 100644
+index 9744274cfcb..212d4e10627 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
-@@ -2791,6 +2791,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
+@@ -2757,6 +2757,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
                     "leal 0x10(%esp),%edx\n\t"
                     "movl %edx,0x0c(%ecx)\n\t"  /* frame->esp */
                     __ASM_CFI_CFA_IS_AT1(ecx, 0x0c)
@@ -23,19 +23,19 @@ index 73334d47c3b..a5f8c3035ee 100644
                     "movw %cs,0x10(%ecx)\n\t"
                     "movw %ss,0x12(%ecx)\n\t"
                     "movw %ds,0x14(%ecx)\n\t"
-@@ -2820,6 +2821,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
-                    __ASM_CFI(".cfi_offset %edi,-20\n\t")
+@@ -2789,6 +2790,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
+                    "fldcw %fs:0x1f8\n\t"       /* thread_data->fpcw */
                     "call *(%eax,%edx,4)\n\t"
                     "leal 16(%esp),%esp\n\t"
 +                   "fldcw 0x40(%esp)\n\t"      /* restore x87 FPU CW */
                     "testl $0x7fff,(%esp)\n\t"  /* frame->restore_flags */
                     "jnz " __ASM_LOCAL_LABEL("__wine_syscall_dispatcher_return") "\n\t"
-                    "movl 0x08(%esp),%ecx\n\t"  /* frame->eip */
+                    "fnclex\n\t"
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index 90a6164eeda..b24422c5b82 100644
+index a9654f1b7ce..0bc0f2706c2 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -3315,6 +3315,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
+@@ -3299,6 +3299,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
                     __ASM_CFI_REG_IS_AT2(rip, rcx, 0xf0,0x00)
                     "movl $0x20000,0xb4(%rcx)\n\t"  /* frame->restore_flags <- RESTORE_FLAGS_INCOMPLETE_FRAME_CONTEXT */
                     __ASM_LOCAL_LABEL("__wine_unix_call_dispatcher_prolog_end") ":\n\t"
@@ -43,7 +43,7 @@ index 90a6164eeda..b24422c5b82 100644
                     "movq %rbx,0x08(%rcx)\n\t"
                     __ASM_CFI_REG_IS_AT1(rbx, rcx, 0x08)
                     "movq %rsi,0x20(%rcx)\n\t"
-@@ -3383,6 +3384,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
+@@ -3367,6 +3368,7 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
                     "callq *(%r10,%rdx,8)\n\t"
                     "movq %rsp,%rcx\n\t"
                     "ldmxcsr 0xd8(%rcx)\n\t"        /* frame->xsave.MxCsr */
@@ -52,5 +52,5 @@ index 90a6164eeda..b24422c5b82 100644
                     "movdqa 0x1d0(%rcx),%xmm7\n\t"
                     "movdqa 0x1e0(%rcx),%xmm8\n\t"
 -- 
-2.53.0
+2.54.0
 

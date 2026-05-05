@@ -1,4 +1,4 @@
-From d8ff458a693b907e3c404b674a20b68d93ff081b Mon Sep 17 00:00:00 2001
+From 9ca97408c11601910bbc96b2352a1711217a0d84 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 3 Mar 2025 03:13:50 -0800
 Subject: [PATCH 13/14] makedep: Use absolute paths for strip_progs.
@@ -8,7 +8,7 @@ Subject: [PATCH 13/14] makedep: Use absolute paths for strip_progs.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 6431577ff46..d560b55ae35 100644
+index 8962f0fe58b..c0eecccf701 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
 @@ -5072,7 +5072,7 @@ int main( int argc, char *argv[] )
@@ -21,5 +21,5 @@ index 6431577ff46..d560b55ae35 100644
      }
  
 -- 
-2.53.0
+2.54.0
 

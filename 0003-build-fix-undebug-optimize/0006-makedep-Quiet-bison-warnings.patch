@@ -1,4 +1,4 @@
-From 6ca68c882589b4dce27abdd373656653b6f55815 Mon Sep 17 00:00:00 2001
+From b1a1c9d31e782e89567e2487d9e89a0742fa9cce Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 22:19:40 +0200
 Subject: [PATCH 06/14] makedep: Quiet bison warnings.
@@ -8,7 +8,7 @@ Subject: [PATCH 06/14] makedep: Quiet bison warnings.
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 1782f3ed79d..5208b4c8f0e 100644
+index 90a522640fe..84d3d06e1c5 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
 @@ -3014,13 +3014,13 @@ static void output_source_y( struct makefile *make, struct incl_file *source, co
@@ -28,5 +28,5 @@ index 1782f3ed79d..5208b4c8f0e 100644
  
  
 -- 
-2.53.0
+2.54.0
 

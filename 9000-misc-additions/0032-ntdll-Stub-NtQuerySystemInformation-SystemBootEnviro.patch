@@ -1,7 +1,7 @@
-From 92f91e175ce0a553450e65e05874cbbdc6fa40c1 Mon Sep 17 00:00:00 2001
+From 07decdad512fc3282cd2881cb9fabc9ca89284e0 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 4 Mar 2025 11:03:46 -0800
-Subject: [PATCH 32/46] ntdll: Stub NtQuerySystemInformation(
+Subject: [PATCH 32/47] ntdll: Stub NtQuerySystemInformation(
  SystemBootEnvironmentInformation ).
 
 ---
@@ -11,10 +11,10 @@ Subject: [PATCH 32/46] ntdll: Stub NtQuerySystemInformation(
  3 files changed, 41 insertions(+)
 
 diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
-index 15d64db2311..72c749b223f 100644
+index 148624ff405..e528ae95a94 100644
 --- a/dlls/ntdll/unix/system.c
 +++ b/dlls/ntdll/unix/system.c
-@@ -3856,6 +3856,22 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+@@ -3882,6 +3882,22 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
          return ret;
      }
  
@@ -38,7 +38,7 @@ index 15d64db2311..72c749b223f 100644
      {
          RTL_DYNAMIC_TIME_ZONE_INFORMATION tz;
 diff --git a/dlls/wow64/system.c b/dlls/wow64/system.c
-index 6ad8b89880b..e4acc8152c9 100644
+index 644c3ae9945..86d15e451e4 100644
 --- a/dlls/wow64/system.c
 +++ b/dlls/wow64/system.c
 @@ -327,6 +327,7 @@ NTSTATUS WINAPI wow64_NtQuerySystemInformation( UINT *args )
@@ -50,7 +50,7 @@ index 6ad8b89880b..e4acc8152c9 100644
      case SystemCodeIntegrityInformation:  /* SYSTEM_CODEINTEGRITY_INFORMATION */
      case SystemKernelDebuggerInformationEx:  /* SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX */
 diff --git a/include/winternl.h b/include/winternl.h
-index 9f72ad58dd9..6c332de09ab 100644
+index a842c1527bc..6f3a6f9ed70 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
 @@ -110,6 +110,30 @@ typedef struct _RTL_TIME_ZONE_INFORMATION {
@@ -85,5 +85,5 @@ index 9f72ad58dd9..6c332de09ab 100644
  {
      LONG Bias;
 -- 
-2.53.0
+2.54.0
 

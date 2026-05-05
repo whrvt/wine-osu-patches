@@ -1,7 +1,7 @@
-From 5dccaacdca6c534b6c7a0fcd9c4a195b8539be03 Mon Sep 17 00:00:00 2001
+From 84286a2617fc13b9fdc4d80a8a03380e5984064a Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 13 Dec 2024 19:58:02 -0800
-Subject: [PATCH 31/46] ntdll: Silence HeapEnableTerminationOnCorruption.
+Subject: [PATCH 31/47] ntdll: Silence HeapEnableTerminationOnCorruption.
 
 ---
  dlls/ntdll/heap.c | 6 ++++++
@@ -38,5 +38,5 @@ index 424baaa5c4b..fbd889279ed 100644
  
  /* Processor feature flags.  */
 -- 
-2.53.0
+2.54.0
 

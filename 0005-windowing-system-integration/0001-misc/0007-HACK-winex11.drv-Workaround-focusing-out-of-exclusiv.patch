@@ -1,0 +1,38 @@
+From 80eee6f65412f473a0d2945ef75ca27b1b10255a Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sun, 21 Sep 2025 17:47:59 +0200
+Subject: [PATCH 07/19] HACK: winex11.drv: Workaround focusing out of exclusive
+ fullscreen windows.
+
+Based on original patch from Proton: https://github.com/ValveSoftware/wine/commit/b2cdeaa801173f4c984b730d978618bb60cd706a,
+seems to help with focusing out of exclusive fullscreen windows on Mutter/KWin.
+
+Excluding XFCE from the check as it breaks alt-tab on it.
+---
+ dlls/winex11.drv/window.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 71fa79ff8c4..e01d6f09216 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1511,7 +1511,15 @@ static void update_net_wm_states( struct x11drv_win_data *data )
+         new_state |= (1 << NET_WM_STATE_MAXIMIZED);
+ 
+     ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
+-    if (ex_style & WS_EX_TOPMOST)
++    if ((ex_style & WS_EX_TOPMOST) &&
++        /* This workaround was initially targetting some mutter and KDE issues, but
++         * removing it causes failure to focus out from exclusive fullscreen windows.
++         *
++         * Many games do not have any specific logic to get out of exclusive fullscreen
++         * mode, and we have currently no way to tell exclusive fullscreen from a window
++         * with topmost + fullscreen styles, so we cannot properly implement it either.
++         */
++        (!(new_state & (1 << NET_WM_STATE_FULLSCREEN)) || X11DRV_HasWindowManager( "Xfwm4" )))
+         new_state |= (1 << NET_WM_STATE_ABOVE);
+     if (!data->add_taskbar)
+     {
+-- 
+2.54.0
+

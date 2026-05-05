@@ -1,4 +1,4 @@
-From 86792b2a396b3483a076fde01d1ad5bcc5272c7a Mon Sep 17 00:00:00 2001
+From 2a9b20e5b8b613c61cbf03532c0ef62632c097f4 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 29 Aug 2025 11:19:36 -0700
 Subject: [PATCH 08/10] pulse,mmdevapi: Some simplifications and stability
@@ -187,5 +187,5 @@ index debb5697513..3ee69bbb0fe 100644
      stream->duration = params->duration;
  
 -- 
-2.53.0
+2.54.0
 

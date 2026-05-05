@@ -1,17 +1,17 @@
-From f5796ec5561dcf55c1f71aa55017a90808a0738f Mon Sep 17 00:00:00 2001
+From a0ac08b01d3d4b92f419a83d9b1716ac334f1c7d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 16 Aug 2024 01:29:41 -0700
-Subject: [PATCH 03/46] add WINE_WAYLAND_DISPLAY_INDEX
+Subject: [PATCH 03/47] add WINE_WAYLAND_DISPLAY_INDEX
 
 ---
  dlls/winewayland.drv/wayland_output.c | 34 +++++++++++++++++++++++++--
  1 file changed, 32 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_output.c b/dlls/winewayland.drv/wayland_output.c
-index f76881a1770..e1a1ab5b62d 100644
+index 8004a781388..710a26bab59 100644
 --- a/dlls/winewayland.drv/wayland_output.c
 +++ b/dlls/winewayland.drv/wayland_output.c
-@@ -67,6 +67,27 @@ static int wayland_output_mode_cmp_rb(const void *key,
+@@ -73,6 +73,27 @@ static int wayland_output_mode_cmp_rb(const void *key,
      return 0;
  }
  
@@ -39,7 +39,7 @@ index f76881a1770..e1a1ab5b62d 100644
  static void wayland_output_state_add_mode(struct wayland_output_state *state,
                                            int32_t width, int32_t height,
                                            int32_t refresh, BOOL current)
-@@ -157,8 +178,15 @@ static void wayland_output_done(struct wayland_output *output)
+@@ -171,8 +192,15 @@ static void wayland_output_done(struct wayland_output *output)
  
      if (output->pending_flags & WAYLAND_OUTPUT_CHANGED_LOGICAL_XY)
      {
@@ -57,7 +57,7 @@ index f76881a1770..e1a1ab5b62d 100644
      }
  
      if (output->pending_flags & WAYLAND_OUTPUT_CHANGED_LOGICAL_WH)
-@@ -224,6 +252,7 @@ static void output_handle_done(void *data, struct wl_output *wl_output)
+@@ -293,6 +321,7 @@ static void output_handle_done(void *data, struct wl_output *wl_output)
      if (!output->zxdg_output_v1 ||
          zxdg_output_v1_get_version(output->zxdg_output_v1) >= 3)
      {
@@ -65,7 +65,7 @@ index f76881a1770..e1a1ab5b62d 100644
          wayland_output_done(output);
      }
  }
-@@ -270,6 +299,7 @@ static void zxdg_output_v1_handle_done(void *data,
+@@ -339,6 +368,7 @@ static void zxdg_output_v1_handle_done(void *data,
      if (zxdg_output_v1_get_version(zxdg_output_v1) < 3)
      {
          struct wayland_output *output = data;
@@ -74,5 +74,5 @@ index f76881a1770..e1a1ab5b62d 100644
      }
  }
 -- 
-2.53.0
+2.54.0
 

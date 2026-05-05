@@ -1,4 +1,4 @@
-From f3e434b3f0d46b96bf9740e5da8b8c0954320587 Mon Sep 17 00:00:00 2001
+From cfd6c63d3872d1c7956ca2281b9fe3173614e802 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 01:27:43 +0200
 Subject: [PATCH 2/2] Revert "ntdll: Switch to CLOCK_BOOTTIME for monotonic
@@ -11,7 +11,7 @@ This reverts commit 3d373e452388b60bea9dca6d5c4cf3f8b20a0c54.
  2 files changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
-index bc9bbf2c30d..f6b564d2d1a 100644
+index bb7197cf247..0a6fa8a5796 100644
 --- a/dlls/ntdll/unix/sync.c
 +++ b/dlls/ntdll/unix/sync.c
 @@ -96,8 +96,8 @@ static inline ULONGLONG monotonic_counter(void)
@@ -41,5 +41,5 @@ index 994169a0565..ed39637728e 100644
  #endif
      if (!clock_gettime( CLOCK_MONOTONIC, &ts ))
 -- 
-2.53.0
+2.54.0
 

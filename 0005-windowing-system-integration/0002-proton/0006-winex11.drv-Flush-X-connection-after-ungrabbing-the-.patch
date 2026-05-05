@@ -1,4 +1,4 @@
-From e98a8c0705e089431bc746004b5f46c0b5a4d6d0 Mon Sep 17 00:00:00 2001
+From ea2392419b356cb7b5338df1bdf5046d3601decc Mon Sep 17 00:00:00 2001
 From: Giovanni Mascellani <gmascellani@codeweavers.com>
 Date: Mon, 15 Mar 2021 12:01:25 -0500
 Subject: [PATCH 6/8] winex11.drv: Flush X connection after ungrabbing the
@@ -11,7 +11,7 @@ CW-Bug-Id: #21879
  1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 51cc92ebbed..30a519ec0da 100644
+index db96cbcf397..5711640bdac 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
 @@ -554,7 +554,11 @@ void ungrab_clipping_window(void)
@@ -28,5 +28,5 @@ index 51cc92ebbed..30a519ec0da 100644
      data->clipping_cursor = FALSE;
      x11drv_xinput2_disable( data->display, DefaultRootWindow( data->display ) );
 -- 
-2.53.0
+2.54.0
 

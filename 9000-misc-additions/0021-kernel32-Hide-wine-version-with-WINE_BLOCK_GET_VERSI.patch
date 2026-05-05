@@ -1,7 +1,7 @@
-From 2441f138ec41b7d719e62e8c6b2f4ec63ff1cd74 Mon Sep 17 00:00:00 2001
+From 6989aa4952a25acf1383f54d75ad404c0318b2f8 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:24:08 +0200
-Subject: [PATCH 21/46] kernel32: Hide wine version with
+Subject: [PATCH 21/47] kernel32: Hide wine version with
  WINE_BLOCK_GET_VERSION=1.
 
 ---
@@ -63,5 +63,5 @@ index ac880100d38..1a0199260cf 100644
  
      if ((ULONG_PTR)function >> 16)
 -- 
-2.53.0
+2.54.0
 

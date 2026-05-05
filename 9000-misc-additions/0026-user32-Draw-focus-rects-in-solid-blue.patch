@@ -1,7 +1,7 @@
-From d2e37255f318d236b0d13fd9dc05bd0c7a4d45eb Mon Sep 17 00:00:00 2001
+From fb614878bccefbdcfb8b4ea7b79476150d5243df Mon Sep 17 00:00:00 2001
 From: Joshua Ashton <joshua@froggi.es>
 Date: Thu, 16 Jul 2020 10:31:54 +0100
-Subject: [PATCH 26/46] user32: Draw focus rects in solid blue
+Subject: [PATCH 26/47] user32: Draw focus rects in solid blue
 
 Signed-off-by: Joshua Ashton <joshua@froggi.es>
 ---
@@ -44,5 +44,5 @@ index 5f3d9dd51b7..f7713a067bd 100644
  
  
 -- 
-2.53.0
+2.54.0
 
