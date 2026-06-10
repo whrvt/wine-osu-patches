@@ -1,0 +1,89 @@
+From 72f9222d25618e42368d6c571d0af6bbf5c3e1cc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
+Date: Wed, 25 Mar 2026 13:35:52 +0100
+Subject: [PATCH] winex11: Update queue input time on WM_TAKE_FOCUS.
+
+---
+ dlls/win32u/input.c      |  2 +-
+ dlls/winex11.drv/event.c |  7 +++++++
+ server/protocol.def      |  7 ++++---
+ server/queue.c           | 12 ++++++++++--
+ 4 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index a0f7a4168e6..ab09c3b7d42 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -943,7 +943,7 @@ DWORD get_last_input_time(void)
+ {
+     DWORD ret;
+ 
+-    SERVER_START_REQ( get_last_input_time )
++    SERVER_START_REQ( set_user_input_time )
+     {
+         wine_server_call( req );
+         ret = reply->time;
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index fdb6b635898..2983d7bfe8a 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -752,6 +752,13 @@ static void handle_wm_protocols( HWND hwnd, XClientMessageEvent *event )
+                 NtUserIsWindowEnabled( hwnd ), NtUserIsWindowVisible( hwnd ), NtUserGetWindowLongW( hwnd, GWL_STYLE ),
+                 get_focus(), get_active_window(), last_focus );
+ 
++        if (event_time) SERVER_START_REQ( set_user_input_time )
++        {
++            req->set = 1;
++            wine_server_call( req );
++        }
++        SERVER_END_REQ;
++
+         if (can_activate_window(hwnd))
+         {
+             set_focus( event->display, hwnd, event_time );
+diff --git a/server/protocol.def b/server/protocol.def
+index 0ac64297026..7ab8f0dbad6 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -3095,10 +3095,11 @@ enum coords_relative
+ @END
+ 
+ 
+-/* Get the time of the last input event */
+-@REQ(get_last_input_time)
++/* Get/Set the time of the input event */
++@REQ(set_user_input_time)
++    int          set;             /* update queue input time */
+ @REPLY
+-    unsigned int time;
++    unsigned int time;            /* time of the last session-wide user input */
+ @END
+ 
+ 
+diff --git a/server/queue.c b/server/queue.c
+index 2c948537f19..abae70fc91b 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -4001,9 +4001,17 @@ DECL_HANDLER(set_caret_info)
+ }
+ 
+ 
+-/* get the time of the last input event */
+-DECL_HANDLER(get_last_input_time)
++/* get/set the time of the last user input event */
++DECL_HANDLER(set_user_input_time)
+ {
++    struct msg_queue *queue;
++
++    if (req->set && (queue = current->queue))
++    {
++        queue->input->user_time = monotonic_time;
++        last_input_time = get_tick_count();
++    }
++
+     reply->time = last_input_time;
+ }
+ 
+-- 
+GitLab
+

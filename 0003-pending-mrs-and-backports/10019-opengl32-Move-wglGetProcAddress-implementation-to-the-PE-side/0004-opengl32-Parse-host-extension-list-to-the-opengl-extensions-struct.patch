@@ -1,16 +1,16 @@
-From eee33f443a4b41a5bac419be2b61773321256fe2 Mon Sep 17 00:00:00 2001
+From 8967a7d016856416562b94593e1f862fe21b49ad Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Thu, 5 Feb 2026 19:05:44 +0100
 Subject: [PATCH] opengl32: Parse host extension list to the opengl_extensions
  struct.
 
 ---
- dlls/opengl32/unix_wgl.c | 59 ++++++++++++++++++++++++++++------------
+ dlls/opengl32/unix_wgl.c | 58 +++++++++++++++++++++++++++-------------
  dlls/win32u/opengl.c     |  1 +
- 2 files changed, 42 insertions(+), 18 deletions(-)
+ 2 files changed, 41 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index 6fbc860231f..0e465e8708c 100644
+index f38c78d3ef6..5c7ef7ebd81 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -887,12 +887,6 @@ const GLubyte *wrap_glGetStringi( TEB *teb, GLenum name, GLuint index )
@@ -43,39 +43,12 @@ index 6fbc860231f..0e465e8708c 100644
      DWORD tid = HandleToULong(teb->ClientId.UniqueThread);
      size_t size = ARRAYSIZE(legacy_extensions) - 1, count = 0;
 -    const char *version, *rest = "", **extensions;
-+    const char *version, *rest = "", **extensions, *compat;
-+    GLint num;
++    const char *version, *compat, *rest = "", **extensions;
++    GLint profile = GL_CONTEXT_COMPATIBILITY_PROFILE_BIT;
      int i, j;
  
      static const char *disabled, *enabled;
-@@ -1269,6 +1265,26 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
- 
-     funcs->p_init_extensions( ctx->base.extensions );
- 
-+    set_gl_error( teb, funcs->p_glGetError() ); /* save the error in the wrapper so we can check for success */
-+    if ((compat = (const char *)funcs->p_glGetString( GL_EXTENSIONS )))
-+    {
-+        parse_extensions( parsed_extensions, compat );
-+        for (enum opengl_extension *ext = parsed_extensions; *ext != GL_EXTENSION_COUNT; ext++)
-+            ctx->base.extensions[*ext] = TRUE;
-+    }
-+    else
-+    {
-+        if (funcs->p_glGetError()) set_gl_error( teb, 0 ); /* clear the glGetString failure error */
-+        funcs->p_glGetIntegerv( GL_NUM_EXTENSIONS, &num );
-+        for (GLint i = 0; i < num; i++)
-+        {
-+            const char *name = (const char *)funcs->p_glGetStringi( GL_EXTENSIONS, i );
-+            enum opengl_extension ext = parse_extension( name, strlen( name ) );
-+            if (ext != GL_EXTENSION_COUNT) ctx->base.extensions[ext] = TRUE;
-+        }
-+    }
-+    dump_extensions( "Host", ctx->base.extensions );
-+
-     for (UINT i = 0; i < ARRAY_SIZE(all_extensions); i++)
-     {
-         if (!enabled_extensions[i] || !all_extensions[i].exposed) client->extensions[i] = FALSE;
-@@ -1282,13 +1298,6 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+@@ -1275,17 +1271,20 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
      if (ctx->major_version >= 3)
      {
          GLint extensions_count;
@@ -89,18 +62,48 @@ index 6fbc860231f..0e465e8708c 100644
          funcs->p_glGetIntegerv( GL_NUM_EXTENSIONS, &extensions_count );
          size += extensions_count;
          if (!(extensions = malloc( size * sizeof(*extensions) ))) return;
-@@ -1335,15 +1344,24 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+         for (i = 0; i < extensions_count; i++) extensions[count++] = (const char *)funcs->p_glGetStringi( GL_EXTENSIONS, i );
++
++        for (GLint i = 0; i < extensions_count; i++)
++        {
++            const char *name = (const char *)funcs->p_glGetStringi( GL_EXTENSIONS, i );
++            enum opengl_extension ext = parse_extension( name, strlen( name ) );
++            if (ext != GL_EXTENSION_COUNT) ctx->base.extensions[ext] = TRUE;
++        }
++
++        if (ctx->major_version > 3 || ctx->minor_version >= 2)
++            funcs->p_glGetIntegerv( GL_CONTEXT_PROFILE_MASK, &profile );
+     }
+     else
+     {
+@@ -1313,6 +1312,15 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+         }
+     }
+ 
++    if ((profile & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) &&
++        (compat = (const char *)funcs->p_glGetString( GL_EXTENSIONS )))
++    {
++        parse_extensions( parsed_extensions, compat );
++        for (enum opengl_extension *ext = parsed_extensions; *ext != GL_EXTENSION_COUNT; ext++)
++            ctx->base.extensions[*ext] = TRUE;
++    }
++    dump_extensions( "Host", ctx->base.extensions );
++
+     for (UINT i = 0; i < ARRAY_SIZE(all_extensions); i++)
+     {
+         if (!enabled_extensions[i] || !all_extensions[i].exposed) client->extensions[i] = FALSE;
+@@ -1335,15 +1343,24 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
          count = j;
      }
  
 -    if (funcs->p_glImportMemoryWin32HandleEXT) extensions[count++] = "GL_EXT_memory_object_win32";
 -    if (funcs->p_glImportSemaphoreWin32HandleEXT) extensions[count++] = "GL_EXT_semaphore_win32";
-+    if (funcs->p_glImportMemoryWin32HandleEXT)
++    if (ctx->base.extensions[GL_EXT_memory_object_fd])
 +    {
 +        client->extensions[GL_EXT_memory_object_win32] = 1;
 +        extensions[count++] = "GL_EXT_memory_object_win32";
 +    }
-+    if (funcs->p_glImportSemaphoreWin32HandleEXT)
++    if (ctx->base.extensions[GL_EXT_semaphore_fd])
 +    {
 +        client->extensions[GL_EXT_semaphore_win32] = 1;
 +        extensions[count++] = "GL_EXT_semaphore_win32";
@@ -117,7 +120,7 @@ index 6fbc860231f..0e465e8708c 100644
      {
          if (ctx->major_version > 4 || (ctx->major_version == 4 && ctx->minor_version > 3))
          {
-@@ -1362,6 +1380,11 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+@@ -1362,6 +1379,11 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
              }
              extensions[j++] = ext;
          }
@@ -130,10 +133,10 @@ index 6fbc860231f..0e465e8708c 100644
      }
  
 diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
-index b64013438ba..6bc4e363633 100644
+index e2292f2aadd..b2ad2c647e7 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -2674,6 +2674,7 @@ static void display_funcs_init(void)
+@@ -2690,6 +2690,7 @@ static void display_funcs_init(void)
      USE_GL_FUNC(glDeleteFramebuffers)
      USE_GL_FUNC(glDeleteRenderbuffers)
      USE_GL_FUNC(glGetNamedFramebufferAttachmentParameteriv)

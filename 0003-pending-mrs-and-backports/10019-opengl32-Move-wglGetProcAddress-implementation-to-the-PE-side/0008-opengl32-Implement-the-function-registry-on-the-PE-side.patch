@@ -1,6 +1,6 @@
-From 1a120ee51fa1866359e4e6e82edb4cc52cb0d8da Mon Sep 17 00:00:00 2001
+From 6fa78815a766045e919e606dcf9c58f6afb6909f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
-Date: Fri, 23 Jan 2026 10:45:56 +0100
+Date: Tue, 24 Feb 2026 15:26:33 +0100
 Subject: [PATCH] opengl32: Implement the function registry on the PE side.
 
 ---
@@ -10,14 +10,14 @@ Subject: [PATCH] opengl32: Implement the function registry on the PE side.
  dlls/opengl32/unix_private.h |   10 -
  dlls/opengl32/unix_thunks.c  | 2791 -----------------
  dlls/opengl32/unix_thunks.h  |    1 -
- dlls/opengl32/unix_wgl.c     |  220 +-
+ dlls/opengl32/unix_wgl.c     |  214 +-
  dlls/opengl32/unixlib.h      |   10 +-
- dlls/opengl32/wgl.c          |   11 +-
- dlls/win32u/opengl.c         |   22 -
- 10 files changed, 2874 insertions(+), 5854 deletions(-)
+ dlls/opengl32/wgl.c          |   12 +-
+ dlls/win32u/opengl.c         |   24 -
+ 10 files changed, 2875 insertions(+), 5850 deletions(-)
 
 diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
-index 79e493f3871..dd352603631 100755
+index d9a1228256a..5b335356dec 100755
 --- a/dlls/opengl32/make_opengl
 +++ b/dlls/opengl32/make_opengl
 @@ -160,6 +160,7 @@ my %manual_win_functions =
@@ -28,7 +28,7 @@ index 79e493f3871..dd352603631 100755
       "wglRealizeLayerPalette" => 1,
       "wglSetLayerPaletteEntries" => 1,
       "wglSwapLayerBuffers" => 1,
-@@ -183,7 +184,6 @@ my %manual_win_thunks =
+@@ -187,7 +188,6 @@ my %manual_win_thunks =
       "wglDeleteContext" => 1,
       "wglDestroyPbufferARB" => 1,
       "wglGetPixelFormat" => 1,
@@ -36,7 +36,7 @@ index 79e493f3871..dd352603631 100755
       "wglMakeContextCurrentARB" => 1,
       "wglMakeCurrent" => 1,
       "wglQueryCurrentRendererStringWINE" => 1,
-@@ -226,7 +226,6 @@ my %manual_unix_thunks =
+@@ -230,7 +230,6 @@ my %manual_unix_thunks =
       "wglCreateContext" => 1,
       "wglCreateContextAttribsARB" => 1,
       "wglDeleteContext" => 1,
@@ -44,7 +44,7 @@ index 79e493f3871..dd352603631 100755
       "wglMakeContextCurrentARB" => 1,
       "wglMakeCurrent" => 1,
       "wglShareLists" => 1,
-@@ -1560,7 +1559,7 @@ print OUT "#include \"winbase.h\"\n";
+@@ -1587,7 +1586,7 @@ print OUT "#include \"winbase.h\"\n";
  print OUT "#include \"winternl.h\"\n";
  print OUT "#include \"wingdi.h\"\n";
  print OUT "#include \"ntuser.h\"\n\n";
@@ -53,7 +53,7 @@ index 79e493f3871..dd352603631 100755
  print OUT "#include \"wine/unixlib.h\"\n\n";
  
  print OUT "struct process_attach_params\n";
-@@ -1645,7 +1644,8 @@ open OUT, ">thunks.c" or die "cannot create thunks.c";
+@@ -1672,7 +1671,8 @@ open OUT, ">thunks.c" or die "cannot create thunks.c";
  print OUT "/* Automatically generated from http://www.opengl.org/registry files; DO NOT EDIT! */\n\n";
  
  print OUT "#include <stdarg.h>\n";
@@ -63,7 +63,7 @@ index 79e493f3871..dd352603631 100755
  
  print OUT "#include \"ntstatus.h\"\n";
  print OUT "#define WIN32_NO_STATUS\n";
-@@ -1688,14 +1688,69 @@ foreach (sort keys %ext_functions)
+@@ -1715,14 +1715,69 @@ foreach (sort keys %ext_functions)
      printf OUT "extern %s WINAPI %s(%s);\n", $func_ret, $_, $decl_args;
  }
  
@@ -137,7 +137,7 @@ index 79e493f3871..dd352603631 100755
  
  close OUT;
  
-@@ -1891,32 +1946,4 @@ foreach (sort keys %norm_functions)
+@@ -1918,32 +1973,4 @@ foreach (sort keys %norm_functions)
      print OUT "    .p_$_ = null_$_,\n";
  }
  print OUT "};\n";
@@ -192,7 +192,7 @@ index 42298ac9ccc..63821690c52 100644
  
  #endif /* __WINE_OPENGL32_PRIVATE_H */
 diff --git a/dlls/opengl32/thunks.c b/dlls/opengl32/thunks.c
-index c3696f3406b..361c64e7ad9 100644
+index 03f04cca07e..502bf0ebd8a 100644
 --- a/dlls/opengl32/thunks.c
 +++ b/dlls/opengl32/thunks.c
 @@ -2,6 +2,7 @@
@@ -203,7 +203,7 @@ index c3696f3406b..361c64e7ad9 100644
  
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
-@@ -24833,2764 +24834,2803 @@ extern BOOL WINAPI wglGetPixelFormatAttribivARB( HDC hdc, int iPixelFormat, int
+@@ -24802,2764 +24803,2803 @@ extern BOOL WINAPI wglGetPixelFormatAttribivARB( HDC hdc, int iPixelFormat, int
  extern BOOL WINAPI wglMakeContextCurrentARB( HDC hDrawDC, HDC hReadDC, HGLRC hglrc );
  extern const GLchar * WINAPI wglQueryCurrentRendererStringWINE( GLenum attribute );
  extern const GLchar * WINAPI wglQueryRendererStringWINE( HDC dc, GLint renderer, GLenum attribute );
@@ -5789,7 +5789,7 @@ index d5ec8cee7c4..c236c0a87b1 100644
  
  static inline const struct opengl_funcs *get_dc_funcs( HDC hdc )
 diff --git a/dlls/opengl32/unix_thunks.c b/dlls/opengl32/unix_thunks.c
-index 3660a55d16e..d3c5a529410 100644
+index f7656b811d4..37ff6a14a99 100644
 --- a/dlls/opengl32/unix_thunks.c
 +++ b/dlls/opengl32/unix_thunks.c
 @@ -59,13 +59,6 @@ static NTSTATUS wgl_wglGetPixelFormat( void *args )
@@ -5806,7 +5806,7 @@ index 3660a55d16e..d3c5a529410 100644
  static NTSTATUS wgl_wglMakeCurrent( void *args )
  {
      struct wglMakeCurrent_params *params = args;
-@@ -30501,7 +30494,6 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+@@ -30524,7 +30517,6 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      wgl_wglCreateContext,
      wgl_wglDeleteContext,
      wgl_wglGetPixelFormat,
@@ -5814,7 +5814,7 @@ index 3660a55d16e..d3c5a529410 100644
      wgl_wglMakeCurrent,
      wgl_wglSetPixelFormat,
      wgl_wglShareLists,
-@@ -33665,19 +33657,6 @@ static NTSTATUS wow64_wgl_wglGetPixelFormat( void *args )
+@@ -33688,19 +33680,6 @@ static NTSTATUS wow64_wgl_wglGetPixelFormat( void *args )
      return STATUS_SUCCESS;
  }
  
@@ -5834,7 +5834,7 @@ index 3660a55d16e..d3c5a529410 100644
  static NTSTATUS wow64_wgl_wglMakeCurrent( void *args )
  {
      struct
-@@ -86818,7 +86797,6 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+@@ -86864,7 +86843,6 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
      wow64_wgl_wglCreateContext,
      wow64_wgl_wglDeleteContext,
      wow64_wgl_wglGetPixelFormat,
@@ -5842,7 +5842,7 @@ index 3660a55d16e..d3c5a529410 100644
      wow64_wgl_wglMakeCurrent,
      wow64_wgl_wglSetPixelFormat,
      wow64_wgl_wglShareLists,
-@@ -89938,11 +89916,6 @@ static int null_wglGetPixelFormat( HDC hdc )
+@@ -89984,11 +89962,6 @@ static int null_wglGetPixelFormat( HDC hdc )
      RtlSetLastWin32Error( ERROR_INVALID_PIXEL_FORMAT );
      return 0;
  }
@@ -5854,7 +5854,7 @@ index 3660a55d16e..d3c5a529410 100644
  static BOOL null_wglMakeCurrent( HDC hDc, HGLRC newContext )
  {
      WARN( "unsupported\n" );
-@@ -91322,7 +91295,6 @@ struct opengl_funcs null_opengl_funcs =
+@@ -91368,7 +91341,6 @@ struct opengl_funcs null_opengl_funcs =
      .p_wglCreateContext = null_wglCreateContext,
      .p_wglDeleteContext = null_wglDeleteContext,
      .p_wglGetPixelFormat = null_wglGetPixelFormat,
@@ -5862,7 +5862,7 @@ index 3660a55d16e..d3c5a529410 100644
      .p_wglMakeCurrent = null_wglMakeCurrent,
      .p_wglSetPixelFormat = null_wglSetPixelFormat,
      .p_wglShareLists = null_wglShareLists,
-@@ -91664,2766 +91636,3 @@ struct opengl_funcs null_opengl_funcs =
+@@ -91710,2766 +91682,3 @@ struct opengl_funcs null_opengl_funcs =
      .p_glVertexPointer = null_glVertexPointer,
      .p_glViewport = null_glViewport,
  };
@@ -8642,7 +8642,7 @@ index a86626520f4..b2911b7e2a1 100644
  extern BOOL wrap_wglShareLists( TEB *teb, HGLRC hrcSrvShare, HGLRC hrcSrvSource );
  extern BOOL wrap_wglSwapBuffers( TEB *teb, HDC hdc );
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index 01ce51ca99f..f99b8984c3f 100644
+index 6493c9e2ecd..7448f62737c 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -128,11 +128,8 @@ struct context
@@ -8812,31 +8812,37 @@ index 01ce51ca99f..f99b8984c3f 100644
      enum opengl_extension parsed_extensions[GL_EXTENSION_COUNT] = {GL_EXTENSION_COUNT};
      DWORD tid = HandleToULong(teb->ClientId.UniqueThread);
 -    size_t size = ARRAYSIZE(legacy_extensions) - 1, count = 0;
--    const char *version, *rest = "", **extensions, *compat;
-+    const char *version, *rest = "", *compat;
+-    const char *version, *compat, *rest = "", **extensions;
+     GLint profile = GL_CONTEXT_COMPATIBILITY_PROFILE_BIT;
++    const char *version, *compat, *rest = "";
      USHORT *ptr;
-     GLint num;
 -    int i, j;
 -
 -    static const char *disabled, *enabled;
  
      ctx->tid = tid;
      teb->glReserved1[0] = draw_hdc;
-@@ -1199,73 +1063,8 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
-         /* keep any other extension that has been enabled on the PE side directly */
-     }
+@@ -1172,16 +1036,10 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+ 
+     funcs->p_init_extensions( ctx->base.extensions );
  
 -    if (funcs->p_glImportMemoryWin32HandleEXT) size++;
 -    if (funcs->p_glImportSemaphoreWin32HandleEXT) size++;
 -
--    if (client->major_version >= 3)
--    {
--        GLint extensions_count;
--        funcs->p_glGetIntegerv( GL_NUM_EXTENSIONS, &extensions_count );
+     if (client->major_version >= 3)
+     {
+         GLint extensions_count;
+         funcs->p_glGetIntegerv( GL_NUM_EXTENSIONS, &extensions_count );
 -        size += extensions_count;
 -        if (!(extensions = malloc( size * sizeof(*extensions) ))) return;
 -        for (i = 0; i < extensions_count; i++) extensions[count++] = (const char *)funcs->p_glGetStringi( GL_EXTENSIONS, i );
--    }
+ 
+         for (GLint i = 0; i < extensions_count; i++)
+         {
+@@ -1193,31 +1051,6 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+         if (client->major_version > 3 || client->minor_version >= 2)
+             funcs->p_glGetIntegerv( GL_CONTEXT_PROFILE_MASK, &profile );
+     }
 -    else
 -    {
 -        const char *str = (const char *)funcs->p_glGetString( GL_EXTENSIONS );
@@ -8862,7 +8868,13 @@ index 01ce51ca99f..f99b8984c3f 100644
 -            ext++;
 -        }
 -    }
--
+ 
+     if ((profile & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) &&
+         (compat = (const char *)funcs->p_glGetString( GL_EXTENSIONS )))
+@@ -1235,36 +1068,8 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+         /* keep any other extension that has been enabled on the PE side directly */
+     }
+ 
 -    if (!disabled && !(disabled = query_opengl_option( "DisabledExtensions" ))) disabled = "";
 -    if (!enabled && !(enabled = query_opengl_option( "EnabledExtensions" ))) enabled = "";
 -    if (*enabled || *disabled)
@@ -8878,12 +8890,12 @@ index 01ce51ca99f..f99b8984c3f 100644
 -        count = j;
 -    }
 -
--    if (funcs->p_glImportMemoryWin32HandleEXT)
+-    if (ctx->base.extensions[GL_EXT_memory_object_fd])
 -    {
 -        client->extensions[GL_EXT_memory_object_win32] = 1;
 -        extensions[count++] = "GL_EXT_memory_object_win32";
 -    }
--    if (funcs->p_glImportSemaphoreWin32HandleEXT)
+-    if (ctx->base.extensions[GL_EXT_semaphore_fd])
 -    {
 -        client->extensions[GL_EXT_semaphore_win32] = 1;
 -        extensions[count++] = "GL_EXT_semaphore_win32";
@@ -8893,12 +8905,12 @@ index 01ce51ca99f..f99b8984c3f 100644
 -    qsort( extensions, count, sizeof(*extensions), string_array_cmp );
 -    ctx->extension_array = extensions;
 -    ctx->extension_count = count;
-+    if (funcs->p_glImportMemoryWin32HandleEXT) client->extensions[GL_EXT_memory_object_win32] = 1;
-+    if (funcs->p_glImportSemaphoreWin32HandleEXT) client->extensions[GL_EXT_semaphore_win32] = 1;
++    if (ctx->base.extensions[GL_EXT_memory_object_fd]) client->extensions[GL_EXT_memory_object_win32] = 1;
++    if (ctx->base.extensions[GL_EXT_semaphore_fd]) client->extensions[GL_EXT_semaphore_win32] = 1;
  
      if (is_win64 && ctx->buffers && !initialize_vk_device( teb, ctx )
          && !(ctx->use_pinned_memory = ctx->base.extensions[GL_AMD_pinned_memory]))
-@@ -1277,22 +1076,11 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+@@ -1276,22 +1081,11 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
              client->minor_version = 3;
              asprintf( &ctx->wow64_version, "4.3%s", rest );
          }
@@ -8921,7 +8933,7 @@ index 01ce51ca99f..f99b8984c3f 100644
      }
  
      dump_extensions( "Client", client->extensions );
-@@ -1340,8 +1128,6 @@ BOOL wrap_wglMakeCurrent( TEB *teb, HDC hdc, HGLRC client_context )
+@@ -1339,8 +1133,6 @@ BOOL wrap_wglMakeCurrent( TEB *teb, HDC hdc, HGLRC client_context )
  static void free_context( struct context *ctx )
  {
      free( ctx->wow64_version );
@@ -8966,21 +8978,22 @@ index 09340fce5d6..2d5290b1856 100644
      unix_wglSetPixelFormat,
      unix_wglShareLists,
 diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
-index c8e2f858482..d01e897ee08 100644
+index 3112e5fae1c..98a9db98c56 100644
 --- a/dlls/opengl32/wgl.c
 +++ b/dlls/opengl32/wgl.c
-@@ -316,6 +316,10 @@ static struct handle_entry *alloc_client_context(void)
+@@ -316,6 +316,11 @@ static struct handle_entry *alloc_client_context(void)
          return NULL;
      }
  
 +    context->base.extensions[WGL_ARB_extensions_string] = TRUE;
-+    context->base.extensions[WGL_EXT_extensions_string] = TRUE;
++    context->base.extensions[WGL_ARB_multisample] = TRUE;
 +    context->base.extensions[WGL_ARB_pixel_format] = TRUE;
++    context->base.extensions[WGL_EXT_extensions_string] = TRUE;
 +
      return ptr;
  }
  
-@@ -1326,17 +1330,13 @@ int WINAPI wglGetLayerPaletteEntries( HDC hdc, int plane, int start, int count,
+@@ -1326,17 +1331,13 @@ int WINAPI wglGetLayerPaletteEntries( HDC hdc, int plane, int start, int count,
   */
  PROC WINAPI wglGetProcAddress( LPCSTR name )
  {
@@ -8999,7 +9012,7 @@ index c8e2f858482..d01e897ee08 100644
  
      if (!strncmp( name, "wglGetExtensionsString", 22 ))
      {
-@@ -1345,7 +1345,6 @@ PROC WINAPI wglGetProcAddress( LPCSTR name )
+@@ -1345,7 +1346,6 @@ PROC WINAPI wglGetProcAddress( LPCSTR name )
          LeaveCriticalSection( &wgl_cs );
      }
  
@@ -9008,10 +9021,10 @@ index c8e2f858482..d01e897ee08 100644
      return proc;
  }
 diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
-index c30fd88b7e7..1aeb1d2c76b 100644
+index 7bbca1a53fa..01257928073 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -1705,15 +1705,6 @@ static BOOL win32u_wglSetPixelFormatWINE( HDC hdc, int format )
+@@ -1720,15 +1720,6 @@ static BOOL win32u_wglSetPixelFormatWINE( HDC hdc, int format )
      return TRUE;
  }
  
@@ -9027,7 +9040,7 @@ index c30fd88b7e7..1aeb1d2c76b 100644
  static void win32u_init_extensions( BOOLEAN extensions[GL_EXTENSION_COUNT] )
  {
      memcpy( extensions, global_extensions, sizeof(global_extensions) );
-@@ -2669,7 +2660,6 @@ static void display_funcs_init(void)
+@@ -2685,7 +2676,6 @@ static void display_funcs_init(void)
      ALL_GL_EXT_FUNCS
  #undef USE_GL_FUNC
  
@@ -9035,10 +9048,12 @@ index c30fd88b7e7..1aeb1d2c76b 100644
      display_funcs.p_init_extensions = win32u_init_extensions;
      display_funcs.p_get_pixel_formats = win32u_get_pixel_formats;
  
-@@ -2689,23 +2679,12 @@ static void display_funcs_init(void)
+@@ -2705,25 +2695,12 @@ static void display_funcs_init(void)
      display_funcs.p_context_destroy = win32u_context_destroy;
      display_funcs.p_context_reset = win32u_context_reset;
  
+-    global_extensions[WGL_ARB_multisample] = 1;
+-
 -    global_extensions[WGL_ARB_pixel_format] = 1;
 -    display_funcs.p_wglChoosePixelFormatARB      = (void *)1; /* never called */
 -    display_funcs.p_wglGetPixelFormatAttribfvARB = (void *)1; /* never called */
@@ -9059,7 +9074,7 @@ index c30fd88b7e7..1aeb1d2c76b 100644
      /* In WineD3D we need the ability to set the pixel format more than once (e.g. after a device reset).
       * The default wglSetPixelFormat doesn't allow this, so add our own which allows it.
       */
-@@ -2718,7 +2697,6 @@ static void display_funcs_init(void)
+@@ -2736,7 +2713,6 @@ static void display_funcs_init(void)
      display_funcs.p_wglCreateContextAttribsARB = (void *)1; /* never called */
  
      global_extensions[WGL_ARB_make_current_read] = 1;

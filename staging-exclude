@@ -1,1 +1,1 @@
--W winedevice-Default_Drivers -W dsound-EAX -W mountmgr-DosDevices
+-W winedevice-Default_Drivers -W mountmgr-DosDevices

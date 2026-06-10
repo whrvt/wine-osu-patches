@@ -1,37 +1,79 @@
-From 4f03373f8fb0accca0bca0a6382a6adc1c50ee28 Mon Sep 17 00:00:00 2001
+From f09c9ba8e27ce041a005a348e0039beb5ed4999b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Thu, 5 Feb 2026 18:54:10 +0100
 Subject: [PATCH] opengl32: Move major / minor version to the PE side context
  wrapper.
 
 ---
- dlls/opengl32/make_opengl    |  1 +
- dlls/opengl32/thunks.c       |  8 --------
- dlls/opengl32/unix_wgl.c     | 31 ++++++++++++-------------------
- dlls/opengl32/wgl.c          | 23 +++++++++++++++++++++++
- include/wine/opengl_driver.h |  2 ++
- 5 files changed, 38 insertions(+), 27 deletions(-)
+ dlls/opengl32/make_opengl    |  5 +++
+ dlls/opengl32/thunks.c       | 41 +----------------
+ dlls/opengl32/unix_wgl.c     | 33 ++++++--------
+ dlls/opengl32/wgl.c          | 85 ++++++++++++++++++++++++++++++++++++
+ include/wine/opengl_driver.h |  2 +
+ 5 files changed, 106 insertions(+), 60 deletions(-)
 
 diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
-index a78ccce005b..dbdfb3ecbf7 100755
+index 45cb47ccd11..9fc362f9ebe 100755
 --- a/dlls/opengl32/make_opengl
 +++ b/dlls/opengl32/make_opengl
-@@ -173,6 +173,7 @@ my %manual_win_thunks =
+@@ -173,6 +173,11 @@ my %manual_win_thunks =
       "glCreateSyncFromCLeventARB" => 1,
       "glDeleteSync" => 1,
       "glFenceSync" => 1,
++     "glGetBooleanv" => 1,
++     "glGetDoublev" => 1,
++     "glGetFloatv" => 1,
++     "glGetInteger64v" => 1,
 +     "glGetIntegerv" => 1,
       "glGetString" => 1,
       "glGetStringi" => 1,
       "glImportSyncEXT" => 1,
 diff --git a/dlls/opengl32/thunks.c b/dlls/opengl32/thunks.c
-index 3c60ec5d6bb..c3696f3406b 100644
+index 3c60ec5d6bb..03f04cca07e 100644
 --- a/dlls/opengl32/thunks.c
 +++ b/dlls/opengl32/thunks.c
-@@ -882,14 +882,6 @@ void WINAPI glGetFloatv( GLenum pname, GLfloat *data )
-     if ((status = UNIX_CALL( glGetFloatv, &args ))) WARN( "glGetFloatv returned %#lx\n", status );
+@@ -841,14 +841,6 @@ void WINAPI glGenTextures( GLsizei n, GLuint *textures )
+     if ((status = UNIX_CALL( glGenTextures, &args ))) WARN( "glGenTextures returned %#lx\n", status );
  }
  
+-void WINAPI glGetBooleanv( GLenum pname, GLboolean *data )
+-{
+-    struct glGetBooleanv_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
+-    NTSTATUS status;
+-    TRACE( "pname %d, data %p\n", pname, data );
+-    if ((status = UNIX_CALL( glGetBooleanv, &args ))) WARN( "glGetBooleanv returned %#lx\n", status );
+-}
+-
+ void WINAPI glGetClipPlane( GLenum plane, GLdouble *equation )
+ {
+     struct glGetClipPlane_params args = { .teb = NtCurrentTeb(), .plane = plane, .equation = equation };
+@@ -857,14 +849,6 @@ void WINAPI glGetClipPlane( GLenum plane, GLdouble *equation )
+     if ((status = UNIX_CALL( glGetClipPlane, &args ))) WARN( "glGetClipPlane returned %#lx\n", status );
+ }
+ 
+-void WINAPI glGetDoublev( GLenum pname, GLdouble *data )
+-{
+-    struct glGetDoublev_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
+-    NTSTATUS status;
+-    TRACE( "pname %d, data %p\n", pname, data );
+-    if ((status = UNIX_CALL( glGetDoublev, &args ))) WARN( "glGetDoublev returned %#lx\n", status );
+-}
+-
+ GLenum WINAPI glGetError(void)
+ {
+     struct glGetError_params args = { .teb = NtCurrentTeb() };
+@@ -874,22 +858,6 @@ GLenum WINAPI glGetError(void)
+     return args.ret;
+ }
+ 
+-void WINAPI glGetFloatv( GLenum pname, GLfloat *data )
+-{
+-    struct glGetFloatv_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
+-    NTSTATUS status;
+-    TRACE( "pname %d, data %p\n", pname, data );
+-    if ((status = UNIX_CALL( glGetFloatv, &args ))) WARN( "glGetFloatv returned %#lx\n", status );
+-}
+-
 -void WINAPI glGetIntegerv( GLenum pname, GLint *data )
 -{
 -    struct glGetIntegerv_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
@@ -43,8 +85,31 @@ index 3c60ec5d6bb..c3696f3406b 100644
  void WINAPI glGetLightfv( GLenum light, GLenum pname, GLfloat *params )
  {
      struct glGetLightfv_params args = { .teb = NtCurrentTeb(), .light = light, .pname = pname, .params = params };
+@@ -8635,14 +8603,6 @@ static void WINAPI glGetInteger64i_v( GLenum target, GLuint index, GLint64 *data
+     if ((status = UNIX_CALL( glGetInteger64i_v, &args ))) WARN( "glGetInteger64i_v returned %#lx\n", status );
+ }
+ 
+-static void WINAPI glGetInteger64v( GLenum pname, GLint64 *data )
+-{
+-    struct glGetInteger64v_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
+-    NTSTATUS status;
+-    TRACE( "pname %d, data %p\n", pname, data );
+-    if ((status = UNIX_CALL( glGetInteger64v, &args ))) WARN( "glGetInteger64v returned %#lx\n", status );
+-}
+-
+ static void WINAPI glGetIntegerIndexedvEXT( GLenum target, GLuint index, GLint *data )
+ {
+     struct glGetIntegerIndexedvEXT_params args = { .teb = NtCurrentTeb(), .target = target, .index = index, .data = data };
+@@ -24827,6 +24787,7 @@ static BOOL WINAPI wglSwapIntervalEXT( int interval )
+ extern GLsync WINAPI glCreateSyncFromCLeventARB( struct _cl_context *context, struct _cl_event *event, GLbitfield flags );
+ extern void WINAPI glDeleteSync( GLsync sync );
+ extern GLsync WINAPI glFenceSync( GLenum condition, GLbitfield flags );
++extern void WINAPI glGetInteger64v( GLenum pname, GLint64 *data );
+ extern const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index );
+ extern GLsync WINAPI glImportSyncEXT( GLenum external_sync_type, GLintptr external_sync, GLbitfield flags );
+ extern BOOL WINAPI wglChoosePixelFormatARB( HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats );
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index 0e465e8708c..d2f0312ad97 100644
+index 5c7ef7ebd81..be427edeb41 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -126,8 +126,6 @@ struct context
@@ -90,7 +155,7 @@ index 0e465e8708c..d2f0312ad97 100644
      case GL_NUM_EXTENSIONS:
          *data = ctx->extension_count;
          return TRUE;
-@@ -1256,12 +1249,12 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+@@ -1256,19 +1249,19 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
  
      pthread_once( &once, init_enabled_extensions );
  
@@ -107,7 +172,6 @@ index 0e465e8708c..d2f0312ad97 100644
  
      funcs->p_init_extensions( ctx->base.extensions );
  
-@@ -1295,7 +1288,7 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
      if (funcs->p_glImportMemoryWin32HandleEXT) size++;
      if (funcs->p_glImportSemaphoreWin32HandleEXT) size++;
  
@@ -116,7 +180,16 @@ index 0e465e8708c..d2f0312ad97 100644
      {
          GLint extensions_count;
          funcs->p_glGetIntegerv( GL_NUM_EXTENSIONS, &extensions_count );
-@@ -1363,11 +1356,11 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+@@ -1283,7 +1276,7 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+             if (ext != GL_EXTENSION_COUNT) ctx->base.extensions[ext] = TRUE;
+         }
+ 
+-        if (ctx->major_version > 3 || ctx->minor_version >= 2)
++        if (client->major_version > 3 || client->minor_version >= 2)
+             funcs->p_glGetIntegerv( GL_CONTEXT_PROFILE_MASK, &profile );
+     }
+     else
+@@ -1362,11 +1355,11 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
      if (is_win64 && ctx->buffers && !initialize_vk_device( teb, ctx )
          && !(ctx->use_pinned_memory = ctx->base.extensions[GL_AMD_pinned_memory]))
      {
@@ -133,41 +206,110 @@ index 0e465e8708c..d2f0312ad97 100644
          }
          for (i = 0, j = 0; i < count; i++)
 diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
-index e8fb929f127..d781eedfbfa 100644
+index 78dc09f1b83..aa2ca8da2d6 100644
 --- a/dlls/opengl32/wgl.c
 +++ b/dlls/opengl32/wgl.c
-@@ -1992,6 +1992,29 @@ GLsync WINAPI glImportSyncEXT( GLenum external_sync_type, GLintptr external_sync
+@@ -1992,6 +1992,21 @@ GLsync WINAPI glImportSyncEXT( GLenum external_sync_type, GLintptr external_sync
      return NULL;
  }
  
-+void WINAPI glGetIntegerv( GLenum name, GLint *data )
++static BOOL get_integer( struct context *ctx, GLenum name, GLint *data )
 +{
-+    struct glGetIntegerv_params args = { .teb = NtCurrentTeb(), .pname = name, .data = data };
-+    struct context *ctx;
-+    NTSTATUS status;
-+
-+    TRACE( "name %d, data %p\n", name, data );
-+
-+    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return;
-+
 +    switch (name)
 +    {
 +    case GL_MAJOR_VERSION:
 +        *data = ctx->base.major_version;
-+        return;
++        return TRUE;
 +    case GL_MINOR_VERSION:
 +        *data = ctx->base.minor_version;
-+        return;
++        return TRUE;
 +    }
 +
-+    if ((status = UNIX_CALL( glGetIntegerv, &args ))) WARN( "glGetIntegerv returned %#lx\n", status );
++    return FALSE;
 +}
 +
  const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
  {
      struct glGetStringi_params args =
+@@ -2042,6 +2057,76 @@ const GLubyte * WINAPI glGetString( GLenum name )
+     return args.ret;
+ }
+ 
++void WINAPI glGetBooleanv( GLenum pname, GLboolean *data )
++{
++    struct glGetBooleanv_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
++    struct context *ctx;
++    NTSTATUS status;
++    GLint value;
++
++    TRACE( "pname %d, data %p\n", pname, data );
++
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return;
++    if (get_integer( ctx, pname, &value )) *data = value;
++    else if ((status = UNIX_CALL( glGetBooleanv, &args ))) WARN( "glGetBooleanv returned %#lx\n", status );
++}
++
++void WINAPI glGetDoublev( GLenum pname, GLdouble *data )
++{
++    struct glGetDoublev_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
++    struct context *ctx;
++    NTSTATUS status;
++    GLint value;
++
++    TRACE( "pname %d, data %p\n", pname, data );
++
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return;
++    if (get_integer( ctx, pname, &value )) *data = value;
++    else if ((status = UNIX_CALL( glGetDoublev, &args ))) WARN( "glGetDoublev returned %#lx\n", status );
++}
++
++void WINAPI glGetFloatv( GLenum pname, GLfloat *data )
++{
++    struct glGetFloatv_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
++    struct context *ctx;
++    NTSTATUS status;
++    GLint value;
++
++    TRACE( "pname %d, data %p\n", pname, data );
++
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return;
++    if (get_integer( ctx, pname, &value )) *data = value;
++    else if ((status = UNIX_CALL( glGetFloatv, &args ))) WARN( "glGetFloatv returned %#lx\n", status );
++}
++
++void WINAPI glGetInteger64v( GLenum pname, GLint64 *data )
++{
++    struct glGetInteger64v_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
++    struct context *ctx;
++    NTSTATUS status;
++    GLint value;
++
++    TRACE( "pname %d, data %p\n", pname, data );
++
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return;
++    if (get_integer( ctx, pname, &value )) *data = value;
++    else if ((status = UNIX_CALL( glGetInteger64v, &args ))) WARN( "glGetInteger64v returned %#lx\n", status );
++}
++
++void WINAPI glGetIntegerv( GLenum pname, GLint *data )
++{
++    struct glGetIntegerv_params args = { .teb = NtCurrentTeb(), .pname = pname, .data = data };
++    struct context *ctx;
++    NTSTATUS status;
++    GLint value;
++
++    TRACE( "pname %d, data %p\n", pname, data );
++
++    if (!(ctx = context_from_handle( NtCurrentTeb()->glCurrentRC ))) return;
++    if (get_integer( ctx, pname, &value )) *data = value;
++    else if ((status = UNIX_CALL( glGetIntegerv, &args ))) WARN( "glGetIntegerv returned %#lx\n", status );
++}
++
+ const char * WINAPI wglGetExtensionsStringARB( HDC hdc )
+ {
+     TRACE( "hdc %p\n", hdc );
 diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
-index 7056ec616ad..f73ff11f023 100644
+index 7cf3d2bd277..e6616c47224 100644
 --- a/include/wine/opengl_driver.h
 +++ b/include/wine/opengl_driver.h
 @@ -74,6 +74,8 @@ struct opengl_client_context

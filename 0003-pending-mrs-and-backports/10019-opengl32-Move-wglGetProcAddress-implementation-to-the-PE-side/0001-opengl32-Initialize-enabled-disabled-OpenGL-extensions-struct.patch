@@ -1,4 +1,4 @@
-From 2644a4d2f798de3eff0d626a2ef9c28f60070f1d Mon Sep 17 00:00:00 2001
+From a55c231648cfc5e01311194a85dfbd85cdeaeab9 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 23 Jan 2026 10:36:36 +0100
 Subject: [PATCH] opengl32: Initialize enabled / disabled OpenGL extensions
@@ -12,10 +12,10 @@ Subject: [PATCH] opengl32: Initialize enabled / disabled OpenGL extensions
  4 files changed, 1061 insertions(+), 972 deletions(-)
 
 diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
-index 6d0cfd9029c..8a50c8827eb 100755
+index 9013f347e13..d424402067e 100755
 --- a/dlls/opengl32/make_opengl
 +++ b/dlls/opengl32/make_opengl
-@@ -1466,7 +1466,7 @@ print HEADER "\n";
+@@ -1489,7 +1489,7 @@ print HEADER "\n";
  print HEADER "#define ALL_WGL_EXTS";
  foreach (sort keys %wgl_extensions)
  {
@@ -24,7 +24,7 @@ index 6d0cfd9029c..8a50c8827eb 100755
  }
  print HEADER "\n\n";
  print HEADER "#define ALL_WGL_FUNCS";
-@@ -1485,7 +1485,7 @@ print HEADER "\n\n";
+@@ -1508,7 +1508,7 @@ print HEADER "\n\n";
  print HEADER "#define ALL_EGL_EXTS";
  foreach (sort keys %egl_extensions)
  {
@@ -33,7 +33,7 @@ index 6d0cfd9029c..8a50c8827eb 100755
  }
  print HEADER "\n\n";
  print HEADER "#define ALL_EGL_FUNCS";
-@@ -1502,18 +1502,10 @@ foreach (sort keys %ext_functions)
+@@ -1525,18 +1525,10 @@ foreach (sort keys %ext_functions)
      printf HEADER " \\\n    USE_GL_FUNC(\%s)", $_;
  }
  print HEADER "\n\n";
@@ -55,7 +55,7 @@ index 6d0cfd9029c..8a50c8827eb 100755
  print HEADER "\n\n";
  print HEADER "#define ALL_GL_FUNCS";
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index 315aa3cee27..0e2cdaeec92 100644
+index 6d73b1cd735..11c0e2d5152 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -191,6 +191,7 @@ static ULONG_PTR zero_bits;
@@ -173,7 +173,7 @@ index 315aa3cee27..0e2cdaeec92 100644
  
      version = (const char *)funcs->p_glGetString( GL_VERSION );
 diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
-index 0ca0a4708fc..8e72cebd5d1 100644
+index 470850c9d49..d53075eee2d 100644
 --- a/include/wine/opengl_driver.h
 +++ b/include/wine/opengl_driver.h
 @@ -59,6 +59,15 @@ struct wgl_pixel_format

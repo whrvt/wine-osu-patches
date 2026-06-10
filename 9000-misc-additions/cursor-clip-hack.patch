@@ -84,9 +84,9 @@ index 68117bef6c3..d480b54aafa 100644
  extern BOOL grab_pointer;
  extern BOOL grab_fullscreen;
 +extern BOOL cursor_clip_hack;
+ extern BOOL is_mouse_in_pointer_enabled( HWND hwnd );
  extern HWND get_active_window(void);
  extern HWND get_capture(void);
- extern BOOL get_cursor_pos( POINT *pt );
 @@ -417,4 +418,22 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
      return !IsRectEmpty( dst );
  }

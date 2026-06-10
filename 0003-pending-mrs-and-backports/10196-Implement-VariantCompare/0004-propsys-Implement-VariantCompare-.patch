@@ -1,0 +1,144 @@
+From dc667fb8e1b51f2ab7e749386d3363cb2f4b9d67 Mon Sep 17 00:00:00 2001
+From: Eric Pouech <epouech@codeweavers.com>
+Date: Wed, 19 Feb 2025 12:04:25 +0100
+Subject: [PATCH] propsys: Implement VariantCompare().
+
+Signed-off-by: Eric Pouech <epouech@codeweavers.com>
+---
+ dlls/propsys/propvar.c       | 97 +++++++++++++++++++++++++++++++++++-
+ dlls/propsys/tests/propsys.c |  2 +-
+ 2 files changed, 97 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/propsys/propvar.c b/dlls/propsys/propvar.c
+index f01ca59af69..a1de99b01f5 100644
+--- a/dlls/propsys/propvar.c
++++ b/dlls/propsys/propvar.c
+@@ -31,6 +31,7 @@
+ #include "shlobj.h"
+ #include "propvarutil.h"
+ #include "strsafe.h"
++#include "intsafe.h"
+ 
+ #include "wine/debug.h"
+ 
+@@ -1164,9 +1165,103 @@ INT WINAPI PropVariantCompareEx(REFPROPVARIANT propvar1, REFPROPVARIANT propvar2
+     return res;
+ }
+ 
++static inline BOOL is_variant_empty(REFVARIANT var)
++{
++    return var->vt == VT_EMPTY || var->vt == VT_NULL;
++}
++
++static BOOL convert_variant(REFVARIANT src, VARIANT *dest)
++{
++    switch (src->vt)
++    {
++    case VT_I1: dest->vt = VT_I8; V_I8(dest) = V_I1(src); break;
++    case VT_I2: dest->vt = VT_I8; V_I8(dest) = V_I2(src); break;
++    case VT_I4: dest->vt = VT_I8; V_I8(dest) = V_I4(src); break;
++    case VT_I8: dest->vt = VT_I8; V_I8(dest) = V_I8(src); break;
++
++    case VT_UI1: dest->vt = VT_UI8; V_UI8(dest) = V_UI1(src); break;
++    case VT_UI2: dest->vt = VT_UI8; V_UI8(dest) = V_UI2(src); break;
++    case VT_UI4: dest->vt = VT_UI8; V_UI8(dest) = V_UI4(src); break;
++    case VT_UI8: dest->vt = VT_UI8; V_UI8(dest) = V_UI8(src); break;
++
++    case VT_R4: dest->vt = VT_R8; V_R8(dest) = V_R4(src); break;
++    case VT_R8: dest->vt = VT_R8; V_R8(dest) = V_R8(src); break;
++
++    default: return FALSE;
++    }
++    return TRUE;
++
++}
++
+ INT WINAPI VariantCompare(REFVARIANT refvar1, REFVARIANT refvar2)
+ {
+-    FIXME("%s %s: stub!\n", debugstr_variant(refvar1), debugstr_variant(refvar2));
++    VARIANT v1, v2;
++    BOOL convert1, convert2;
++
++    TRACE("(%s %s)\n", debugstr_variant(refvar1), debugstr_variant(refvar2));
++
++    if (is_variant_empty(refvar1))
++        return is_variant_empty(refvar2) ? 0 : -1;
++    if (is_variant_empty(refvar2)) return 1;
++
++    /* dunno why... */
++    if (refvar1->vt != refvar2->vt && (refvar1->vt == VT_I1 || refvar2->vt == VT_I1))
++        return 0;
++    /* dunno why these two return always 0 (but UI1 doesn't, nor R8)... */
++    if ((refvar1->vt == VT_UI2 || refvar1->vt == VT_UI4 || refvar1->vt == VT_UI8) && refvar2->vt == VT_R4)
++        return 0;
++    if (refvar1->vt == VT_R4 && (refvar2->vt == VT_UI2 || refvar2->vt == VT_UI4 || refvar2->vt == VT_UI8))
++        return 0;
++
++    convert1 = convert_variant(refvar1, &v1);
++    convert2 = convert_variant(refvar2, &v2);
++    if (convert1 && convert2) /* handle numeric comparisons */
++    {
++#define SPACESHIP_CMP(a, b) ((a) == (b) ? 0 : ((a) < (b) ? -1 : 1))
++        if (v1.vt == VT_I8 && v2.vt == VT_I8)
++            return SPACESHIP_CMP(V_I8(&v1), V_I8(&v2));
++        if (v1.vt == VT_UI8 && v2.vt == VT_UI8)
++            return SPACESHIP_CMP(V_UI8(&v1), V_UI8(&v2));
++        if (v1.vt == VT_R8 && v2.vt == VT_R8)
++            return SPACESHIP_CMP(V_R8(&v1), V_R8(&v2));
++        if (v1.vt == VT_I8 && v2.vt == VT_UI8)
++        {
++            if (V_I8(&v1) < 0) return -1;
++            if (V_UI8(&v2) > (ULONG64)INT64_MAX) return -1;
++            return SPACESHIP_CMP((ULONG64)V_I8(&v1), V_UI8(&v2));
++        }
++        if (v1.vt == VT_UI8 && v2.vt == VT_I8)
++        {
++            if (V_I8(&v2) < 0) return 1;
++            if (V_UI8(&v1) > (ULONG64)INT64_MAX) return 1;
++            return SPACESHIP_CMP(V_UI8(&v1), (ULONG64)V_I8(&v2));
++        }
++        if (v1.vt == VT_R8 && v2.vt == VT_I8)
++            return SPACESHIP_CMP(V_R8(&v1), (double)V_I8(&v2));
++        if (v1.vt == VT_R8 && v2.vt == VT_UI8)
++            return SPACESHIP_CMP(V_R8(&v1), (double)V_UI8(&v2));
++        if (v1.vt == VT_I8 && v2.vt == VT_R8)
++            return SPACESHIP_CMP((double)V_I8(&v1), V_R8(&v2));
++        if (v1.vt == VT_UI8 && v2.vt == VT_R8)
++            return SPACESHIP_CMP((double)V_UI8(&v1), V_R8(&v2));
++        /* should not be reached */
++#undef SPACESHIP_CMP
++    }
++    if (refvar1->vt == refvar2->vt)
++    {
++        if (refvar1->vt == VT_BSTR)
++            return lstrcmpW(V_BSTR(refvar1), V_BSTR(refvar2));
++    }
++    else
++    {
++        /* this doesn't make a lot of sense either */
++        if (convert1 && refvar2->vt == VT_BSTR)
++            return -1;
++        if (refvar1->vt == VT_BSTR && convert2)
++            return 1;
++    }
++    /* potentially other cases here */
++    FIXME("Case not handled %s <=> %s\n", debugstr_variant(refvar1), debugstr_variant(refvar2));
+     return 0;
+ }
+ 
+diff --git a/dlls/propsys/tests/propsys.c b/dlls/propsys/tests/propsys.c
+index f5dc843ca0a..fa21349bb8b 100644
+--- a/dlls/propsys/tests/propsys.c
++++ b/dlls/propsys/tests/propsys.c
+@@ -1006,7 +1006,7 @@ static void test_VariantCompare(void)
+     VariantInit(&var2);
+ #define VARINIT(var,vt,val) V_VT(var) = VT_ ## vt; V_ ## vt(var) = (val)
+ #define VARCMP_(pvar1,pvar2,exp) res = VariantCompare(pvar1, pvar2);    \
+-    todo_wine_if(exp) ok(res == (exp), "res=%d while expecting %d\n", res, (exp))
++    ok(res == (exp), "res=%d while expecting %d\n", res, (exp))
+ #define VARCMP(vt1,val1,vt2,val2,exp)                   \
+     { VARINIT(&var1,vt1,(val1));                        \
+       VARINIT(&var2,vt2,(val2));                        \
+-- 
+GitLab
+

@@ -1,4 +1,4 @@
-From a9ec9aa94909176af5ad6bb383f3390d28e24df8 Mon Sep 17 00:00:00 2001
+From 0409904793bad9c7bc1abdf4e85d45dd22052980 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 3 Feb 2026 11:34:44 +0100
 Subject: [PATCH] win32u: Query every OpenGL functions on initialization.
@@ -9,7 +9,7 @@ Subject: [PATCH] win32u: Query every OpenGL functions on initialization.
  2 files changed, 11 insertions(+), 44 deletions(-)
 
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index 452af04b22f..01ce51ca99f 100644
+index 37675d7658e..6493c9e2ecd 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -840,17 +840,17 @@ PROC wrap_wglGetProcAddress( TEB *teb, LPCSTR name )
@@ -52,7 +52,7 @@ index 452af04b22f..01ce51ca99f 100644
      funcs->p_glGetIntegerv( GL_NUM_DEVICE_UUIDS_EXT, &uuid_count );
      for (i = 0; i < uuid_count; i++)
      {
-@@ -2148,37 +2139,29 @@ NTSTATUS return_wow64_string( const void *str, PTR32 *wow64_str )
+@@ -2153,37 +2144,29 @@ NTSTATUS return_wow64_string( const void *str, PTR32 *wow64_str )
  static GLint get_buffer_param( TEB *teb, GLenum target, GLenum param )
  {
      const struct opengl_funcs *funcs = teb->glTable;
@@ -95,10 +95,10 @@ index 452af04b22f..01ce51ca99f 100644
  
  static GLuint get_target_name( TEB *teb, GLenum target )
 diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
-index 6bc4e363633..c30fd88b7e7 100644
+index b2ad2c647e7..7bbca1a53fa 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -2666,23 +2666,7 @@ static void display_funcs_init(void)
+@@ -2682,23 +2682,7 @@ static void display_funcs_init(void)
      if (!display_funcs.p_##func && !(display_funcs.p_##func = driver_funcs->p_get_proc_address( #func ))) \
          WARN( "%s not found.\n", #func );
      ALL_GL_FUNCS

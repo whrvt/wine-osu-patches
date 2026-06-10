@@ -1,0 +1,25 @@
+From a48fa61cfd000fff0f548fd9f334b27a66053700 Mon Sep 17 00:00:00 2001
+From: Eric Pouech <epouech@codeweavers.com>
+Date: Wed, 25 Feb 2026 15:28:54 +0100
+Subject: [PATCH] include: Add definition for VariantCompare in propvarutil.h
+
+Signed-off-by: Eric Pouech <epouech@codeweavers.com>
+---
+ include/propvarutil.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/propvarutil.h b/include/propvarutil.h
+index 003a4f761a8..dae95152b08 100644
+--- a/include/propvarutil.h
++++ b/include/propvarutil.h
+@@ -118,6 +118,7 @@ PSSTDAPI PropVariantToString(REFPROPVARIANT propvarIn, PWSTR ret, UINT cch);
+ PSSTDAPI_(PCWSTR) PropVariantToStringWithDefault(REFPROPVARIANT propvarIn, LPCWSTR pszDefault);
+ PSSTDAPI_(PCWSTR) VariantToStringWithDefault(const VARIANT *pvar, LPCWSTR pszDefault);
+ PSSTDAPI VariantToString(REFVARIANT var, PWSTR ret, UINT cch);
++PSSTDAPI_(INT) VariantCompare(REFVARIANT var1, REFVARIANT var2);
+ 
+ PSSTDAPI PropVariantToStringAlloc(REFPROPVARIANT propvarIn, WCHAR **ret);
+ 
+-- 
+GitLab
+

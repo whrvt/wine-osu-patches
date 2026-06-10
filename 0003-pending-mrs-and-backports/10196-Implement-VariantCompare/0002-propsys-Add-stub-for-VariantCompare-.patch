@@ -1,0 +1,44 @@
+From d596de9f972116277284131f8d55019050f5ca47 Mon Sep 17 00:00:00 2001
+From: Eric Pouech <epouech@codeweavers.com>
+Date: Thu, 26 Feb 2026 08:51:50 +0100
+Subject: [PATCH] propsys: Add stub for VariantCompare().
+
+Signed-off-by: Eric Pouech <epouech@codeweavers.com>
+---
+ dlls/propsys/propsys.spec | 2 +-
+ dlls/propsys/propvar.c    | 6 ++++++
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/propsys/propsys.spec b/dlls/propsys/propsys.spec
+index 28245452f6f..670f7282041 100644
+--- a/dlls/propsys/propsys.spec
++++ b/dlls/propsys/propsys.spec
+@@ -153,7 +153,7 @@
+ @ stdcall PropVariantToVariant(ptr ptr)
+ @ stub StgDeserializePropVariant
+ @ stub StgSerializePropVariant
+-@ stub VariantCompare
++@ stdcall VariantCompare(ptr ptr)
+ @ stub VariantGetBooleanElem
+ @ stub VariantGetDoubleElem
+ @ stub VariantGetElementCount
+diff --git a/dlls/propsys/propvar.c b/dlls/propsys/propvar.c
+index 7a1ee5fd876..f01ca59af69 100644
+--- a/dlls/propsys/propvar.c
++++ b/dlls/propsys/propvar.c
+@@ -1164,6 +1164,12 @@ INT WINAPI PropVariantCompareEx(REFPROPVARIANT propvar1, REFPROPVARIANT propvar2
+     return res;
+ }
+ 
++INT WINAPI VariantCompare(REFVARIANT refvar1, REFVARIANT refvar2)
++{
++    FIXME("%s %s: stub!\n", debugstr_variant(refvar1), debugstr_variant(refvar2));
++    return 0;
++}
++
+ HRESULT WINAPI PropVariantToVariant(const PROPVARIANT *propvar, VARIANT *var)
+ {
+     HRESULT hr = S_OK;
+-- 
+GitLab
+

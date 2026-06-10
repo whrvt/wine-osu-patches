@@ -118,9 +118,9 @@ index 514ad218274..250638f868f 100644
  #elif defined(__x86_64__)
  
 @@ -12178,6 +12268,7 @@ START_TEST(exception)
-     test_single_step_address();
      test_base_init_thunk_unwind();
      test_backtrace_without_runtime_function();
+     test_set_context_mxcsr();
 +    test_eflags_sanitization();
  
  #elif defined(__aarch64__)

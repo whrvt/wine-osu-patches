@@ -12,14 +12,14 @@ index 96e5fe2487e..ebf774a5dfc 100644
 --- a/dlls/dsound/dsound_main.c
 +++ b/dlls/dsound/dsound_main.c
 @@ -82,7 +82,7 @@ GUID *DSOUND_capture_guids;
- const WCHAR wine_vxd_drv[] = L"winemm.vxd";
+ GUID *DSOUND_capture_guids;
  
  /* All default settings, you most likely don't want to touch these, see wiki on UsefulRegistryKeys */
 -int ds_hel_buflen = 32768 * 2;
 +int ds_hel_buflen = 4096 * 2;
- int ds_hq_buffers_max = 4;
  
  /*
+  * Get a config key from either the app-specific or the default config
 -- 
 2.49.0
 

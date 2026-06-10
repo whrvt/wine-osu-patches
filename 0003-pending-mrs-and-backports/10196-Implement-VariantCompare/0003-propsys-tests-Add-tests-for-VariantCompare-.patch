@@ -1,0 +1,461 @@
+From 7d7d5e63814824a53c0637fd63ad189e47d7dc3a Mon Sep 17 00:00:00 2001
+From: Eric Pouech <epouech@codeweavers.com>
+Date: Wed, 25 Feb 2026 15:29:17 +0100
+Subject: [PATCH] propsys/tests: Add tests for VariantCompare().
+
+Signed-off-by: Eric Pouech <epouech@codeweavers.com>
+---
+ dlls/propsys/tests/propsys.c | 423 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 423 insertions(+)
+
+diff --git a/dlls/propsys/tests/propsys.c b/dlls/propsys/tests/propsys.c
+index 17c9e87d7ef..f5dc843ca0a 100644
+--- a/dlls/propsys/tests/propsys.c
++++ b/dlls/propsys/tests/propsys.c
+@@ -34,6 +34,8 @@
+ #include "strsafe.h"
+ #include "propkey.h"
+ #include "wine/test.h"
++#include "intsafe.h"
++#include "float.h"
+ 
+ DEFINE_GUID(GUID_NULL,0,0,0,0,0,0,0,0,0,0,0);
+ DEFINE_GUID(dummy_guid, 0xdeadbeef, 0xdead, 0xbeef, 0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe);
+@@ -977,6 +979,426 @@ static void test_PropVariantCompareEx(void)
+     SysFreeString(str_b.bstrVal);
+ }
+ 
++static void test_VariantCompare(void)
++{
++    VARIANT emptyarray;
++    VARIANT var1, var2;
++    INT res;
++    BSTR bstr_def = SysAllocString(L"66"); /* must match C_DEF value below */
++    BSTR bstr_0def = SysAllocString(L"066");
++    BSTR bstr_bbb = SysAllocString(L"bbb");
++    SAFEARRAY emptysafearray;
++
++    ok(bstr_def && bstr_0def && bstr_bbb, "Allocation failed\n");
++    VariantInit(&emptyarray);
++
++    emptyarray.vt = VT_ARRAY | VT_I4;
++    emptyarray.parray = &emptysafearray;
++    emptysafearray.cDims = 1;
++    emptysafearray.fFeatures = FADF_FIXEDSIZE;
++    emptysafearray.cbElements = 4;
++    emptysafearray.cLocks = 0;
++    emptysafearray.pvData = NULL;
++    emptysafearray.rgsabound[0].cElements = 0;
++    emptysafearray.rgsabound[0].lLbound = 0;
++
++    VariantInit(&var1);
++    VariantInit(&var2);
++#define VARINIT(var,vt,val) V_VT(var) = VT_ ## vt; V_ ## vt(var) = (val)
++#define VARCMP_(pvar1,pvar2,exp) res = VariantCompare(pvar1, pvar2);    \
++    todo_wine_if(exp) ok(res == (exp), "res=%d while expecting %d\n", res, (exp))
++#define VARCMP(vt1,val1,vt2,val2,exp)                   \
++    { VARINIT(&var1,vt1,(val1));                        \
++      VARINIT(&var2,vt2,(val2));                        \
++      VARCMP_(&var1,&var2,(exp)); }
++
++    /* default values, that should be usable for all integral & float types */
++#define C_DEF  (2*33)
++#define C_SBLW (-33)
++#define C_UBLW (33)
++#define C_ABV  (3*33)
++
++    var1.vt = VT_EMPTY; var2.vt = VT_EMPTY;
++    VARCMP_(&var1, &var2,0);
++    var1.vt = VT_EMPTY; var2.vt = VT_NULL;
++    VARCMP_(&var1, &var2,0);
++    var1.vt = VT_NULL; var2.vt = VT_EMPTY;
++    VARCMP_(&var1, &var2,0);
++    var1.vt = VT_NULL; var2.vt = VT_NULL;
++    VARCMP_(&var1, &var2,0);
++
++    VARINIT(&var2,I4,C_DEF);
++    var1.vt = VT_EMPTY;
++    VARCMP_(&var1, &var2,-1);
++    var1.vt = VT_NULL;
++    VARCMP_(&var1, &var2,-1);
++    VARCMP_(&emptyarray,&var2,0);
++
++    VARINIT(&var1,I4,C_DEF);
++    var2.vt = VT_EMPTY;
++    VARCMP_(&var1, &var2,1);
++    var2.vt = VT_NULL;
++    VARCMP_(&var1, &var2,1);
++    VARCMP_(&var1,&emptyarray,0);
++
++    /* regular values */
++    VARCMP(I1,C_DEF,I1,C_DEF,0);
++    VARCMP(I1,C_DEF,I1,C_SBLW,1);
++    VARCMP(I1,C_SBLW,I1,C_DEF,-1);
++    VARCMP(I1,C_DEF,I1,C_ABV,-1);
++    VARCMP(I1,C_ABV,I1,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(I1,C_DEF,I1,INT8_MIN,1);
++    VARCMP(I1,C_DEF,I1,INT8_MAX,-1);
++    VARCMP(I1,INT8_MIN,I1,C_DEF,-1);
++    VARCMP(I1,INT8_MAX,I1,C_DEF,1);
++
++    VARCMP(I1,INT8_MIN,I1,INT8_MAX,-1);
++    VARCMP(I1,INT8_MAX,I1,INT8_MIN,1);
++
++    /* limit / beyond limit in larger integer */
++    VARCMP(I1,INT8_MIN,I2,INT8_MIN-1,0);
++    VARCMP(I1,INT8_MIN,I4,INT8_MIN-1,0);
++    VARCMP(I1,INT8_MIN,I8,INT8_MIN-1,0);
++    VARCMP(I1,INT8_MIN,R4,INT8_MIN-1,0);
++    VARCMP(I1,INT8_MIN,R8,INT8_MIN-1,0);
++    VARCMP(I2,INT8_MIN-1,I1,INT8_MIN,0);
++    VARCMP(I1,INT8_MAX,I2,INT8_MAX+1,0);
++    VARCMP(I1,INT8_MAX,I4,INT8_MAX+1,0);
++    VARCMP(I1,INT8_MAX,I8,INT8_MAX+1,0);
++    VARCMP(I1,INT8_MAX,R4,INT8_MAX+1,0);
++    VARCMP(I1,INT8_MAX,R8,INT8_MAX+1,0);
++    VARCMP(I2,INT8_MAX+1,I1,INT8_MAX,0);
++
++    /* regular values */
++    VARCMP(I2,C_DEF,I2,C_DEF,0);
++    VARCMP(I2,C_DEF,I2,C_SBLW,1);
++    VARCMP(I2,C_SBLW,I2,C_DEF,-1);
++    VARCMP(I2,C_DEF,I2,C_ABV,-1);
++    VARCMP(I2,C_ABV,I2,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(I2,C_DEF,I2,INT16_MIN,1);
++    VARCMP(I2,C_DEF,I2,INT16_MAX,-1);
++    VARCMP(I2,INT16_MIN,I2,C_DEF,-1);
++    VARCMP(I2,INT16_MAX,I2,C_DEF,1);
++
++    VARCMP(I2,INT16_MIN,I2,INT16_MAX,-1);
++    VARCMP(I2,INT16_MAX,I2,INT16_MIN,1);
++
++    /* limit / beyond limit in larger integer */
++    VARCMP(I2,INT16_MIN,I4,INT16_MIN-1,1);
++    VARCMP(I4,INT16_MIN-1,I2,INT16_MIN,-1);
++
++    VARCMP(I2,INT16_MAX,I4,INT16_MAX+1,-1);
++    VARCMP(I4,INT16_MAX+1,I2,INT16_MAX,1);
++
++    /* regular values */
++    VARCMP(I4,C_DEF,I4,C_DEF,0);
++    VARCMP(I4,C_DEF,I4,C_SBLW,1);
++    VARCMP(I4,C_SBLW,I4,C_DEF,-1);
++    VARCMP(I4,C_DEF,I4,C_ABV,-1);
++    VARCMP(I4,C_ABV,I4,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(I4,C_DEF,I4,INT32_MIN,1);
++    VARCMP(I4,C_DEF,I4,INT32_MAX,-1);
++    VARCMP(I4,INT32_MIN,I4,C_DEF,-1);
++    VARCMP(I4,INT32_MAX,I4,C_DEF,1);
++
++    VARCMP(I4,INT32_MIN,I4,INT32_MAX,-1);
++    VARCMP(I4,INT32_MAX,I4,INT32_MIN,1);
++
++    /* limit / beyond limit in larger integer */
++    VARCMP(I4,INT32_MIN,I8,(LONG64)INT32_MIN-1,1);
++    VARCMP(I8,(LONG64)INT32_MIN-1,I4,INT32_MIN,-1);
++
++    VARCMP(I4,INT32_MAX,I8,(LONG64)INT32_MAX+1,-1);
++    VARCMP(I8,(LONG64)INT32_MAX+1,I4,INT32_MAX,1);
++
++    /* regular values */
++    VARCMP(I8,C_DEF,I8,C_DEF,0);
++    VARCMP(I8,C_DEF,I8,C_SBLW,1);
++    VARCMP(I8,C_SBLW,I8,C_DEF,-1);
++    VARCMP(I8,C_DEF,I8,C_ABV,-1);
++    VARCMP(I8,C_ABV,I8,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(I8,C_DEF,I8,INT64_MIN,1);
++    VARCMP(I8,C_DEF,I8,INT64_MAX,-1);
++    VARCMP(I8,INT64_MIN,I8,C_DEF,-1);
++    VARCMP(I8,INT64_MAX,I8,C_DEF,1);
++
++    VARCMP(I8,INT64_MIN,I8,INT64_MAX,-1);
++    VARCMP(I8,INT64_MAX,I8,INT64_MIN,1);
++
++    /* regular values */
++    VARCMP(R4,C_DEF,R4,C_DEF,0);
++    VARCMP(R4,C_DEF,R4,C_SBLW,1);
++    VARCMP(R4,C_SBLW,R4,C_DEF,-1);
++    VARCMP(R4,C_DEF,R4,C_ABV,-1);
++    VARCMP(R4,C_ABV,R4,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(R4,C_DEF,R4,-FLT_MAX,1);
++    VARCMP(R4,C_DEF,R4,FLT_MAX,-1);
++    VARCMP(R4,-FLT_MAX,R4,C_DEF,-1);
++    VARCMP(R4,FLT_MAX,R4,C_DEF,1);
++
++    VARCMP(R4,-FLT_MAX,R4,FLT_MAX,-1);
++    VARCMP(R4,FLT_MAX,R4,-FLT_MAX,1);
++
++    /* limit / beyond limit in larger float */
++    VARCMP(R4,-FLT_MAX,R8,-2.*FLT_MAX,1);
++    VARCMP(R8,-2.*FLT_MAX,R4,-FLT_MAX,-1);
++
++    VARCMP(R4,FLT_MAX,R8,2.*FLT_MAX,-1);
++    VARCMP(R8,2.*FLT_MAX,R4,FLT_MAX,1);
++
++    /* regular values */
++    VARCMP(R8,C_DEF,R8,C_DEF,0);
++    VARCMP(R8,C_DEF,R8,C_SBLW,1);
++    VARCMP(R8,C_SBLW,R8,C_DEF,-1);
++    VARCMP(R8,C_DEF,R8,C_ABV,-1);
++    VARCMP(R8,C_ABV,R8,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(R8,C_DEF,R8,-DBL_MAX,1);
++    VARCMP(R8,C_DEF,R8,DBL_MAX,-1);
++    VARCMP(R8,-DBL_MAX,R8,C_DEF,-1);
++    VARCMP(R8,DBL_MAX,R8,C_DEF,1);
++
++    VARCMP(R8,-DBL_MAX,R8,DBL_MAX,-1);
++    VARCMP(R8,DBL_MAX,R8,-DBL_MAX,1);
++
++    /* some more int <> float tests */
++    VARCMP(I4,C_DEF,R4,C_DEF,0);
++    VARCMP(I4,C_DEF,R4,C_SBLW,1);
++    VARCMP(I4,C_SBLW,R4,C_DEF,-1);
++    VARCMP(I4,C_DEF,R4,C_ABV,-1);
++    VARCMP(I4,C_ABV,R4,C_DEF,1);
++
++    VARCMP(R4,C_DEF,I4,C_DEF,0);
++    VARCMP(R4,C_DEF,I4,C_SBLW,1);
++    VARCMP(R4,C_SBLW,I4,C_DEF,-1);
++    VARCMP(R4,C_DEF,I4,C_ABV,-1);
++    VARCMP(I4,C_ABV,R4,C_DEF,1);
++
++    VARCMP(I4,C_DEF,R8,C_DEF,0);
++    VARCMP(I4,C_DEF,R8,C_SBLW,1);
++    VARCMP(I4,C_SBLW,R8,C_DEF,-1);
++    VARCMP(I4,C_DEF,R8,C_ABV,-1);
++    VARCMP(I4,C_ABV,R8,C_DEF,1);
++
++    VARCMP(R8,C_DEF,I4,C_DEF,0);
++    VARCMP(R8,C_DEF,I4,C_SBLW,1);
++    VARCMP(R8,C_SBLW,I4,C_DEF,-1);
++    VARCMP(R8,C_DEF,I4,C_ABV,-1);
++    VARCMP(R8,C_ABV,I4,C_DEF,1);
++
++    VARCMP(I4,C_DEF,R4,C_DEF+.1f,-1);
++    VARCMP(R4,C_DEF+.1f,I4,C_DEF,1);
++    VARCMP(I4,C_DEF,R8,C_DEF+.1,-1);
++    VARCMP(R8,C_DEF+.1,I4,C_DEF,1);
++
++    /* regular values */
++    VARCMP(UI1,C_DEF,UI1,C_DEF,0);
++    VARCMP(UI1,C_DEF,UI1,C_UBLW,1);
++    VARCMP(UI1,C_UBLW,UI1,C_DEF,-1);
++    VARCMP(UI1,C_DEF,UI1,C_ABV,-1);
++    VARCMP(UI1,C_ABV,UI1,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(UI1,C_DEF,UI1,0,1);
++    VARCMP(UI1,C_DEF,UI1,UINT8_MAX,-1);
++    VARCMP(UI1,0,UI1,C_DEF,-1);
++    VARCMP(UI1,UINT8_MAX,UI1,C_DEF,1);
++
++    VARCMP(UI1,0,UI1,UINT8_MAX,-1);
++    VARCMP(UI1,UINT8_MAX,UI1,0,1);
++
++    /* limit / beyond limit in larger integer */
++    VARCMP(UI1,0,R4,-1,1);
++    VARCMP(UI1,0,R8,-1,1);
++    VARCMP(UI1,UINT8_MAX,UI2,UINT8_MAX+1,-1);
++    VARCMP(UI1,UINT8_MAX,UI4,UINT8_MAX+1,-1);
++    VARCMP(UI1,UINT8_MAX,UI8,UINT8_MAX+1,-1);
++    VARCMP(UI1,UINT8_MAX,R4,UINT8_MAX+1,-1);
++    VARCMP(UI1,UINT8_MAX,R8,UINT8_MAX+1,-1);
++    VARCMP(UI2,UINT8_MAX+1,UI1,UINT8_MAX,1);
++
++    /* regular values */
++    VARCMP(UI2,C_DEF,UI2,C_DEF,0);
++    VARCMP(UI2,C_DEF,UI2,C_UBLW,1);
++    VARCMP(UI2,C_UBLW,UI2,C_DEF,-1);
++    VARCMP(UI2,C_DEF,UI2,C_ABV,-1);
++    VARCMP(UI2,C_ABV,UI2,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(UI2,C_DEF,UI2,0,1);
++    VARCMP(UI2,C_DEF,UI2,UINT16_MAX,-1);
++    VARCMP(UI2,0,UI2,C_DEF,-1);
++    VARCMP(UI2,UINT16_MAX,UI2,C_DEF,1);
++
++    VARCMP(UI2,0,UI2,UINT16_MAX,-1);
++    VARCMP(UI2,UINT16_MAX,UI2,0,1);
++
++    /* limit / beyond limit in larger integer */
++    VARCMP(UI2,UINT16_MAX,UI4,UINT16_MAX+1,-1);
++    VARCMP(UI4,UINT16_MAX+1,UI2,UINT16_MAX,1);
++
++    /* regular values */
++    VARCMP(UI4,C_DEF,UI4,C_DEF,0);
++    VARCMP(UI4,C_DEF,UI4,C_UBLW,1);
++    VARCMP(UI4,C_UBLW,UI4,C_DEF,-1);
++    VARCMP(UI4,C_DEF,UI4,C_ABV,-1);
++    VARCMP(UI4,C_ABV,UI4,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(UI4,C_DEF,UI4,0,1);
++    VARCMP(UI4,C_DEF,UI4,UINT32_MAX,-1);
++    VARCMP(UI4,0,UI4,C_DEF,-1);
++    VARCMP(UI4,UINT32_MAX,UI4,C_DEF,1);
++
++    VARCMP(UI4,0,UI4,UINT32_MAX,-1);
++    VARCMP(UI4,UINT32_MAX,UI4,0,1);
++
++    /* limit / beyond limit in larger integer */
++    VARCMP(UI4,UINT32_MAX,UI8,(LONG64)UINT32_MAX+1,-1);
++    VARCMP(UI8,(LONG64)UINT32_MAX+1,UI4,UINT32_MAX,1);
++
++    /* regular values */
++    VARCMP(UI8,C_DEF,UI8,C_DEF,0);
++    VARCMP(UI8,C_DEF,UI8,C_UBLW,1);
++    VARCMP(UI8,C_UBLW,UI8,C_DEF,-1);
++    VARCMP(UI8,C_DEF,UI8,C_ABV,-1);
++    VARCMP(UI8,C_ABV,UI8,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(UI8,C_DEF,UI8,0,1);
++    VARCMP(UI8,C_DEF,UI8,UINT64_MAX,-1);
++    VARCMP(UI8,0,UI8,C_DEF,-1);
++    VARCMP(UI8,UINT64_MAX,UI8,C_DEF,1);
++
++    VARCMP(UI8,0,UI8,UINT64_MAX,-1);
++    VARCMP(UI8,UINT64_MAX,UI8,0,1);
++
++    /* regular values */
++    VARCMP(R4,C_DEF,R4,C_DEF,0);
++    VARCMP(R4,C_DEF,R4,C_UBLW,1);
++    VARCMP(R4,C_UBLW,R4,C_DEF,-1);
++    VARCMP(R4,C_DEF,R4,C_ABV,-1);
++    VARCMP(R4,C_ABV,R4,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(R4,C_DEF,R4,-FLT_MAX,1);
++    VARCMP(R4,C_DEF,R4,FLT_MAX,-1);
++    VARCMP(R4,-FLT_MAX,R4,C_DEF,-1);
++    VARCMP(R4,FLT_MAX,R4,C_DEF,1);
++
++    VARCMP(R4,-FLT_MAX,R4,FLT_MAX,-1);
++    VARCMP(R4,FLT_MAX,R4,-FLT_MAX,1);
++
++    /* limit / beyond limit in larger float */
++    VARCMP(R4,-FLT_MAX,R8,-2.*FLT_MAX,1);
++    VARCMP(R8,-2.*FLT_MAX,R4,-FLT_MAX,-1);
++
++    VARCMP(R4,FLT_MAX,R8,2.*FLT_MAX,-1);
++    VARCMP(R8,2.*FLT_MAX,R4,FLT_MAX,1);
++
++    /* regular values */
++    VARCMP(R8,C_DEF,R8,C_DEF,0);
++    VARCMP(R8,C_DEF,R8,C_UBLW,1);
++    VARCMP(R8,C_UBLW,R8,C_DEF,-1);
++    VARCMP(R8,C_DEF,R8,C_ABV,-1);
++    VARCMP(R8,C_ABV,R8,C_DEF,1);
++
++    /* default + limits / limits */
++    VARCMP(R8,C_DEF,R8,-DBL_MAX,1);
++    VARCMP(R8,C_DEF,R8,DBL_MAX,-1);
++    VARCMP(R8,-DBL_MAX,R8,C_DEF,-1);
++    VARCMP(R8,DBL_MAX,R8,C_DEF,1);
++
++    VARCMP(R8,-DBL_MAX,R8,DBL_MAX,-1);
++    VARCMP(R8,DBL_MAX,R8,-DBL_MAX,1);
++
++    /* some more int <> float tests */
++    VARCMP(UI4,C_DEF,R4,C_DEF,0);
++    VARCMP(UI4,C_DEF,R4,C_UBLW,0);
++    VARCMP(UI4,C_UBLW,R4,C_DEF,0);
++    VARCMP(UI4,C_DEF,R4,C_ABV,0);
++    VARCMP(UI4,C_ABV,R4,C_DEF,0);
++
++    VARCMP(R4,C_DEF,UI4,C_DEF,0);
++    VARCMP(R4,C_DEF,UI4,C_UBLW,0);
++    VARCMP(R4,C_UBLW,UI4,C_DEF,0);
++    VARCMP(R4,C_DEF,UI4,C_ABV,0);
++    VARCMP(R4,C_ABV,UI4,C_DEF,0);
++    /* UI2 and UI8 return 0 */
++
++    VARCMP(UI4,C_DEF,R8,C_DEF,0);
++    VARCMP(UI4,C_DEF,R8,C_UBLW,1);
++    VARCMP(UI4,C_UBLW,R8,C_DEF,-1);
++    VARCMP(UI4,C_DEF,R8,C_ABV,-1);
++    VARCMP(UI4,C_ABV,R8,C_DEF,1);
++
++    VARCMP(R8,C_DEF,UI4,C_DEF,0);
++    VARCMP(R8,C_DEF,UI4,C_UBLW,1);
++    VARCMP(R8,C_UBLW,UI4,C_DEF,-1);
++    VARCMP(R8,C_DEF,UI4,C_ABV,-1);
++    VARCMP(R8,C_ABV,UI4,C_DEF,1);
++
++    VARCMP(UI4,C_DEF,R4,C_DEF+.1f,0);
++    VARCMP(R4,C_DEF+.1f,UI4,C_DEF,0);
++    VARCMP(UI4,C_DEF,R8,C_DEF+.1,-1);
++    VARCMP(R8,C_DEF+.1,UI4,C_DEF,1);
++
++    /* signed / unsigned comparisons */
++    VARCMP(I1,C_SBLW,UI1,C_DEF,0);
++    VARCMP(UI1,C_DEF,I1,C_SBLW,0);
++    VARCMP(UI1,C_DEF,I2,C_SBLW,1);
++    VARCMP(UI1,C_DEF,I4,C_SBLW,1);
++    VARCMP(UI1,C_DEF,I8,C_SBLW,1);
++    VARCMP(UI1,C_DEF,R4,C_SBLW,1);
++    VARCMP(UI1,C_DEF,R8,C_SBLW,1);
++    VARCMP(UI1,C_DEF,I1,C_UBLW,0);
++
++    VARCMP(I8,INT64_MAX,UI8,UINT64_MAX,-1);
++    VARCMP(I8,INT64_MIN,UI8,0,-1);
++    VARCMP(I8,INT64_MIN,UI8,(ULONG64)INT_MAX+1,-1);
++    VARCMP(UI8,(ULONG64)INT_MAX+1,I8,INT64_MIN,1);
++    VARCMP(UI8,UINT64_MAX,I8,INT64_MAX,1);
++    VARCMP(UI8,0,I8,INT64_MIN,1);
++
++    /* string string comparisons */
++    VARCMP(BSTR,bstr_def,BSTR,bstr_0def,1);
++    VARCMP(BSTR,bstr_0def,BSTR,bstr_def,-1);
++    VARCMP(BSTR,bstr_def,BSTR,bstr_bbb,-1);
++    VARCMP(BSTR,bstr_bbb,BSTR,bstr_def,1);
++
++    /* integer / string comparisons */
++    VARCMP(I2,C_DEF,BSTR,bstr_def,-1);
++    VARCMP(BSTR,bstr_def,I2,C_DEF,1);
++    VARCMP(I2,C_DEF,BSTR,bstr_0def,-1);
++    VARCMP(BSTR,bstr_0def,I2,C_DEF,1);
++    VARCMP(I2,C_DEF,BSTR,bstr_bbb,-1);
++    VARCMP(BSTR,bstr_bbb,I2,C_DEF,1);
++
++#undef VARCMP
++#undef VARCMP_
++#undef VARINIT
++
++#undef C_DEF
++#undef C_SBLW
++#undef C_UBLW
++#undef C_ABV
++
++    SysFreeString(bstr_def);
++    SysFreeString(bstr_0def);
++    SysFreeString(bstr_bbb);
++}
++
+ static void test_intconversions(void)
+ {
+     PROPVARIANT propvar;
+@@ -3246,6 +3668,7 @@ START_TEST(propsys)
+     test_VariantToStringWithDefault();
+     test_VariantToString();
+     test_VariantToPropVariant();
++    test_VariantCompare();
+     test_PropVariantToVariant();
+     test_PropVariantGetStringElem();
+     test_PropVariantToFileTime();
+-- 
+GitLab
+

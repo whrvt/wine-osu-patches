@@ -1,4 +1,4 @@
-From 9a28f634dd4cc585bc155c297142ea2e7ec2b4df Mon Sep 17 00:00:00 2001
+From fb7b12bb7fb2c512aafa5a06e787d944fb060f33 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Thu, 5 Feb 2026 11:30:25 +0100
 Subject: [PATCH] opengl32: Remove now unused wgl pixel format unix thunks.
@@ -11,7 +11,7 @@ Subject: [PATCH] opengl32: Remove now unused wgl pixel format unix thunks.
  4 files changed, 3 insertions(+), 176 deletions(-)
 
 diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
-index 99b5325bb0a..a78ccce005b 100755
+index 1a5d788c89a..45cb47ccd11 100755
 --- a/dlls/opengl32/make_opengl
 +++ b/dlls/opengl32/make_opengl
 @@ -147,6 +147,7 @@ my %manual_win_functions =
@@ -48,10 +48,10 @@ index 99b5325bb0a..a78ccce005b 100755
       "wglMakeContextCurrentARB" => 1,
       "wglMakeCurrent" => 1,
 diff --git a/dlls/opengl32/unix_thunks.c b/dlls/opengl32/unix_thunks.c
-index 7b3774e0613..d4dca9dbd47 100644
+index ce8520c60e5..ae6dd237e75 100644
 --- a/dlls/opengl32/unix_thunks.c
 +++ b/dlls/opengl32/unix_thunks.c
-@@ -30340,15 +30340,6 @@ static NTSTATUS ext_wglBindTexImageARB( void *args )
+@@ -30363,15 +30363,6 @@ static NTSTATUS ext_wglBindTexImageARB( void *args )
      return STATUS_SUCCESS;
  }
  
@@ -67,7 +67,7 @@ index 7b3774e0613..d4dca9dbd47 100644
  static NTSTATUS ext_wglCreateContextAttribsARB( void *args )
  {
      struct wglCreateContextAttribsARB_params *params = args;
-@@ -30394,24 +30385,6 @@ static NTSTATUS ext_wglGetPbufferDCARB( void *args )
+@@ -30417,24 +30408,6 @@ static NTSTATUS ext_wglGetPbufferDCARB( void *args )
      return STATUS_SUCCESS;
  }
  
@@ -92,7 +92,7 @@ index 7b3774e0613..d4dca9dbd47 100644
  static NTSTATUS ext_wglGetSwapIntervalEXT( void *args )
  {
      struct wglGetSwapIntervalEXT_params *params = args;
-@@ -33604,14 +33577,11 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+@@ -33627,14 +33600,11 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      ext_glWriteMaskEXT,
      ext_wglAllocateMemoryNV,
      ext_wglBindTexImageARB,
@@ -107,7 +107,7 @@ index 7b3774e0613..d4dca9dbd47 100644
      ext_wglGetSwapIntervalEXT,
      ext_wglMakeContextCurrentARB,
      ext_wglQueryCurrentRendererIntegerWINE,
-@@ -86574,25 +86544,6 @@ static NTSTATUS wow64_ext_wglBindTexImageARB( void *args )
+@@ -86620,25 +86590,6 @@ static NTSTATUS wow64_ext_wglBindTexImageARB( void *args )
      return STATUS_SUCCESS;
  }
  
@@ -133,7 +133,7 @@ index 7b3774e0613..d4dca9dbd47 100644
  static NTSTATUS wow64_ext_wglCreateContextAttribsARB( void *args )
  {
      struct
-@@ -86670,44 +86621,6 @@ static NTSTATUS wow64_ext_wglGetPbufferDCARB( void *args )
+@@ -86716,44 +86667,6 @@ static NTSTATUS wow64_ext_wglGetPbufferDCARB( void *args )
      return STATUS_SUCCESS;
  }
  
@@ -178,7 +178,7 @@ index 7b3774e0613..d4dca9dbd47 100644
  static NTSTATUS wow64_ext_wglGetSwapIntervalEXT( void *args )
  {
      struct
-@@ -89981,14 +89894,11 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+@@ -90027,14 +89940,11 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
      wow64_ext_glWriteMaskEXT,
      wow64_ext_wglAllocateMemoryNV,
      wow64_ext_wglBindTexImageARB,
@@ -263,7 +263,7 @@ index a41771ea362..09340fce5d6 100644
      unix_wglMakeContextCurrentARB,
      unix_wglQueryCurrentRendererIntegerWINE,
 diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
-index ee8384bc658..e8fb929f127 100644
+index d550304fa74..78dc09f1b83 100644
 --- a/dlls/opengl32/wgl.c
 +++ b/dlls/opengl32/wgl.c
 @@ -1093,28 +1093,6 @@ BOOL WINAPI wglChoosePixelFormatARB( HDC hdc, const int *attribs_int, const FLOA

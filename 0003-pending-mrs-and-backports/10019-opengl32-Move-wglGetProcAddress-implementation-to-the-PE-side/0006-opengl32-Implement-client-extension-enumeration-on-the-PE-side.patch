@@ -1,23 +1,25 @@
-From 1b251874d03d4b7b61ae2632fa0c8c0d140368e5 Mon Sep 17 00:00:00 2001
+From eb35ff15f2750a9e5f86927190063ae2e7cadc7b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
-Date: Tue, 3 Feb 2026 11:22:53 +0100
+Date: Tue, 10 Feb 2026 10:22:05 +0100
 Subject: [PATCH] opengl32: Implement client extension enumeration on the PE
  side.
 
 ---
  dlls/opengl32/make_opengl    |  1 -
+ dlls/opengl32/tests/opengl.c | 34 ++++++++++----
  dlls/opengl32/unix_thunks.c  |  4 +-
  dlls/opengl32/unix_thunks.h  |  1 -
  dlls/opengl32/unix_wgl.c     | 86 +++---------------------------------
- dlls/opengl32/wgl.c          | 66 +++++++++++++++++++++++++++
+ dlls/opengl32/wgl.c          | 75 +++++++++++++++++++++++++++++++
+ dlls/win32u/tests/d3dkmt.c   |  7 ++-
  include/wine/opengl_driver.h |  2 +
- 6 files changed, 77 insertions(+), 83 deletions(-)
+ 8 files changed, 117 insertions(+), 93 deletions(-)
 
 diff --git a/dlls/opengl32/make_opengl b/dlls/opengl32/make_opengl
-index dbdfb3ecbf7..79e493f3871 100755
+index 9fc362f9ebe..d9a1228256a 100755
 --- a/dlls/opengl32/make_opengl
 +++ b/dlls/opengl32/make_opengl
-@@ -214,7 +214,6 @@ my %manual_unix_thunks =
+@@ -218,7 +218,6 @@ my %manual_unix_thunks =
       "glGetInteger64v" => 1,
       "glGetIntegerv" => 1,
       "glGetString" => 1,
@@ -25,11 +27,99 @@ index dbdfb3ecbf7..79e493f3871 100755
       "glGetUnsignedBytevEXT" => 1,
       "glImportSyncEXT" => 1,
       "glNamedFramebufferDrawBuffer" => 1,
+diff --git a/dlls/opengl32/tests/opengl.c b/dlls/opengl32/tests/opengl.c
+index 107dfc3f9ff..9fb9f90e389 100644
+--- a/dlls/opengl32/tests/opengl.c
++++ b/dlls/opengl32/tests/opengl.c
+@@ -58,6 +58,13 @@ static const char *debugstr_ok( const char *cond )
+     } while (0)
+ #define ok_ret( e, r )      ok_ex( r, ==, e, UINT, "%#x" )
+ 
++#define check_gl_error(exp) check_gl_error_(__LINE__, exp)
++static void check_gl_error_( unsigned int line, GLenum exp )
++{
++    GLenum err = glGetError();
++    ok_(__FILE__,line)( err == exp, "glGetError returned %x, expected %x\n", err, exp );
++}
++
+ static NTSTATUS (WINAPI *pD3DKMTCreateDCFromMemory)( D3DKMT_CREATEDCFROMMEMORY *desc );
+ static NTSTATUS (WINAPI *pD3DKMTDestroyDCFromMemory)( const D3DKMT_DESTROYDCFROMMEMORY *desc );
+ 
+@@ -109,11 +116,12 @@ static PFN_glCopyNamedBufferSubData pglCopyNamedBufferSubData;
+ static PFN_glCreateBuffers pglCreateBuffers;
+ static PFN_glDeleteBuffers pglDeleteBuffers;
+ static PFN_glDeleteSync pglDeleteSync;
++static PFN_glFenceSync pglFenceSync;
+ static PFN_glFlushMappedBufferRange pglFlushMappedBufferRange;
+ static PFN_glFlushMappedNamedBufferRange pglFlushMappedNamedBufferRange;
+ static PFN_glGenBuffers pglGenBuffers;
++static PFN_glGetStringi pglGetStringi;
+ static PFN_glIsSync pglIsSync;
+-static PFN_glFenceSync pglFenceSync;
+ static PFN_glMapBuffer pglMapBuffer;
+ static PFN_glMapBufferRange pglMapBufferRange;
+ static PFN_glMapNamedBuffer pglMapNamedBuffer;
+@@ -197,11 +205,12 @@ static void init_functions(void)
+     GET_PROC(glCreateBuffers)
+     GET_PROC(glDeleteBuffers)
+     GET_PROC(glDeleteSync)
++    GET_PROC(glFenceSync)
+     GET_PROC(glFlushMappedBufferRange)
+     GET_PROC(glFlushMappedNamedBufferRange)
+     GET_PROC(glGenBuffers)
++    GET_PROC(glGetStringi)
+     GET_PROC(glIsSync)
+-    GET_PROC(glFenceSync)
+     GET_PROC(glMapBuffer)
+     GET_PROC(glMapBufferRange)
+     GET_PROC(glMapNamedBuffer)
+@@ -2388,6 +2397,8 @@ static void test_opengl3(HDC hdc)
+     {
+         int attribs[] = {WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 0, 0};
+         HGLRC gl3Ctx = pwglCreateContextAttribsARB(hdc, 0, attribs);
++        const GLubyte *ext;
++        GLint num;
+ 
+         if(gl3Ctx == NULL)
+         {
+@@ -2395,6 +2406,18 @@ static void test_opengl3(HDC hdc)
+             return;
+         }
+ 
++        wglMakeCurrent(hdc, gl3Ctx);
++
++        glGetIntegerv(GL_NUM_EXTENSIONS, &num);
++        ok(num > 0, "got %u\n", num);
++        check_gl_error(0);
++        ext = pglGetStringi(GL_EXTENSIONS, 0);
++        ok(!!ext, "got %p\n", ext);
++        check_gl_error(0);
++        ext = pglGetStringi(GL_EXTENSIONS, num);
++        ok(!ext, "got %p\n", ext);
++        check_gl_error(GL_INVALID_VALUE);
++
+         wglDeleteContext(gl3Ctx);
+     }
+ 
+@@ -3535,13 +3558,6 @@ static void test_child_window(HWND hwnd, PIXELFORMATDESCRIPTOR *pfd)
+     DestroyWindow(child);
+ }
+ 
+-#define check_gl_error(exp) check_gl_error_(__LINE__, exp)
+-static void check_gl_error_( unsigned int line, GLenum exp )
+-{
+-    GLenum err = glGetError();
+-    ok_(__FILE__,line)( err == exp, "glGetError returned %x, expected %x\n", err, exp );
+-}
+-
+ static void test_gl_error( HDC hdc )
+ {
+     HGLRC rc, old_rc;
 diff --git a/dlls/opengl32/unix_thunks.c b/dlls/opengl32/unix_thunks.c
-index d4dca9dbd47..3660a55d16e 100644
+index ae6dd237e75..f7656b811d4 100644
 --- a/dlls/opengl32/unix_thunks.c
 +++ b/dlls/opengl32/unix_thunks.c
-@@ -12301,7 +12301,7 @@ static NTSTATUS ext_glGetStringi( void *args )
+@@ -12316,7 +12316,7 @@ static NTSTATUS ext_glGetStringi( void *args )
      struct glGetStringi_params *params = args;
      const struct opengl_funcs *funcs = params->teb->glTable;
      if (!funcs->p_glGetStringi) return STATUS_NOT_IMPLEMENTED;
@@ -38,7 +128,7 @@ index d4dca9dbd47..3660a55d16e 100644
      return STATUS_SUCCESS;
  }
  
-@@ -55009,7 +55009,7 @@ static NTSTATUS wow64_ext_glGetStringi( void *args )
+@@ -55047,7 +55047,7 @@ static NTSTATUS wow64_ext_glGetStringi( void *args )
      const GLubyte *ret;
      const struct opengl_funcs *funcs = teb->glTable;
      if (!funcs->p_glGetStringi) return STATUS_NOT_IMPLEMENTED;
@@ -60,7 +150,7 @@ index 2c0824e0268..a86626520f4 100644
  extern GLsync wrap_glImportSyncEXT( TEB *teb, GLenum external_sync_type, GLintptr external_sync, GLbitfield flags, GLsync handle );
  extern void wrap_glNamedFramebufferDrawBuffer( TEB *teb, GLuint framebuffer, GLenum buf );
 diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
-index d2f0312ad97..452af04b22f 100644
+index be427edeb41..37675d7658e 100644
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
 @@ -653,61 +653,6 @@ static BOOL is_extension_supported( struct context *ctx, const char *extension )
@@ -169,15 +259,15 @@ index d2f0312ad97..452af04b22f 100644
  static int registry_entry_cmp( const void *a, const void *b )
  {
      const struct registry_entry *entry_a = a, *entry_b = b;
-@@ -1236,6 +1158,7 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
-     DWORD tid = HandleToULong(teb->ClientId.UniqueThread);
+@@ -1237,6 +1159,7 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
      size_t size = ARRAYSIZE(legacy_extensions) - 1, count = 0;
-     const char *version, *rest = "", **extensions, *compat;
+     const char *version, *compat, *rest = "", **extensions;
+     GLint profile = GL_CONTEXT_COMPATIBILITY_PROFILE_BIT;
 +    USHORT *ptr;
-     GLint num;
      int i, j;
  
-@@ -1381,7 +1304,12 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
+     static const char *disabled, *enabled;
+@@ -1380,7 +1303,12 @@ static void make_context_current( TEB *teb, const struct opengl_funcs *funcs, HD
          ctx->extension_count = j;
      }
  
@@ -192,7 +282,7 @@ index d2f0312ad97..452af04b22f 100644
  
  BOOL wrap_wglMakeCurrent( TEB *teb, HDC hdc, HGLRC client_context )
 diff --git a/dlls/opengl32/wgl.c b/dlls/opengl32/wgl.c
-index d781eedfbfa..c8e2f858482 100644
+index aa2ca8da2d6..3112e5fae1c 100644
 --- a/dlls/opengl32/wgl.c
 +++ b/dlls/opengl32/wgl.c
 @@ -277,6 +277,7 @@ struct context
@@ -211,31 +301,52 @@ index d781eedfbfa..c8e2f858482 100644
      free( context );
  }
  
-@@ -2010,6 +2012,19 @@ void WINAPI glGetIntegerv( GLenum name, GLint *data )
+@@ -1992,6 +1994,29 @@ GLsync WINAPI glImportSyncEXT( GLenum external_sync_type, GLintptr external_sync
+     return NULL;
+ }
+ 
++static const enum opengl_extension legacy_extensions[] =
++{
++    WGL_EXT_extensions_string,
++    WGL_EXT_swap_control,
++};
++
++static const char *enum_gl_extensions( struct context *ctx, UINT index, GLint *ret )
++{
++    UINT count = 0;
++    for (enum opengl_extension ext = 0; ext < ARRAY_SIZE(all_extensions); ext++)
++    {
++        if (strncmp( all_extensions[ext].name, "GL_", 3 )) continue;
++        if (ctx->base.extensions[ext] && count++ == index) return all_extensions[ext].name;
++    }
++    for (UINT i = 0; i < ARRAY_SIZE(legacy_extensions); i++)
++    {
++        enum opengl_extension ext = legacy_extensions[i];
++        if (ctx->base.extensions[ext] && count++ == index) return all_extensions[ext].name;
++    }
++    if (ret) *ret = count;
++    return NULL;
++}
++
+ static BOOL get_integer( struct context *ctx, GLenum name, GLint *data )
+ {
+     switch (name)
+@@ -2002,6 +2027,9 @@ static BOOL get_integer( struct context *ctx, GLenum name, GLint *data )
      case GL_MINOR_VERSION:
          *data = ctx->base.minor_version;
-         return;
+         return TRUE;
 +    case GL_NUM_EXTENSIONS:
-+    {
-+        UINT count = 0;
-+        for (UINT i = 0; i < ARRAY_SIZE(all_extensions); i++)
-+        {
-+            if (strncmp( all_extensions[i].name, "GL_", 3 )) continue;
-+            if (ctx->base.extensions[i]) count++;
-+        }
-+        if (ctx->base.extensions[WGL_EXT_extensions_string]) count++;
-+        if (ctx->base.extensions[WGL_EXT_swap_control]) count++;
-+        *data = count;
-+        return;
-+    }
++        enum_gl_extensions( ctx, -1, data );
++        return TRUE;
      }
  
-     if ((status = UNIX_CALL( glGetIntegerv, &args ))) WARN( "glGetIntegerv returned %#lx\n", status );
-@@ -2027,9 +2042,25 @@ const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
+     return FALSE;
+@@ -2019,9 +2047,21 @@ const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
  #ifndef _WIN64
      GLubyte *wow64_str = NULL;
  #endif
 +    struct context *ctx;
++    const char *str;
  
      TRACE( "name %d, index %d\n", name, index );
  
@@ -244,20 +355,15 @@ index d781eedfbfa..c8e2f858482 100644
 +    switch (name)
 +    {
 +    case GL_EXTENSIONS:
-+        for (UINT i = 0; i < ARRAY_SIZE(all_extensions); i++)
-+        {
-+            if (strncmp( all_extensions[i].name, "GL_", 3 ) || !all_extensions[i].exposed) continue;
-+            if (ctx->base.extensions[i] && !index--) return (const GLubyte *)all_extensions[i].name;
-+        }
-+        if (ctx->base.extensions[WGL_EXT_extensions_string] && !index--) return (const GLubyte *)"WGL_EXT_extensions_string";
-+        if (ctx->base.extensions[WGL_EXT_swap_control] && !index--) return (const GLubyte *)"WGL_EXT_swap_control";
++        if ((str = enum_gl_extensions( ctx, index, NULL ))) return (const GLubyte *)str;
++        set_gl_error( GL_INVALID_VALUE );
 +        return NULL;
 +    }
 +
  #ifndef _WIN64
      if (UNIX_CALL( glGetStringi, &args ) == STATUS_BUFFER_TOO_SMALL) args.ret = wow64_str = malloc( (size_t)args.ret );
  #endif
-@@ -2047,6 +2078,7 @@ const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
+@@ -2039,6 +2079,7 @@ const GLubyte * WINAPI glGetStringi( GLenum name, GLuint index )
  const GLubyte * WINAPI glGetString( GLenum name )
  {
      struct glGetString_params args = { .teb = NtCurrentTeb(), .name = name };
@@ -265,7 +371,7 @@ index d781eedfbfa..c8e2f858482 100644
      NTSTATUS status;
  #ifndef _WIN64
      GLubyte *wow64_str = NULL;
-@@ -2054,6 +2086,40 @@ const GLubyte * WINAPI glGetString( GLenum name )
+@@ -2046,6 +2087,40 @@ const GLubyte * WINAPI glGetString( GLenum name )
  
      TRACE( "name %d\n", name );
  
@@ -306,8 +412,36 @@ index d781eedfbfa..c8e2f858482 100644
  #ifndef _WIN64
      if (UNIX_CALL( glGetString, &args ) == STATUS_BUFFER_TOO_SMALL) args.ret = wow64_str = malloc( (size_t)args.ret );
  #endif
+diff --git a/dlls/win32u/tests/d3dkmt.c b/dlls/win32u/tests/d3dkmt.c
+index 6b52d3100b4..d4ca602e8e4 100644
+--- a/dlls/win32u/tests/d3dkmt.c
++++ b/dlls/win32u/tests/d3dkmt.c
+@@ -4224,7 +4224,7 @@ static struct opengl_device *create_opengl_device( HWND hwnd, LUID *luid )
+     PFN_glGetUnsignedBytevEXT p_glGetUnsignedBytevEXT;
+     PFN_glGetUnsignedBytei_vEXT p_glGetUnsignedBytei_vEXT;
+ 
+-    const char *extensions, *ptr;
++    const char *extensions, *renderer, *ptr;
+     struct opengl_device *dev;
+     unsigned int nodes = 0;
+     LUID device_luid = {0};
+@@ -4261,9 +4261,14 @@ static struct opengl_device *create_opengl_device( HWND hwnd, LUID *luid )
+     ok_x4( glGetError(), ==, 0 );
+     ok_ptr( extensions, !=, NULL );
+ 
++    renderer = (char *)glGetString( GL_RENDERER );
++    ok_x4( glGetError(), ==, 0 );
++    ok_ptr( renderer, !=, NULL );
++
+     ptr = find_opengl_extension( extensions, "GL_EXT_memory_object_win32" );
+     ok_ptr( ptr, !=, NULL );
+     ptr = find_opengl_extension( extensions, "GL_EXT_semaphore_win32" );
++    todo_wine_if( strstr( renderer, "llvmpipe" ))
+     ok_ptr( ptr, !=, NULL );
+     ptr = find_opengl_extension( extensions, "GL_EXT_win32_keyed_mutex" );
+     dev->broken = !winetest_platform_is_wine && ptr == NULL; /* missing on AMD, as is support for importing D3D handles */
 diff --git a/include/wine/opengl_driver.h b/include/wine/opengl_driver.h
-index f73ff11f023..4c852a9b52a 100644
+index e6616c47224..7702268e2cf 100644
 --- a/include/wine/opengl_driver.h
 +++ b/include/wine/opengl_driver.h
 @@ -77,9 +77,11 @@ struct opengl_client_context

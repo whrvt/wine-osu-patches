@@ -1,0 +1,27 @@
+From 704b8c6d4d852e8cac1f06cfcf23f247e62deb5a Mon Sep 17 00:00:00 2001
+From: Zhao Yi <zhaoyi@uniontech.com>
+Date: Fri, 13 Mar 2026 08:03:10 +0000
+Subject: [PATCH] win32u: Fix deadlock when setting hdc_src to the window's
+ self DC.
+
+Signed-off-by: Zhao Yi <zhaoyi@uniontech.com>
+---
+ dlls/win32u/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index fc129df0785..350c9092de8 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2678,7 +2678,7 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+     apply_window_pos( hwnd, 0, swp_flags, surface, &new_rects, NULL );
+     if (!surface) return FALSE;
+ 
+-    if (!hdc_src || surface == &dummy_surface)
++    if (!hdc_src || surface == &dummy_surface || (NtUserWindowFromDC( hdc_src ) == hwnd))
+     {
+         user_driver->pUpdateLayeredWindow( hwnd, source_alpha, flags );
+         ret = TRUE;
+-- 
+GitLab
+
