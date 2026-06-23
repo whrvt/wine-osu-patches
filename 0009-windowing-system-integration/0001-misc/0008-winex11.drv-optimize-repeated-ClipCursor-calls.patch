@@ -1,7 +1,7 @@
-From 4409b4ebdf12823d13d36df7b2084741853059c5 Mon Sep 17 00:00:00 2001
+From aa6748d5dffee58450ba563951708faf9901209e Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jan=20Kl=C3=B6tzke?= <jan@kloetzke.net>
 Date: Sun, 11 Sep 2022 20:29:03 +0200
-Subject: [PATCH] winex11.drv: optimize repeated ClipCursor calls
+Subject: [PATCH 08/19] winex11.drv: optimize repeated ClipCursor calls
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -20,10 +20,10 @@ Signed-off-by: Jan Klötzke <jan@kloetzke.net>
  1 file changed, 4 insertions(+)
 
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 11111111111..11111111111 100644
+index b87763f1569..60b294dcd04 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
-@@ -447,6 +447,10 @@ static BOOL grab_clipping_window( const RECT *clip )
+@@ -477,6 +477,10 @@ static BOOL grab_clipping_window( const RECT *clip )
      if (!is_current_process_focused()) return TRUE;
  
      if (!data) return FALSE;
@@ -35,5 +35,5 @@ index 11111111111..11111111111 100644
  
      if (keyboard_grabbed)
 -- 
-0.0.0
+2.54.0
 

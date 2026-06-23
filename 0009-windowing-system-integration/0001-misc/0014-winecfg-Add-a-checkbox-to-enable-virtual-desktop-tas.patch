@@ -1,7 +1,8 @@
-From 2f1de1c78dcb32cde3d7673a9345cc616ec72e09 Mon Sep 17 00:00:00 2001
+From 0b5996bf23d3eeef3978a044b9f309fbbf4f6ffd Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 10 Dec 2024 22:12:41 +0100
-Subject: [PATCH] winecfg: Add a checkbox to enable virtual desktop taskbar.
+Subject: [PATCH 14/19] winecfg: Add a checkbox to enable virtual desktop
+ taskbar.
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57515
 ---
@@ -103,7 +104,7 @@ index d4fedff5afb..e881fb33614 100644
  
  /* create a unicode string from a string in Unix locale */
 diff --git a/programs/winecfg/winecfg.rc b/programs/winecfg/winecfg.rc
-index fe2a984a35d..ad47d661e49 100644
+index fe2a984a35d..9468c57ab5b 100644
 --- a/programs/winecfg/winecfg.rc
 +++ b/programs/winecfg/winecfg.rc
 @@ -177,7 +177,9 @@ BEGIN
@@ -113,7 +114,7 @@ index fe2a984a35d..ad47d661e49 100644
 -                BS_AUTOCHECKBOX | WS_TABSTOP,15,56,230,10
 +                BS_AUTOCHECKBOX | WS_TABSTOP,15,56,100,10
 +    CONTROL     "&with a taskbar",IDC_ENABLE_SHELL,"Button",
-+                BS_AUTOCHECKBOX | WS_TABSTOP,120,56,100,10,WS_DISABLED
++                BS_AUTOCHECKBOX | WS_TABSTOP,120,44,100,10,WS_DISABLED
      LTEXT       "Desktop &size:",IDC_DESKTOP_SIZE,15,70,64,16,WS_DISABLED
      LTEXT       "#msgctxt#do not translate#X",IDC_DESKTOP_BY,129,70,8,8,WS_DISABLED
      EDITTEXT    IDC_DESKTOP_WIDTH,84,68,40,12,ES_AUTOHSCROLL | ES_NUMBER | WS_DISABLED
@@ -175,5 +176,5 @@ index 9db8da5a4f4..9680972b842 100644
                          case IDC_ENABLE_DECORATED: on_enable_decorated_clicked(hDlg); break;
  			case IDC_FULLSCREEN_GRAB:  on_fullscreen_grab_clicked(hDlg); break;
 -- 
-GitLab
+2.54.0
 

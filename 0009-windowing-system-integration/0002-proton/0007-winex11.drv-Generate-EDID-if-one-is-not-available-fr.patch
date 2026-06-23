@@ -1,8 +1,8 @@
-From 608690437a165bf14c699df5ad2ecbf815490f4e Mon Sep 17 00:00:00 2001
+From cffa0bbb046a08ffbb6d8a91de03ee7b16732858 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 1 Mar 2022 22:11:17 +0300
-Subject: [PATCH 0862/2346] winex11.drv: Generate EDID if one is not available
- from xrandr.
+Subject: [PATCH 7/8] winex11.drv: Generate EDID if one is not available from
+ xrandr.
 
 CW-Bug-Id: #20204
 CW-Bug-Id: #19217
@@ -11,7 +11,7 @@ CW-Bug-Id: #19217
  1 file changed, 99 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/winex11.drv/xrandr.c b/dlls/winex11.drv/xrandr.c
-index b0e3ee9294e..d0f07996ec3 100644
+index b147b952cab..f764ee45235 100644
 --- a/dlls/winex11.drv/xrandr.c
 +++ b/dlls/winex11.drv/xrandr.c
 @@ -32,6 +32,7 @@
@@ -22,7 +22,7 @@ index b0e3ee9294e..d0f07996ec3 100644
  #include "x11drv.h"
  #include "wine/debug.h"
  
-@@ -536,23 +537,108 @@ static void get_screen_size( XRRScreenResources *resources, unsigned int *width,
+@@ -531,23 +532,108 @@ static void get_screen_size( XRRScreenResources *resources, unsigned int *width,
      }
  }
  
@@ -138,7 +138,7 @@ index b0e3ee9294e..d0f07996ec3 100644
  }
  
  static void set_screen_size( int width, int height )
-@@ -1085,7 +1171,8 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **ne
+@@ -1106,7 +1192,8 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **ne
      /* Inactive but attached monitor, no need to check for mirrored/replica monitors */
      if (!output_info->crtc || !crtc_info->mode)
      {
@@ -148,7 +148,7 @@ index b0e3ee9294e..d0f07996ec3 100644
          monitor_count = 1;
      }
      /* Active monitors, need to find other monitors with the same coordinates as mirrored */
-@@ -1136,7 +1223,8 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **ne
+@@ -1157,7 +1244,8 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **ne
                          primary_index = monitor_count;
  
                      monitors[monitor_count].edid_len = get_edid( screen_resources->outputs[i],
@@ -158,7 +158,7 @@ index b0e3ee9294e..d0f07996ec3 100644
                      monitor_count++;
                  }
  
-@@ -1180,7 +1268,7 @@ done:
+@@ -1201,7 +1289,7 @@ done:
          for (i = 0; i < monitor_count; i++)
          {
              if (monitors[i].edid)
@@ -167,7 +167,7 @@ index b0e3ee9294e..d0f07996ec3 100644
          }
          free( monitors );
          ERR("Failed to get monitors\n");
-@@ -1195,7 +1283,7 @@ static void xrandr14_free_monitors( struct gdi_monitor *monitors, int count )
+@@ -1216,7 +1304,7 @@ static void xrandr14_free_monitors( struct gdi_monitor *monitors, int count )
      for (i = 0; i < count; i++)
      {
          if (monitors[i].edid)
@@ -177,5 +177,5 @@ index b0e3ee9294e..d0f07996ec3 100644
      free( monitors );
  }
 -- 
-2.47.0
+2.54.0
 

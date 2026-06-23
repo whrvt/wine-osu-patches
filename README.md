@@ -73,18 +73,6 @@ Patch: [disable-ime-envvar.patch](9000-misc-additions/disable-ime-envvar.patch)
 
 `boolean`
 
-## WINE_DISABLE_KDE_HACKS
-
-Patch: [0001-HACK-winex11-Skip-delay-on-KDE-if-wm_state-is-unchan.patch](0009-windowing-system-integration/0001-misc/0001-HACK-winex11-Skip-delay-on-KDE-if-wm_state-is-unchan.patch)
-
-### Commit message
-
-```
-HACK: winex11: Skip delay on KDE if wm_state is unchanged
-Attempt at fixing an edge-case where a black window is created upon alt-tab on KDE when the window state is unchanged.
-Can be disabled with WINE_DISABLE_KDE_HACKS=1.
-```
-
 ## WINE_DISABLE_RAWINPUT
 
 Patch: [force-disable-rawinput-envvar.patch](9000-misc-additions/force-disable-rawinput-envvar.patch)
@@ -127,17 +115,27 @@ cursor clip hack
 
 `numeric`
 
-## WINE_ENABLE_OSU_FOCUS_FIX
+## WINE_ENABLE_KDE_HACKS
 
-Patch: [0002-HACK-win32u-keep-osu-from-taking-focus-when-unfocuse.patch](0009-windowing-system-integration/0001-misc/0002-HACK-win32u-keep-osu-from-taking-focus-when-unfocuse.patch)
+Patch: [0004-HACK-winex11.drv-Avoid-delaying-repositioning-on-KDE.patch](0009-windowing-system-integration/0001-misc/0004-HACK-winex11.drv-Avoid-delaying-repositioning-on-KDE.patch)
 
 ### Commit message
 
 ```
-HACK: win32u: keep osu! from taking focus when unfocused on certain WMs
-Depends on Proton's WM detection. KDE seems to not be affected by this.
-Can also be enabled on whatever DE/WM with WINE_ENABLE_OSU_FOCUS_FIX=1.
+HACK: winex11.drv: Avoid delaying/repositioning fullscreen windows on KDE.
+KDE (KWin) doesn't play well with the config-change delay nor with
+repositioning requests under osu!'s window management, causing glitches.
+When running under KWin and WINE_ENABLE_KDE_HACKS is set, skip the config
+change delay and avoid repositioning exclusive fullscreen windows.
 ```
+
+### Description
+
+Under KWin, skips the config-change delay and avoids repositioning exclusive fullscreen windows to work around KDE glitches with osu!'s window management. Only active under KWin and when set.
+
+### Type
+
+`boolean`
 
 ## WINE_HOST_XDG_CACHE_HOME
 

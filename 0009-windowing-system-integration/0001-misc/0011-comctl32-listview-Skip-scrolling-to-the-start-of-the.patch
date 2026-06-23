@@ -1,24 +1,24 @@
-From 276cd6097bc1f167b1037216f2fed07c52e7f8a8 Mon Sep 17 00:00:00 2001
+From 77b472ef2d9965c2eebf2bac544f74209827b418 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 16 Sep 2024 10:02:10 -0700
-Subject: [PATCH] comctl32/listview: Skip scrolling to the start of the list
- for SB_INTERNAL scrolls if it's not necessary.
+Subject: [PATCH 11/19] comctl32/listview: Skip scrolling to the start of the
+ list for SB_INTERNAL scrolls if it's not necessary.
 
 Fixes osu! editor's timing panel scroll position jumping to the very top of the
 list view when first clicking on an item in the list, given that it is not
-opened at that position initially. This jumping doesn't happen if the user 
-manually scrolls to the same element and clicks on it. 
+opened at that position initially. This jumping doesn't happen if the user
+manually scrolls to the same element and clicks on it.
 
 For the vertical and horizontal scrolling types, visibility is determined by:
  - Vertical scrolling:
-     In any case, just check if nFocusedItem < (INT)scrollInfo.nPage. 
+     In any case, just check if nFocusedItem < (INT)scrollInfo.nPage.
      If it is, then it's already visible, and there's no need to scroll.
- - Horizontal scrolling: 
+ - Horizontal scrolling:
      1. In report view (LV_VIEW_DETAILS), horizontal scrolling typically affects
        column visibility rather than item visibility.
-     2. In list view (LV_VIEW_LIST), horizontal scrolling moves through items, 
+     2. In list view (LV_VIEW_LIST), horizontal scrolling moves through items,
        so the same logic as vertical scrolling applies.
-     3. In icon and small icon views (LV_VIEW_ICON/SMALLICON), items can 
+     3. In icon and small icon views (LV_VIEW_ICON/SMALLICON), items can
        be arranged in a grid, which complicates the visibility determination.
      The additional case logic is applied for the specific view types,
      because the LV_VIEW_ICON/SMALLICON/DETAILS views can wrap to multiple rows.
@@ -33,10 +33,10 @@ https://learn.microsoft.com/en-us/windows/win32/controls/list-view-controls-over
  1 file changed, 28 insertions(+)
 
 diff --git a/dlls/comctl32/listview.c b/dlls/comctl32/listview.c
-index c82473b6205..7baefe20d16 100644
+index f91e63f1f5b..9b639ad62df 100644
 --- a/dlls/comctl32/listview.c
 +++ b/dlls/comctl32/listview.c
-@@ -9813,6 +9813,12 @@ static LRESULT LISTVIEW_VScroll(LISTVIEW_INFO *infoPtr, INT nScrollCode,
+@@ -9839,6 +9839,12 @@ static LRESULT LISTVIEW_VScroll(LISTVIEW_INFO *infoPtr, INT nScrollCode,
      switch (nScrollCode)
      {
      case SB_INTERNAL:
@@ -49,7 +49,7 @@ index c82473b6205..7baefe20d16 100644
          break;
  
      case SB_LINEUP:
-@@ -9918,6 +9924,28 @@ static LRESULT LISTVIEW_HScroll(LISTVIEW_INFO *infoPtr, INT nScrollCode,
+@@ -9952,6 +9958,28 @@ static LRESULT LISTVIEW_HScroll(LISTVIEW_INFO *infoPtr, INT nScrollCode,
      switch (nScrollCode)
      {
      case SB_INTERNAL:
@@ -79,5 +79,5 @@ index c82473b6205..7baefe20d16 100644
  
      case SB_LINELEFT:
 -- 
-2.46.1
+2.54.0
 

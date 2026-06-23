@@ -1,7 +1,7 @@
-From 9f8e1ea7cc3f232c5fedf460ea7aa094bbd69da7 Mon Sep 17 00:00:00 2001
+From 0b9120d290e27cd64570a92614bcd20bcc2f052f Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 18 Feb 2025 03:50:33 -0800
-Subject: [PATCH] ddraw: Use signed types for GetAvailableVidMem.
+Subject: [PATCH 16/19] ddraw: Use signed types for GetAvailableVidMem.
 
 Otherwise applications see negative memory if the true amount is >INT_MAX.
 ---
@@ -9,10 +9,10 @@ Otherwise applications see negative memory if the true amount is >INT_MAX.
  1 file changed, 4 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/ddraw/ddraw.c b/dlls/ddraw/ddraw.c
-index 19beeab0963..3d309127423 100644
+index c4ce81234bc..ad91fd18135 100644
 --- a/dlls/ddraw/ddraw.c
 +++ b/dlls/ddraw/ddraw.c
-@@ -2047,7 +2047,8 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
+@@ -2011,7 +2011,8 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
      if (free)
      {
          free_vidmem = wined3d_device_get_available_texture_mem(ddraw->wined3d_device);
@@ -22,7 +22,7 @@ index 19beeab0963..3d309127423 100644
          TRACE("Free video memory %#lx.\n", *free);
      }
  
-@@ -2056,8 +2057,8 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
+@@ -2020,8 +2021,8 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
          struct wined3d_adapter_identifier desc = {0};
  
          hr = wined3d_adapter_get_identifier(ddraw->wined3d_adapter, 0, &desc);
@@ -34,5 +34,5 @@ index 19beeab0963..3d309127423 100644
      }
  
 -- 
-2.48.1
+2.54.0
 

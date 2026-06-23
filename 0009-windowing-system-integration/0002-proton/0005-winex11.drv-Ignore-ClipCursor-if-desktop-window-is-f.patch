@@ -1,7 +1,7 @@
-From 9e5e225dba0f887c9c07771390de2485a07d38f7 Mon Sep 17 00:00:00 2001
+From 881f59febd188c717bcac2e149e84b405e79bbfa Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 21 Jan 2020 21:05:05 +0100
-Subject: [PATCH 0309/1562] winex11.drv: Ignore ClipCursor if desktop window is
+Subject: [PATCH 5/8] winex11.drv: Ignore ClipCursor if desktop window is
  foreground.
 
 CW-Bug-Id: #21879
@@ -10,10 +10,10 @@ CW-Bug-Id: #21879
  1 file changed, 6 insertions(+)
 
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
-index 5f083a787e9..0cca9791903 100644
+index 8d0512b46c5..1ec6f562e1f 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
-@@ -2648,6 +2648,12 @@ BOOL WINAPI NtUserClipCursor( const RECT *rect )
+@@ -2786,6 +2786,12 @@ BOOL WINAPI NtUserClipCursor( const RECT *rect )
  
      TRACE( "Clipping to %s\n", wine_dbgstr_rect(rect) );
  
@@ -25,7 +25,7 @@ index 5f083a787e9..0cca9791903 100644
 +
      if (rect)
      {
-         if (rect->left > rect->right || rect->top > rect->bottom) return FALSE;
+         HWND foreground = NtUserGetForegroundWindow();
 -- 
-2.45.2
+2.54.0
 
