@@ -8,28 +8,24 @@ Subject: [PATCH] combase: Check null token earlier.
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/combase/combase.c b/dlls/combase/combase.c
-index d478b30beb0..b363bc771ef 100644
+index 35da4fe9ca8..eabb5162a57 100644
 --- a/dlls/combase/combase.c
 +++ b/dlls/combase/combase.c
-@@ -2655,6 +2655,8 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
+@@ -2809,12 +2809,11 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
  
      TRACE("%p\n", token);
  
 +    if(!token) return E_POINTER;
 +
-     if (!InternalIsProcessInitialized())
-     {
-         ERR("apartment not initialised\n");
-@@ -2670,9 +2672,6 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
      if (FAILED(hr = com_get_tlsdata(&tlsdata)))
          return hr;
  
 -    if (!token)
 -        return E_POINTER;
 -
-     if (!tlsdata->context_token)
+     if (!(apt = apartment_get_current_or_mta()))
      {
-         struct thread_context *context;
+         ERR("apartment not initialised\n");
 -- 
 2.46.0
 

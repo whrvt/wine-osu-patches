@@ -10,26 +10,22 @@ STAGING_AUDIO_DURATION (units: usecs*10)
 
 Also, silence pcm.c underrun errors.
 ---
- dlls/mmdevapi/client.c     | 49 ++++++++++++++++++++++++++++++--------
- dlls/winealsa.drv/alsa.c   | 30 ++++++++++++++++-------
- dlls/winepulse.drv/pulse.c | 25 +++++++++++++++++--
+ dlls/mmdevapi/client.c     | 49 ++++++++++++++++++++++++++++++++++++----------
+ dlls/winealsa.drv/alsa.c   | 30 +++++++++++++++++++---------
+ dlls/winepulse.drv/pulse.c | 25 +++++++++++++++++++++--
  3 files changed, 83 insertions(+), 21 deletions(-)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index 39cbae27b34..f4259e9d912 100644
+index d4d3e82b466..719cecbcf0d 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
-@@ -52,6 +52,9 @@ extern struct audio_session_wrapper *session_wrapper_create(struct audio_client
- 
- static HANDLE main_loop_thread;
+@@ -89,10 +89,12 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
+     return CONTAINING_RECORD(iface, struct audio_client, IAudioStreamVolume_iface);
+ }
  
 +static BOOL custom;
 +static REFERENCE_TIME num_periods = 3;
 +
- void main_loop_stop(void)
- {
-     if (main_loop_thread) {
-@@ -110,7 +113,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
  static HRESULT get_periods(struct audio_client *client,
                             REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
  {
@@ -37,7 +33,7 @@ index 39cbae27b34..f4259e9d912 100644
      struct get_device_period_params params;
  
      params.device     = client->device_name;
-@@ -120,8 +122,6 @@ static HRESULT get_periods(struct audio_client *client,
+@@ -102,8 +104,6 @@ static HRESULT get_periods(struct audio_client *client,
  
      wine_unix_call(get_device_period, &params);
  
@@ -46,7 +42,7 @@ index 39cbae27b34..f4259e9d912 100644
      return params.result;
  }
  
-@@ -141,12 +141,10 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -123,12 +123,10 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
      TRACE("Device periods: %lu default and %lu minimum\n", (ULONG)def_period, (ULONG)min_period);
  
      if (mode == AUDCLNT_SHAREMODE_SHARED) {
@@ -62,7 +58,7 @@ index 39cbae27b34..f4259e9d912 100644
      } else {
          const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
          if (fmtex->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-@@ -171,7 +169,11 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -153,7 +151,11 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
          }
      }
  
@@ -75,7 +71,7 @@ index 39cbae27b34..f4259e9d912 100644
  
      return hr;
  }
-@@ -384,6 +386,25 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
+@@ -394,6 +396,25 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
      if (mode != AUDCLNT_SHAREMODE_SHARED && mode != AUDCLNT_SHAREMODE_EXCLUSIVE)
          return E_INVALIDARG;
  
@@ -101,7 +97,7 @@ index 39cbae27b34..f4259e9d912 100644
      if (flags & ~(AUDCLNT_STREAMFLAGS_CROSSPROCESS |
                    AUDCLNT_STREAMFLAGS_LOOPBACK |
                    AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
-@@ -1097,13 +1118,21 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
+@@ -1163,13 +1184,21 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
  {
      struct audio_client *This = impl_from_IAudioClient3(iface);
      REFERENCE_TIME period;
@@ -125,7 +121,7 @@ index 39cbae27b34..f4259e9d912 100644
      return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
  }
 diff --git a/dlls/winealsa.drv/alsa.c b/dlls/winealsa.drv/alsa.c
-index 5bd1d71d837..480041418f0 100644
+index 4ad83bdba05..b9a636e365b 100644
 --- a/dlls/winealsa.drv/alsa.c
 +++ b/dlls/winealsa.drv/alsa.c
 @@ -82,10 +82,10 @@ struct alsa_stream
@@ -142,7 +138,7 @@ index 5bd1d71d837..480041418f0 100644
  
  static const WCHAR drv_keyW[] = {'S','o','f','t','w','a','r','e','\\',
      'W','i','n','e','\\','D','r','i','v','e','r','s','\\',
-@@ -805,11 +805,23 @@ static NTSTATUS alsa_create_stream(void *args)
+@@ -784,11 +784,23 @@ static NTSTATUS alsa_create_stream(void *args)
      snd_pcm_format_t format;
      unsigned int rate, alsa_period_us, i;
      WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)params->fmt;
@@ -166,7 +162,7 @@ index 5bd1d71d837..480041418f0 100644
      stream = calloc(1, sizeof(*stream));
      if(!stream){
          params->result = E_OUTOFMEMORY;
-@@ -1008,10 +1020,10 @@ static NTSTATUS alsa_create_stream(void *args)
+@@ -993,10 +1005,10 @@ static NTSTATUS alsa_create_stream(void *args)
  
      pthread_mutex_init(&stream->lock, NULL);
  
@@ -181,7 +177,7 @@ index 5bd1d71d837..480041418f0 100644
  
  exit:
      free(sw_params);
-@@ -1280,7 +1292,7 @@ static snd_pcm_sframes_t alsa_write_best_effort(struct alsa_stream *stream, BYTE
+@@ -1265,7 +1277,7 @@ static snd_pcm_sframes_t alsa_write_best_effort(struct alsa_stream *stream, BYTE
          WARN("writei failed, recovering: %ld (%s)\n", written,
                  snd_strerror(written));
  
@@ -190,7 +186,7 @@ index 5bd1d71d837..480041418f0 100644
          if(ret < 0){
              WARN("Could not recover: %d (%s)\n", ret, snd_strerror(ret));
              return ret;
-@@ -1454,7 +1466,7 @@ static void alsa_read_data(struct alsa_stream *stream)
+@@ -1439,7 +1451,7 @@ static void alsa_read_data(struct alsa_stream *stream)
  
          WARN("read failed, recovering: %ld (%s)\n", nread, snd_strerror(nread));
  
@@ -200,10 +196,10 @@ index 5bd1d71d837..480041418f0 100644
              WARN("Recover failed: %d (%s)\n", ret, snd_strerror(ret));
              return;
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 735d16bbdc3..eed8cd6392f 100644
+index 7d330a45e6e..a99a8de5ea3 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -747,8 +747,9 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -775,8 +775,9 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
      pa_channel_map map;
      pa_sample_spec ss;
      pa_buffer_attr attr;
@@ -214,7 +210,7 @@ index 735d16bbdc3..eed8cd6392f 100644
  
      if (pulse_name && !pulse_name[0])
          pulse_name = NULL;
-@@ -795,7 +796,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -823,7 +824,13 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
          pa_stream_unref(stream);
  
      if (length)
@@ -229,7 +225,7 @@ index 735d16bbdc3..eed8cd6392f 100644
  
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
      wfx->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-@@ -1162,6 +1169,8 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1179,6 +1186,8 @@ static NTSTATUS pulse_create_stream(void *args)
  {
      struct create_stream_params *params = args;
      struct pulse_stream *stream;
@@ -238,7 +234,7 @@ index 735d16bbdc3..eed8cd6392f 100644
      unsigned int i;
      HRESULT hr;
      char *name;
-@@ -1200,6 +1209,18 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1217,6 +1226,18 @@ static NTSTATUS pulse_create_stream(void *args)
      if (FAILED(hr))
          goto exit;
  

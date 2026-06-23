@@ -5,25 +5,25 @@ Subject: [PATCH] pulse,mmdevapi: Some simplifications and stability
  improvements to the low latency patches.
 
 ---
- dlls/mmdevapi/client.c     | 52 ++++++++------------------------------
- dlls/winepulse.drv/pulse.c | 46 ++++++++++++++++++++-------------
+ dlls/mmdevapi/client.c     | 52 +++++++++-------------------------------------
+ dlls/winepulse.drv/pulse.c | 46 ++++++++++++++++++++++++----------------
  2 files changed, 38 insertions(+), 60 deletions(-)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index f4259e9d912..433829e65db 100644
+index 719cecbcf0d..06d08887bc2 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
-@@ -52,9 +52,6 @@ extern struct audio_session_wrapper *session_wrapper_create(struct audio_client
- 
- static HANDLE main_loop_thread;
+@@ -89,9 +89,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
+     return CONTAINING_RECORD(iface, struct audio_client, IAudioStreamVolume_iface);
+ }
  
 -static BOOL custom;
 -static REFERENCE_TIME num_periods = 3;
 -
- void main_loop_stop(void)
+ static HRESULT get_periods(struct audio_client *client,
+                            REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
  {
-     if (main_loop_thread) {
-@@ -141,10 +138,12 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -123,10 +120,12 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
      TRACE("Device periods: %lu default and %lu minimum\n", (ULONG)def_period, (ULONG)min_period);
  
      if (mode == AUDCLNT_SHAREMODE_SHARED) {
@@ -39,7 +39,7 @@ index f4259e9d912..433829e65db 100644
      } else {
          const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
          if (fmtex->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-@@ -169,11 +168,7 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -151,11 +150,7 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
          }
      }
  
@@ -52,7 +52,7 @@ index f4259e9d912..433829e65db 100644
  
      return hr;
  }
-@@ -386,25 +381,6 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
+@@ -396,25 +391,6 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
      if (mode != AUDCLNT_SHAREMODE_SHARED && mode != AUDCLNT_SHAREMODE_EXCLUSIVE)
          return E_INVALIDARG;
  
@@ -78,7 +78,7 @@ index f4259e9d912..433829e65db 100644
      if (flags & ~(AUDCLNT_STREAMFLAGS_CROSSPROCESS |
                    AUDCLNT_STREAMFLAGS_LOOPBACK |
                    AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
-@@ -1084,9 +1060,9 @@ static HRESULT WINAPI client_GetSharedModeEnginePeriod(IAudioClient3 *iface,
+@@ -1150,9 +1126,9 @@ static HRESULT WINAPI client_GetSharedModeEnginePeriod(IAudioClient3 *iface,
      if (FAILED(hr = get_periods(This, &def_period, &min_period)))
          return hr;
  
@@ -91,7 +91,7 @@ index f4259e9d912..433829e65db 100644
      *unit_period_frames    = 1;
  
      return hr;
-@@ -1118,21 +1094,13 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
+@@ -1184,21 +1160,13 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
  {
      struct audio_client *This = impl_from_IAudioClient3(iface);
      REFERENCE_TIME period;
@@ -115,10 +115,10 @@ index f4259e9d912..433829e65db 100644
      return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
  }
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 333ddb22746..e8523fd56c5 100644
+index 9ad62f0339b..73baaf3bfc8 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -750,6 +750,15 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
+@@ -767,6 +767,15 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
      fmt->dwChannelMask = pa_mask;
  }
  
@@ -134,7 +134,7 @@ index 333ddb22746..e8523fd56c5 100644
  static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, const char *pulse_name,
                                   WAVEFORMATEXTENSIBLE *fmt, REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
  {
-@@ -806,13 +815,26 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -823,13 +832,26 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
      if (stream)
          pa_stream_unref(stream);
  
@@ -167,7 +167,7 @@ index 333ddb22746..e8523fd56c5 100644
      }
  
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-@@ -1223,18 +1245,6 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1227,18 +1249,6 @@ static NTSTATUS pulse_create_stream(void *args)
      if (FAILED(hr))
          goto exit;
  

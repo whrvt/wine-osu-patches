@@ -6,19 +6,19 @@ Subject: [PATCH] combase: Implement RoOriginateError(W) and
 
 ---
  dlls/combase/combase_private.h |   3 +
- dlls/combase/errorinfo.c       |  33 ++--
- dlls/combase/roapi.c           | 309 ++++++++++++++++++++++++++++++++-
- dlls/combase/tests/roapi.c     | 137 +++++++--------
+ dlls/combase/errorinfo.c       |  33 +++--
+ dlls/combase/roapi.c           | 309 ++++++++++++++++++++++++++++++++++++++++-
+ dlls/combase/tests/roapi.c     | 137 +++++++++---------
  4 files changed, 391 insertions(+), 91 deletions(-)
 
 diff --git a/dlls/combase/combase_private.h b/dlls/combase/combase_private.h
-index ca79356e8eb..03c776c3935 100644
+index 76393650f3a..20a85613cd7 100644
 --- a/dlls/combase/combase_private.h
 +++ b/dlls/combase/combase_private.h
-@@ -261,3 +261,6 @@ HRESULT ipid_get_dispatch_params(const IPID *ipid, struct apartment **stub_apt,
-         IID *iid, IUnknown **iface);
+@@ -268,3 +268,6 @@ HRESULT ipid_get_dispatch_params(const IPID *ipid, struct apartment **stub_apt,
  HRESULT ipid_get_dest_context(const IPID *ipid, MSHCTX *dest_context, void **dest_context_data);
  HRESULT start_apartment_remote_unknown(struct apartment *apt);
+ void get_process_secret(GUID *process_secret);
 +
 +HRESULT set_error_info(IErrorInfo *error_info);
 +HRESULT get_error_info(IErrorInfo **error_info);
@@ -88,10 +88,10 @@ index 9383e8d5a72..4ae9dfb1c5c 100644
 +    return reserved ? E_INVALIDARG : set_error_info(error_info);
 +}
 diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
-index 5745099ae4f..57001eb14a4 100644
+index f665bfd7505..e3c7d7842b0 100644
 --- a/dlls/combase/roapi.c
 +++ b/dlls/combase/roapi.c
-@@ -27,6 +27,7 @@
+@@ -29,6 +29,7 @@
  
  #include "combase_private.h"
  
@@ -99,7 +99,7 @@ index 5745099ae4f..57001eb14a4 100644
  #include "wine/debug.h"
  
  WINE_DEFAULT_DEBUG_CHANNEL(combase);
-@@ -493,13 +494,232 @@ HRESULT WINAPI RoRegisterActivationFactories(HSTRING *classes, PFNGETACTIVATIONF
+@@ -534,13 +535,232 @@ HRESULT WINAPI RoRegisterActivationFactories(HSTRING *classes, PFNGETACTIVATIONF
      return S_OK;
  }
  
@@ -334,7 +334,7 @@ index 5745099ae4f..57001eb14a4 100644
  }
  
  /***********************************************************************
-@@ -525,8 +745,19 @@ BOOL WINAPI RoOriginateLanguageException(HRESULT error, HSTRING message, IUnknow
+@@ -566,8 +786,19 @@ BOOL WINAPI RoOriginateLanguageException(HRESULT error, HSTRING message, IUnknow
   */
  BOOL WINAPI RoOriginateError(HRESULT error, HSTRING message)
  {
@@ -356,7 +356,7 @@ index 5745099ae4f..57001eb14a4 100644
  }
  
  /***********************************************************************
-@@ -534,8 +765,74 @@ BOOL WINAPI RoOriginateError(HRESULT error, HSTRING message)
+@@ -575,8 +806,74 @@ BOOL WINAPI RoOriginateError(HRESULT error, HSTRING message)
   */
  BOOL WINAPI RoOriginateErrorW(HRESULT error, UINT max_len, const WCHAR *message)
  {
@@ -434,10 +434,10 @@ index 5745099ae4f..57001eb14a4 100644
  
  /***********************************************************************
 diff --git a/dlls/combase/tests/roapi.c b/dlls/combase/tests/roapi.c
-index d761932a601..c1c51cd59da 100644
+index f1101eb8265..6653f563cf0 100644
 --- a/dlls/combase/tests/roapi.c
 +++ b/dlls/combase/tests/roapi.c
-@@ -795,7 +795,7 @@ static void test_GetRestrictedErrorInfo(void)
+@@ -1022,7 +1022,7 @@ static void test_GetRestrictedErrorInfo(void)
      ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
  
      hr = GetRestrictedErrorInfo(&r_info);
@@ -446,7 +446,7 @@ index d761932a601..c1c51cd59da 100644
  
      /* The ICreateErrorInfo object returned by CreateErrorInfo does not supoprt IRestrictedErrorInfo. */
      hr = CreateErrorInfo(&create_info);
-@@ -807,35 +807,29 @@ static void test_GetRestrictedErrorInfo(void)
+@@ -1034,35 +1034,29 @@ static void test_GetRestrictedErrorInfo(void)
      ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
      /* GetRestrictedErrorInfo should return S_FALSE if the error object does not support IRestrictedErrorInfo. */
      hr = GetRestrictedErrorInfo(&r_info);
@@ -498,7 +498,7 @@ index d761932a601..c1c51cd59da 100644
  }
  
  /* Return the system-supplied description of an HRESULT code. If there isn't one, we only check whether error
-@@ -1020,12 +1014,11 @@ static void test_error_reporting(void)
+@@ -1247,12 +1241,11 @@ static void test_error_reporting(void)
         exp_len = wcslen(default_msg);
         exp_msg = default_msg[0] ? default_msg : NULL;
         ret = RoOriginateError(test_codes[i], NULL);
@@ -514,7 +514,7 @@ index d761932a601..c1c51cd59da 100644
         exception_caught = FALSE;
         ret = RoOriginateLanguageException(test_codes[i], NULL, NULL);
         todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
-@@ -1038,23 +1031,22 @@ static void test_error_reporting(void)
+@@ -1265,23 +1258,22 @@ static void test_error_reporting(void)
         /* A NULL string with a non-zero length is accepted. */
         exception_caught = FALSE;
         ret = RoOriginateError(test_codes[i], NULL);
@@ -545,7 +545,7 @@ index d761932a601..c1c51cd59da 100644
  
         set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO);
         exception_caught = FALSE;
-@@ -1063,12 +1055,11 @@ static void test_error_reporting(void)
+@@ -1290,12 +1282,11 @@ static void test_error_reporting(void)
         /* RoOriginateError with a custom error message. */
         WindowsCreateStringReference(message, wcslen(message), &hstr_hdr, &msg);
         ret = RoOriginateError(test_codes[i], msg);
@@ -561,7 +561,7 @@ index d761932a601..c1c51cd59da 100644
         exception_caught = FALSE;
         ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
         todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
-@@ -1081,19 +1072,19 @@ static void test_error_reporting(void)
+@@ -1308,19 +1299,19 @@ static void test_error_reporting(void)
         set_error_reporting_flags(RO_ERROR_REPORTING_USESETERRORINFO | RO_ERROR_REPORTING_FORCEEXCEPTIONS);
         exception_caught = FALSE;
         ret = RoOriginateErrorW(test_codes[i], wcslen(message), message);
@@ -589,7 +589,7 @@ index d761932a601..c1c51cd59da 100644
  
         /* Error messages longer than 512 characters are truncated. */
         exception_caught = FALSE;
-@@ -1101,11 +1092,11 @@ static void test_error_reporting(void)
+@@ -1328,11 +1319,11 @@ static void test_error_reporting(void)
         exp_msg = message_trunc;
         WindowsCreateStringReference(message_large, wcslen(message_large), &hstr_hdr, &msg);
         ret = RoOriginateError(test_codes[i], msg);
@@ -605,7 +605,7 @@ index d761932a601..c1c51cd59da 100644
         exception_caught = FALSE;
         ret = RoOriginateLanguageException(test_codes[i], msg, NULL);
         todo_wine ok(ret, "RoOriginateLanguageException returned %d.\n", ret);
-@@ -1116,19 +1107,19 @@ static void test_error_reporting(void)
+@@ -1343,19 +1334,19 @@ static void test_error_reporting(void)
  
         exception_caught = FALSE;
         ret = RoOriginateErrorW(test_codes[i], wcslen(message_large), message_large);
@@ -633,7 +633,7 @@ index d761932a601..c1c51cd59da 100644
  
         /* RoOriginateError with a custom error message containing an embedded NUL. */
         exception_caught = FALSE;
-@@ -1140,12 +1131,12 @@ static void test_error_reporting(void)
+@@ -1367,12 +1358,12 @@ static void test_error_reporting(void)
         hr = WindowsPromoteStringBuffer(hstr_buf, &msg);
         ok(hr == S_OK, "Got unexpected hr %#lx\n", hr);
         ret = RoOriginateError(test_codes[i], msg);
@@ -649,7 +649,7 @@ index d761932a601..c1c51cd59da 100644
         if (hr == S_OK)
         {
             hr = IErrorInfo_QueryInterface(info, &IID_IRestrictedErrorInfo, (void **)&r_info);
-@@ -1164,11 +1155,11 @@ static void test_error_reporting(void)
+@@ -1391,11 +1382,11 @@ static void test_error_reporting(void)
  
         exception_caught = FALSE;
         ret = RoOriginateErrorW(test_codes[i], ARRAY_SIZE(message_nul), message_nul);
@@ -665,7 +665,7 @@ index d761932a601..c1c51cd59da 100644
  
         winetest_pop_context();
     }
-@@ -1177,31 +1168,31 @@ static void test_error_reporting(void)
+@@ -1404,31 +1395,31 @@ static void test_error_reporting(void)
      exception_caught = FALSE;
      set_error_reporting_flags(RO_ERROR_REPORTING_NONE | RO_ERROR_REPORTING_SUPPRESSEXCEPTIONS);
      ret = RoOriginateError(E_FAIL, NULL);

@@ -16,15 +16,15 @@ Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=30984
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=45605
 CW-Bug-Id: #16793
 ---
- dlls/winex11.drv/keyboard.c | 62 +++++++++++++++++++------------------
+ dlls/winex11.drv/keyboard.c | 62 +++++++++++++++++++++++----------------------
  1 file changed, 32 insertions(+), 30 deletions(-)
 
 diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
-index 731adc0265b..b561bd997b6 100644
+index da632589a18..da109b02e58 100644
 --- a/dlls/winex11.drv/keyboard.c
 +++ b/dlls/winex11.drv/keyboard.c
-@@ -1440,6 +1440,35 @@ BOOL X11DRV_KeyEvent( HWND hwnd, XEvent *xev )
-     return TRUE;
+@@ -1714,6 +1714,35 @@ static DWORD klid_from_xkb_layout( const char *layout, const char *variant )
+     return -1;
  }
  
 +/* From the point of view of this function there are two types of
@@ -56,13 +56,13 @@ index 731adc0265b..b561bd997b6 100644
 +    return keysym & 0xff;
 +}
 +
- /**********************************************************************
-  *		X11DRV_KEYBOARD_DetectLayout
-  *
-@@ -1470,22 +1499,7 @@ X11DRV_KEYBOARD_DetectLayout( Display *display )
-       /* get data for keycode from X server */
-       for (i = 0; i < syms; i++) {
-         if (!(keysym = XkbKeycodeToKeysym( display, keyc, 0, i ))) continue;
+ /* fuzzy layout detection through keysym / keycode matching, kbd_section must be held */
+ static unsigned int detect_keyboard_layout( Display *display, XModifierKeymap *modmap, unsigned int xkb_group )
+ {
+@@ -1755,22 +1784,7 @@ static unsigned int detect_keyboard_layout( Display *display, XModifierKeymap *m
+            */
+           state = xkb_group << 13 | (i & 1 ? ShiftMask : 0) | (i & 2 ? altgr_mod : 0);
+           if (!XkbLookupKeySym( display, keyc, state, &dummy, &keysym )) continue;
 -	/* Allow both one-byte and two-byte national keysyms */
 -	if ((keysym < 0x8000) && (keysym != ' '))
 -        {
@@ -83,7 +83,7 @@ index 731adc0265b..b561bd997b6 100644
        }
    }
  
-@@ -1660,20 +1674,8 @@ void X11DRV_InitKeyboard( Display *display )
+@@ -1909,20 +1923,8 @@ static void init_keycode_mappings( Display *display )
  	      /* we seem to need to search the layout-dependent scancodes */
  	      int maxlen=0,maxval=-1,ok;
  	      for (i=0; i<syms; i++) {
