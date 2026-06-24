@@ -173,15 +173,15 @@ index 684a58a724b..93d71b2030c 100644
 + */
 +NTSTATUS virtual_set_tls_information( PROCESS_TLS_INFORMATION *t )
 +{
-+    struct ntdll_thread_data *thread_data;
++    struct thread_data *thread_data;
 +    NTSTATUS ret = STATUS_SUCCESS;
 +    unsigned int idx = 0;
 +    sigset_t sigset;
 +
 +    server_enter_uninterrupted_section( &virtual_mutex, &sigset );
-+    LIST_FOR_EACH_ENTRY_REV( thread_data, &teb_list, struct ntdll_thread_data, entry )
++    LIST_FOR_EACH_ENTRY_REV( thread_data, &teb_list, struct thread_data, entry )
 +    {
-+        TEB *teb = CONTAINING_RECORD( thread_data, TEB, GdiTebBatch );
++        TEB *teb = thread_data->teb;
 +
 +        if (idx == t->ThreadDataCount) break;
 +        if ((ret = virtual_set_tls_information_teb( t, &idx, teb ))) break;
