@@ -1,7 +1,8 @@
-From ba80c8bfe142c8340e81705cbcd2d12cc75e98bd Mon Sep 17 00:00:00 2001
+From 4448c1e437c08daec4566c7b354de8678d5cc685 Mon Sep 17 00:00:00 2001
 From: Billy Laws <blaws05@gmail.com>
 Date: Thu, 16 Jan 2025 20:13:21 +0000
-Subject: [PATCH 03/14] include: Use inline assembly for TEB access with clang.
+Subject: [PATCH 008/121] include: Use inline assembly for TEB access with
+ clang.
 
 Avoids typ conflicts when WINE_NO_LONG_TYPES is defined.
 ---
@@ -9,7 +10,7 @@ Avoids typ conflicts when WINE_NO_LONG_TYPES is defined.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/include/winnt.h b/include/winnt.h
-index 3381b65d932..d701d5355b4 100644
+index 2dc1aadddde..b610ead600c 100644
 --- a/include/winnt.h
 +++ b/include/winnt.h
 @@ -2582,7 +2582,7 @@ NTSYSAPI struct _TEB * WINAPI NtCurrentTeb(void) __attribute__((pure));

@@ -1,0 +1,41 @@
+From 378e58460ce8162fe6a31e7d22fb0af0f76518f6 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Sat, 18 Apr 2026 01:17:43 +0200
+Subject: [PATCH 084/121] win32u: Add WINE_DISABLE_IME.
+
+---
+ dlls/win32u/imm.c              | 3 ++-
+ dlls/winex11.drv/x11drv_main.c | 3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/imm.c b/dlls/win32u/imm.c
+index 03c454d7377..cac90a72d46 100644
+--- a/dlls/win32u/imm.c
++++ b/dlls/win32u/imm.c
+@@ -289,7 +289,8 @@ BOOL register_imm_window( HWND hwnd )
+ 
+     TRACE( "(%p)\n", hwnd );
+ 
+-    if (disable_ime || !needs_ime_window( hwnd ))
++    const char *e = getenv("WINE_DISABLE_IME");
++    if ((e && *e != '\0' && *e != '0') || disable_ime || !needs_ime_window( hwnd ))
+         return FALSE;
+ 
+     thread_data = get_imm_thread_data();
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index da6bcd3cad7..8d2f46acf16 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -687,7 +687,8 @@ NTSTATUS __wine_unix_lib_init(void)
+ 
+     x11drv_init_keyboard( gdi_display );
+     X11DRV_InitMouse( gdi_display );
+-    if (use_xim) use_xim = xim_init( input_style );
++    const char *e = getenv("WINE_DISABLE_IME");
++    if (use_xim) use_xim = !(e && *e != '\0' && *e != '0') && xim_init( input_style );
+ 
+     init_icm_profile();
+     init_user_driver();
+-- 
+2.54.0
+

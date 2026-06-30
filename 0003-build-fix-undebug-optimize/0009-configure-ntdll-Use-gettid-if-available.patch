@@ -1,7 +1,7 @@
-From c9faf051d42a762e6c4b714df518eb36e202214b Mon Sep 17 00:00:00 2001
+From 075c49a1d5e6605b42a4db8f65b84d555d54e30e Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 29 Dec 2024 23:23:41 -0800
-Subject: [PATCH 09/14] configure, ntdll: Use gettid() if available.
+Subject: [PATCH 014/121] configure, ntdll: Use gettid() if available.
 
 ---
  configure.ac             | 1 +
@@ -9,10 +9,10 @@ Subject: [PATCH 09/14] configure, ntdll: Use gettid() if available.
  2 files changed, 3 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 8c183f01682..d43e5abb9e1 100644
+index ae655983934..fd4a84eaf35 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -2114,6 +2114,7 @@ AC_CHECK_FUNCS(\
+@@ -2116,6 +2116,7 @@ AC_CHECK_FUNCS(\
  	getauxval \
  	getifaddrs \
  	getrandom \
@@ -21,7 +21,7 @@ index 8c183f01682..d43e5abb9e1 100644
  	memfd_create \
  	pipe2 \
 diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index 686835d4a98..aba0a612faa 100644
+index d0f6a0947b3..bf8376c03b4 100644
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
 @@ -1572,6 +1572,8 @@ static int get_unix_tid(void)

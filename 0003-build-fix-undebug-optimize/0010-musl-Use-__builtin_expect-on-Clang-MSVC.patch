@@ -1,7 +1,7 @@
-From 721bc35520ae6ec9fc282e33649f795df48d1515 Mon Sep 17 00:00:00 2001
+From 743ceddc5f36024c07d68007a5a270185a8ce4d9 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 8 Jan 2025 22:33:17 -0800
-Subject: [PATCH 10/14] musl: Use __builtin_expect on Clang MSVC.
+Subject: [PATCH 015/121] musl: Use __builtin_expect on Clang MSVC.
 
 ---
  libs/musl/src/internal/libm.h | 2 +-

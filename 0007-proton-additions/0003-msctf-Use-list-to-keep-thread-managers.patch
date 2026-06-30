@@ -1,7 +1,7 @@
-From 03c78a95efbed9648bc131329facdfa1aae0b428 Mon Sep 17 00:00:00 2001
+From 88cda29a47ad0acc3b2a7ef729778c4d09641dc3 Mon Sep 17 00:00:00 2001
 From: Zhiyi Zhang <zzhang@codeweavers.com>
 Date: Fri, 16 Aug 2019 09:46:25 +0000
-Subject: [PATCH 03/13] msctf: Use list to keep thread managers.
+Subject: [PATCH 065/121] msctf: Use list to keep thread managers.
 
 Thread managers were stored in thread local storage,
 which have a major flaw that they can't not be released
@@ -9,10 +9,10 @@ by another thread.
 
 Signed-off-by: Zhiyi Zhang <zzhang@codeweavers.com>
 ---
- dlls/msctf/msctf.c          | 46 +++++++----------------
+ dlls/msctf/msctf.c          | 46 +++++++-----------------
  dlls/msctf/msctf_internal.h |  1 -
- dlls/msctf/threadmgr.c      | 73 ++++++++++++++++++++++++++++++++-----
- 3 files changed, 76 insertions(+), 44 deletions(-)
+ dlls/msctf/threadmgr.c      | 72 +++++++++++++++++++++++++++++++------
+ 3 files changed, 75 insertions(+), 44 deletions(-)
 
 diff --git a/dlls/msctf/msctf.c b/dlls/msctf/msctf.c
 index e2dde836b12..a79a32afc02 100644
@@ -130,10 +130,10 @@ index 1d94fa1b9b3..e465b985bf2 100644
  extern ITfCompartmentMgr *globalCompartmentMgr;
  
 diff --git a/dlls/msctf/threadmgr.c b/dlls/msctf/threadmgr.c
-index 11c79c030ff..ff2b0b95ff7 100644
+index 312b527eb74..1d99f1e8df7 100644
 --- a/dlls/msctf/threadmgr.c
 +++ b/dlls/msctf/threadmgr.c
-@@ -37,6 +37,17 @@
+@@ -41,6 +41,17 @@ DEFINE_GUID(GUID_SYSTEM_FUNCTIONPROVIDER, 0x9a698bb0,0x0f21,0x11d3,0x8d,0xf1,0x0
  
  WINE_DEFAULT_DEBUG_CHANNEL(msctf);
  
@@ -151,7 +151,7 @@ index 11c79c030ff..ff2b0b95ff7 100644
  typedef struct tagPreservedKey
  {
      struct list     entry;
-@@ -98,6 +109,9 @@ typedef struct tagACLMulti {
+@@ -103,6 +114,9 @@ typedef struct tagACLMulti {
      struct list     ThreadMgrEventSink;
      struct list     UIElementSink;
      struct list     InputProcessorProfileActivationSink;
@@ -161,7 +161,7 @@ index 11c79c030ff..ff2b0b95ff7 100644
  } ThreadMgr;
  
  typedef struct tagEnumTfDocumentMgr {
-@@ -110,6 +124,11 @@ typedef struct tagEnumTfDocumentMgr {
+@@ -115,6 +129,11 @@ typedef struct tagEnumTfDocumentMgr {
  
  static HRESULT EnumTfDocumentMgr_Constructor(struct list* head, IEnumTfDocumentMgrs **ppOut);
  
@@ -173,9 +173,9 @@ index 11c79c030ff..ff2b0b95ff7 100644
  static inline ThreadMgr *impl_from_ITfThreadMgrEx(ITfThreadMgrEx *iface)
  {
      return CONTAINING_RECORD(iface, ThreadMgr, ITfThreadMgrEx_iface);
-@@ -155,6 +174,35 @@ static inline EnumTfDocumentMgr *impl_from_IEnumTfDocumentMgrs(IEnumTfDocumentMg
-     return CONTAINING_RECORD(iface, EnumTfDocumentMgr, IEnumTfDocumentMgrs_iface);
- }
+@@ -331,6 +350,34 @@ static const ITfFunctionProviderVtbl TfFunctionProviderVtbl =
+     func_provider_GetFunction,
+ };
  
 +/***********************************************************************
 + *              TF_GetThreadMgr (MSCTF.@)
@@ -205,11 +205,10 @@ index 11c79c030ff..ff2b0b95ff7 100644
 +    *pptim = NULL;
 +    return E_FAIL;
 +}
-+
  static void ThreadMgr_Destructor(ThreadMgr *This)
  {
      struct list *cursor, *cursor2;
-@@ -163,7 +211,9 @@ static void ThreadMgr_Destructor(ThreadMgr *This)
+@@ -339,7 +386,9 @@ static void ThreadMgr_Destructor(ThreadMgr *This)
      if (This->focusHook)
          UnhookWindowsHookEx(This->focusHook);
  
@@ -220,7 +219,7 @@ index 11c79c030ff..ff2b0b95ff7 100644
      TRACE("destroying %p\n", This);
      if (This->focus)
          ITfDocumentMgr_Release(This->focus);
-@@ -386,17 +436,20 @@ static HRESULT WINAPI ThreadMgr_SetFocus(ITfThreadMgrEx *iface, ITfDocumentMgr *
+@@ -562,17 +611,20 @@ static HRESULT WINAPI ThreadMgr_SetFocus(ITfThreadMgrEx *iface, ITfDocumentMgr *
  
  static LRESULT CALLBACK ThreadFocusHookProc(int nCode, WPARAM wParam, LPARAM lParam)
  {
@@ -243,7 +242,7 @@ index 11c79c030ff..ff2b0b95ff7 100644
          return 0;
      }
  
-@@ -417,6 +470,7 @@ static LRESULT CALLBACK ThreadFocusHookProc(int nCode, WPARAM wParam, LPARAM lPa
+@@ -593,6 +645,7 @@ static LRESULT CALLBACK ThreadFocusHookProc(int nCode, WPARAM wParam, LPARAM lPa
          }
      }
  
@@ -251,7 +250,7 @@ index 11c79c030ff..ff2b0b95ff7 100644
      return CallNextHookEx(This->focusHook, nCode, wParam, lParam);
  }
  
-@@ -1346,13 +1400,8 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
+@@ -1532,13 +1585,8 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
          return CLASS_E_NOAGGREGATION;
  
      /* Only 1 ThreadMgr is created per thread */
@@ -266,15 +265,15 @@ index 11c79c030ff..ff2b0b95ff7 100644
  
      This = calloc(1, sizeof(ThreadMgr));
      if (This == NULL)
-@@ -1367,7 +1416,6 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
-     This->ITfUIElementMgr_iface.lpVtbl = &ThreadMgrUIElementMgrVtbl;
+@@ -1554,7 +1602,6 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
      This->ITfSourceSingle_iface.lpVtbl = &SourceSingleVtbl;
+     This->ITfFunctionProvider_iface.lpVtbl = &TfFunctionProviderVtbl;
      This->refCount = 1;
 -    TlsSetValue(tlsIndex,This);
  
      CompartmentMgr_Constructor((IUnknown*)&This->ITfThreadMgrEx_iface, &IID_IUnknown, (IUnknown**)&This->CompartmentMgr);
  
-@@ -1384,6 +1432,11 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
+@@ -1571,6 +1618,11 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
      list_init(&This->UIElementSink);
      list_init(&This->InputProcessorProfileActivationSink);
  

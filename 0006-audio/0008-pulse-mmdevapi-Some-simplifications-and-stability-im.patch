@@ -1,29 +1,29 @@
-From 2a9b20e5b8b613c61cbf03532c0ef62632c097f4 Mon Sep 17 00:00:00 2001
+From b327cd65d4b9a2130f6c7746856cf454faf9d0da Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 29 Aug 2025 11:19:36 -0700
-Subject: [PATCH 08/10] pulse,mmdevapi: Some simplifications and stability
+Subject: [PATCH 060/121] pulse,mmdevapi: Some simplifications and stability
  improvements to the low latency patches.
 
 ---
  dlls/mmdevapi/client.c     | 52 ++++++++------------------------------
- dlls/winepulse.drv/pulse.c | 46 ++++++++++++++++++++-------------
- 2 files changed, 38 insertions(+), 60 deletions(-)
+ dlls/winepulse.drv/pulse.c | 44 +++++++++++++++++++-------------
+ 2 files changed, 36 insertions(+), 60 deletions(-)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index 3025ac1aa44..d09c5e8db42 100644
+index 719cecbcf0d..06d08887bc2 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
-@@ -44,9 +44,6 @@ typedef struct tagLANGANDCODEPAGE
- 
- static HANDLE main_loop_thread;
+@@ -89,9 +89,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
+     return CONTAINING_RECORD(iface, struct audio_client, IAudioStreamVolume_iface);
+ }
  
 -static BOOL custom;
 -static REFERENCE_TIME num_periods = 3;
 -
- void main_loop_stop(void)
+ static HRESULT get_periods(struct audio_client *client,
+                            REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
  {
-     if (main_loop_thread) {
-@@ -133,10 +130,12 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -123,10 +120,12 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
      TRACE("Device periods: %lu default and %lu minimum\n", (ULONG)def_period, (ULONG)min_period);
  
      if (mode == AUDCLNT_SHAREMODE_SHARED) {
@@ -39,7 +39,7 @@ index 3025ac1aa44..d09c5e8db42 100644
      } else {
          const WAVEFORMATEXTENSIBLE *fmtex = (WAVEFORMATEXTENSIBLE *)fmt;
          if (fmtex->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-@@ -161,11 +160,7 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
+@@ -151,11 +150,7 @@ static HRESULT adjust_timing(struct audio_client *client, const BOOLEAN force_de
          }
      }
  
@@ -52,7 +52,7 @@ index 3025ac1aa44..d09c5e8db42 100644
  
      return hr;
  }
-@@ -453,25 +448,6 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
+@@ -396,25 +391,6 @@ static HRESULT stream_init(struct audio_client *client, const BOOLEAN force_def_
      if (mode != AUDCLNT_SHAREMODE_SHARED && mode != AUDCLNT_SHAREMODE_EXCLUSIVE)
          return E_INVALIDARG;
  
@@ -78,7 +78,7 @@ index 3025ac1aa44..d09c5e8db42 100644
      if (flags & ~(AUDCLNT_STREAMFLAGS_CROSSPROCESS |
                    AUDCLNT_STREAMFLAGS_LOOPBACK |
                    AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
-@@ -1219,9 +1195,9 @@ static HRESULT WINAPI client_GetSharedModeEnginePeriod(IAudioClient3 *iface,
+@@ -1150,9 +1126,9 @@ static HRESULT WINAPI client_GetSharedModeEnginePeriod(IAudioClient3 *iface,
      if (FAILED(hr = get_periods(This, &def_period, &min_period)))
          return hr;
  
@@ -91,7 +91,7 @@ index 3025ac1aa44..d09c5e8db42 100644
      *unit_period_frames    = 1;
  
      return hr;
-@@ -1253,21 +1229,13 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
+@@ -1184,21 +1160,13 @@ static HRESULT WINAPI client_InitializeSharedAudioStream(IAudioClient3 *iface, D
  {
      struct audio_client *This = impl_from_IAudioClient3(iface);
      REFERENCE_TIME period;
@@ -115,26 +115,24 @@ index 3025ac1aa44..d09c5e8db42 100644
      return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
  }
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index debb5697513..3ee69bbb0fe 100644
+index ca438140f7b..b14cbdb763d 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -749,6 +749,15 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
+@@ -767,6 +767,13 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
      fmt->dwChannelMask = pa_mask;
  }
  
 +static LONGLONG find_closest_to_next_integer(LONGLONG x, LONGLONG c, LONGLONG d) {
-+    // get the target ceiling value (next integer)
-+    LONGLONG target = ((x * c) + d - 1) / d;  // ceil((x * c) / d)
-+    // find the largest x' such that (x' * c) / d <= target  
-+    LONGLONG max_x_for_target = (target * d) / c;  // floor((target * d) / c)
-+    // return the maximum of input x and calculated boundary
++    LONGLONG target = ((x * c) + d - 1) / d;
++    LONGLONG max_x_for_target = (target * d) / c;
 +    return (x > max_x_for_target) ? x : max_x_for_target;
 +}
++
 +
  static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, const char *pulse_name,
                                   WAVEFORMATEXTENSIBLE *fmt, REFERENCE_TIME *def_period, REFERENCE_TIME *min_period)
  {
-@@ -805,13 +814,26 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -823,13 +830,26 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
      if (stream)
          pa_stream_unref(stream);
  
@@ -151,23 +149,23 @@ index debb5697513..3ee69bbb0fe 100644
 +                MESSAGE("Set custom audio period %d\n", periodval);
 +            }
 +        }
-+
-+        if (periodval > 0) {
-+            period_to_set = periodval;
-+            multiplier = 1;
-+        }
  
 -    penv = getenv("STAGING_AUDIO_PERIOD");
 -    if (penv && (periodval = atoi(penv)) >= 0) {
 -        *def_period = *min_period = periodval;
 -        TRACE("Pulse audio period set to %d.\n", periodval);
++        if (periodval > 0) {
++            period_to_set = periodval;
++            multiplier = 1;
++        }
++
 +        /* overwrite default with minimum (for playback devices) */
 +        *min_period = find_closest_to_next_integer(period_to_set, ss.rate, 10000000);
 +        *def_period = find_closest_to_next_integer(*min_period * multiplier, ss.rate, 10000000);
      }
  
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-@@ -1209,18 +1231,6 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1227,18 +1247,6 @@ static NTSTATUS pulse_create_stream(void *args)
      if (FAILED(hr))
          goto exit;
  

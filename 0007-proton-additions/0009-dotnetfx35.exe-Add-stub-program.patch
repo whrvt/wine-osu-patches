@@ -1,7 +1,7 @@
-From f2f11e59a152ee396ecf28279592e4f5b23b3237 Mon Sep 17 00:00:00 2001
+From 6f8ebe9ab5650f5a6d907dde7ad626f5c1018379 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 16 Oct 2020 23:37:09 +0200
-Subject: [PATCH 09/13] dotnetfx35.exe: Add stub program.
+Subject: [PATCH 071/121] dotnetfx35.exe: Add stub program.
 
 This makes it possible to override native dotnetfx35 installer, which
 is broken in an unfixable way. Recent Windows versions also bypass its
@@ -16,10 +16,10 @@ execution somehow.
  create mode 100644 programs/dotnetfx35/main.c
 
 diff --git a/configure b/configure
-index 495f4e97793..2fd63f1f3c8 100755
+index 2cf1a766c0e..f5df51cbea2 100755
 --- a/configure
 +++ b/configure
-@@ -1715,6 +1715,7 @@ enable_control
+@@ -1729,6 +1729,7 @@ enable_control
  enable_cscript
  enable_dism
  enable_dllhost
@@ -27,7 +27,7 @@ index 495f4e97793..2fd63f1f3c8 100755
  enable_dplaysvr
  enable_dpnsvr
  enable_dpvsetup
-@@ -23889,6 +23890,7 @@ wine_fn_config_makefile programs/control enable_control
+@@ -23273,6 +23274,7 @@ wine_fn_config_makefile programs/control enable_control
  wine_fn_config_makefile programs/cscript enable_cscript
  wine_fn_config_makefile programs/dism enable_dism
  wine_fn_config_makefile programs/dllhost enable_dllhost
@@ -36,10 +36,10 @@ index 495f4e97793..2fd63f1f3c8 100755
  wine_fn_config_makefile programs/dpnsvr enable_dpnsvr
  wine_fn_config_makefile programs/dpvsetup enable_dpvsetup
 diff --git a/configure.ac b/configure.ac
-index df0d600fbaf..36f93949bb6 100644
+index b9d40a01904..7381d0135da 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3571,6 +3571,7 @@ WINE_CONFIG_MAKEFILE(programs/control)
+@@ -3584,6 +3584,7 @@ WINE_CONFIG_MAKEFILE(programs/control)
  WINE_CONFIG_MAKEFILE(programs/cscript)
  WINE_CONFIG_MAKEFILE(programs/dism)
  WINE_CONFIG_MAKEFILE(programs/dllhost)

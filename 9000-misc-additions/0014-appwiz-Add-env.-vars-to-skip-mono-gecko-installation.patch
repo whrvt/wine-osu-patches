@@ -1,0 +1,62 @@
+From eaf63557fedb3d8ba3afc6e8a6c9e59418ec8776 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sat, 18 Apr 2026 01:22:08 +0200
+Subject: [PATCH 089/121] appwiz: Add env. vars to skip mono/gecko
+ installation.
+
+---
+ dlls/appwiz.cpl/addons.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/appwiz.cpl/addons.c b/dlls/appwiz.cpl/addons.c
+index f0835e90ed5..01dd97c3b0d 100644
+--- a/dlls/appwiz.cpl/addons.c
++++ b/dlls/appwiz.cpl/addons.c
+@@ -75,6 +75,7 @@ typedef struct {
+     const WCHAR *url_config_key;
+     const WCHAR *dir_config_key;
+     LPCWSTR dialog_template;
++    const char *control_env_var;
+ } addon_info_t;
+ 
+ /* Download addon files over HTTP because Wine depends on an external library
+@@ -88,7 +89,8 @@ static const addon_info_t addons_info[] = {
+         GECKO_SHA,
+         "http://source.winehq.org/winegecko.php",
+         L"MSHTML", L"GeckoUrl", L"GeckoCabDir",
+-        MAKEINTRESOURCEW(ID_DWL_GECKO_DIALOG)
++        MAKEINTRESOURCEW(ID_DWL_GECKO_DIALOG),
++        "WINE_SKIP_GECKO_INSTALLATION"
+     },
+     {
+         MONO_VERSION,
+@@ -97,7 +99,8 @@ static const addon_info_t addons_info[] = {
+         MONO_SHA,
+         "http://source.winehq.org/winemono.php",
+         L"Dotnet", L"MonoUrl", L"MonoCabDir",
+-        MAKEINTRESOURCEW(ID_DWL_MONO_DIALOG)
++        MAKEINTRESOURCEW(ID_DWL_MONO_DIALOG),
++        "WINE_SKIP_MONO_INSTALLATION"
+     }
+ };
+ 
+@@ -752,11 +755,16 @@ static INT_PTR CALLBACK installer_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
+ 
+ BOOL install_addon(addon_t addon_type)
+ {
++    const char *envar_content;
++
+     if(!*GECKO_ARCH)
+         return FALSE;
+ 
+     addon = addons_info+addon_type;
+ 
++    if (!(envar_content = getenv(addon->control_env_var)) || atoi(envar_content) != 0)
++        return FALSE;
++
+     p_wine_get_version = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version");
+ 
+     /*
+-- 
+2.54.0
+

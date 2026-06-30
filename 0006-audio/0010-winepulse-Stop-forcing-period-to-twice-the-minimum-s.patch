@@ -1,7 +1,7 @@
-From a3d3219607290060012830fd40826f2a19371f02 Mon Sep 17 00:00:00 2001
+From 933dde66ca0fa72823e3f1d525099d2edf9d3472 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sun, 8 Mar 2026 15:17:41 +0100
-Subject: [PATCH 10/10] winepulse: Stop forcing period to twice the minimum
+Subject: [PATCH 062/121] winepulse: Stop forcing period to twice the minimum
  size.
 
 Since pipewire-1.6, minimum quant value has been increased to 256: no need to multiply it manually anymore.
@@ -12,10 +12,10 @@ https://gitlab.freedesktop.org/pipewire/pipewire/-/commit/7bd65cfe9385b4e005b7f5
  1 file changed, 2 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 3ee69bbb0fe..3488a9f8648 100644
+index b14cbdb763d..45cfb2f4e71 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -816,7 +816,6 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -832,7 +832,6 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
  
      if (length) {
          REFERENCE_TIME period_to_set = pa_bytes_to_usec(10 * length, &ss);
@@ -23,7 +23,7 @@ index 3ee69bbb0fe..3488a9f8648 100644
          static int periodval = -1;
          if (periodval == -1) {
              const char* penv = getenv("STAGING_AUDIO_PERIOD");
-@@ -826,14 +825,12 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
+@@ -842,14 +841,12 @@ static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, c
              }
          }
  

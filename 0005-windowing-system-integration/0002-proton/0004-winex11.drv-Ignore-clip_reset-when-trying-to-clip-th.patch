@@ -1,8 +1,8 @@
-From 3023de7f4d08d3e7558d3bc6ce446fada88434af Mon Sep 17 00:00:00 2001
+From 7fbf934021c90d3a23fdf3cef22f40145e03653e Mon Sep 17 00:00:00 2001
 From: Alexey Prokhin <alexey@prokhin.ru>
 Date: Wed, 17 Oct 2018 19:55:27 +0300
-Subject: [PATCH 4/8] winex11.drv: Ignore clip_reset when trying to clip the
- mouse after the desktop has been resized.
+Subject: [PATCH 048/121] winex11.drv: Ignore clip_reset when trying to clip
+ the mouse after the desktop has been resized.
 
 This fixes the mouse clipping when the desktop is resized multiple times in a row.
 
@@ -12,10 +12,10 @@ CW-Bug-Id: #21879
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
-index e12a73f33fb..8d0512b46c5 100644
+index 1579a6eacb2..65ca2d99da6 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
-@@ -2682,7 +2682,7 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
+@@ -2699,7 +2699,7 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
  
      if (!ret || !is_fullscreen( &monitor_info, &window_rect )) return FALSE;
      if (is_captured_by_system()) return FALSE;

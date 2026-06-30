@@ -1,7 +1,7 @@
-From 97fb3908380a765b897da9435c8a882f7780fd9f Mon Sep 17 00:00:00 2001
+From c6e32db372495b0464cabcc7d1dd1b2a12f7b1ce Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 02:00:00 +0200
-Subject: [PATCH 01/14] ntdll: Fix compilation with link-time optimizations.
+Subject: [PATCH 006/121] ntdll: Fix compilation with link-time optimizations.
 
 Rebased from an original patch by Torge Matthies.
 ---
@@ -13,59 +13,59 @@ Rebased from an original patch by Torge Matthies.
  5 files changed, 9 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/ntdll/unix/signal_arm.c b/dlls/ntdll/unix/signal_arm.c
-index 60b34c2d8bd..59d97cdeca3 100644
+index 775fc1996c4..ee3a21cd2e6 100644
 --- a/dlls/ntdll/unix/signal_arm.c
 +++ b/dlls/ntdll/unix/signal_arm.c
-@@ -1103,7 +1103,7 @@ void signal_init_process(void)
+@@ -1111,7 +1111,7 @@ void signal_init_process( TEB *teb )
  /***********************************************************************
   *           init_syscall_frame
   */
--void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
-+__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
  {
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
-index 536834955b3..d7d5d50ff20 100644
+index 522ade368f0..6786cb67ea3 100644
 --- a/dlls/ntdll/unix/signal_arm64.c
 +++ b/dlls/ntdll/unix/signal_arm64.c
-@@ -1451,7 +1451,7 @@ void syscall_dispatcher_return_slowpath(void)
+@@ -1521,7 +1521,7 @@ void syscall_dispatcher_return_slowpath(void)
  /***********************************************************************
   *           init_syscall_frame
   */
--void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
-+__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
  {
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
-index e105dd00bb6..9744274cfcb 100644
+index 738e7169cad..cdbcf88fd73 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
-@@ -2419,7 +2419,7 @@ void signal_init_process(void)
+@@ -2441,7 +2441,7 @@ void signal_init_process( TEB *teb )
  /***********************************************************************
   *           init_syscall_frame
   */
--void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
-+__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
  {
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index 50539d54126..a9654f1b7ce 100644
+index 0023abf1d2b..953d6137895 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -2828,7 +2828,7 @@ void signal_init_process(void)
+@@ -2846,7 +2846,7 @@ void signal_init_process( TEB *teb )
  /***********************************************************************
   *           init_syscall_frame
   */
--void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
-+__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
  {
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/loader/preloader.c b/loader/preloader.c
-index ce82a9f296f..b1003cae723 100644
+index 72b7fcc7817..deae42d28a2 100644
 --- a/loader/preloader.c
 +++ b/loader/preloader.c
 @@ -179,7 +179,7 @@ void __bb_init_func(void) { return; }

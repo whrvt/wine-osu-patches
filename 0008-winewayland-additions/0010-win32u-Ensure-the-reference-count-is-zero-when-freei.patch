@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Sat, 18 Apr 2026 15:07:30 -0500
+Subject: [PATCH 10/46] 
+ 0014-win32u-Ensure-the-reference-count-is-zero-when-freei.patch
+
+---
+ dlls/win32u/window.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index b3765bacdbc..cc9f82d8c5c 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -372,7 +372,8 @@ void client_surface_release( struct client_surface *surface )
+         pthread_mutex_unlock( &surfaces_lock );
+ 
+         surface->funcs->destroy( surface );
+-        free( surface );
++        /* the driver may cache the surface */
++        if (!surface->ref) free( surface );
+     }
+ }
+ 

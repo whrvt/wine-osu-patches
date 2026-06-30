@@ -1,7 +1,7 @@
-From 1f70659ad5d2fe86fe84cecdcae4b7197964ad55 Mon Sep 17 00:00:00 2001
+From d5f66136d28250fc8aed5576fc955ffc048fad6a Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 4 May 2026 23:41:09 +0200
-Subject: [PATCH 13/13] server/user32: Backport more raw input changes from
+Subject: [PATCH 075/121] server/user32: Backport more raw input changes from
  Proton.
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH 13/13] server/user32: Backport more raw input changes from
  3 files changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/user32/input.c b/dlls/user32/input.c
-index d375a4be782..3efce24a66c 100644
+index 1df43259b11..4c2b022f0d5 100644
 --- a/dlls/user32/input.c
 +++ b/dlls/user32/input.c
 @@ -31,6 +31,7 @@
@@ -40,7 +40,7 @@ index d375a4be782..3efce24a66c 100644
      if (flags & ~(DEVICE_NOTIFY_SERVICE_HANDLE | DEVICE_NOTIFY_ALL_INTERFACE_CLASSES))
      {
 diff --git a/server/queue.c b/server/queue.c
-index 8bbbefaa25d..b5b3aaa84c9 100644
+index a3f954ef713..2815ec29b17 100644
 --- a/server/queue.c
 +++ b/server/queue.c
 @@ -2339,7 +2339,8 @@ static void key_repeat_timeout( void *private )
@@ -62,7 +62,7 @@ index 8bbbefaa25d..b5b3aaa84c9 100644
              desktop->key_repeat.win = win;
              if (desktop->key_repeat.timeout) remove_timeout_user( desktop->key_repeat.timeout );
 diff --git a/server/user.h b/server/user.h
-index 060e54ec775..86fa0c19960 100644
+index 1d16e2aab95..3aba4fe230c 100644
 --- a/server/user.h
 +++ b/server/user.h
 @@ -57,6 +57,7 @@ struct key_repeat

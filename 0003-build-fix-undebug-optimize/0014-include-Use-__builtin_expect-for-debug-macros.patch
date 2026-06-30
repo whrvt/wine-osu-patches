@@ -1,7 +1,7 @@
-From ad6bfa86150d02b016d6f3702f6eb58269e73a22 Mon Sep 17 00:00:00 2001
+From fa3f578b71f1c81ce012e37666eeb2ac30ebb23b Mon Sep 17 00:00:00 2001
 From: Torge Matthies <openglfreak@googlemail.com>
 Date: Sat, 26 Mar 2022 17:04:26 +0100
-Subject: [PATCH 14/14] include: Use __builtin_expect for debug macros.
+Subject: [PATCH 019/121] include: Use __builtin_expect for debug macros.
 
 ---
  include/wine/debug.h | 25 ++++++++++++++++++++-----

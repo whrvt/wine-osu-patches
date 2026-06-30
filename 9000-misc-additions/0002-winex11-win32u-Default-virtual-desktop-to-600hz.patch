@@ -1,7 +1,7 @@
-From a54495fbaf623c79942c3a8f83020ee4497d2ce0 Mon Sep 17 00:00:00 2001
+From 5b2f605e3dc87245a69de877662636709163f6e2 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:06:45 +0200
-Subject: [PATCH 02/47] winex11/win32u: Default virtual desktop to 600hz.
+Subject: [PATCH 077/121] winex11/win32u: Default virtual desktop to 600hz.
 
 ---
  dlls/win32u/sysparams.c    | 4 ++--
@@ -10,10 +10,10 @@ Subject: [PATCH 02/47] winex11/win32u: Default virtual desktop to 600hz.
  3 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index 00fe10f30ca..42b05fa4837 100644
+index 239d13df6cc..4681142cfae 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
-@@ -2110,7 +2110,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
+@@ -2111,7 +2111,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
  static DEVMODEW *get_virtual_modes( const DEVMODEW *initial, const DEVMODEW *maximum,
                                      const DEVMODEW *host_modes, UINT host_modes_count, UINT32 *modes_count )
  {
@@ -22,7 +22,7 @@ index 00fe10f30ca..42b05fa4837 100644
      DEVMODEW *modes = NULL;
      SIZE *screen_sizes;
      BOOL vertical;
-@@ -2764,7 +2764,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
+@@ -2765,7 +2765,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
      if (!read_source_mode( source->key, ENUM_CURRENT_SETTINGS, &current ))
      {
          current = ctx->primary;
@@ -32,10 +32,10 @@ index 00fe10f30ca..42b05fa4837 100644
          current.dmPelsHeight = initial.dmPelsHeight;
      }
 diff --git a/dlls/wined3d/directx.c b/dlls/wined3d/directx.c
-index 16500e8e855..76e25a8ac6c 100644
+index 57253248da2..d697cf964f3 100644
 --- a/dlls/wined3d/directx.c
 +++ b/dlls/wined3d/directx.c
-@@ -1840,7 +1840,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d_output *outp
+@@ -1841,7 +1841,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d_output *outp
      if (FAILED(wined3d_output_get_display_mode(output, &mode, NULL)))
          return WINED3DERR_INVALIDCALL;
      if (mode.refresh_rate == DEFAULT_REFRESH_RATE)

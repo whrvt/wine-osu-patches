@@ -1,7 +1,7 @@
-From 4e472ac28df1465f03c04dfde414a0d9dea818fc Mon Sep 17 00:00:00 2001
+From bc9ca770ab0ebc8ee9a7f1e210071697a1548af0 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 27 Dec 2024 13:17:14 -0800
-Subject: [PATCH 17/19] gdi32: Map SwapBuffers directly to
+Subject: [PATCH 042/121] gdi32: Map SwapBuffers directly to
  opengl32.wglSwapBuffers.
 
 Removes one level of indirection, not sure why it was done this way before.

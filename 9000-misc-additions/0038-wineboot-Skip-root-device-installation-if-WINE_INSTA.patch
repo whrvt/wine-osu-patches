@@ -1,0 +1,36 @@
+From a6354346c35afe2b4a0f690a458cc438cc05f2f4 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 5 Dec 2024 18:11:18 -0800
+Subject: [PATCH 113/121] wineboot: Skip root device installation if
+ WINE_INSTALL_ROOT_DEVICES isn't in the environment.
+
+osu! doesn't need any of them.
+---
+ programs/wineboot/wineboot.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index 21a8910c6f6..da114282a0b 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -1602,6 +1602,7 @@ static void update_user_profile(void)
+ static void update_wineprefix( BOOL force )
+ {
+     const WCHAR *config_dir = _wgetenv( L"WINECONFIGDIR" );
++    const WCHAR *root_install = _wgetenv( L"WINE_INSTALL_ROOT_DEVICES" );
+     WCHAR *inf_path = get_wine_inf_path();
+     int fd;
+     struct stat st;
+@@ -1648,7 +1649,8 @@ static void update_wineprefix( BOOL force )
+                 count++;
+             }
+         }
+-        install_root_pnp_devices();
++        if (root_install)
++            install_root_pnp_devices();
+         update_user_profile();
+ 
+         TRACE( "wine: configuration in %s has been updated.\n", debugstr_w(prettyprint_configdir()) );
+-- 
+2.54.0
+

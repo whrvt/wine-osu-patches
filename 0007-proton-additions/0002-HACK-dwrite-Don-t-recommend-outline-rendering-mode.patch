@@ -1,7 +1,7 @@
-From bf79630c1a792960ab8722aa844062182f6aaebc Mon Sep 17 00:00:00 2001
+From 3da6e970c77e713b1426e8c63c1f8fdd0b9293ee Mon Sep 17 00:00:00 2001
 From: Nikolay Sivov <nsivov@codeweavers.com>
 Date: Wed, 8 Mar 2017 20:15:40 +0300
-Subject: [PATCH 02/13] HACK: dwrite: Don't recommend outline rendering mode
+Subject: [PATCH 064/121] HACK: dwrite: Don't recommend outline rendering mode
 
 ---
  dlls/dwrite/font.c | 3 ++-

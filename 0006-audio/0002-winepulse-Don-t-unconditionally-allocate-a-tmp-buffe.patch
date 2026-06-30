@@ -1,17 +1,18 @@
-From 22318155940bf0f27373d6bf23c901f01288dac6 Mon Sep 17 00:00:00 2001
+From 49a6ac1e8963234f4ce79cee2f29eae0cc58307c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:15:33 -0700
-Subject: [PATCH 02/10] winepulse: Don't unconditionally allocate a tmp buffer.
+Subject: [PATCH 054/121] winepulse: Don't unconditionally allocate a tmp
+ buffer.
 
 ---
  dlls/winepulse.drv/pulse.c | 11 ++++++++---
  1 file changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 1302b4a5edc..11db0c47a82 100644
+index 4553f9a528f..332c550579f 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -1201,9 +1201,14 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1219,9 +1219,14 @@ static NTSTATUS pulse_create_stream(void *args)
          /* Update frames according to new size */
          dump_attr(attr);
          if (stream->dataflow == eRender) {

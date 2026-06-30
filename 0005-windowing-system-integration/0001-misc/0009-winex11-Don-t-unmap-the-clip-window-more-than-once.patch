@@ -1,7 +1,7 @@
-From 951bdbb720ea212134150e920079d826dd4089c4 Mon Sep 17 00:00:00 2001
+From f5a3723bebe8788d58e7d019b134b9957386aec8 Mon Sep 17 00:00:00 2001
 From: Myah Caron <qsniyg@mail.com>
 Date: Wed, 18 Mar 2020 17:24:01 +0100
-Subject: [PATCH 09/19] winex11: Don't unmap the clip window more than once
+Subject: [PATCH 034/121] winex11: Don't unmap the clip window more than once
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=48772
 Signed-off-by: Myah Caron <qsniyg@mail.com>
@@ -10,7 +10,7 @@ Signed-off-by: Myah Caron <qsniyg@mail.com>
  1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 60b294dcd04..c41a30e79a9 100644
+index 094264de1e9..c62a4501503 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
 @@ -131,6 +131,7 @@ static const UINT button_up_data[NB_BUTTONS] =

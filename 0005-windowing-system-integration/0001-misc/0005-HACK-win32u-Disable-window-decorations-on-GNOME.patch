@@ -1,7 +1,7 @@
-From 593371acb83ac81b091d8c5e57c60d8a49b3b05c Mon Sep 17 00:00:00 2001
+From 4e4bdefea480faf86ba2653af8e491732c946d22 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 25 Feb 2026 13:08:14 +0100
-Subject: [PATCH 05/19] HACK: win32u: Disable window decorations on GNOME.
+Subject: [PATCH 030/121] HACK: win32u: Disable window decorations on GNOME.
 
 Window decorations seems to be the root cause of game/shell crashes after alt-tab
 on GNOME: disabling them to prevent such issues.
@@ -10,10 +10,10 @@ on GNOME: disabling them to prevent such issues.
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index d06b48cd25e..3b55ba5a420 100644
+index 55a11d0586d..c15b9b93c5c 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -2074,7 +2074,8 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
+@@ -1997,7 +1997,8 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
      RECT visible_rect, rect = {0};
  
      if (get_present_rect( hwnd, &rect, get_thread_dpi() )) return rect;

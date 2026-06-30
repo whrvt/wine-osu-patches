@@ -1,7 +1,7 @@
-From b9ae394a1153d062a73d580cfc5fb676a47904a8 Mon Sep 17 00:00:00 2001
+From fcfb3303501031be4a521c41f238348d1dc1e12f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 15 May 2020 13:01:26 +0200
-Subject: [PATCH 06/13] d3d10core: Implement D3D10CoreRegisterLayers.
+Subject: [PATCH 068/121] d3d10core: Implement D3D10CoreRegisterLayers.
 
 ---
  dlls/d3d10core/d3d10core_main.c | 4 +++-

@@ -1,0 +1,175 @@
+From 8204b0cacd851c83338107f50f56ed1dd2a85dc1 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Wed, 18 Sep 2024 13:23:09 -0700
+Subject: [PATCH 118/121] winex11: Custom frame limiter for OpenGL
+
+---
+ configure.ac                   | 11 +++++++
+ dlls/winex11.drv/opengl.c      | 56 ++++++++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h      |  2 ++
+ dlls/winex11.drv/x11drv_main.c | 26 ++++++++++++++++
+ 4 files changed, 95 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 9c0db4ce5ca..cb8037ca2c7 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2145,6 +2145,17 @@ AC_SEARCH_LIBS(clock_gettime, rt,
+                 test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
+ LIBS=$ac_save_LIBS
+ 
++dnl Check for clock_nanosleep which may be in -lrt
++case $host_os in
++    darwin*|macosx*) ;;
++    *) ac_save_LIBS=$LIBS
++        AC_SEARCH_LIBS(clock_nanosleep, rt,
++            [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define to 1 if you have the `clock_nanosleep' function.])
++                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
++    LIBS=$ac_save_LIBS
++    ;;
++esac
++
+ AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
+                 AC_LINK_IFELSE([AC_LANG_PROGRAM(
+ [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 7a210278998..f88fb83c217 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -29,6 +29,7 @@
+ 
+ #include "config.h"
+ 
++#include <errno.h>
+ #include <assert.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -1373,6 +1374,56 @@ static const char *X11DRV_wglQueryRendererStringWINE( HDC dc, GLint renderer, GL
+     return pglXQueryRendererStringMESA( gdi_display, DefaultScreen(gdi_display), renderer, attribute );
+ }
+ 
++/**
++ * Precise-ish frame limiter
++ * 
++ */
++#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
++static long long last_frame_time = 0;
++
++static long long get_time_ns() {
++    struct timespec ts;
++    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
++        /* ERR("clock_gettime failed with errno %d\n", errno); */
++        return 0;
++    }
++    return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
++}
++
++static void precise_sleep(long long ns) {
++    struct timespec req, rem;
++    req.tv_sec = ns / 1000000000LL;
++    req.tv_nsec = ns % 1000000000LL;
++
++    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &req, &rem) == EINTR) {
++        req = rem;
++    }
++}
++
++static void limit_frame_rate() {
++    long long current_time = get_time_ns();
++    long long frame_time = current_time - last_frame_time;
++    long long target_frame_time = 1000000000LL / custom_fps;
++
++    if (frame_time < target_frame_time) {
++        long long sleep_time = target_frame_time - frame_time;
++
++        if (sleep_time < busy_wait_threshold) {
++            while (get_time_ns() < current_time + sleep_time) {
++                YieldProcessor();
++            }
++        } else {
++            precise_sleep(sleep_time - busy_wait_threshold);
++            while (get_time_ns() < current_time + sleep_time) {
++                YieldProcessor();
++            }
++        }
++    }
++
++    last_frame_time = get_time_ns();
++}
++#endif
++
+ /**
+  * glxRequireVersion (internal)
+  *
+@@ -1441,6 +1492,11 @@ static void x11drv_init_extensions( struct opengl_funcs *funcs, BOOLEAN extensio
+         funcs->p_wglFreeMemoryNV = pglXFreeMemoryNV;
+     }
+ 
++#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
++    if (custom_fps) limit_frame_rate();
++#endif
++
++
+     if (has_extension(glxExtensions, "GLX_OML_swap_method"))
+         has_swap_method = TRUE;
+ 
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index c3f9b9bf8ab..77c411a6bf5 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -731,6 +731,8 @@ extern void window_wm_hints_notify( struct x11drv_win_data *data, unsigned long
+ extern void window_mwm_hints_notify( struct x11drv_win_data *data, unsigned long serial, const MwmHints *hints );
+ extern void window_wm_normal_hints_notify( struct x11drv_win_data *data, unsigned long serial, const XSizeHints *hints );
+ extern void window_configure_notify( struct x11drv_win_data *data, unsigned long serial, const RECT *rect );
++extern int custom_fps;
++extern long long busy_wait_threshold;
+ 
+ extern void set_net_active_window( HWND hwnd, HWND previous );
+ extern Window get_net_active_window( Display *display );
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 8d2f46acf16..066b60981de 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -74,6 +74,8 @@ BOOL use_system_cursors = TRUE;
+ BOOL grab_fullscreen = FALSE;
+ BOOL managed_mode = TRUE;
+ BOOL private_color_map = FALSE;
++int custom_fps = 0;
++long long busy_wait_threshold = 100000; // nanoseconds, 0.1ms
+ int primary_monitor = 0;
+ BOOL client_side_graphics = TRUE;
+ BOOL client_side_with_render = TRUE;
+@@ -688,6 +690,30 @@ NTSTATUS __wine_unix_lib_init(void)
+     x11drv_init_keyboard( gdi_display );
+     X11DRV_InitMouse( gdi_display );
+     const char *e = getenv("WINE_DISABLE_IME");
++#if defined(HAVE_CLOCK_GETTIME) && defined(HAVE_CLOCK_NANOSLEEP)
++    {
++        const char* e = getenv("WINE_CUSTOM_FPS");
++        if (e) {
++            int custom_fps_tmp = atoi(e);
++            if (custom_fps_tmp > 0) {
++                custom_fps = custom_fps_tmp;
++                TRACE("Custom frame limiter enabled with target FPS %d\n", custom_fps);
++            }
++        }
++    }
++    if (custom_fps)
++    {
++        const char* e = getenv("WINE_CUSTOM_FPS_BUSYTHRESH");
++        if (e) {
++            long long busy_wait_threshold_tmp = atoll(e);
++            if (busy_wait_threshold_tmp > 0) {
++                busy_wait_threshold = busy_wait_threshold_tmp;
++                TRACE("Custom frame limiter busywait threshold set to %lld\n", busy_wait_threshold);
++            }
++        }
++    }
++#endif
++
+     if (use_xim) use_xim = !(e && *e != '\0' && *e != '0') && xim_init( input_style );
+ 
+     init_icm_profile();
+-- 
+2.54.0
+

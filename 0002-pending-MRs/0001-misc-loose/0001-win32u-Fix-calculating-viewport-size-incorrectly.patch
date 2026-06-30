@@ -1,7 +1,7 @@
-From b8388386f0f021d579bcd79b29452291f212bf21 Mon Sep 17 00:00:00 2001
+From 23740d0ff4225b4d5fb756d236a4db0f78b6d712 Mon Sep 17 00:00:00 2001
 From: Haoyang Chen <chenhaoyang@kylinos.cn>
 Date: Tue, 21 Nov 2023 16:24:56 +0800
-Subject: [PATCH 1/2] win32u: Fix calculating viewport size incorrectly.
+Subject: [PATCH 004/121] win32u: Fix calculating viewport size incorrectly.
 
 Calling either SetViewportExtEx or SetWindowExtEx
 fixes the viewport(MAPPING_FixIsotropic), but if both are called then it is fixed twice.

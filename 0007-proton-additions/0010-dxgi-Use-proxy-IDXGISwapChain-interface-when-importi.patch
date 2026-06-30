@@ -1,8 +1,8 @@
-From 008d0ff1ddd7affedca86992c62ff860b03d064c Mon Sep 17 00:00:00 2001
+From 1ba9ae842c78e7ee6d2f9a3a9f46915b397d3c15 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Mon, 29 Mar 2021 21:54:30 +0300
-Subject: [PATCH 10/13] dxgi: Use proxy IDXGISwapChain interface when importing
- that from d3d implementation.
+Subject: [PATCH 072/121] dxgi: Use proxy IDXGISwapChain interface when
+ importing that from d3d implementation.
 
 For Origin overlay.
 

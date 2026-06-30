@@ -1,7 +1,7 @@
-From 60850a35e41e36948c976cdb58e79632897ab20c Mon Sep 17 00:00:00 2001
+From 5ea65eb55022736fee56e30a66b0a7e5619e6ace Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 30 Dec 2024 02:14:28 -0800
-Subject: [PATCH 08/14] server: Disable debug features if NDEBUG is defined.
+Subject: [PATCH 013/121] server: Disable debug features if NDEBUG is defined.
 
 Co-authored-by: Torge Matthies <openglfreak@googlemail.com>
 ---
@@ -11,7 +11,7 @@ Co-authored-by: Torge Matthies <openglfreak@googlemail.com>
  3 files changed, 16 insertions(+), 3 deletions(-)
 
 diff --git a/server/mapping.c b/server/mapping.c
-index f9a80bc6cf9..6258cf75288 100644
+index a53b6b68304..2779e833022 100644
 --- a/server/mapping.c
 +++ b/server/mapping.c
 @@ -1532,7 +1532,9 @@ volatile void *alloc_shared_object( mem_size_t shm_size )
@@ -68,10 +68,10 @@ index a4cbd06f56d..0ea9a53bc21 100644
      return ptr;
  }
 diff --git a/server/object.h b/server/object.h
-index dc15da64518..99832ff3077 100644
+index 64c81f96ad3..75c1b21ce00 100644
 --- a/server/object.h
 +++ b/server/object.h
-@@ -26,7 +26,9 @@
+@@ -27,7 +27,9 @@
  #include "wine/server_protocol.h"
  #include "wine/list.h"
  
@@ -81,7 +81,7 @@ index dc15da64518..99832ff3077 100644
  
  /* kernel objects */
  
-@@ -141,8 +143,10 @@ struct wait_queue_entry
+@@ -142,8 +144,10 @@ struct wait_queue_entry
      struct thread_wait *wait;
  };
  

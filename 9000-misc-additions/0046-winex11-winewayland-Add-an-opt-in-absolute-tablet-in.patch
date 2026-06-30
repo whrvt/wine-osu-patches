@@ -1,0 +1,147 @@
+From 51a4cc0ef94c2e2ac0a9135e1bd31386bac47a1d Mon Sep 17 00:00:00 2001
+From: winebuild <wine@build.dev>
+Date: Mon, 29 Jun 2026 23:10:31 +0200
+Subject: [PATCH] winex11, winewayland: Add an opt-in absolute tablet input
+ workaround.
+
+Avoid pointer grabs, warps, and Wayland constraints that block absolute tablet input.
+Enable with WINE_ABS_TABLET or WINE_ENABLE_ABS_TABLET_HACK.
+---
+ dlls/winewayland.drv/wayland_pointer.c | 14 ++++++++++++++
+ dlls/winex11.drv/mouse.c               |  6 ++++++
+ dlls/winex11.drv/window.c              | 11 +++++++----
+ dlls/winex11.drv/x11drv.h              |  2 ++
+ dlls/winex11.drv/x11drv_main.c         |  5 +++++
+ 5 files changed, 34 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
+index af404994a44..85e29a11dde 100644
+--- a/dlls/winewayland.drv/wayland_pointer.c
++++ b/dlls/winewayland.drv/wayland_pointer.c
+@@ -36,6 +36,16 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(cursor);
+ 
++static BOOL abs_tablet_hack_enabled(void)
++{
++    static int enabled = -1;
++
++    if (enabled == -1)
++        enabled = atoi( getenv( "WINE_ABS_TABLET" ) ?:
++                        getenv( "WINE_ENABLE_ABS_TABLET_HACK" ) ?: "0" ) != 0;
++    return enabled;
++}
++
+ /* The cursor-shape-v1 protocol file references the zwp_tablet_tool_v2
+  * interface object. Since we don't currently use the tablet protocol,
+  * provide a dummy object here to avoid linking errors. */
+@@ -886,6 +896,8 @@ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+     needs_confine = wl_surface && confine_rect && is_visible && !force_lock &&
+                     pointer->wl_pointer;
+ 
++    if (abs_tablet_hack_enabled()) needs_lock = needs_confine = FALSE;
++
+     if (!needs_confine && pointer->zwp_confined_pointer_v1)
+     {
+         TRACE("Unconfining from hwnd=%p\n", pointer->constraint_hwnd);
+@@ -1010,6 +1022,8 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
+ {
+     struct wayland_pointer *pointer = &process_wayland.pointer;
+ 
++    if (abs_tablet_hack_enabled()) return TRUE;
++
+     pthread_mutex_lock(&pointer->mutex);
+     if (pointer->zwp_relative_pointer_v1)
+     {
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 80588d503b5..69244999332 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -494,6 +494,8 @@ static BOOL grab_clipping_window( const RECT *clip )
+         return TRUE;
+     }
+ 
++    if (is_xwayland && abs_tablet_hack) return TRUE;
++
+     TRACE( "clipping to %s win %lx\n", wine_dbgstr_rect(clip), clip_window );
+ 
+     if (!data->clipping_cursor && clip_window_mapped) XUnmapWindow( data->display, clip_window );
+@@ -1487,6 +1489,9 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
+         return FALSE;
+     }
+ 
++    /* warping the xwayland pointer can stop absolute tablet events */
++    if (is_xwayland && abs_tablet_hack) return TRUE;
++
+     if (!clipping_cursor &&
+         XGrabPointer( data->display, root_window, False,
+                       PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+@@ -1705,6 +1710,7 @@ BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
+         TRACE( "pos %d,%d old serial %lu, ignoring\n", event->x, event->y, event->serial );
+         return FALSE;
+     }
++
+     map_event_coords( hwnd, event->window, event->root, event->x_root, event->y_root, &input );
+     send_mouse_input( hwnd, event->window, event->state, &input );
+     return TRUE;
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index d2eaea26582..4861a1c3c85 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -3159,10 +3159,13 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags, HWND previous )
+         if (!(data = get_win_data( hwnd ))) return;
+         if (data->whole_window)
+         {
+-            XGrabPointer( data->display, data->whole_window, False,
+-                          PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+-                          GrabModeAsync, GrabModeAsync, None, None, CurrentTime );
+-            XFlush( data->display );
++            if (!(is_xwayland && abs_tablet_hack))
++            {
++                XGrabPointer( data->display, data->whole_window, False,
++                              PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
++                              GrabModeAsync, GrabModeAsync, None, None, CurrentTime );
++                XFlush( data->display );
++            }
+         }
+         release_win_data( data );
+     }
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 77c411a6bf5..bbb3be5553c 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -478,6 +478,8 @@ extern XPixmapFormatValues **pixmap_formats;
+ extern Window root_window;
+ extern BOOL clipping_cursor;
+ extern BOOL keyboard_grabbed;
++extern BOOL is_xwayland;
++extern BOOL abs_tablet_hack;
+ extern unsigned int screen_bpp;
+ extern BOOL usexrandr;
+ extern BOOL usexvidmode;
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index d9eb5512b20..743b0d020cd 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -72,6 +72,8 @@ BOOL use_take_focus = TRUE;
+ BOOL use_primary_selection = FALSE;
+ BOOL use_system_cursors = TRUE;
+ BOOL grab_fullscreen = FALSE;
++BOOL is_xwayland = FALSE;
++BOOL abs_tablet_hack = FALSE;
+ BOOL managed_mode = TRUE;
+ BOOL private_color_map = FALSE;
+ int custom_fps = 0;
+@@ -688,6 +690,9 @@ NTSTATUS __wine_unix_lib_init(void)
+ #ifdef SONAME_LIBXCOMPOSITE
+     X11DRV_XComposite_Init();
+ #endif
++    is_xwayland = getenv( "WAYLAND_DISPLAY" ) != NULL;
++    abs_tablet_hack = atoi( getenv( "WINE_ABS_TABLET" ) ?:
++                            getenv( "WINE_ENABLE_ABS_TABLET_HACK" ) ?: "0" ) != 0;
+     x11drv_xinput2_load();
+ 
+     x11drv_init_keyboard( gdi_display );
+-- 
+2.54.0
+

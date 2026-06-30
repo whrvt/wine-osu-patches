@@ -1,14 +1,14 @@
-From 372fe98d8ca688ef063ead1e6cc2257ee831bc7d Mon Sep 17 00:00:00 2001
+From 47913ebf62f988db2f4ec09846780f74037edf59 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 26 Sep 2024 05:12:47 -0700
-Subject: [PATCH 04/10] winepulse: Specify the buffer to try memlocking.
+Subject: [PATCH 056/121] winepulse: Specify the buffer to try memlocking.
 
 ---
  dlls/winepulse.drv/pulse.c | 20 ++++++++++++++++----
  1 file changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index ddd6f39fcc8..0b02d940caa 100644
+index a901b1175af..e34b886bdd0 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -201,11 +201,23 @@ static char *wstr_to_str(const WCHAR *wstr)
@@ -37,7 +37,7 @@ index ddd6f39fcc8..0b02d940caa 100644
          WARN("Couldn't memlock audio buffer.\n");
      else
          TRACE("Successfully memlocked audio buffer.\n");
-@@ -1225,7 +1237,7 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1243,7 +1255,7 @@ static NTSTATUS pulse_create_stream(void *args)
                                              zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
                      hr = E_OUTOFMEMORY;
                  else
@@ -46,7 +46,7 @@ index ddd6f39fcc8..0b02d940caa 100644
              }
          }
          else {
-@@ -1814,7 +1826,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+@@ -1831,7 +1843,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
          return FALSE;
  
      stream->tmp_buffer_bytes = bytes;

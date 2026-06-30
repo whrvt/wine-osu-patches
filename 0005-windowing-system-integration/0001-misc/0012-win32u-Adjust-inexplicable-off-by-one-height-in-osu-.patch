@@ -1,15 +1,15 @@
-From aef3344fd0b83cc31bd66600849dd682593c5bf1 Mon Sep 17 00:00:00 2001
+From 8e5ff877f091bebd8c5f975f791ac641ddd4a46f Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 13 Oct 2024 18:03:33 -0700
-Subject: [PATCH 12/19] win32u: Adjust inexplicable off-by-one height in osu!'s
- window size request.
+Subject: [PATCH 037/121] win32u: Adjust inexplicable off-by-one height in
+ osu!'s window size request.
 
 ---
  dlls/win32u/defwnd.c | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index dc3611a06ab..4ac679aecf0 100644
+index 5951374fc9a..843bedb3ea3 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
 @@ -256,6 +256,16 @@ BOOL adjust_window_rect( RECT *rect, DWORD style, BOOL menu, DWORD ex_style, UIN

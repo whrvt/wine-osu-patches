@@ -1,7 +1,7 @@
-From 8abb3af0c138ffdb59e7e5dabd33877a208983bb Mon Sep 17 00:00:00 2001
+From 0ad1dba02281b54bed7dc9a9af5c407a0495ab6d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 15 May 2020 12:59:44 +0200
-Subject: [PATCH 07/13] dxgi: Add fallback to D3D10CoreRegisterLayers.
+Subject: [PATCH 069/121] dxgi: Add fallback to D3D10CoreRegisterLayers.
 
 If D3D11CoreRegisterLayers is not found in module.
 ---

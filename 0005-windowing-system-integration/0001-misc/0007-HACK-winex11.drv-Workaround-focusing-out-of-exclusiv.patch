@@ -1,8 +1,8 @@
-From 80eee6f65412f473a0d2945ef75ca27b1b10255a Mon Sep 17 00:00:00 2001
+From d822182d0766472ce47573504bad3f7d297fdb05 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sun, 21 Sep 2025 17:47:59 +0200
-Subject: [PATCH 07/19] HACK: winex11.drv: Workaround focusing out of exclusive
- fullscreen windows.
+Subject: [PATCH 032/121] HACK: winex11.drv: Workaround focusing out of
+ exclusive fullscreen windows.
 
 Based on original patch from Proton: https://github.com/ValveSoftware/wine/commit/b2cdeaa801173f4c984b730d978618bb60cd706a,
 seems to help with focusing out of exclusive fullscreen windows on Mutter/KWin.
@@ -13,7 +13,7 @@ Excluding XFCE from the check as it breaks alt-tab on it.
  1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 71fa79ff8c4..e01d6f09216 100644
+index 42dd3c9964c..6b32403a3e5 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1511,7 +1511,15 @@ static void update_net_wm_states( struct x11drv_win_data *data )

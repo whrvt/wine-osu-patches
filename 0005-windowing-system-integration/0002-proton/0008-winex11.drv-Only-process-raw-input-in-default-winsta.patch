@@ -1,7 +1,7 @@
-From c111c249ff074f2fa7cbf615eda5a1e04e070438 Mon Sep 17 00:00:00 2001
+From 8c1ec0d97715d0c3ac9be21972559532efdf2864 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 19 Aug 2025 13:42:06 -0600
-Subject: [PATCH 8/8] winex11.drv: Only process raw input in default
+Subject: [PATCH 052/121] winex11.drv: Only process raw input in default
  winstation's explorer.exe.
 
 CW-Bug-Id: #25818
@@ -10,10 +10,10 @@ CW-Bug-Id: #25818
  1 file changed, 13 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 8573569fb6e..4ffe8274d07 100644
+index 59c44f65d50..a7ed4e23656 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2787,13 +2787,22 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
+@@ -2791,13 +2791,22 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
  {
      if (hwnd == NtUserGetDesktopWindow())
      {

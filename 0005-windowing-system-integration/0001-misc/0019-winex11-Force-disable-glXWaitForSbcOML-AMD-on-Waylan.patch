@@ -1,7 +1,7 @@
-From a9fd7f18db0e30ddf529bb92903d50f7454030aa Mon Sep 17 00:00:00 2001
+From 8c4e7769ab620dd82fa3e3c8eea654d6efde14e0 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 07:23:38 -0700
-Subject: [PATCH 19/19] winex11: Force disable glXWaitForSbcOML (AMD) on
+Subject: [PATCH 044/121] winex11: Force disable glXWaitForSbcOML (AMD) on
  Wayland to circumvent Xwayland locking FPS to the monitor's refresh rate.
 
 It will prevent ingame vsync from working properly, but the environment variable
@@ -13,7 +13,7 @@ vblank_mode != 0 can override-disable this behavior.
  3 files changed, 22 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 6ccdc98c085..193cfc85718 100644
+index eca1b4c781d..1b37c4db105 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
 @@ -1525,8 +1525,9 @@ static void handle_xembed_protocol( HWND hwnd, XClientMessageEvent *event )
@@ -61,10 +61,10 @@ index 6ccdc98c085..193cfc85718 100644
      UINT effect;
  
 diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
-index 56c22ab7ee7..9d814392070 100644
+index 9926209a1ca..7a210278998 100644
 --- a/dlls/winex11.drv/opengl.c
 +++ b/dlls/winex11.drv/opengl.c
-@@ -740,7 +740,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
+@@ -733,7 +733,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
  
      if (has_extension( glxExtensions, "GLX_OML_sync_control" ))
      {
@@ -75,10 +75,10 @@ index 56c22ab7ee7..9d814392070 100644
      }
  
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 1432d43b9de..b39de2f6de6 100644
+index f292d4b3756..3c46a387fd7 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -995,7 +995,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+@@ -1016,7 +1016,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
      dst->bottom = min( src1->bottom, src2->bottom );
      return !IsRectEmpty( dst );
  }

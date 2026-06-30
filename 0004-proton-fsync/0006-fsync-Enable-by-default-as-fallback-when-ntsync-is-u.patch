@@ -1,7 +1,7 @@
-From b3e4f19278cadeb4008b3a8dde73cffe4e2bd8bd Mon Sep 17 00:00:00 2001
+From fecab6d17b5cdd337d7e04db216425bc86a57041 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 05:13:30 +0200
-Subject: [PATCH 6/6] fsync: Enable by default as fallback when ntsync is
+Subject: [PATCH 025/121] fsync: Enable by default as fallback when ntsync is
  unavailable.
 
 ---

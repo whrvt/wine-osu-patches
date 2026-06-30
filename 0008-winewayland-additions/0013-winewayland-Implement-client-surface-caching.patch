@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Sat, 18 Apr 2026 19:05:16 -0500
+Subject: [PATCH 13/46] 0018-winewayland-Implement-client-surface-caching.patch
+
+---
+ dlls/winewayland.drv/vulkan.c          | 15 +++++++++++++++
+ dlls/winewayland.drv/wayland_surface.c | 16 ++++++++++++++++
+ dlls/winewayland.drv/waylanddrv.h      |  2 ++
+ dlls/winewayland.drv/window.c          |  1 +
+ 4 files changed, 34 insertions(+)
+
+diff --git a/dlls/winewayland.drv/vulkan.c b/dlls/winewayland.drv/vulkan.c
+index b2c435cb7a4..1b1b7526561 100644
+--- a/dlls/winewayland.drv/vulkan.c
++++ b/dlls/winewayland.drv/vulkan.c
+@@ -38,6 +38,20 @@ WINE_DEFAULT_DEBUG_CHANNEL(vulkan);
+ 
+ static const struct vulkan_driver_funcs wayland_vulkan_driver_funcs;
+ 
++static void stash_client_surface(HWND hwnd, struct wayland_client_surface *surface)
++{
++    struct wayland_win_data *data;
++
++    if (!(data = wayland_win_data_get(hwnd))) return;
++    if (data->stashed_client != surface)
++    {
++        if (data->stashed_client) client_surface_release(&data->stashed_client->client);
++        if (surface) client_surface_add_ref(&surface->client);
++        data->stashed_client = surface;
++    }
++    wayland_win_data_release(data);
++}
++
+ static VkResult wayland_vulkan_surface_create(struct client_surface *client, const struct vulkan_instance *instance, VkSurfaceKHR *handle)
+ {
+     VkResult res;
+@@ -54,6 +68,7 @@ static VkResult wayland_vulkan_surface_create(struct client_surface *client, con
+     create_info_host.surface = surface->wl_surface;
+     if ((res = instance->p_vkCreateWaylandSurfaceKHR(instance->host.instance, &create_info_host, NULL /* allocator */, handle))) return res;
+     set_client_surface(hwnd, surface);
++    stash_client_surface(hwnd, surface);
+ 
+     TRACE("Created surface=0x%s\n", wine_dbgstr_longlong(*handle));
+     return VK_SUCCESS;
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index f27deefbf30..3cd3ab4122d 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -1313,8 +1313,24 @@ struct wayland_client_surface *impl_from_client_surface(struct client_surface *c
+ struct client_surface *WAYLAND_CreateClientSurface(HWND hwnd, int pixel_format)
+ {
+     struct wayland_client_surface *client;
++    struct wayland_win_data *data;
+     struct wl_region *empty_region;
+ 
++    /* Reuse a surface held only by our stash, preserving its dmabuf modifiers. */
++    if ((data = wayland_win_data_get(hwnd)))
++    {
++        if ((client = data->stashed_client) && ReadAcquire(&client->client.ref) == 1)
++        {
++            data->stashed_client = NULL;
++            wayland_client_surface_attach(client, NULL);
++            if (data->client_surface == client) data->client_surface = NULL;
++            wayland_win_data_release(data);
++            TRACE("Reusing stashed client surface %p for hwnd=%p\n", client, hwnd);
++            return &client->client;
++        }
++        wayland_win_data_release(data);
++    }
++
+     if (!(client = client_surface_create(sizeof(*client), &wayland_client_surface_funcs, hwnd))) return NULL;
+ 
+     client->wl_surface =
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index b48db748784..2b3bfa381d1 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -397,6 +397,8 @@ struct wayland_win_data
+     struct wayland_surface *wayland_surface;
+     /* wayland client surface (if any) for this window */
+     struct wayland_client_surface *client_surface;
++    /* Client surface stashed for dmabuf modifier reuse. */
++    struct wayland_client_surface *stashed_client;
+     /* window rects, relative to parent client area */
+     struct window_rects rects;
+     BOOL is_fullscreen;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index dcd53205eda..8a37e1c6b51 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -99,6 +99,7 @@ static void wayland_win_data_destroy(struct wayland_win_data *data)
+ 
+     pthread_mutex_unlock(&win_data_mutex);
+ 
++    if (data->stashed_client) client_surface_release(&data->stashed_client->client);
+     if (data->wayland_surface) wayland_surface_destroy(data->wayland_surface);
+     if (data->window_contents) wayland_shm_buffer_unref(data->window_contents);
+     free(data);

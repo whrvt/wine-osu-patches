@@ -1,17 +1,17 @@
-From 8c2842d8970a03a7aa938b70f96c9a8c2e74b95b Mon Sep 17 00:00:00 2001
+From ef1de504fd7a71338e0fb4c0ecad52f890490496 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Feb 2025 09:26:03 -0800
-Subject: [PATCH 06/10] winepulse: Align stream buffer to 64 bytes.
+Subject: [PATCH 058/121] winepulse: Align stream buffer to 64 bytes.
 
 ---
  dlls/winepulse.drv/pulse.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 551a7247904..debb5697513 100644
+index 7f9cc93ad9b..ca438140f7b 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
-@@ -1191,12 +1191,13 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1209,12 +1209,13 @@ static NTSTATUS pulse_create_stream(void *args)
          return STATUS_SUCCESS;
      }
  

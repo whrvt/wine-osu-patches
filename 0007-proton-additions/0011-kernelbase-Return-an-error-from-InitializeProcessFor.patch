@@ -1,7 +1,7 @@
-From 9264eec64f4056d4fc1c5102f1cae93a1cad09d9 Mon Sep 17 00:00:00 2001
+From 2233287d2b5e3df3741a212326b6846d4d14f7f3 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Thu, 16 Sep 2021 18:01:42 +0300
-Subject: [PATCH 11/13] kernelbase: Return an error from
+Subject: [PATCH 073/121] kernelbase: Return an error from
  InitializeProcessForWsWatch() stub.
 
 CW-Bug-ID: #19445
@@ -12,10 +12,10 @@ For DeathLoop.
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
-index bebe0403aa3..235384c28f8 100644
+index fbb259e7118..fbd3c8cbaca 100644
 --- a/dlls/kernelbase/debug.c
 +++ b/dlls/kernelbase/debug.c
-@@ -1788,7 +1788,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetWsChangesEx( HANDLE process, PSAPI_WS_WATCH_INF
+@@ -1789,7 +1789,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetWsChangesEx( HANDLE process, PSAPI_WS_WATCH_INF
  BOOL WINAPI /* DECLSPEC_HOTPATCH */ InitializeProcessForWsWatch( HANDLE process )
  {
      FIXME( "(process=%p): stub\n", process );

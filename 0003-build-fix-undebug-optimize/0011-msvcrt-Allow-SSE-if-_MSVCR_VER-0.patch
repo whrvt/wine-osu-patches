@@ -1,7 +1,7 @@
-From 4433571f2f2e2df3b68845bba47d5f8c65776642 Mon Sep 17 00:00:00 2001
+From 14e5c61ead3e34564b36d44a645f0800bd447b68 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 31 Jan 2025 13:46:42 -0800
-Subject: [PATCH 11/14] msvcrt: Allow SSE if _MSVCR_VER == 0.
+Subject: [PATCH 016/121] msvcrt: Allow SSE if _MSVCR_VER == 0.
 
 ---
  dlls/msvcrt/math.c | 2 +-

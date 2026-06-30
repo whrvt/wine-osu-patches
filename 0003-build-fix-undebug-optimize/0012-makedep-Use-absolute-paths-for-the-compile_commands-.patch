@@ -1,7 +1,7 @@
-From 871bfb918cc77f0f014ce7f1fbb262485777f354 Mon Sep 17 00:00:00 2001
+From 7e54f52a95ddb03a6a26930b3bad6fd2c7b488c6 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 29 Jan 2025 23:57:29 -0800
-Subject: [PATCH 12/14] makedep: Use absolute paths for the compile_commands
+Subject: [PATCH 017/121] makedep: Use absolute paths for the compile_commands
  compiler.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 12/14] makedep: Use absolute paths for the compile_commands
  2 files changed, 59 insertions(+), 1 deletion(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 84d3d06e1c5..8962f0fe58b 100644
+index f409e1eb849..e0a94ae30c9 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -804,6 +804,33 @@ static char *get_line( FILE *file )
+@@ -818,6 +818,33 @@ static char *get_line( FILE *file )
      }
  }
  
@@ -47,7 +47,7 @@ index 84d3d06e1c5..8962f0fe58b 100644
  
  /*******************************************************************
   *         hash_filename
-@@ -4512,7 +4539,7 @@ static void output_compile_commands( const char *dest )
+@@ -4633,7 +4660,7 @@ static void output_compile_commands( const char *dest )
      LIST_FOR_EACH_ENTRY( cmd, &compile_commands, struct compile_command, entry )
      {
          output( "  {\n" );

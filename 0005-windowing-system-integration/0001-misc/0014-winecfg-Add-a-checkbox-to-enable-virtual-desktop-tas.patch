@@ -1,7 +1,7 @@
-From 0b5996bf23d3eeef3978a044b9f309fbbf4f6ffd Mon Sep 17 00:00:00 2001
+From 700033f2582415155be63ea771ffb4b34708ab08 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 10 Dec 2024 22:12:41 +0100
-Subject: [PATCH 14/19] winecfg: Add a checkbox to enable virtual desktop
+Subject: [PATCH 039/121] winecfg: Add a checkbox to enable virtual desktop
  taskbar.
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57515

@@ -1,7 +1,7 @@
-From 2e9a925c774756e3b5ccc87456ff5c2473edf824 Mon Sep 17 00:00:00 2001
+From cb9c29dd20ffa2bdb22c25f71041a5396b09e3ba Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:21:12 -0700
-Subject: [PATCH 03/10] winepulse: Try memlocking the audio buffer.
+Subject: [PATCH 055/121] winepulse: Try memlocking the audio buffer.
 
 But allow disabling it with WINE_PULSE_MEMLOCK=0.
 ---
@@ -9,7 +9,7 @@ But allow disabling it with WINE_PULSE_MEMLOCK=0.
  1 file changed, 19 insertions(+)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 11db0c47a82..ddd6f39fcc8 100644
+index 332c550579f..a901b1175af 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -114,6 +114,7 @@ static pthread_mutex_t pulse_mutex;
@@ -45,9 +45,9 @@ index 11db0c47a82..ddd6f39fcc8 100644
  
      pthread_mutexattr_init(&attr);
      pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT);
-@@ -255,6 +267,10 @@ static NTSTATUS pulse_process_attach(void *args)
-     }
- #endif
+@@ -245,6 +257,10 @@ static NTSTATUS pulse_process_attach(void *args)
+     if (pthread_mutex_init(&pulse_mutex, &attr) != 0)
+         pthread_mutex_init(&pulse_mutex, NULL);
  
 +    memlock_env = getenv("WINE_PULSE_MEMLOCK");
 +    if (memlock_env && atoi(memlock_env) == 0)
@@ -56,7 +56,7 @@ index 11db0c47a82..ddd6f39fcc8 100644
      return STATUS_SUCCESS;
  }
  
-@@ -1208,6 +1224,8 @@ static NTSTATUS pulse_create_stream(void *args)
+@@ -1226,6 +1242,8 @@ static NTSTATUS pulse_create_stream(void *args)
                  if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
                                              zero_bits, &stream->bufsize_bytes, MEM_COMMIT, PAGE_READWRITE))
                      hr = E_OUTOFMEMORY;
@@ -65,7 +65,7 @@ index 11db0c47a82..ddd6f39fcc8 100644
              }
          }
          else {
-@@ -1796,6 +1814,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
+@@ -1813,6 +1831,7 @@ static BOOL alloc_tmp_buffer(struct pulse_stream *stream, SIZE_T bytes)
          return FALSE;
  
      stream->tmp_buffer_bytes = bytes;

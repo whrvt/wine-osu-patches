@@ -1,8 +1,8 @@
-From abc308c70ae928b98766365bf032c6efd55519f6 Mon Sep 17 00:00:00 2001
+From 79df9eed695dee435c137319b049f15ac54ff590 Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Mon, 18 Jun 2018 07:56:35 -0500
-Subject: [PATCH 01/13] ntdll: Notice THREADNAME_INFO exceptions and set thread
- name on Linux
+Subject: [PATCH 063/121] ntdll: Notice THREADNAME_INFO exceptions and set
+ thread name on Linux
 
 Patch by Zeb.
 ---
@@ -10,7 +10,7 @@ Patch by Zeb.
  1 file changed, 28 insertions(+)
 
 diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
-index a469c3df8db..8122c8510b1 100644
+index 546963a4241..d943f33967a 100644
 --- a/dlls/ntdll/unix/thread.c
 +++ b/dlls/ntdll/unix/thread.c
 @@ -61,6 +61,9 @@
@@ -23,7 +23,7 @@ index a469c3df8db..8122c8510b1 100644
  
  #ifdef __APPLE__
  #include <mach/mach.h>
-@@ -1542,6 +1545,16 @@ void wait_suspend( CONTEXT *context )
+@@ -1568,6 +1571,16 @@ void wait_suspend( CONTEXT *context )
  }
  
  
@@ -40,7 +40,7 @@ index a469c3df8db..8122c8510b1 100644
  /**********************************************************************
   *           send_debug_event
   *
-@@ -1563,6 +1576,21 @@ NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_c
+@@ -1596,6 +1609,21 @@ NTSTATUS send_debug_event( struct thread_data *data, EXCEPTION_RECORD *rec,
      for (i = 0; i < min( rec->NumberParameters, EXCEPTION_MAXIMUM_PARAMETERS ); i++)
          params[i] = rec->ExceptionInformation[i];
  

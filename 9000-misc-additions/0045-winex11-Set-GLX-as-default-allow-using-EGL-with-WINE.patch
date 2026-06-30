@@ -1,0 +1,36 @@
+From 4779a8adf36774847a902ad4da69e88c5e9482d1 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 4 May 2026 18:18:50 +0200
+Subject: [PATCH 120/121] winex11: Set GLX as default, allow using EGL with
+ WINE_USE_EGL.
+
+---
+ dlls/winex11.drv/x11drv_main.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 066b60981de..d9eb5512b20 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -67,7 +67,7 @@ Window root_window;
+ BOOL usexvidmode = TRUE;
+ BOOL usexrandr = TRUE;
+ BOOL usexcomposite = TRUE;
+-BOOL use_egl = TRUE;
++BOOL use_egl = FALSE;
+ BOOL use_take_focus = TRUE;
+ BOOL use_primary_selection = FALSE;
+ BOOL use_system_cursors = TRUE;
+@@ -469,6 +469,9 @@ static void setup_options(void)
+     if (!get_config_key( hkey, appkey, "UseEGL", buffer, sizeof(buffer) ))
+         use_egl = IS_OPTION_TRUE( buffer[0] );
+ 
++    if (getenv( "WINE_USE_EGL" ))
++        use_egl = IS_OPTION_TRUE( getenv( "WINE_USE_EGL" )[0] );
++
+     if (!get_config_key( hkey, appkey, "UseXVidMode", buffer, sizeof(buffer) ))
+         usexvidmode = IS_OPTION_TRUE( buffer[0] );
+ 
+-- 
+2.54.0
+

@@ -1,7 +1,7 @@
-From 980c53acbbc481072d788ef028623d0b2e620076 Mon Sep 17 00:00:00 2001
+From 62688120d85030f0ddcd03b66fc9ac50e4f96f16 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 3 Dec 2024 09:58:18 +0100
-Subject: [PATCH 01/19] winex11: Keep track of the window manager name.
+Subject: [PATCH 026/121] winex11: Keep track of the window manager name.
 
 ---
  dlls/winex11.drv/event.c       | 14 +++++++++
@@ -11,7 +11,7 @@ Subject: [PATCH 01/19] winex11: Keep track of the window manager name.
  4 files changed, 79 insertions(+)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 6f553c52f06..81f470db3dc 100644
+index e87403fa7da..5ba53af6dc4 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
 @@ -1322,6 +1322,19 @@ static void handle_wm_normal_hints_notify( HWND hwnd, XPropertyEvent *event )
@@ -43,10 +43,10 @@ index 6f553c52f06..81f470db3dc 100644
      if (event->atom == x11drv_atom(_NET_ACTIVE_WINDOW)) handle_net_active_window( event );
  
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 33dc2b5a8e0..933781b4d99 100644
+index c9186e5ebfc..cd0f8d2ad0e 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -3696,6 +3696,62 @@ void X11DRV_FlashWindowEx( FLASHWINFO *pfinfo )
+@@ -3699,6 +3699,62 @@ void X11DRV_FlashWindowEx( FLASHWINFO *pfinfo )
      release_win_data( data );
  }
  
@@ -110,7 +110,7 @@ index 33dc2b5a8e0..933781b4d99 100644
  {
      unsigned long count, remaining;
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 1a036fbbfd3..8138011aa11 100644
+index 5dda0a65511..2e7d7521ca6 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -229,6 +229,7 @@ extern BOOL X11DRV_CreateWindow( HWND hwnd );
@@ -121,7 +121,7 @@ index 1a036fbbfd3..8138011aa11 100644
  extern void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
                            const RECT *top_rect, DWORD flags );
  extern void X11DRV_ReleaseDC( HWND hwnd, HDC hdc );
-@@ -414,6 +415,7 @@ struct x11drv_thread_data
+@@ -427,6 +428,7 @@ struct x11drv_thread_data
      Atom    *net_supported;        /* list of _NET_SUPPORTED atoms */
      int      net_supported_count;  /* number of _NET_SUPPORTED atoms */
      UINT     net_wm_state_mask;    /* mask of supported _NET_WM_STATE *bits */
@@ -129,7 +129,7 @@ index 1a036fbbfd3..8138011aa11 100644
  #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
      XIValuatorClassInfo x_valuator;
      XIValuatorClassInfo y_valuator;
-@@ -502,6 +504,7 @@ enum x11drv_atoms
+@@ -516,6 +518,7 @@ enum x11drv_atoms
      XATOM_WM_PROTOCOLS,
      XATOM_WM_DELETE_WINDOW,
      XATOM_WM_HINTS,
@@ -137,7 +137,7 @@ index 1a036fbbfd3..8138011aa11 100644
      XATOM_WM_NORMAL_HINTS,
      XATOM_WM_STATE,
      XATOM_WM_TAKE_FOCUS,
-@@ -514,6 +517,7 @@ enum x11drv_atoms
+@@ -528,6 +531,7 @@ enum x11drv_atoms
      XATOM__NET_STARTUP_INFO_BEGIN,
      XATOM__NET_STARTUP_INFO,
      XATOM__NET_SUPPORTED,
@@ -145,7 +145,7 @@ index 1a036fbbfd3..8138011aa11 100644
      XATOM__NET_SYSTEM_TRAY_OPCODE,
      XATOM__NET_SYSTEM_TRAY_S0,
      XATOM__NET_SYSTEM_TRAY_VISUAL,
-@@ -719,6 +723,7 @@ extern Window get_net_active_window( Display *display );
+@@ -733,6 +737,7 @@ extern Window get_net_active_window( Display *display );
  extern void net_active_window_notify( unsigned long serial, Window window, Time time );
  extern void net_active_window_init( struct x11drv_thread_data *data );
  extern void net_supported_init( struct x11drv_thread_data *data );
@@ -154,10 +154,10 @@ index 1a036fbbfd3..8138011aa11 100644
  
  extern Window init_clip_window(void);
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index fca05fe5334..4c0407ffb20 100644
+index 3411e9efbcf..48b9095f25d 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-@@ -120,6 +120,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -121,6 +121,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
      "WM_PROTOCOLS",
      "WM_DELETE_WINDOW",
      "WM_HINTS",
@@ -165,7 +165,7 @@ index fca05fe5334..4c0407ffb20 100644
      "WM_NORMAL_HINTS",
      "WM_STATE",
      "WM_TAKE_FOCUS",
-@@ -132,6 +133,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
+@@ -133,6 +134,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
      "_NET_STARTUP_INFO_BEGIN",
      "_NET_STARTUP_INFO",
      "_NET_SUPPORTED",
@@ -173,7 +173,7 @@ index fca05fe5334..4c0407ffb20 100644
      "_NET_SYSTEM_TRAY_OPCODE",
      "_NET_SYSTEM_TRAY_S0",
      "_NET_SYSTEM_TRAY_VISUAL",
-@@ -694,6 +696,7 @@ void X11DRV_ThreadDetach(void)
+@@ -696,6 +698,7 @@ void X11DRV_ThreadDetach(void)
          if (data->xim) XCloseIM( data->xim );
          if (data->font_set) XFreeFontSet( data->display, data->font_set );
          if (data->net_supported) XFree( data->net_supported );
@@ -181,7 +181,7 @@ index fca05fe5334..4c0407ffb20 100644
          XSync( gdi_display, False ); /* make sure XReparentWindow requests have completed before closing the thread display */
          XCloseDisplay( data->display );
          free( data );
-@@ -762,6 +765,7 @@ struct x11drv_thread_data *x11drv_init_thread_data(void)
+@@ -764,6 +767,7 @@ struct x11drv_thread_data *x11drv_init_thread_data(void)
      if (use_xim) xim_thread_attach( data );
      x11drv_xinput2_init( data );
      net_supported_init( data );

@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Wed, 22 Apr 2026 23:06:46 -0500
+Subject: [PATCH 29/46] 
+ 0038-win32u-Implement-cross-thread-keyboard-layout-query.patch
+
+---
+ dlls/win32u/defwnd.c |  8 ++++++++
+ dlls/win32u/input.c  | 20 ++++++++++++++++++--
+ 2 files changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
+index 843bedb3ea3..20d6ee33f3a 100644
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -2977,6 +2977,14 @@ LRESULT default_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+             int count = 0;
+             info->kbd_layout = (HKL)lparam;
+ 
++            SERVER_START_REQ(set_thread_layout)
++            {
++                req->tid = GetCurrentThreadId();
++                req->layout = wine_server_client_ptr( info->kbd_layout );
++                wine_server_call(req);
++            }
++            SERVER_END_REQ;
++
+             if (!win_array)
+                 break;
+             while (win_array[count])
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 39eb582d4b8..5807e8d4252 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -1002,10 +1002,18 @@ static HKL get_locale_kbd_layout(void)
+ HKL WINAPI NtUserGetKeyboardLayout( DWORD thread_id )
+ {
+     struct user_thread_info *thread = get_user_thread_info();
+-    HKL layout = thread->kbd_layout;
++    HKL layout = NULL;
+ 
+     if (thread_id && thread_id != GetCurrentThreadId())
+-        FIXME( "couldn't return keyboard layout for thread %04x\n", thread_id );
++    {
++        SERVER_START_REQ(get_thread_layout)
++        {
++            req->tid = thread_id;
++            if (!wine_server_call(req))
++                layout = wine_server_get_ptr(reply->layout);
++        }
++        SERVER_END_REQ;
++    } else layout = thread->kbd_layout;
+ 
+     if (!layout) return get_locale_kbd_layout();
+     return layout;
+@@ -1373,6 +1381,14 @@ HKL WINAPI NtUserActivateKeyboardLayout( HKL layout, UINT flags )
+         info->kbd_layout = layout;
+         info->kbd_layout_id = 0;
+ 
++        SERVER_START_REQ(set_thread_layout)
++        {
++            req->tid = GetCurrentThreadId();
++            req->layout = wine_server_client_ptr(layout);
++            wine_server_call(req);
++        }
++        SERVER_END_REQ;
++
+         if (ime_hwnd) send_message( ime_hwnd, WM_IME_INTERNAL, IME_INTERNAL_HKL_ACTIVATE, HandleToUlong(layout) );
+ 
+         if ((focus = get_focus()) && get_window_thread( focus, NULL ) == GetCurrentThreadId())

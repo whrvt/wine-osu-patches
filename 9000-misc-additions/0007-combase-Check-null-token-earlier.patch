@@ -1,35 +1,31 @@
-From 5c225782cd9911ab43d5ef7de4f31429fea919df Mon Sep 17 00:00:00 2001
+From e7595e48bd58f14a107cd696f8a25759de7862d7 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 11:21:17 -0700
-Subject: [PATCH 07/47] combase: Check null token earlier.
+Subject: [PATCH 082/121] combase: Check null token earlier.
 
 ---
  dlls/combase/combase.c | 5 ++---
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/combase/combase.c b/dlls/combase/combase.c
-index a627d4779ec..dd544525f25 100644
+index 94e256f7cc1..defadea8063 100644
 --- a/dlls/combase/combase.c
 +++ b/dlls/combase/combase.c
-@@ -2712,6 +2712,8 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
+@@ -2804,12 +2804,11 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
  
      TRACE("%p\n", token);
  
-+    if(!token) return E_POINTER;
++    if (!token) return E_POINTER;
 +
-     if (!InternalIsProcessInitialized())
-     {
-         ERR("apartment not initialised\n");
-@@ -2721,9 +2723,6 @@ HRESULT WINAPI CoGetContextToken(ULONG_PTR *token)
      if (FAILED(hr = com_get_tlsdata(&tlsdata)))
          return hr;
  
 -    if (!token)
 -        return E_POINTER;
 -
-     if (!tlsdata->context_token)
+     if (!(apt = apartment_get_current_or_mta()))
      {
-         struct thread_context *context;
+         ERR("apartment not initialised\n");
 -- 
 2.54.0
 

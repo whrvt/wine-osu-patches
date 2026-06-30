@@ -1,7 +1,7 @@
-From cf9cb035eb3b7f6193e70c1c877257677d714bcd Mon Sep 17 00:00:00 2001
+From b44c96bedc8d6a8d7f111b31e27ecf17e41afc8d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 2 Apr 2025 00:58:56 -0700
-Subject: [PATCH 06/47] combase: Return S_OK for
+Subject: [PATCH 081/121] combase: Return S_OK for
  RoGetParameterizedTypeInstanceIID.
 
 Fixes osu! crashing with Wine version hidden.
@@ -10,10 +10,10 @@ Fixes osu! crashing with Wine version hidden.
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/combase/roapi.c b/dlls/combase/roapi.c
-index f4f7c0aac26..6e4ff5a3206 100644
+index 6085b4897a1..fe886584958 100644
 --- a/dlls/combase/roapi.c
 +++ b/dlls/combase/roapi.c
-@@ -212,10 +212,10 @@ HRESULT WINAPI RoGetParameterizedTypeInstanceIID(UINT32 name_element_count, cons
+@@ -214,10 +214,10 @@ HRESULT WINAPI RoGetParameterizedTypeInstanceIID(UINT32 name_element_count, cons
                                                   const IRoMetaDataLocator *meta_data_locator, GUID *iid,
                                                   ROPARAMIIDHANDLE *hiid)
  {

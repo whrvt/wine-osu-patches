@@ -1,8 +1,8 @@
-From 3823aa75dfd8a62419e75a60faca13c2cb1a1f46 Mon Sep 17 00:00:00 2001
+From c128896c734cf674b0a081a3bf6c7dea2fc8dbea Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 18 Oct 2019 11:39:19 +0200
-Subject: [PATCH 1/8] winex11.drv: Pass XEvent instead of XClientMessageEvent
- to handlers.
+Subject: [PATCH 045/121] winex11.drv: Pass XEvent instead of
+ XClientMessageEvent to handlers.
 
 This is to avoid a dubious cast from XClientMessageEvent to XEvent in
 next patch.
@@ -11,7 +11,7 @@ next patch.
  1 file changed, 12 insertions(+), 7 deletions(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 193cfc85718..e530eb3fe48 100644
+index 1b37c4db105..62cc0d25cc8 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
 @@ -667,8 +667,10 @@ static void set_focus( Display *display, HWND focus, Time time )

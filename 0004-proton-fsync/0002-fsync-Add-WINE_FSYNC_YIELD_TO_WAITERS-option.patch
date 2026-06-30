@@ -1,7 +1,7 @@
-From f0b9a0adea5bb19630a419445cb0e7463a950c1f Mon Sep 17 00:00:00 2001
+From 0b598f7c6d95df0b6a865933f15a44fd934dc786 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Thu, 27 Apr 2023 17:32:38 -0600
-Subject: [PATCH 2/6] fsync: Add WINE_FSYNC_YIELD_TO_WAITERS option.
+Subject: [PATCH 021/121] fsync: Add WINE_FSYNC_YIELD_TO_WAITERS option.
 
 CW-Bug-Id: #22194
 ---
@@ -10,7 +10,7 @@ CW-Bug-Id: #22194
  2 files changed, 8 insertions(+)
 
 diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
-index f350b76d5ef..25e8ecc8f81 100644
+index 11be65122e8..6d33b972858 100644
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
 @@ -76,6 +76,7 @@ int main_argc = 0;
@@ -35,10 +35,10 @@ index f350b76d5ef..25e8ecc8f81 100644
  
  
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index d35862f5411..aaa482f8c36 100644
+index b30c82af39b..152a8ceba08 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -212,6 +212,7 @@ extern int main_argc;
+@@ -213,6 +213,7 @@ extern int main_argc;
  extern char **main_argv;
  extern WCHAR **main_wargv;
  extern BOOL fsync_simulate_sched_quantum;

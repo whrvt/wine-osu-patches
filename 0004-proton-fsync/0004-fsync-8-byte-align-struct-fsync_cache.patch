@@ -1,7 +1,7 @@
-From 352a1505a28bf884fa72e05385262629f886d7c4 Mon Sep 17 00:00:00 2001
+From 6a69503aee4a5c36ea024c76fd70e4e8b5cf4eef Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Sun, 12 Apr 2026 13:42:46 -0600
-Subject: [PATCH 4/6] fsync: 8-byte align 'struct fsync_cache'.
+Subject: [PATCH 023/121] fsync: 8-byte align 'struct fsync_cache'.
 
 ---
  dlls/ntdll/unix/fsync.c | 2 +-

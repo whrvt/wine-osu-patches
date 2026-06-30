@@ -1,7 +1,7 @@
-From 229b528866daf1170f2f47e39c303aa2dbc5afe9 Mon Sep 17 00:00:00 2001
+From 88281243a70a7e5a9342608ce019577e5ef277f3 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 05:03:11 +0200
-Subject: [PATCH 5/6] fsync: Also disable NTsync via WINENTSYNC=0.
+Subject: [PATCH 024/121] fsync: Also disable NTsync via WINENTSYNC=0.
 
 ---
  server/inproc_sync.c | 3 ++-

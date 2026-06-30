@@ -1,8 +1,8 @@
-From cffa0bbb046a08ffbb6d8a91de03ee7b16732858 Mon Sep 17 00:00:00 2001
+From fa2188cef0b0cf3fa1b02161e2cb16b3bd6dfa40 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 1 Mar 2022 22:11:17 +0300
-Subject: [PATCH 7/8] winex11.drv: Generate EDID if one is not available from
- xrandr.
+Subject: [PATCH 051/121] winex11.drv: Generate EDID if one is not available
+ from xrandr.
 
 CW-Bug-Id: #20204
 CW-Bug-Id: #19217

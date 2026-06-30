@@ -1,0 +1,53 @@
+From ac1f2b401d1ab4c87143ffba2e2f3f382b5ed5c1 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sun, 21 Sep 2025 17:47:59 +0200
+Subject: [PATCH 029/121] HACK: winex11.drv: Avoid delaying/repositioning
+ fullscreen windows on KDE.
+
+KDE (KWin) doesn't play well with the config-change delay nor with
+repositioning requests under osu!'s window management, causing glitches.
+When running under KWin and WINE_ENABLE_KDE_HACKS is set, skip the config
+change delay and avoid repositioning exclusive fullscreen windows.
+---
+ dlls/winex11.drv/window.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index bc18632aba2..ab8deb34beb 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -956,6 +956,14 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
+ static const UINT config_notify_mask = (1 << NET_WM_STATE_MAXIMIZED) | (1 << NET_WM_STATE_FULLSCREEN) |
+                                        (1 << NET_WM_STATE_ABOVE);
+ 
++static BOOL kde_hacks_enabled(void)
++{
++    static int cached = -1;
++    if (cached == -1)
++        cached = X11DRV_HasWindowManager("KWin") && !!getenv("WINE_ENABLE_KDE_HACKS");
++    return cached;
++}
++
+ static BOOL window_needs_mwm_hints_change_delay( struct x11drv_win_data *data )
+ {
+     if (data->pending_state.wm_state == WithdrawnState) return FALSE; /* window is unmapped, should be safe to make any change */
+@@ -980,6 +988,7 @@ static BOOL window_needs_config_change_delay( struct x11drv_win_data *data )
+ {
+     if (!data->managed || data->embedded) return FALSE; /* window is not managed or is embedded, safe to make changes */
+     if (data->pending_state.wm_state == WithdrawnState) return FALSE; /* window is unmapped, should be safe to make any change */
++    if (kde_hacks_enabled()) return FALSE; /* HACK: KDE Wayland and osu!'s window management don't play well with the delay */
+     if (data->configure_serial) return TRUE; /* another config update is pending, wait for it to complete */
+     /* delay any config request when a _NET_WM_STATE or _MOTIF_WM_HINTS change which might trigger a ConfigureNotify is in flight */
+     return (data->net_wm_state_serial && (data->pending_state.net_wm_state ^ data->current_state.net_wm_state) & config_notify_mask) ||
+@@ -1423,6 +1432,8 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
+     data->desired_state.above = above;
+     if (!data->whole_window) return; /* no window, nothing to update */
+     if (EqualRect( old_rect, new_rect ) && (old_above || !above || data->managed)) return; /* rects are the same, no need to be raised, nothing to update */
++    /* KDE has issues repositioning the window/handling delay requests on osu!'s weird window management: simply avoid them */
++    if (data->is_fullscreen && !is_virtual_desktop() && kde_hacks_enabled()) return;
+     if (window_needs_config_change_delay( data ))
+     {
+         TRACE( "window %p/%lx is updating _NET_WM_STATE/_MOTIF_WM_HINTS, delaying request\n", data->hwnd, data->whole_window );
+-- 
+2.54.0
+

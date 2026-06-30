@@ -1,7 +1,7 @@
-From c14bdd3bf65926368883f55c2cc814b1b4a56674 Mon Sep 17 00:00:00 2001
+From 045a9ccbb7f99aeb44cab17112af50a9a7e25a9f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 22 Apr 2022 23:12:33 +0200
-Subject: [PATCH 13/19] winex11.drv: Do not enable/disable XInput2 when
+Subject: [PATCH 038/121] winex11.drv: Do not enable/disable XInput2 when
  clipping.
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 13/19] winex11.drv: Do not enable/disable XInput2 when
  1 file changed, 4 deletions(-)
 
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index c41a30e79a9..db96cbcf397 100644
+index c62a4501503..186955086ed 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
 @@ -496,9 +496,6 @@ static BOOL grab_clipping_window( const RECT *clip )
