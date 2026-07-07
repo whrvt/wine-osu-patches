@@ -1,0 +1,28 @@
+From 8c70f785422088f141e933ad7d6a3812fc09b2b0 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 14 Jun 2026 13:59:10 +0200
+Subject: [PATCH 23/29] mmdevapi: Read the audio driver list from
+ WINE_AUDIO_DRIVER when set.
+
+---
+ dlls/mmdevapi/main.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/mmdevapi/main.c b/dlls/mmdevapi/main.c
+index c9573ec75d6..a5ea0a3292e 100644
+--- a/dlls/mmdevapi/main.c
++++ b/dlls/mmdevapi/main.c
+@@ -125,7 +125,9 @@ static BOOL WINAPI init_driver(INIT_ONCE *once, void *param, void **context)
+     HKEY key;
+     WCHAR reg_list[256], *p, *next, *driver_list = default_list;
+ 
+-    if(RegOpenKeyW(HKEY_CURRENT_USER, drv_keyW, &key) == ERROR_SUCCESS){
++    if(GetEnvironmentVariableW(L"WINE_AUDIO_DRIVER", reg_list, ARRAY_SIZE(reg_list)))
++        driver_list = reg_list;
++    else if(RegOpenKeyW(HKEY_CURRENT_USER, drv_keyW, &key) == ERROR_SUCCESS){
+         DWORD size = sizeof(reg_list);
+ 
+         if(RegQueryValueExW(key, L"Audio", 0, NULL, (BYTE*)reg_list, &size) == ERROR_SUCCESS){
+-- 
+2.55.0
+

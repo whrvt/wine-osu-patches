@@ -1,0 +1,33 @@
+From 41554a3b5e022a504809347b4ba6925d6ae6bc7b Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 14:07:31 +0200
+Subject: [PATCH 08/29] winepipewire.drv: Use the loopback flag to request sink
+ capture.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 583f6318a12..adad177caaa 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1499,11 +1499,11 @@ static HRESULT pipewire_stream_connect(struct pipewire_stream *stream, const cha
+         pw_properties_set(props, PW_KEY_NODE_NAME, "winepipewire");
+     pw_properties_setf(props, PW_KEY_NODE_LATENCY, "%u/%u", period_frames, stream->info.rate);
+     if (device && device[0])
+-    {
+         pw_properties_set(props, PW_KEY_TARGET_OBJECT, device);
+-        if (stream->dataflow == eCapture && device_is_sink(device))
+-            pw_properties_set(props, PW_KEY_STREAM_CAPTURE_SINK, "true");
+-    }
++    if (stream->dataflow == eCapture &&
++        ((stream->flags & AUDCLNT_STREAMFLAGS_LOOPBACK) ||
++         (device && device[0] && device_is_sink(device))))
++        pw_properties_set(props, PW_KEY_STREAM_CAPTURE_SINK, "true");
+ 
+     stream->pw = pw_stream_new(pw_core_global, "winepipewire", props);
+     if (!stream->pw)
+-- 
+2.55.0
+

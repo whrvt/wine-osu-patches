@@ -1,0 +1,50 @@
+From f3d991df2a6de1c1fd87461065ee63e8113cad56 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 14:07:31 +0200
+Subject: [PATCH 09/29] winepipewire.drv: Check the rate control result and fix
+ repeated SetSampleRate calls.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index adad177caaa..34af9e5195c 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -77,6 +77,7 @@ struct pipewire_stream
+     struct spa_hook stream_listener;
+     struct spa_audio_info_raw info;
+     UINT32 frame_size;
++    UINT32 rate_connected; /* negotiated stream rate; SPA_PROP_rate is absolute vs this */
+ 
+     DWORD flags;
+     AUDCLNT_SHAREMODE share;
+@@ -1610,6 +1611,8 @@ static NTSTATUS pipewire_create_stream(void *args)
+     if (FAILED(hr))
+         goto exit;
+ 
++    stream->rate_connected = stream->info.rate;
++
+     if (stream->dataflow == eRender)
+     {
+         size = stream->real_bufsize_bytes = stream->bufsize_frames * 2 * stream->frame_size;
+@@ -2482,8 +2485,13 @@ static NTSTATUS pipewire_set_sample_rate(void *args)
+         goto exit;
+     }
+ 
+-    ratio = params->rate / (float)stream->info.rate;
+-    pw_stream_set_control(stream->pw, SPA_PROP_rate, 1, &ratio, 0);
++    ratio = params->rate / (float)stream->rate_connected;
++    if (pw_stream_set_control(stream->pw, SPA_PROP_rate, 1, &ratio, 0) < 0)
++    {
++        /* needs PipeWire >= 1.2.6 and an active adaptive resampler */
++        hr = E_NOTIMPL;
++        goto exit;
++    }
+ 
+     pw_stream_flush(stream->pw, false);
+ 
+-- 
+2.55.0
+

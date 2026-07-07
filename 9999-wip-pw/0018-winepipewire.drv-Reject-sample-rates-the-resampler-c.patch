@@ -1,0 +1,34 @@
+From b5eabcf977cbe5b5f487b6c6678b697a84510f36 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 19:10:47 +0200
+Subject: [PATCH 18/29] winepipewire.drv: Reject sample rates the resampler
+ cannot honor.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 3bc9467fbb3..a50826599cf 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2600,6 +2600,16 @@ static NTSTATUS pipewire_set_sample_rate(void *args)
+         goto exit;
+     }
+ 
++    /* PulseAudio rejects rates outside [1, 48000 * 8] in
++     * pa_stream_update_sample_rate; mirror winepulse's observable failure
++     * code for rates the resampler cannot honor (the negated comparison
++     * also catches NaN). */
++    if (!(params->rate >= 1.0f && params->rate <= 384000.0f))
++    {
++        hr = E_OUTOFMEMORY;
++        goto exit;
++    }
++
+     ratio = params->rate / (float)stream->rate_connected;
+     if (pw_stream_set_control(stream->pw, SPA_PROP_rate, 1, &ratio, 0) < 0)
+     {
+-- 
+2.55.0
+
