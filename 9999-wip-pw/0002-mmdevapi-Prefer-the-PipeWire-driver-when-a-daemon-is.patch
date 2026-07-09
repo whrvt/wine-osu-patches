@@ -1,0 +1,26 @@
+From e246bc345f7ae4e0ebf41d7b5698174c139fbbe1 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 00:06:47 +0200
+Subject: [PATCH 02/29] mmdevapi: Prefer the PipeWire driver when a daemon is
+ available.
+
+---
+ dlls/mmdevapi/main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/mmdevapi/main.c b/dlls/mmdevapi/main.c
+index 70eace863e1..c9573ec75d6 100644
+--- a/dlls/mmdevapi/main.c
++++ b/dlls/mmdevapi/main.c
+@@ -120,7 +120,7 @@ fail:
+ 
+ static BOOL WINAPI init_driver(INIT_ONCE *once, void *param, void **context)
+ {
+-    static WCHAR default_list[] = L"pulse,alsa,oss,coreaudio";
++    static WCHAR default_list[] = L"pipewire,pulse,alsa,oss,coreaudio";
+     DriverFuncs driver;
+     HKEY key;
+     WCHAR reg_list[256], *p, *next, *driver_list = default_list;
+-- 
+2.55.0
+

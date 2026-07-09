@@ -1,0 +1,116 @@
+From c0c7449702cc5a4d037e3e432a738596112a8fcf Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 7 Jul 2026 04:06:15 +0200
+Subject: [PATCH 30/29] winepipewire.drv: Advertise a 256-frame default period,
+ overridable via WINE_PIPEWIRE_QUANTUM.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 48 +++++++++++++++++---------------
+ 1 file changed, 26 insertions(+), 22 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 5513c097194..38cc22c8316 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -442,7 +442,7 @@ static void build_format(WAVEFORMATEXTENSIBLE *fmt, uint32_t rate, uint32_t chan
+ 
+ static struct pw_phys_device *add_device(struct list *list, const char *pw_name, const char *display,
+                                          EndpointFormFactor form, uint32_t rate, uint32_t channels, UINT mask,
+-                                         REFERENCE_TIME min_period)
++                                         REFERENCE_TIME def_period, REFERENCE_TIME min_period)
+ {
+     size_t len = strlen(pw_name);
+     struct pw_phys_device *dev = malloc(offsetof(struct pw_phys_device, pw_name) + len + 1);
+@@ -457,7 +457,7 @@ static struct pw_phys_device *add_device(struct list *list, const char *pw_name,
+     dev->form = form;
+     build_format(&dev->fmt, rate, channels, mask);
+     dev->channel_mask = dev->fmt.dwChannelMask;
+-    dev->def_period = 100000;
++    dev->def_period = def_period;
+     dev->min_period = min_period;
+     memcpy(dev->pw_name, pw_name, len + 1);
+     list_add_tail(list, &dev->entry);
+@@ -922,7 +922,7 @@ static void probe_roundtrip(struct probe *p)
+  * default routing).  When the default node is known, mirror its format so
+  * the default endpoint advertises the real speaker layout. */
+ static void add_default_device(struct list *list, EndpointFormFactor form, const char *match,
+-                               uint32_t rate, REFERENCE_TIME min_period)
++                               uint32_t rate, REFERENCE_TIME def_period, REFERENCE_TIME min_period)
+ {
+     struct pw_phys_device *dev, *def_src = NULL, *def;
+ 
+@@ -940,7 +940,7 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
+     }
+     def->pw_name[0] = '\0';
+     def->form = form;
+-    def->def_period = 100000;
++    def->def_period = def_period;
+     def->min_period = min_period;
+     if (def_src)
+     {
+@@ -955,28 +955,32 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
+     list_add_head(list, &def->entry);
+ }
+ 
++static uint32_t quantum_override(void)
++{
++    static uint32_t cached = ~0u;
++    const char *env;
++
++    if (cached != ~0u)
++        return cached;
++
++    env = getenv("WINE_PIPEWIRE_QUANTUM");
++    cached = env ? (uint32_t)strtoul(env, NULL, 10) : 0;
++    return cached;
++}
++
+ static void build_device_cache(struct probe *p)
+ {
+     struct probe_node *pn;
+     uint32_t rate = p->clock_rate ? p->clock_rate : 48000;
++    uint32_t override = quantum_override();
+     REFERENCE_TIME min_period = 30000;
++    REFERENCE_TIME def_period = (REFERENCE_TIME)256 * 10000000 / rate;
+ 
+-    /* IAudioClient3 shared-mode floor.  The graph cannot deliver cycles
+-     * below clock.min-quantum (clock.force-quantum pins it outright), and
+-     * 128 frames (~2.7 ms at 48 kHz) matches the typical Windows engine
+-     * floor.  Clamp to the 3 ms winepulse-parity value so the advertised
+-     * minimum only ever improves; without settings metadata keep 3 ms. */
+-    if (p->min_quantum)
++    if (override)
+     {
+-        /* Floor division: mmdevapi converts back with a ceiling, so this
+-         * round-trips to the exact frame count. */
+-        REFERENCE_TIME q = (REFERENCE_TIME)p->min_quantum * 10000000 / rate;
+-        REFERENCE_TIME floor_rt = (REFERENCE_TIME)128 * 10000000 / rate;
+-        min_period = q > floor_rt ? q : floor_rt;
+-        if (min_period > 30000)
+-            min_period = 30000;
+-        TRACE("min_quantum=%u rate=%u -> min_period=%d hns\n",
+-              p->min_quantum, rate, (int)min_period);
++        min_period = def_period = (REFERENCE_TIME)override * 10000000 / rate;
++        TRACE("WINE_PIPEWIRE_QUANTUM=%u rate=%u -> period=%d hns\n",
++              override, rate, (int)def_period);
+     }
+ 
+     lstrcpynA(g_default_sink, p->default_sink, sizeof(g_default_sink));
+@@ -989,11 +993,11 @@ static void build_device_cache(struct probe *p)
+         uint32_t channels = pn->have_format ? pn->channels : 2;
+         UINT mask = pn->have_format ? positions_to_mask(pn->position, pn->channels)
+                                     : (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT);
+-        add_device(list, pn->node_name, pn->display, form, rate, channels, mask, min_period);
++        add_device(list, pn->node_name, pn->display, form, rate, channels, mask, def_period, min_period);
+     }
+ 
+-    add_default_device(&g_render_devices, Speakers, g_default_sink, rate, min_period);
+-    add_default_device(&g_capture_devices, Microphone, g_default_source, rate, min_period);
++    add_default_device(&g_render_devices, Speakers, g_default_sink, rate, def_period, min_period);
++    add_default_device(&g_capture_devices, Microphone, g_default_source, rate, def_period, min_period);
+ }
+ 
+ static void probe_teardown(struct probe *p)
+-- 
+2.55.0
+

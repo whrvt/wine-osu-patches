@@ -1,0 +1,74 @@
+From 9db1ffba6de0d2ad9010742eef54ad2fe2695cdf Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 14:07:31 +0200
+Subject: [PATCH 14/29] winepipewire.drv: Support PipeWire versions older than
+ 1.4.
+
+---
+ configure.ac                     |  5 ++++-
+ dlls/winepipewire.drv/pipewire.c | 26 +++++++++++++++++++++++++-
+ 2 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 1843e095cd6..c112f046878 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1726,7 +1726,10 @@ dnl **** Check for PipeWire ****
+ if test "x$with_pipewire" != "xno";
+ then
+     WINE_PACKAGE_FLAGS(PIPEWIRE,[libpipewire-0.3],,,,
+-        [AC_CHECK_HEADERS([pipewire/pipewire.h],,[PIPEWIRE_LIBS=""])])
++        [AC_CHECK_HEADERS([pipewire/pipewire.h],,[PIPEWIRE_LIBS=""])
++         AS_IF([test -n "$PIPEWIRE_LIBS"],
++            [AC_CHECK_DECL([pw_stream_get_time_n],,[PIPEWIRE_LIBS=""],
++                [[#include <pipewire/pipewire.h>]])])])
+ fi
+ WINE_NOTICE_WITH(pipewire, [test -z "$PIPEWIRE_LIBS"],
+         [libpipewire-0.3 ${notice_platform}development files not found, PipeWire won't be supported.],
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index c5d200bda12..5754ccab825 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -250,6 +250,30 @@ static void copy_from_ring(BYTE *dst, const BYTE *ring, SIZE_T ring_size, SIZE_T
+         memcpy(dst + first, ring, n - first);
+ }
+ 
++/* Parse {"name":"<value>"} metadata values.  spa_json_str_object_find needs
++ * PipeWire 1.4; this uses only the stable spa_json core (verified in 1.0.0). */
++static int parse_json_str_field(const char *json, const char *field, char *dst, size_t maxlen)
++{
++    struct spa_json it[2];
++    char key[64];
++    const char *val;
++    int len;
++
++    spa_json_init(&it[0], json, strlen(json));
++    if (spa_json_enter_object(&it[0], &it[1]) <= 0)
++        return -1;
++    while (spa_json_get_string(&it[1], key, sizeof(key)) > 0)
++    {
++        if (!strcmp(key, field))
++            return spa_json_get_string(&it[1], dst, maxlen) > 0 ? 0 : -1;
++        if ((len = spa_json_next(&it[1], &val)) <= 0)
++            return -1;
++        if (spa_json_is_container(val, len) && spa_json_container_len(&it[1], val, len) <= 0)
++            return -1;
++    }
++    return -1;
++}
++
+ /* SPA channel position -> WASAPI speaker bit */
+ static UINT spa_position_to_mask_bit(uint32_t pos)
+ {
+@@ -656,7 +680,7 @@ static int on_probe_metadata_property(void *data, uint32_t subject, const char *
+         dst = p->default_source;
+     else
+         return 0;
+-    spa_json_str_object_find(value, strlen(value), "name", dst, 256);
++    parse_json_str_field(value, "name", dst, 256);
+     return 0;
+ }
+ 
+-- 
+2.55.0
+

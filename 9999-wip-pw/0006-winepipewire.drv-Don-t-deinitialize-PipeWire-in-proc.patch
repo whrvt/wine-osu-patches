@@ -1,0 +1,41 @@
+From cb79f81e9fe5894af22f781d2a1de0244064d72f Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 10:25:50 +0200
+Subject: [PATCH 06/29] winepipewire.drv: Don't deinitialize PipeWire in
+ process detach.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 6da18d509a5..ab836815468 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -449,8 +449,14 @@ static NTSTATUS pipewire_process_attach(void *args)
+ 
+ static NTSTATUS pipewire_process_detach(void *args)
+ {
++    /* May run at process exit (DLL_PROCESS_DETACH with lpvReserved set), with
++     * the pw_thread_loop still running: it is a raw pthread that process
++     * termination does not stop, and main_loop_stop is skipped on that path.
++     * Do not take the loop lock (a killed thread may have held it) and do not
++     * pw_deinit() here (it dlcloses the PipeWire modules under the live loop
++     * thread).  Clean library teardown happens in pipewire_main_loop_stop on
++     * the FreeLibrary path; at process exit the OS reclaims everything. */
+     free_device_lists();
+-    pw_deinit();
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -554,6 +560,7 @@ static NTSTATUS pipewire_main_loop_stop(void *args)
+         pw_loop_global = NULL;
+     }
+     pthread_mutex_unlock(&pw_init_mutex);
++    pw_deinit();
+     return STATUS_SUCCESS;
+ }
+ 
+-- 
+2.55.0
+

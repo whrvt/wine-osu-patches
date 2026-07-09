@@ -1,0 +1,32 @@
+From 021fe33408fbd2437e7f43144874e20c7c564c0d Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 19:10:48 +0200
+Subject: [PATCH 19/29] winepipewire.drv: Fail start when the stream cannot be
+ activated.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index a50826599cf..77b4a2dbf51 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2073,7 +2073,13 @@ static NTSTATUS pipewire_start(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    pw_stream_set_active(stream->pw, true);
++    if (pw_stream_set_active(stream->pw, true) < 0)
++    {
++        /* mirrors pulse_start's failed-uncork path */
++        params->result = E_FAIL;
++        pw_thread_loop_unlock(pw_loop_global);
++        return STATUS_SUCCESS;
++    }
+     stream->started = TRUE;
+     pw_thread_loop_unlock(pw_loop_global);
+     return STATUS_SUCCESS;
+-- 
+2.55.0
+

@@ -1,0 +1,38 @@
+From 171f38597be6ef8a0caf18febc7ea4190b9efc17 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 16:14:45 +0200
+Subject: [PATCH 16/29] winepipewire.drv: Trace the probe name without
+ converting it.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index df84ffa092d..32d7334f267 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -945,7 +945,6 @@ static NTSTATUS pipewire_test_connect(void *args)
+     struct test_connect_params *params = args;
+     struct probe p;
+     struct probe_node *pn, *next;
+-    char *name;
+ 
+     free_device_lists();
+     list_init(&g_render_devices);
+@@ -1008,11 +1007,9 @@ static NTSTATUS pipewire_test_connect(void *args)
+         free(pn);
+     }
+ 
+-    name = wstr_to_str(params->name);
+     TRACE("probe for %s: %u sinks default=%s, %u sources default=%s, rate=%u\n",
+-          debugstr_a(name), list_count(&g_render_devices), debugstr_a(g_default_sink),
++          debugstr_w(params->name), list_count(&g_render_devices), debugstr_a(g_default_sink),
+           list_count(&g_capture_devices), debugstr_a(g_default_source), p.clock_rate);
+-    free(name);
+ 
+     params->priority = Priority_Preferred;
+     return STATUS_SUCCESS;
+-- 
+2.55.0
+

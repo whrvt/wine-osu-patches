@@ -1,0 +1,29 @@
+From 019035e828d308355e196094af0616ecbb7bcc91 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 14:07:31 +0200
+Subject: [PATCH 12/29] winepipewire.drv: Clamp capture chunks to the buffer
+ size.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 7c732f2fbd9..f806fa7c69d 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1418,8 +1418,9 @@ static void on_stream_process(void *data)
+     {
+         if (stream->started && stream->capture_ring)
+         {
+-            UINT32 avail = d->chunk->size;
+-            const BYTE *src = (const BYTE *)d->data + d->chunk->offset;
++            UINT32 offs = min(d->chunk->offset, d->maxsize);
++            UINT32 avail = min(d->chunk->size, d->maxsize - offs);
++            const BYTE *src = (const BYTE *)d->data + offs;
+             SIZE_T n = avail;
+ 
+             if (n > stream->capture_ring_size)
+-- 
+2.55.0
+

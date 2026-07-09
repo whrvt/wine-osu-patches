@@ -1,0 +1,25 @@
+From f1ce27548b1471b87095a63702845b3d7f21a9e4 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 14:07:30 +0200
+Subject: [PATCH 07/29] winepipewire.drv: Define WIN32_NO_STATUS before
+ including winternl.h.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index ab836815468..583f6318a12 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -44,6 +44,7 @@
+ #include <spa/utils/json.h>
+ 
+ #include "ntstatus.h"
++#define WIN32_NO_STATUS
+ #include "winternl.h"
+ 
+ #include "mmdeviceapi.h"
+-- 
+2.55.0
+

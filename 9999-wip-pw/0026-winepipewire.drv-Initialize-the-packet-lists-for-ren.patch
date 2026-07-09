@@ -1,0 +1,35 @@
+From 0bf4ae9cf27371db0be3214d746e0a7f800fd6b9 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 14 Jun 2026 18:36:36 +0200
+Subject: [PATCH 26/29] winepipewire.drv: Initialize the packet lists for
+ render streams.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 4e914b10e37..9ca87d3548c 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1756,6 +1756,8 @@ static NTSTATUS pipewire_create_stream(void *args)
+ 
+     stream->rate_connected = stream->info.rate;
+ 
++    list_init(&stream->packet_free_head);
++    list_init(&stream->packet_filled_head);
+     if (stream->dataflow == eRender)
+     {
+         size = stream->real_bufsize_bytes = stream->bufsize_frames * 2 * stream->frame_size;
+@@ -1782,8 +1784,6 @@ static NTSTATUS pipewire_create_stream(void *args)
+             ACPacket *cur_packet = (ACPacket *)((char *)stream->local_buffer + stream->real_bufsize_bytes);
+             BYTE *data = stream->local_buffer;
+             silence_buffer(stream->info.format, stream->local_buffer, stream->real_bufsize_bytes);
+-            list_init(&stream->packet_free_head);
+-            list_init(&stream->packet_filled_head);
+             for (i = 0; i < capture_packets; ++i, ++cur_packet)
+             {
+                 list_add_tail(&stream->packet_free_head, &cur_packet->entry);
+-- 
+2.55.0
+

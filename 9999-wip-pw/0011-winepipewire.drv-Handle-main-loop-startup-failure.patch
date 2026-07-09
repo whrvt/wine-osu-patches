@@ -1,0 +1,45 @@
+From 441ad351106c7f5ae5c1029f9120c73454c5e290 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 11 Jun 2026 14:07:31 +0200
+Subject: [PATCH 11/29] winepipewire.drv: Handle main loop startup failure.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 948f8372904..7c732f2fbd9 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -528,7 +528,14 @@ static NTSTATUS pipewire_main_loop_start(void *args)
+         pw_loop_global = NULL;
+         goto out;
+     }
+-    pw_thread_loop_start(pw_loop_global);
++    if (pw_thread_loop_start(pw_loop_global) < 0)
++    {
++        ERR("pw_thread_loop_start failed\n");
++        pw_context_destroy(pw_ctx);
++        pw_ctx = NULL;
++        pw_thread_loop_destroy(pw_loop_global);
++        pw_loop_global = NULL;
++    }
+ 
+ out:
+     pthread_mutex_unlock(&pw_init_mutex);
+@@ -1546,6 +1553,12 @@ static NTSTATUS pipewire_create_stream(void *args)
+     UINT32 i;
+     HRESULT hr;
+ 
++    if (!pw_loop_global)
++    {
++        params->result = AUDCLNT_E_ENDPOINT_CREATE_FAILED;
++        return STATUS_SUCCESS;
++    }
++
+     if (params->share == AUDCLNT_SHAREMODE_EXCLUSIVE)
+     {
+         params->result = AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED;
+-- 
+2.55.0
+
