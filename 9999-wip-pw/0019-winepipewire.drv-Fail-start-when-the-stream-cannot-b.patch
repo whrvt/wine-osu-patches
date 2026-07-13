@@ -1,7 +1,7 @@
-From 021fe33408fbd2437e7f43144874e20c7c564c0d Mon Sep 17 00:00:00 2001
+From 2d610f7b7289513c37476bc9ff3a34e448715907 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 19:10:48 +0200
-Subject: [PATCH 19/29] winepipewire.drv: Fail start when the stream cannot be
+Subject: [PATCH 19/39] winepipewire.drv: Fail start when the stream cannot be
  activated.
 
 ---

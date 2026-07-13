@@ -1,7 +1,7 @@
-From 9db1ffba6de0d2ad9010742eef54ad2fe2695cdf Mon Sep 17 00:00:00 2001
+From 46b76dba851b955d96f776fa111cf8db7de51145 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 14/29] winepipewire.drv: Support PipeWire versions older than
+Subject: [PATCH 14/39] winepipewire.drv: Support PipeWire versions older than
  1.4.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 14/29] winepipewire.drv: Support PipeWire versions older than
  2 files changed, 29 insertions(+), 2 deletions(-)
 
 diff --git a/configure.ac b/configure.ac
-index 1843e095cd6..c112f046878 100644
+index cfbd5dfe333..ed425ebae9e 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1726,7 +1726,10 @@ dnl **** Check for PipeWire ****
+@@ -1738,7 +1738,10 @@ dnl **** Check for PipeWire ****
  if test "x$with_pipewire" != "xno";
  then
      WINE_PACKAGE_FLAGS(PIPEWIRE,[libpipewire-0.3],,,,

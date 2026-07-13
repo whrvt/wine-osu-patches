@@ -1,7 +1,7 @@
-From 9c3235421152881b26f910ffe39652e8a398019e Mon Sep 17 00:00:00 2001
+From bd27414c6cc3391a1a44d8d18fbc1600c74d940a Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 18:35:34 +0200
-Subject: [PATCH 24/29] winepipewire.drv: Resync the device cursor on render
+Subject: [PATCH 24/39] winepipewire.drv: Resync the device cursor on render
  buffer overflow.
 
 ---

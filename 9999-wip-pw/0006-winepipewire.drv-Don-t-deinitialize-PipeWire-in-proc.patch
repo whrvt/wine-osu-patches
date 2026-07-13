@@ -1,7 +1,7 @@
-From cb79f81e9fe5894af22f781d2a1de0244064d72f Mon Sep 17 00:00:00 2001
+From 041f2e8668d16262e45b093750ab8e927308d53b Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 10:25:50 +0200
-Subject: [PATCH 06/29] winepipewire.drv: Don't deinitialize PipeWire in
+Subject: [PATCH 06/39] winepipewire.drv: Don't deinitialize PipeWire in
  process detach.
 
 ---

@@ -1,7 +1,7 @@
-From 441ad351106c7f5ae5c1029f9120c73454c5e290 Mon Sep 17 00:00:00 2001
+From 3ed30545b48f92fa93b61ae376c340fe3cbca322 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 11/29] winepipewire.drv: Handle main loop startup failure.
+Subject: [PATCH 11/39] winepipewire.drv: Handle main loop startup failure.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 15 ++++++++++++++-

@@ -1,7 +1,7 @@
-From abad47cbc3e164ac5452c27c53eed7af4878d58b Mon Sep 17 00:00:00 2001
+From 4d69bc68ad6c0317bc41ab82803f12011c40a24d Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Wed, 10 Jun 2026 23:54:58 +0200
-Subject: [PATCH 01/29] winepipewire.drv: New PipeWire mmdevapi audio driver.
+Subject: [PATCH 01/39] winepipewire.drv: New PipeWire mmdevapi audio driver.
 
 ---
  configure.ac                      |   16 +-
@@ -12,7 +12,7 @@ Subject: [PATCH 01/29] winepipewire.drv: New PipeWire mmdevapi audio driver.
  create mode 100644 dlls/winepipewire.drv/pipewire.c
 
 diff --git a/configure.ac b/configure.ac
-index a8e3bf77076..1843e095cd6 100644
+index ee0b1c483d4..cfbd5dfe333 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -52,6 +52,7 @@ AC_ARG_WITH(opengl,    AS_HELP_STRING([--without-opengl],[do not use OpenGL]))
@@ -23,7 +23,7 @@ index a8e3bf77076..1843e095cd6 100644
  AC_ARG_WITH(pthread,   AS_HELP_STRING([--without-pthread],[do not use the pthread library]))
  AC_ARG_WITH(pulse,     AS_HELP_STRING([--without-pulse],[do not use PulseAudio sound support]))
  AC_ARG_WITH(sane,      AS_HELP_STRING([--without-sane],[do not use SANE (scanner support)]))
-@@ -1721,6 +1722,16 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE_LIBS"],
+@@ -1733,6 +1734,16 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE_LIBS"],
          [libpulse ${notice_platform}development files not found or too old, Pulse won't be supported.],
          [enable_winepulse_drv])
  
@@ -40,7 +40,7 @@ index a8e3bf77076..1843e095cd6 100644
  dnl **** Check for FFmpeg ****
  if test "x$with_ffmpeg" != "xno";
  then
-@@ -1919,8 +1930,8 @@ WINE_NOTICE_WITH(netapi,[test "x$ac_cv_lib_soname_netapi" = "x"],
+@@ -1931,8 +1942,8 @@ WINE_NOTICE_WITH(netapi,[test "x$ac_cv_lib_soname_netapi" = "x"],
  
  
  dnl **** Check for any sound system ****
@@ -51,7 +51,7 @@ index a8e3bf77076..1843e095cd6 100644
  then
      WINE_WARNING([No sound system was found. Windows applications will be silent.])
  fi
-@@ -3386,6 +3397,7 @@ WINE_CONFIG_MAKEFILE(dlls/winehid.sys)
+@@ -3398,6 +3409,7 @@ WINE_CONFIG_MAKEFILE(dlls/winehid.sys)
  WINE_CONFIG_MAKEFILE(dlls/winemac.drv)
  WINE_CONFIG_MAKEFILE(dlls/winemapi)
  WINE_CONFIG_MAKEFILE(dlls/wineoss.drv)

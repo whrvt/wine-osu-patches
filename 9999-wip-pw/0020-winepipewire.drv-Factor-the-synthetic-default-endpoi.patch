@@ -1,7 +1,7 @@
-From e987ee1aec5d8cac87259ccbeeca12cf03302801 Mon Sep 17 00:00:00 2001
+From ede4f4fbfcfe2a96820c1d4b472ea92288f4da5d Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 19:10:48 +0200
-Subject: [PATCH 20/29] winepipewire.drv: Factor the synthetic default
+Subject: [PATCH 20/39] winepipewire.drv: Factor the synthetic default
  endpoints into a helper.
 
 ---

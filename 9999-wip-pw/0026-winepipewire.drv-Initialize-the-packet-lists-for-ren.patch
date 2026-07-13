@@ -1,7 +1,7 @@
-From 0bf4ae9cf27371db0be3214d746e0a7f800fd6b9 Mon Sep 17 00:00:00 2001
+From 46a7a9d97bd378ab2a98c4c73965e694aaaf02f8 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 18:36:36 +0200
-Subject: [PATCH 26/29] winepipewire.drv: Initialize the packet lists for
+Subject: [PATCH 26/39] winepipewire.drv: Initialize the packet lists for
  render streams.
 
 ---

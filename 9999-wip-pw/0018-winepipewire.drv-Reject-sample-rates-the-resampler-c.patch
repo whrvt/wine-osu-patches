@@ -1,7 +1,7 @@
-From b5eabcf977cbe5b5f487b6c6678b697a84510f36 Mon Sep 17 00:00:00 2001
+From f788c3151c7b35d0f7b7de40687595a36d6d86c6 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 19:10:47 +0200
-Subject: [PATCH 18/29] winepipewire.drv: Reject sample rates the resampler
+Subject: [PATCH 18/39] winepipewire.drv: Reject sample rates the resampler
  cannot honor.
 
 ---

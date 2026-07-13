@@ -1,7 +1,7 @@
-From f3d991df2a6de1c1fd87461065ee63e8113cad56 Mon Sep 17 00:00:00 2001
+From 005f53b8c8b636b29bc238136cd828ce7ba88349 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 09/29] winepipewire.drv: Check the rate control result and fix
+Subject: [PATCH 09/39] winepipewire.drv: Check the rate control result and fix
  repeated SetSampleRate calls.
 
 ---

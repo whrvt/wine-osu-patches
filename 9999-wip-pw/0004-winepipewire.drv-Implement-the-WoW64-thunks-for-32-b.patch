@@ -1,7 +1,7 @@
-From d114d3698c599f1b95cc9ebc3f32be8cb3840897 Mon Sep 17 00:00:00 2001
+From 15f32340486472db10ffe242159a9a2df5fa3075 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 01:50:27 +0200
-Subject: [PATCH 04/29] winepipewire.drv: Implement the WoW64 thunks for 32-bit
+Subject: [PATCH 04/39] winepipewire.drv: Implement the WoW64 thunks for 32-bit
  clients.
 
 ---

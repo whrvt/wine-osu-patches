@@ -1,7 +1,7 @@
-From 2e220dd4a8d82549da346dfda7b62cf55c4ae9f2 Mon Sep 17 00:00:00 2001
+From e9aa0fe547390c25e067f18c6ac44041f1a4f74e Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 00:34:16 +0200
-Subject: [PATCH 21/29] winepipewire.drv: Derive the SPA plugin directory from
+Subject: [PATCH 21/39] winepipewire.drv: Derive the SPA plugin directory from
  the loaded library.
 
 ---

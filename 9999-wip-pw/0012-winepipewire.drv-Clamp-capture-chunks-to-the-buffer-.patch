@@ -1,7 +1,7 @@
-From 019035e828d308355e196094af0616ecbb7bcc91 Mon Sep 17 00:00:00 2001
+From 25f92fca26d4d84dab6ad29aca03332977a4f7dd Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 12/29] winepipewire.drv: Clamp capture chunks to the buffer
+Subject: [PATCH 12/39] winepipewire.drv: Clamp capture chunks to the buffer
  size.
 
 ---

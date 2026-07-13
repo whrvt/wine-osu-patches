@@ -1,0 +1,39 @@
+From 62cddf49ec03176495ee6ac1e3d48dbc5fee59eb Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Mon, 6 Jul 2026 20:29:58 +0200
+Subject: [PATCH 32/39] winepipewire.drv: Write the stream out parameters only
+ on success.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 5513c097194..dc841817458 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1841,9 +1841,6 @@ static NTSTATUS pipewire_create_stream(void *args)
+         }
+     }
+ 
+-    *params->channel_count = stream->info.channels;
+-    *params->stream = (stream_handle)(UINT_PTR)stream;
+-
+ exit:
+     if (FAILED(params->result = hr))
+     {
+@@ -1867,7 +1864,11 @@ exit:
+     }
+ 
+     if (SUCCEEDED(hr))
++    {
++        *params->channel_count = stream->info.channels;
++        *params->stream = (stream_handle)(UINT_PTR)stream;
+         TRACE("created stream %p, %u channels.\n", stream, stream->info.channels);
++    }
+     else
+         WARN("failed: %#x.\n", (unsigned)hr);
+     pw_thread_loop_unlock(pw_loop_global);
+-- 
+2.55.0
+

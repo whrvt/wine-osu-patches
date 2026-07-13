@@ -1,0 +1,30 @@
+From cb1892458b31c37620887befb4459e2007880233 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Mon, 6 Jul 2026 20:29:46 +0200
+Subject: [PATCH 31/39] mmdevapi: Ignore an oversized WINE_AUDIO_DRIVER value.
+
+---
+ dlls/mmdevapi/main.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/mmdevapi/main.c b/dlls/mmdevapi/main.c
+index b54db650505..871e5b62a4b 100644
+--- a/dlls/mmdevapi/main.c
++++ b/dlls/mmdevapi/main.c
+@@ -122,10 +122,12 @@ static BOOL WINAPI init_driver(INIT_ONCE *once, void *param, void **context)
+ {
+     static WCHAR default_list[] = L"pipewire,pulse,alsa,oss,coreaudio";
+     DriverFuncs driver;
++    DWORD env_len;
+     HKEY key;
+     WCHAR reg_list[256], *p, *next, *driver_list = default_list;
+ 
+-    if(GetEnvironmentVariableW(L"WINE_AUDIO_DRIVER", reg_list, ARRAY_SIZE(reg_list)))
++    env_len = GetEnvironmentVariableW(L"WINE_AUDIO_DRIVER", reg_list, ARRAY_SIZE(reg_list));
++    if(env_len && env_len < ARRAY_SIZE(reg_list))
+         driver_list = reg_list;
+     else if(RegOpenKeyW(HKEY_CURRENT_USER, drv_keyW, &key) == ERROR_SUCCESS){
+         DWORD size = sizeof(reg_list);
+-- 
+2.55.0
+

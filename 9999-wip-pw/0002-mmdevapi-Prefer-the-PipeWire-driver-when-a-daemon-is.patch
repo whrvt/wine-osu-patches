@@ -1,7 +1,7 @@
-From e246bc345f7ae4e0ebf41d7b5698174c139fbbe1 Mon Sep 17 00:00:00 2001
+From f7c8f0660141f6211f40e898a9b5be9ed6c81900 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 00:06:47 +0200
-Subject: [PATCH 02/29] mmdevapi: Prefer the PipeWire driver when a daemon is
+Subject: [PATCH 02/39] mmdevapi: Prefer the PipeWire driver when a daemon is
  available.
 
 ---

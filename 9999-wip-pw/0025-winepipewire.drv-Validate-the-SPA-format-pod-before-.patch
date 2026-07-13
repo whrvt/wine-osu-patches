@@ -1,7 +1,7 @@
-From a03edf22f152e221d31bde0cff94de90ef0b2d6d Mon Sep 17 00:00:00 2001
+From 63dddfdb8e6dda62c0c3023debd3cff566948869 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 18:36:08 +0200
-Subject: [PATCH 25/29] winepipewire.drv: Validate the SPA format pod before
+Subject: [PATCH 25/39] winepipewire.drv: Validate the SPA format pod before
  connecting.
 
 ---

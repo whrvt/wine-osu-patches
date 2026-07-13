@@ -1,0 +1,67 @@
+From 688f2efa4336a5f3899c29879483eb636c16e171 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Mon, 6 Jul 2026 20:30:45 +0200
+Subject: [PATCH 34/39] winepipewire.drv: Abort the device probe on a core
+ error.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 1d62adb0fb6..18d2759fdb4 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -731,6 +731,7 @@ struct probe
+     char default_source[256];
+     uint32_t clock_rate;
+     uint32_t min_quantum;
++    BOOL core_error;
+ };
+ 
+ static void on_probe_node_param(void *data, int seq, uint32_t id, uint32_t index,
+@@ -906,14 +907,28 @@ static void on_probe_core_done(void *data, uint32_t id, int seq)
+         pw_thread_loop_signal(p->loop, false);
+ }
+ 
++static void on_probe_core_error(void *data, uint32_t id, int seq, int res, const char *message)
++{
++    /* Runs on the PipeWire loop thread: pw API only, no ntdll/Wine calls. */
++    struct probe *p = data;
++    if (id == PW_ID_CORE)
++    {
++        p->core_error = TRUE;
++        pw_thread_loop_signal(p->loop, false);
++    }
++}
++
+ static const struct pw_core_events probe_core_events = {
+     PW_VERSION_CORE_EVENTS,
+     .done = on_probe_core_done,
++    .error = on_probe_core_error,
+ };
+ 
+ /* Round-trip the core; must be called with the loop lock held. */
+ static void probe_roundtrip(struct probe *p)
+ {
++    if (p->core_error)
++        return;
+     p->sync_seq = pw_core_sync(p->core, PW_ID_CORE, p->sync_seq);
+     pw_thread_loop_timed_wait(p->loop, 2);
+ }
+@@ -1098,6 +1113,12 @@ static NTSTATUS pipewire_test_connect(void *args)
+     pw_context_destroy(p.context);
+     pw_thread_loop_destroy(p.loop);
+ 
++    if (p.core_error && list_empty(&p.nodes))
++    {
++        WARN("PipeWire core reported an error during the probe\n");
++        return STATUS_SUCCESS;
++    }
++
+     /* The pw loop is fully stopped: safe to do Wine string conversion. */
+     build_device_cache(&p);
+ 
+-- 
+2.55.0
+

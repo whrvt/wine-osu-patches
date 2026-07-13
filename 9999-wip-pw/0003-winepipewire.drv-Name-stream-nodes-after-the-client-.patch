@@ -1,7 +1,7 @@
-From 655245bf45b9b411a70df6fee561e52001b6c003 Mon Sep 17 00:00:00 2001
+From c33aa83714c982baf98f74fc3c7e22e1ffec589e Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 01:20:53 +0200
-Subject: [PATCH 03/29] winepipewire.drv: Name stream nodes after the client
+Subject: [PATCH 03/39] winepipewire.drv: Name stream nodes after the client
  and lower the minimum period.
 
 ---

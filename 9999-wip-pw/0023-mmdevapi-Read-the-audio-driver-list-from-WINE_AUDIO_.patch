@@ -1,7 +1,7 @@
-From 8c70f785422088f141e933ad7d6a3812fc09b2b0 Mon Sep 17 00:00:00 2001
+From 177f469ee05b9e7b7285493d0d49b8472049d3c3 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 13:59:10 +0200
-Subject: [PATCH 23/29] mmdevapi: Read the audio driver list from
+Subject: [PATCH 23/39] mmdevapi: Read the audio driver list from
  WINE_AUDIO_DRIVER when set.
 
 ---

@@ -1,7 +1,7 @@
-From f1ce27548b1471b87095a63702845b3d7f21a9e4 Mon Sep 17 00:00:00 2001
+From df1c1716391522eb84e77d4b17abc34d379e5879 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:30 +0200
-Subject: [PATCH 07/29] winepipewire.drv: Define WIN32_NO_STATUS before
+Subject: [PATCH 07/39] winepipewire.drv: Define WIN32_NO_STATUS before
  including winternl.h.
 
 ---

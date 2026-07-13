@@ -1,7 +1,7 @@
-From e0f625875929dde1ba04c4d5a03a1a370585122f Mon Sep 17 00:00:00 2001
+From 1a0e77246d27876b1ead7576f37e4421007d66ca Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 13/29] winepipewire.drv: Handle allocation failures during
+Subject: [PATCH 13/39] winepipewire.drv: Handle allocation failures during
  device probing.
 
 ---

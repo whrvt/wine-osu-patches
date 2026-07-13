@@ -1,7 +1,7 @@
-From 41554a3b5e022a504809347b4ba6925d6ae6bc7b Mon Sep 17 00:00:00 2001
+From e263f51ac4ce8cf113b0ef379d1c2dce7ceee5f5 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 08/29] winepipewire.drv: Use the loopback flag to request sink
+Subject: [PATCH 08/39] winepipewire.drv: Use the loopback flag to request sink
  capture.
 
 ---

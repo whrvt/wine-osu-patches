@@ -1,0 +1,35 @@
+From f1092dc013b098fa7ca38a766ebfeacecb8e95a4 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sat, 11 Jul 2026 00:29:16 +0200
+Subject: [PATCH 38/39] mmdevapi: Reject whitespace-only product names.
+
+Some executables publish a blank ProductName version string. Ignore it so get_application_name() falls back to the executable basename.
+---
+ dlls/mmdevapi/client.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index d4d3e82b466..8024a1f5d0b 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -204,9 +204,15 @@ static HRESULT stream_release(stream_handle stream)
+ 
+ static BOOL query_productname(void *data, LANGANDCODEPAGE *lang, LPVOID *buffer, UINT *len)
+ {
+-    WCHAR pn[37];
++    WCHAR pn[37], *name;
++
+     swprintf(pn, ARRAY_SIZE(pn), L"\\StringFileInfo\\%04x%04x\\ProductName", lang->wLanguage, lang->wCodePage);
+-    return VerQueryValueW(data, pn, buffer, len) && *len;
++    if (!VerQueryValueW(data, pn, buffer, len) || !*len)
++        return FALSE;
++    for (name = *buffer; *name; name++)
++        if (*name > ' ')
++            return TRUE;
++    return FALSE;
+ }
+ 
+ WCHAR *get_application_name(void)
+-- 
+2.55.0
+
