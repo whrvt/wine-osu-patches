@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 26 Aug 2026 21:40:00 +0200
+Subject: [PATCH 3/3] Revert "secur32: HACK: Add %NO_SHUFFLE_EXTENSIONS to
+ priority string."
+
+This reverts commit cb50ee2f25521aa7a11b07c3fcedcf9db73798a5.
+---
+ dlls/secur32/schannel_gnutls.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/dlls/secur32/schannel_gnutls.c
++++ b/dlls/secur32/schannel_gnutls.c
+@@ -434,7 +434,7 @@
+ 
+ static NTSTATUS set_priority(schan_credentials *cred, gnutls_session_t session)
+ {
+-    char priority[160] = "NORMAL:%LATEST_RECORD_VERSION:%NO_SHUFFLE_EXTENSIONS", *p;
++    char priority[128] = "NORMAL:%LATEST_RECORD_VERSION", *p;
+     BOOL server = !!(cred->credential_use & SECPKG_CRED_INBOUND);
+     const struct protocol_priority_flag *protocols =
+         server ? server_protocol_priority_flags : client_protocol_priority_flags;
+-- 
+2.55.0
+

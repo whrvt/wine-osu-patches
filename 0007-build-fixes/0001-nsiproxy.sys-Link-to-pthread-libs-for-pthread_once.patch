@@ -1,0 +1,25 @@
+From d2c88a1286243a69b3701aaf06811e9197c2bd6e Mon Sep 17 00:00:00 2001
+From: Alexandre Julliard <julliard@winehq.org>
+Date: Tue, 16 Jun 2026 12:19:31 +0200
+Subject: [PATCH] nsiproxy.sys: Link to pthread libs for pthread_once.
+
+---
+ dlls/nsiproxy.sys/Makefile.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/nsiproxy.sys/Makefile.in b/dlls/nsiproxy.sys/Makefile.in
+index 40ea0701a46..6b5fbe7aa6d 100644
+--- a/dlls/nsiproxy.sys/Makefile.in
++++ b/dlls/nsiproxy.sys/Makefile.in
+@@ -1,7 +1,7 @@
+ MODULE    = nsiproxy.sys
+ UNIXLIB   = nsiproxy.so
+ IMPORTS   = ntoskrnl
+-UNIX_LIBS = $(PROCSTAT_LIBS)
++UNIX_LIBS = $(PROCSTAT_LIBS) $(PTHREAD_LIBS)
+ 
+ EXTRADLLFLAGS = -Wl,--subsystem,native
+ 
+-- 
+2.55.0
+

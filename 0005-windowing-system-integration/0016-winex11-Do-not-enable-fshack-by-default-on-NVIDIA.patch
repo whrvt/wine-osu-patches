@@ -1,0 +1,49 @@
+From d57a744cba34378661e493d853b9fb5d07014d65 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 7 Oct 2025 04:29:39 +0200
+Subject: [PATCH 16/17] winex11: Do not enable fshack by default on NVIDIA
+
+---
+ dlls/win32u/opengl.c | 21 ---------------------
+ 1 file changed, 21 deletions(-)
+
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index bb3a2e0eae0..8abb30c1bcc 100644
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -972,32 +972,11 @@ static struct opengl_drawable *framebuffer_surface_create( int format, struct cl
+ 
+ static BOOL needs_framebuffer_surface( HWND hwnd )
+ {
+-    static int xwayland_nv_cached = -1;
+     float gamma_ramp[GAMMA_RAMP_SIZE * 4];
+     LONG gamma_serial;
+ 
+     if (!fshack_enabled) return FALSE;
+ 
+-    if (xwayland_nv_cached == -1) xwayland_nv_cached = !!user_driver->pHasWindowManager( "xwayland_glx_nvidia" );
+-    if (xwayland_nv_cached)
+-    {
+-        static int skip_cached = -1;
+-        if (skip_cached == -1)
+-        {
+-            const char *sgi = getenv( "SteamGameId" );
+-            skip_cached = sgi && (
+-                          !strcmp( sgi, "582660" )
+-                          || !strcmp( sgi, "323220" )
+-                          );
+-        }
+-        if (!skip_cached)
+-        {
+-            /* Force fshack on XWayland / NVidia because drawing to front buffer doesn't get presented there and fshack works
+-             * that around as a side effect. */
+-            return TRUE;
+-        }
+-    }
+-
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_RAW_DPI )) return TRUE;
+     return get_float_gamma_ramp( gamma_ramp, &gamma_serial );
+ }
+-- 
+2.55.0
+

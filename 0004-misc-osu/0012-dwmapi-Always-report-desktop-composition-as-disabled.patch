@@ -1,0 +1,36 @@
+From 6cd9c5a07fd08b5b2d782c14ead80db889301f57 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 10 Apr 2025 08:33:22 -0700
+Subject: [PATCH 12/14] dwmapi: Always report desktop composition as disabled.
+
+Silences the misleading "non-fullscreen will increase your latency"
+warning from osu!.
+---
+ dlls/dwmapi/dwmapi_main.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/dlls/dwmapi/dwmapi_main.c b/dlls/dwmapi/dwmapi_main.c
+index af14f546f3f..cf17365c09c 100644
+--- a/dlls/dwmapi/dwmapi_main.c
++++ b/dlls/dwmapi/dwmapi_main.c
+@@ -38,17 +38,12 @@ WINE_DEFAULT_DEBUG_CHANNEL(dwmapi);
+  */
+ HRESULT WINAPI DwmIsCompositionEnabled(BOOL *enabled)
+ {
+-    RTL_OSVERSIONINFOEXW version;
+-
+     TRACE("%p\n", enabled);
+ 
+     if (!enabled)
+         return E_INVALIDARG;
+ 
+     *enabled = FALSE;
+-    version.dwOSVersionInfoSize = sizeof(version);
+-    if (!RtlGetVersion(&version))
+-        *enabled = (version.dwMajorVersion > 6 || (version.dwMajorVersion == 6 && version.dwMinorVersion >= 3));
+ 
+     return S_OK;
+ }
+-- 
+2.55.0
+

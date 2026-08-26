@@ -1,0 +1,26 @@
+From 95e9f2e3df0f1c858d9e9c59d3b50032f201621f Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 4 May 2026 18:18:50 +0200
+Subject: [PATCH 09/14] winex11: Set GLX as default, allow using EGL with
+ WINE_USE_EGL.
+
+---
+ dlls/winex11.drv/x11drv_main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index 0ddf6cf1147..90691b88ed9 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -69,7 +69,7 @@ Window root_window;
+ BOOL usexvidmode = TRUE;
+ BOOL usexrandr = TRUE;
+ BOOL usexcomposite = TRUE;
+-BOOL use_egl = TRUE;
++BOOL use_egl = FALSE;
+ BOOL use_xfixes = FALSE;
+ BOOL use_take_focus = TRUE;
+ BOOL use_primary_selection = FALSE;
+-- 
+2.55.0
+

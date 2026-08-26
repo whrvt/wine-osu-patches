@@ -1,0 +1,42 @@
+From f7535bba30e3b9f4494cbf373498a3069717425a Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 26 Aug 2026 19:28:07 +0200
+Subject: [PATCH 10/14] downgrade some debug messages
+
+---
+ dlls/kernelbase/debug.c      | 2 +-
+ programs/wineboot/wineboot.c | 5 ++++-
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
+index e1784fcf9c1..c82b03fa223 100644
+--- a/dlls/kernelbase/debug.c
++++ b/dlls/kernelbase/debug.c
+@@ -846,7 +846,7 @@ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerRegisterRuntimeExceptionModule( const
+  */
+ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerSetFlags( DWORD flags )
+ {
+-    FIXME("(%ld) stub\n", flags);
++    WARN("(%ld) stub\n", flags);
+     return S_OK;
+ }
+ 
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index 6df26c12998..79e37d54ee4 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -1317,7 +1317,10 @@ static void process_run_key( HKEY key, const WCHAR *keyname, BOOL delete, BOOL s
+         }
+         if (runCmd( cmdline, NULL, synchronous, FALSE ) == INVALID_RUNCMD_RETURN)
+         {
+-            WINE_ERR( "Error running cmd %s (%lu).\n", wine_dbgstr_w(cmdline), GetLastError() );
++            if (GetLastError() == ERROR_FILE_NOT_FOUND)
++                WINE_WARN( "Error running cmd %s (%lu).\n", wine_dbgstr_w(cmdline), GetLastError() );
++            else
++                WINE_ERR( "Error running cmd %s (%lu).\n", wine_dbgstr_w(cmdline), GetLastError() );
+         }
+         WINE_TRACE( "Done processing cmd %lu.\n", i );
+     }
+-- 
+2.55.0
+

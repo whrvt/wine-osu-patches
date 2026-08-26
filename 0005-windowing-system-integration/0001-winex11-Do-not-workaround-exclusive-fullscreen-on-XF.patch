@@ -1,0 +1,26 @@
+From 146732742118974a7c92a69e795ffb6d3cdbf90e Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 7 Oct 2025 00:35:23 +0200
+Subject: [PATCH 01/17] winex11: Do not workaround exclusive fullscreen on XFCE
+
+Fixes xfce's panel staying over games on alt-tab.
+---
+ dlls/winex11.drv/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index f9717d7d8ec..9471971b510 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1707,7 +1707,7 @@ static void update_net_wm_states( struct x11drv_win_data *data )
+          * mode, and we have currently no way to tell exclusive fullscreen from a window
+          * with topmost + fullscreen styles, so we cannot properly implement it either.
+          */
+-        !(new_state & (1 << NET_WM_STATE_FULLSCREEN)))
++        (!(new_state & (1 << NET_WM_STATE_FULLSCREEN)) || X11DRV_HasWindowManager( "Xfwm4" )))
+         new_state |= (1 << NET_WM_STATE_ABOVE);
+     if (!data->add_taskbar)
+     {
+-- 
+2.55.0
+

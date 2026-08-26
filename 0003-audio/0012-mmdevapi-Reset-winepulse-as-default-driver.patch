@@ -1,0 +1,25 @@
+From 97e44bbf78bdb5064b0f90fb8ba77756a4ea5d3d Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 21 Jul 2026 16:53:42 +0200
+Subject: [PATCH 12/12] mmdevapi: Reset winepulse as default driver.
+
+---
+ dlls/mmdevapi/main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/mmdevapi/main.c b/dlls/mmdevapi/main.c
+index 712c34d4d7c..1d9bfaaabbc 100644
+--- a/dlls/mmdevapi/main.c
++++ b/dlls/mmdevapi/main.c
+@@ -121,7 +121,7 @@ fail:
+ 
+ static BOOL WINAPI init_driver(INIT_ONCE *once, void *param, void **context)
+ {
+-    static WCHAR default_list[] = L"pipewire,pulse,alsa,oss,coreaudio";
++    static WCHAR default_list[] = L"pulse,pipewire,alsa,oss,coreaudio";
+     DriverFuncs driver;
+     DWORD env_len;
+     HKEY key;
+-- 
+2.55.0
+

@@ -1,0 +1,28 @@
+From fdd8e61506eb90b11b5445ea356f28c6c4659866 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 7 Oct 2025 02:05:52 +0200
+Subject: [PATCH 08/17] winex11: Only hide decorations for layered windows
+ without captions
+
+Fixes osu! editor dialogue windows not receiving window decorations until after a delay.
+Patch by William Horvath.
+---
+ dlls/winex11.drv/window.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 117a7648ffc..a747e485dac 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -537,7 +537,7 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style
+     if (X11DRV_HasWindowManager( "Mutter" )) return 0;
+ 
+     if (ex_style & WS_EX_TOOLWINDOW) return 0;
+-    if (ex_style & WS_EX_LAYERED) return 0;
++    if (!((style & WS_CAPTION) == WS_CAPTION) && (ex_style & WS_EX_LAYERED)) return 0;
+ 
+     if ((style & WS_CAPTION) == WS_CAPTION)
+     {
+-- 
+2.55.0
+
