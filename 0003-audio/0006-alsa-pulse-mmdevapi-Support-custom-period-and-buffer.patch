@@ -1,4 +1,4 @@
-From dbcc736eb62ed98d553970397e16646fd2775ee7 Mon Sep 17 00:00:00 2001
+From 4bd1f9338415c3cc6d2624b7deb59dfef6854c4b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
 Subject: [PATCH 06/12] alsa,pulse,mmdevapi: Support custom period and buffer

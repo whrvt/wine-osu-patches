@@ -1,7 +1,7 @@
-From fc4a939bcd5e24931194c187f6e43cb7c8357f47 Mon Sep 17 00:00:00 2001
+From 038288bd2bcf80ad56b964c07e1911401934c27b Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:51:39 +0300
-Subject: [PATCH 08/14] Revert "HACK: dxdiag: Dump to stdout if no filename is
+Subject: [PATCH 08/16] Revert "HACK: dxdiag: Dump to stdout if no filename is
  given"
 
 This reverts commit 66e13e61a9728a552f068a8958d88fd4820cd31d.

@@ -1,4 +1,4 @@
-From 0a52fd58b855e890ceae69a112318219256dfe71 Mon Sep 17 00:00:00 2001
+From 40125468c9c9b5081f65b6b01541a356f97aea2c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 16 Mar 2025 17:31:41 -0700
 Subject: [PATCH 08/12] dsound: Divide default buffer length by a factor of 8.

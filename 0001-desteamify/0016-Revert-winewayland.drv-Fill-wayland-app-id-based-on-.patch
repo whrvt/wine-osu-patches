@@ -1,0 +1,47 @@
+From a969023a54c2d1087c62bf8a5f1c09cfcb4228d1 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 26 Aug 2026 22:00:00 +0200
+Subject: [PATCH 16/16] Revert "winewayland.drv: Fill wayland app id based on
+ Steam appid"
+
+This reverts commit b74e8e1868f.
+---
+ dlls/winewayland.drv/wayland_surface.c | 15 ++-------------
+ 1 file changed, 2 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 3ff83dfb9f6..9b1002e8652 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -544,9 +544,6 @@ void wayland_surface_sync_alpha(struct wayland_surface *surface)
+  */
+ void wayland_surface_make_toplevel(struct wayland_surface *surface, BOOL server_decor)
+ {
+-    static char steam_proton[] = "steam_proton";
+-    const char *app_id = getenv("SteamAppId");
+-    char proton_app_class[128];
+     WCHAR text[1024];
+ 
+     TRACE("surface=%p\n", surface);
+@@ -583,16 +580,8 @@ void wayland_surface_make_toplevel(struct wayland_surface *surface, BOOL server_
+     if (!surface->xdg_toplevel) goto err;
+     xdg_toplevel_add_listener(surface->xdg_toplevel, &xdg_toplevel_listener, surface->hwnd);
+ 
+-    if(!app_id || !*app_id) {
+-        app_id = getenv("WINE_WMCLASS");
+-    }
+-
+-    if (app_id && *app_id) {
+-        snprintf(proton_app_class, sizeof(proton_app_class), "steam_app_%s", app_id);
+-        xdg_toplevel_set_app_id(surface->xdg_toplevel, proton_app_class);
+-    } else {
+-        xdg_toplevel_set_app_id(surface->xdg_toplevel, steam_proton);
+-    }
++    if (process_name)
++        xdg_toplevel_set_app_id(surface->xdg_toplevel, process_name);
+ 
+     if (process_wayland.xdg_toplevel_tag_manager_v1)
+     {
+-- 
+2.55.0
+

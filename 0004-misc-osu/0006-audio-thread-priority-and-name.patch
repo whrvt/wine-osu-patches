@@ -1,7 +1,7 @@
-From d1b41b9b876990b5f3a8287c3c5d5d872e62ad80 Mon Sep 17 00:00:00 2001
+From a31dbf43683aee1c9d8127e15f3492a0d9f9121f Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 26 Aug 2026 19:28:07 +0200
-Subject: [PATCH 06/14] audio thread priority and name
+Subject: [PATCH 06/15] audio thread priority and name
 
 ---
  dlls/avrt/main.c | 7 +++++--

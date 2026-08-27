@@ -1,7 +1,7 @@
-From bee59c0e97c18505dc1da3242a19b9ee8a99cf42 Mon Sep 17 00:00:00 2001
+From 196fb5c5e5d173af0a00d81a40949e099f75cea4 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Sat, 12 Dec 2020 22:36:59 +0100
-Subject: [PATCH 03/14] Avoid winemenubuilder to startup explorer.exe.
+Subject: [PATCH 03/15] Avoid winemenubuilder to startup explorer.exe.
 
 Because its session seems not interactive and fails later
 to create windows.

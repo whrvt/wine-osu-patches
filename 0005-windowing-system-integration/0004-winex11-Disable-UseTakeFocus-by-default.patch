@@ -1,7 +1,7 @@
-From 70b9b3a38f8059ebef3d2d0ffd81fdfb7439b245 Mon Sep 17 00:00:00 2001
+From 1b884ce22ae02e35ec97c5ac7a126566dd8087d0 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 7 Oct 2025 01:58:45 +0200
-Subject: [PATCH 04/17] winex11: Disable UseTakeFocus by default
+Subject: [PATCH 04/20] winex11: Disable UseTakeFocus by default
 
 ---
  dlls/winex11.drv/x11drv_main.c | 2 +-

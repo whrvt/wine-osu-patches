@@ -1,4 +1,4 @@
-From 6685096bbd61ae23a9755290d58ac64c3a0aa79e Mon Sep 17 00:00:00 2001
+From 01d715587fd448ba00df38174deae341c299ac7a Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sun, 8 Mar 2026 15:17:41 +0100
 Subject: [PATCH 11/12] winepulse: Stop forcing period to twice the minimum

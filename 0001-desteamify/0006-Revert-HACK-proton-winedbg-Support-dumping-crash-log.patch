@@ -1,7 +1,7 @@
-From 8e0a6e9560445cb58acf14a3ed3cacde5776eb6b Mon Sep 17 00:00:00 2001
+From 31df192707891cd62294a49748094744f349131e Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:51:29 +0300
-Subject: [PATCH 06/14] Revert "HACK: proton: winedbg: Support dumping crash
+Subject: [PATCH 06/16] Revert "HACK: proton: winedbg: Support dumping crash
  logs to a directory"
 
 This reverts commit aa561aa3b465163a0a632b2fe13cd36297a7fbab.

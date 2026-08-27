@@ -1,0 +1,118 @@
+From 213cb753134e1d210b8031643803e140c1cf3f11 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 13 Jul 2026 21:09:49 +0200
+Subject: [PATCH 39/39] winepipewire.drv: Advertise a 128-frame default period,
+ overridable via WINE_PIPEWIRE_QUANTUM.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 45 +++++++++++++++++++++++++++-----
+ 1 file changed, 38 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 4460bec4de3..ff2a8ef5b3b 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -456,7 +456,7 @@ static void build_format(WAVEFORMATEXTENSIBLE *fmt, uint32_t rate, uint32_t chan
+ 
+ static struct pw_phys_device *add_device(struct list *list, const char *pw_name, const char *display,
+                                          EndpointFormFactor form, uint32_t rate, uint32_t channels, UINT mask,
+-                                         REFERENCE_TIME min_period)
++                                         REFERENCE_TIME def_period, REFERENCE_TIME min_period)
+ {
+     size_t len = strlen(pw_name);
+     struct pw_phys_device *dev = malloc(offsetof(struct pw_phys_device, pw_name) + len + 1);
+@@ -471,7 +471,7 @@ static struct pw_phys_device *add_device(struct list *list, const char *pw_name,
+     dev->form = form;
+     build_format(&dev->fmt, rate, channels, mask);
+     dev->channel_mask = dev->fmt.dwChannelMask;
+-    dev->def_period = 100000;
++    dev->def_period = def_period;
+     dev->min_period = min_period;
+     memcpy(dev->pw_name, pw_name, len + 1);
+     list_add_tail(list, &dev->entry);
+@@ -959,7 +959,7 @@ static void probe_roundtrip(struct probe *p)
+  * default routing).  When the default node is known, mirror its format so
+  * the default endpoint advertises the real speaker layout. */
+ static void add_default_device(struct list *list, EndpointFormFactor form, const char *match,
+-                               uint32_t rate, REFERENCE_TIME min_period)
++                               uint32_t rate, REFERENCE_TIME def_period, REFERENCE_TIME min_period)
+ {
+     struct pw_phys_device *dev, *def_src = NULL, *def;
+ 
+@@ -977,7 +977,7 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
+     }
+     def->pw_name[0] = '\0';
+     def->form = form;
+-    def->def_period = 100000;
++    def->def_period = def_period;
+     def->min_period = min_period;
+     if (def_src)
+     {
+@@ -992,11 +992,30 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
+     list_add_head(list, &def->entry);
+ }
+ 
++static uint32_t quantum_override(void)
++{
++    const char *env = getenv("WINE_PIPEWIRE_QUANTUM");
++    unsigned long val;
++
++    if (!env || !*env)
++        return 0;
++
++    val = strtoul(env, NULL, 10);
++    if (val < 16 || val > 8192)
++    {
++        WARN("Ignoring WINE_PIPEWIRE_QUANTUM=%s, expected 16-8192 frames.\n", env);
++        return 0;
++    }
++    return val;
++}
++
+ static void build_device_cache(struct probe *p)
+ {
+     struct probe_node *pn;
+     uint32_t rate = p->clock_rate ? p->clock_rate : 48000;
++    uint32_t override = quantum_override();
+     REFERENCE_TIME min_period = 30000;
++    REFERENCE_TIME def_period = (REFERENCE_TIME)128 * 10000000 / rate;
+ 
+     /* IAudioClient3 shared-mode floor.  The graph cannot deliver cycles
+      * below clock.min-quantum (clock.force-quantum pins it outright), and
+@@ -1016,6 +1035,18 @@ static void build_device_cache(struct probe *p)
+               p->min_quantum, rate, (int)min_period);
+     }
+ 
++    if (override)
++    {
++        def_period = (REFERENCE_TIME)override * 10000000 / rate;
++        TRACE("WINE_PIPEWIRE_QUANTUM=%u rate=%u -> def_period=%d hns\n",
++              override, rate, (int)def_period);
++    }
++
++    /* a high graph rate or a small override can push the default period
++     * below the minimum; the default must always be initializable */
++    if (min_period > def_period)
++        min_period = def_period;
++
+     lstrcpynA(g_default_sink, p->default_sink, sizeof(g_default_sink));
+     lstrcpynA(g_default_source, p->default_source, sizeof(g_default_source));
+ 
+@@ -1026,11 +1057,11 @@ static void build_device_cache(struct probe *p)
+         uint32_t channels = pn->have_format ? pn->channels : 2;
+         UINT mask = pn->have_format ? positions_to_mask(pn->position, pn->channels)
+                                     : (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT);
+-        add_device(list, pn->node_name, pn->display, form, rate, channels, mask, min_period);
++        add_device(list, pn->node_name, pn->display, form, rate, channels, mask, def_period, min_period);
+     }
+ 
+-    add_default_device(&g_render_devices, Speakers, g_default_sink, rate, min_period);
+-    add_default_device(&g_capture_devices, Microphone, g_default_source, rate, min_period);
++    add_default_device(&g_render_devices, Speakers, g_default_sink, rate, def_period, min_period);
++    add_default_device(&g_capture_devices, Microphone, g_default_source, rate, def_period, min_period);
+ }
+ 
+ static void probe_teardown(struct probe *p)
+-- 
+2.55.0
+

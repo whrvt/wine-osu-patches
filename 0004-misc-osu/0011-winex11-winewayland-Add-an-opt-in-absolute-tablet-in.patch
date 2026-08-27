@@ -1,7 +1,7 @@
-From 7839ab7cb60f51b9ae77eee7a1853567dfa19c02 Mon Sep 17 00:00:00 2001
+From cce109dbef65440bc70bbbd896762e84570cbc26 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 29 Jun 2026 23:10:31 +0200
-Subject: [PATCH 11/14] winex11, winewayland: Add an opt-in absolute tablet
+Subject: [PATCH 11/15] winex11, winewayland: Add an opt-in absolute tablet
  input workaround.
 
 Avoid pointer grabs, warps, and Wayland constraints that block absolute tablet input.
@@ -85,10 +85,10 @@ index e1a5e70a6fe..6af78211d74 100644
      send_mouse_input( hwnd, event->window, event->state, &input );
      return TRUE;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index a5fd7dc9e9f..f9717d7d8ec 100644
+index c568538ad0c..9a344ec6c65 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -3542,11 +3542,14 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags )
+@@ -3527,11 +3527,14 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags )
          if (!(data = get_win_data( NtUserGetAncestor( hwnd, GA_ROOT )))) return;
          if (data->whole_window)
          {

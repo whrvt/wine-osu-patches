@@ -1,0 +1,45 @@
+From ca99caaf5f6ec1b219e6222804019606ff8bdeae Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Wed, 26 Aug 2026 22:00:00 +0200
+Subject: [PATCH 15/16] Revert "HACK: proton: winex11: Fill WM_CLASS based on
+ Steam appid."
+
+This reverts commit 19149d7c48958c1e7649c0a95b8dd732fac74c24 and the
+WINE_WMCLASS fallback added on top of it in c77a4ecdf41.
+---
+ dlls/winex11.drv/window.c | 19 ++-----------------
+ 1 file changed, 2 insertions(+), 17 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index a5fd7dc9e9f..c568538ad0c 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1245,23 +1245,8 @@ static void set_initial_wm_hints( Display *display, Window window )
+     /* class hints */
+     if ((class_hints = XAllocClassHint()))
+     {
+-        static char steam_proton[] = "steam_proton";
+-        const char *app_id = getenv("SteamAppId");
+-        char proton_app_class[128];
+-
+-        if(!app_id || !*app_id) {
+-            app_id = getenv("WINE_WMCLASS");
+-        }
+-
+-        if(app_id && *app_id){
+-            snprintf(proton_app_class, sizeof(proton_app_class), "steam_app_%s", app_id);
+-            class_hints->res_name = proton_app_class;
+-            class_hints->res_class = proton_app_class;
+-        }else{
+-            class_hints->res_name = steam_proton;
+-            class_hints->res_class = steam_proton;
+-        }
+-
++        class_hints->res_name = process_name;
++        class_hints->res_class = process_name;
+         XSetClassHint( display, window, class_hints );
+         XFree( class_hints );
+     }
+-- 
+2.55.0
+

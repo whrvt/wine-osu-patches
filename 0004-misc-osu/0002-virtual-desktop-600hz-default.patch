@@ -1,7 +1,7 @@
-From c92444175c9661f29d16c94a54ab04c2086fcd8c Mon Sep 17 00:00:00 2001
+From e049a065e76fff32056bbee64115e56b42f363ed Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 26 Aug 2026 19:28:07 +0200
-Subject: [PATCH 02/14] virtual desktop 600hz default
+Subject: [PATCH 02/15] virtual desktop 600hz default
 
 Only applies for the nodrv/nores backend (i.e. wayland or (UseXRandr = N and UseXVidMode = N))
 ---

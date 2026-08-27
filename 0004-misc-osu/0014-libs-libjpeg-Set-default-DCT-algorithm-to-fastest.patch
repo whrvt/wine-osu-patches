@@ -1,7 +1,7 @@
-From 7bb2750b88dd6150d22fb0fdd43ff40a1d215d9a Mon Sep 17 00:00:00 2001
+From 9091dec7866a9f5a5feb181a9bac000e28f5cf08 Mon Sep 17 00:00:00 2001
 From: Torge Matthies <tmatthies@codeweavers.com>
 Date: Tue, 2 May 2023 01:36:12 +0200
-Subject: [PATCH 14/14] libs/libjpeg: Set default DCT algorithm to fastest.
+Subject: [PATCH 14/15] libs/libjpeg: Set default DCT algorithm to fastest.
 
 ---
  libs/jpeg/jconfig.h | 1 +

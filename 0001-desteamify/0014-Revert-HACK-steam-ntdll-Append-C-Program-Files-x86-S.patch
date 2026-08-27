@@ -1,7 +1,7 @@
-From d1b9b7c072af1b6dfe2f89d759bad90be11ec141 Mon Sep 17 00:00:00 2001
+From 2513ba19ac8eca0a59544cc5e531060206303da9 Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:55:12 +0300
-Subject: [PATCH 14/14] Revert "HACK: steam: ntdll: Append C:/Program Files
+Subject: [PATCH 14/16] Revert "HACK: steam: ntdll: Append C:/Program Files
  (x86)/Steam to PATH."
 
 This reverts commit adba6db13ee035341983ee2c8e72b2440a2900c1.

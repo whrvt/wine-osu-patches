@@ -1,7 +1,7 @@
-From 1c523ea56b6c3cfd3ec786e7f519371d52705544 Mon Sep 17 00:00:00 2001
+From bac159e7ebefdab1794667b35a1985be893f5aac Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:51:43 +0300
-Subject: [PATCH 09/14] Revert "HACK: shell32: Preserve duplicated
+Subject: [PATCH 09/16] Revert "HACK: shell32: Preserve duplicated
  Documents/Stuff directories"
 
 This reverts commit 3979d95d1eb0da4485f3d311ae3c2ea2280d4837.

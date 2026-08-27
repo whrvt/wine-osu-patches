@@ -1,7 +1,7 @@
-From b901ab96a502f4fdc05453604c4cfe545f45d1d9 Mon Sep 17 00:00:00 2001
+From 96159728fafa45f11c891e7ddc1fe11e1f5b1d25 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 7 Oct 2025 00:42:07 +0200
-Subject: [PATCH 02/17] winex11: Use Xshape fallback on Mutter
+Subject: [PATCH 02/20] winex11: Use Xshape fallback on Mutter
 
 Workarounds https://github.com/wine-mirror/wine/commit/35193586, without this
 osu! force-enables vsync due to the compositor not being disabled, even in fullscreen.
@@ -10,10 +10,10 @@ osu! force-enables vsync due to the compositor not being disabled, even in fulls
  1 file changed, 11 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 9471971b510..117a7648ffc 100644
+index 2e206f8c9e3..c972d83dfc9 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2618,7 +2618,9 @@ Window get_dummy_parent(void)
+@@ -2603,7 +2603,9 @@ Window get_dummy_parent(void)
          attrib.colormap = default_colormap;
  
  #ifdef HAVE_LIBXSHAPE
@@ -23,7 +23,7 @@ index 9471971b510..117a7648ffc 100644
              static XRectangle empty_rect;
              dummy_parent = XCreateWindow( gdi_display, root_window, 0, 0, 1, 1, 0,
                                            default_visual.depth, InputOutput, default_visual.visual,
-@@ -2628,11 +2630,15 @@ Window get_dummy_parent(void)
+@@ -2613,11 +2615,15 @@ Window get_dummy_parent(void)
              XShapeCombineRectangles( gdi_display, dummy_parent, ShapeInput, 0, 0, &empty_rect, 1,
                                       ShapeSet, YXBanded );
          }

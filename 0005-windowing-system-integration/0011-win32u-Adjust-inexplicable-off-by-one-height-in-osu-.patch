@@ -1,7 +1,7 @@
-From d462f0ecae85b21bdc64c488e00aa3a8b881125d Mon Sep 17 00:00:00 2001
+From 942f3e17d611fca338c5c7e03a9b3296252874f9 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 13 Oct 2024 18:03:33 -0700
-Subject: [PATCH 11/17] win32u: Adjust inexplicable off-by-one height in osu!'s
+Subject: [PATCH 11/20] win32u: Adjust inexplicable off-by-one height in osu!'s
  window size request.
 
 ---

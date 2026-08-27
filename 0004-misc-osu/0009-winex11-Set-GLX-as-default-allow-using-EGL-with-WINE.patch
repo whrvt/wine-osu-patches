@@ -1,7 +1,7 @@
-From 95e9f2e3df0f1c858d9e9c59d3b50032f201621f Mon Sep 17 00:00:00 2001
+From 4b7813073d18fad62ecd32cf8aceea16db10a804 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 4 May 2026 18:18:50 +0200
-Subject: [PATCH 09/14] winex11: Set GLX as default, allow using EGL with
+Subject: [PATCH 09/15] winex11: Set GLX as default, allow using EGL with
  WINE_USE_EGL.
 
 ---

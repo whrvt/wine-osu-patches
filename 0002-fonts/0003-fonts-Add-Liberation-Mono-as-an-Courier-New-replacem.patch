@@ -1,4 +1,4 @@
-From ec0b85fc4165ce3c4b71ab27b72b4ce0eaa93e2c Mon Sep 17 00:00:00 2001
+From 66598d3569a144ff2a5502b7a5930c861e74a57d Mon Sep 17 00:00:00 2001
 From: Sebastian Lackner <sebastian@fds-team.de>
 Date: Thu, 3 Sep 2015 01:30:37 +0200
 Subject: [PATCH 3/6] fonts: Add Liberation Mono as an Courier New replacement.

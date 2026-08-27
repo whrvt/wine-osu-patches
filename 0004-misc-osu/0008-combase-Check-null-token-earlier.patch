@@ -1,7 +1,7 @@
-From 7d3e85c168d664b6b831e635aaa156acbb0f0d9c Mon Sep 17 00:00:00 2001
+From 79fb92ceaf97c1b5d1ae1b86ac21095528a5ed7b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 11:21:17 -0700
-Subject: [PATCH 08/14] combase: Check null token earlier.
+Subject: [PATCH 08/15] combase: Check null token earlier.
 
 ---
  dlls/combase/combase.c | 5 ++---

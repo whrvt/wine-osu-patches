@@ -1,7 +1,7 @@
-From 824038463d248e7658d43af295b1e42f01f6c9a1 Mon Sep 17 00:00:00 2001
+From cbdaf4f82ab6e90a216029c915800cb27764d7fb Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 16 Sep 2024 10:02:10 -0700
-Subject: [PATCH 10/17] comctl32/listview: Skip scrolling to the start of the
+Subject: [PATCH 10/20] comctl32/listview: Skip scrolling to the start of the
  list for SB_INTERNAL scrolls if it's not necessary.
 
 Fixes osu! editor's timing panel scroll position jumping to the very top of the

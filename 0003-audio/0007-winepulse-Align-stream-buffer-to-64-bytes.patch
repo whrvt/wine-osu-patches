@@ -1,4 +1,4 @@
-From f4dbfc1e04534978c1f7c7c68e0f7761aa881497 Mon Sep 17 00:00:00 2001
+From 95dade9a39bfeb6eb56143a45ee98585f5b599b7 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Feb 2025 09:26:03 -0800
 Subject: [PATCH 07/12] winepulse: Align stream buffer to 64 bytes.

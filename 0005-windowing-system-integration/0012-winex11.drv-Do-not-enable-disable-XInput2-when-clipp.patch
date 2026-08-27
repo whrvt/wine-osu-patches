@@ -1,7 +1,7 @@
-From 5b4b97993f375627a427c1dfbfad49c63dee1e0a Mon Sep 17 00:00:00 2001
+From 588ce8a9c1a3ef82567121b5a5e90123ad2ce0fd Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 22 Apr 2022 23:12:33 +0200
-Subject: [PATCH 12/17] winex11.drv: Do not enable/disable XInput2 when
+Subject: [PATCH 12/20] winex11.drv: Do not enable/disable XInput2 when
  clipping.
 
 ---

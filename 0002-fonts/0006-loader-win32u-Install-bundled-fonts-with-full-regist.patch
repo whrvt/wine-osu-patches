@@ -1,4 +1,4 @@
-From 5308c9723d65f820a7d1f3ca0bfaeb41eebfd8e5 Mon Sep 17 00:00:00 2001
+From 772653b8425fe1fd89c8d799a610a22b82815242 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Thu, 18 Jun 2026 20:22:14 +0200
 Subject: [PATCH 6/6] loader/win32u: Install bundled fonts with full registry

@@ -1,7 +1,7 @@
-From 21623b4ce285170f434444edfa830e1787ca413a Mon Sep 17 00:00:00 2001
+From e00ae3553d0fc3ced8d9807dd94130583abb38d3 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 7 Oct 2025 01:17:57 +0200
-Subject: [PATCH 03/17] win32u: Prevent osu! from stealing focus on certain
+Subject: [PATCH 03/20] win32u: Prevent osu! from stealing focus on certain
  window managers
 
 Behavior can be toggled with WINE_ENABLE_OSU_FOCUS_FIX.

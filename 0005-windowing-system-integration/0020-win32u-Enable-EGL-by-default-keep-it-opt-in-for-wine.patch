@@ -1,16 +1,18 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 640f741fe5b6374aad79cd2810a195a92eb8d2e7 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 26 Aug 2026 21:10:00 +0200
-Subject: [PATCH 15/15] win32u: Enable EGL by default, keep it opt-in for
+Subject: [PATCH 20/20] win32u: Enable EGL by default, keep it opt-in for
  winex11.
 
 ---
  dlls/win32u/opengl.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
+index 8abb30c1bcc..7d1f7706ddd 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -1422,7 +1422,7 @@
+@@ -1422,7 +1422,7 @@ static BOOL egl_init( const struct opengl_driver_funcs **driver_funcs )
      struct opengl_funcs *funcs = &display_funcs;
      const char *extensions, *env;
  

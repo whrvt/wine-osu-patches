@@ -1,14 +1,14 @@
-From 14c520e7c2d16c4dcc05f31970a4a359e882c3cf Mon Sep 17 00:00:00 2001
+From bd0c72ed41230c65848c0dc5d2df8c9b64b96246 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 30 Jun 2026 04:52:58 +0200
-Subject: [PATCH 19/19] HACK: winewayland: Enable EGL tearing by default
+Subject: [PATCH 19/20] HACK: winewayland: Enable EGL tearing by default
 
 ---
  dlls/winewayland.drv/wayland.c | 3 +--
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland.c b/dlls/winewayland.drv/wayland.c
-index 6b99971..abe0f4e 100644
+index 6b99971e782..abe0f4e8dbc 100644
 --- a/dlls/winewayland.drv/wayland.c
 +++ b/dlls/winewayland.drv/wayland.c
 @@ -116,8 +116,7 @@ static int use_egl_tearing(void)
@@ -21,3 +21,6 @@ index 6b99971..abe0f4e 100644
      }
  
      return enabled;
+-- 
+2.55.0
+

@@ -1,4 +1,4 @@
-From 6b03fb66ca6989c8c32b57350b686a56bc02f565 Mon Sep 17 00:00:00 2001
+From 664281a19d29e907e83d11d2f00d3659c47cb285 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 29 Aug 2025 11:19:36 -0700
 Subject: [PATCH 09/12] pulse,mmdevapi: Some simplifications and stability

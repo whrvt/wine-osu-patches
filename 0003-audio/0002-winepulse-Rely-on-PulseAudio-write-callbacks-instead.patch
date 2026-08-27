@@ -1,4 +1,4 @@
-From 5f11c49c1c52452f0d89bacf8bb15ec913f9ccd7 Mon Sep 17 00:00:00 2001
+From 51f1267436de0019b2da0eb1ab013b86dc917bb5 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
 Subject: [PATCH 02/12] winepulse: Rely on PulseAudio write callbacks instead

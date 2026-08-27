@@ -1,7 +1,7 @@
-From 0c40df305f91d08263fbacacc89ea354b7e08f4e Mon Sep 17 00:00:00 2001
+From 961cda18d48263cbd051f0b26038f36ef0ca8d09 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 18 Feb 2025 03:50:33 -0800
-Subject: [PATCH 14/17] ddraw: Use signed types for GetAvailableVidMem.
+Subject: [PATCH 14/20] ddraw: Use signed types for GetAvailableVidMem.
 
 Otherwise applications see negative memory if the true amount is >INT_MAX.
 ---

@@ -1,7 +1,7 @@
-From d57a744cba34378661e493d853b9fb5d07014d65 Mon Sep 17 00:00:00 2001
+From 16fd3c4a696bf45d620e46e6a6c7d6bc1aa1b7a5 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 7 Oct 2025 04:29:39 +0200
-Subject: [PATCH 16/17] winex11: Do not enable fshack by default on NVIDIA
+Subject: [PATCH 16/20] winex11: Do not enable fshack by default on NVIDIA
 
 ---
  dlls/win32u/opengl.c | 21 ---------------------

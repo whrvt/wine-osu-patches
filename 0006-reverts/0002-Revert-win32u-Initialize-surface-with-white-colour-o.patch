@@ -1,7 +1,7 @@
-From 61b4b301791e874cec000213eec7ccf5a871e8bd Mon Sep 17 00:00:00 2001
+From 40711d915eed95b83866ca1dbd1959de2b520db2 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 24 Jun 2026 01:37:17 +0200
-Subject: [PATCH 2/2] Revert "win32u: Initialize surface with white colour on
+Subject: [PATCH 2/3] Revert "win32u: Initialize surface with white colour on
  creation."
 
 This reverts commit 18339eb0f5048500efb668e6a9b679ed2f62d7a3.

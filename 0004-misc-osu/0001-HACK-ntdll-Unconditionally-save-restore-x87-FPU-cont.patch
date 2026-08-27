@@ -1,7 +1,7 @@
-From bfa07e4a0ebe6ac0496f4bca3eb11572f9eaa494 Mon Sep 17 00:00:00 2001
+From 0749cf4a3e73bdd5267f068e3ffb614f54a9575d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 7 Jan 2025 04:12:20 -0800
-Subject: [PATCH 01/14] HACK: ntdll: Unconditionally save/restore x87 FPU
+Subject: [PATCH 01/15] HACK: ntdll: Unconditionally save/restore x87 FPU
  control word in the unix call dispatchers.
 
 Workaround for thread suspension issue in osu! causing rounding mode to

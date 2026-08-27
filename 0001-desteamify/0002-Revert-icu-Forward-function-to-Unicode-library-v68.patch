@@ -1,7 +1,7 @@
-From 5a569b8efb42108a2f4e01a7fc4e19d867408102 Mon Sep 17 00:00:00 2001
+From a55776878eb73b89106fe6b5cf97040413d06576 Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Mon, 20 Apr 2026 10:34:31 +0300
-Subject: [PATCH 02/14] Revert "icu: Forward function to Unicode library v68."
+Subject: [PATCH 02/16] Revert "icu: Forward function to Unicode library v68."
 
 This reverts commit 99d77fc35dc9d64a2d7196d1738affa7a8ba8332.
 ---

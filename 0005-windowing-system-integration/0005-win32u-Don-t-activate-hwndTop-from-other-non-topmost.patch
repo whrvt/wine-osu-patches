@@ -1,7 +1,7 @@
-From 9db497f6985ea0cc595c82deccfa2abf68233b2d Mon Sep 17 00:00:00 2001
+From b664949038402eeef49c860d507832458cef46b6 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 17 Apr 2025 20:17:27 -0700
-Subject: [PATCH 05/17] win32u: Don't activate hwndTop from other non-topmost
+Subject: [PATCH 05/20] win32u: Don't activate hwndTop from other non-topmost
  threads.
 
 A hack that I don't understand really, but it allows osu! to properly lose focus on i3 again.

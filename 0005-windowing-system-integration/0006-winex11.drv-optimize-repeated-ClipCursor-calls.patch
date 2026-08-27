@@ -1,7 +1,7 @@
-From 65d107823899a2a0b992d55de623b703ac2f56e6 Mon Sep 17 00:00:00 2001
+From 6019bfd25ebcb78d3e3aa5eee51372ba2de37555 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jan=20Kl=C3=B6tzke?= <jan@kloetzke.net>
 Date: Sun, 11 Sep 2022 20:29:03 +0200
-Subject: [PATCH 06/17] winex11.drv: optimize repeated ClipCursor calls
+Subject: [PATCH 06/20] winex11.drv: optimize repeated ClipCursor calls
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

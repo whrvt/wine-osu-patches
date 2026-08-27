@@ -1,7 +1,7 @@
-From 1f4060010a8494c318dc8faec4da2bf1f9a553a3 Mon Sep 17 00:00:00 2001
+From f6939a6d082109b9f22b1f983863f4b4e85ec53f Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 16 Aug 2024 01:29:41 -0700
-Subject: [PATCH 04/14] add WINE_WAYLAND_DISPLAY_INDEX
+Subject: [PATCH 04/15] add WINE_WAYLAND_DISPLAY_INDEX
 
 ---
  dlls/winewayland.drv/wayland_output.c | 34 +++++++++++++++++++++++++--

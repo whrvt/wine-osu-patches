@@ -1,7 +1,7 @@
-From f7535bba30e3b9f4494cbf373498a3069717425a Mon Sep 17 00:00:00 2001
+From a0c63e872ad1e3fc5c0f641b909c353740acf86e Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 26 Aug 2026 19:28:07 +0200
-Subject: [PATCH 10/14] downgrade some debug messages
+Subject: [PATCH 10/15] downgrade some debug messages
 
 ---
  dlls/kernelbase/debug.c      | 2 +-

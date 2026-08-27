@@ -1,7 +1,7 @@
-From 9c57dd8e6f098183f4992bc5cd1b8763d5a9ea14 Mon Sep 17 00:00:00 2001
+From d3c8dde86c87cb232bf50f90479ecfccdb53df92 Mon Sep 17 00:00:00 2001
 From: Myah Caron <qsniyg@mail.com>
 Date: Wed, 18 Mar 2020 17:24:01 +0100
-Subject: [PATCH 07/17] winex11: Don't unmap the clip window more than once
+Subject: [PATCH 07/20] winex11: Don't unmap the clip window more than once
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=48772
 Signed-off-by: Myah Caron <qsniyg@mail.com>

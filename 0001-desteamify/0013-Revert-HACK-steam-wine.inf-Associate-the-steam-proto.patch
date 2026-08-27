@@ -1,7 +1,7 @@
-From af9a5d6ab2dd1738aa68f50eb6c2786bf84ebba7 Mon Sep 17 00:00:00 2001
+From f9b09bed1b9ecc3bba16c62b05a611e49b408903 Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:55:09 +0300
-Subject: [PATCH 13/14] Revert "HACK: steam: wine.inf: Associate the steam
+Subject: [PATCH 13/16] Revert "HACK: steam: wine.inf: Associate the steam
  protocol with steam.exe."
 
 This reverts commit eeb10d71bea438089b62906f0aaa40be1a05dc97.

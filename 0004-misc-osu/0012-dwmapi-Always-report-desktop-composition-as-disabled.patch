@@ -1,7 +1,7 @@
-From 6cd9c5a07fd08b5b2d782c14ead80db889301f57 Mon Sep 17 00:00:00 2001
+From 1cd7aa0c2ab123d55dcb66ebdc363d1edb328e78 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 10 Apr 2025 08:33:22 -0700
-Subject: [PATCH 12/14] dwmapi: Always report desktop composition as disabled.
+Subject: [PATCH 12/15] dwmapi: Always report desktop composition as disabled.
 
 Silences the misleading "non-fullscreen will increase your latency"
 warning from osu!.

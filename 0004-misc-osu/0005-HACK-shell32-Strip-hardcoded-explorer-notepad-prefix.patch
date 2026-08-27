@@ -1,7 +1,7 @@
-From 26d7c9e3fc46fa248fbe6c56690f474959b8660b Mon Sep 17 00:00:00 2001
+From c17a7e9e709af89f990e92273ed5e45af0b81aaa Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 15 Dec 2024 17:22:38 -0800
-Subject: [PATCH 05/14] HACK: shell32: Strip hardcoded explorer/notepad prefix
+Subject: [PATCH 05/15] HACK: shell32: Strip hardcoded explorer/notepad prefix
  from osu!'s shell open calls.
 
 This allows osu! to open the screenshot folder by clicking

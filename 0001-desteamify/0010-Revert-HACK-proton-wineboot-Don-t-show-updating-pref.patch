@@ -1,7 +1,7 @@
-From 8a86607610ec76723dea0be394992f91da8b19e4 Mon Sep 17 00:00:00 2001
+From 469758ae74236c630e74f24627533f94da7c35c0 Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:54:46 +0300
-Subject: [PATCH 10/14] Revert "HACK: proton: wineboot: Don't show "updating
+Subject: [PATCH 10/16] Revert "HACK: proton: wineboot: Don't show "updating
  prefix" window."
 
 This reverts commit 6ce9191479de6d2a459a8dc4f7a86ec66f7ea404.

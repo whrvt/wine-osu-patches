@@ -1,4 +1,4 @@
-From 8921aba3b973d0df9a263c0c40109be9c975934c Mon Sep 17 00:00:00 2001
+From 7d8214bb551763dedb932598bb8d35da7a926689 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:15:33 -0700
 Subject: [PATCH 03/12] winepulse: Don't unconditionally allocate a tmp buffer.

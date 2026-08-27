@@ -1,7 +1,7 @@
-From 5f6eb9fce315e39df027b8bb4123d8d57f221325 Mon Sep 17 00:00:00 2001
+From a3d43c3eec3a31cc9c45ce63fec5ca9d190ace5c Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Wed, 22 Apr 2026 21:14:14 +0300
-Subject: [PATCH 05/14] Revert "wine.inf: Add protontts registry entries."
+Subject: [PATCH 05/16] Revert "wine.inf: Add protontts registry entries."
 
 This reverts commit 8db22ff4fa3d2fe8547faef7984483dded6b587c.
 ---

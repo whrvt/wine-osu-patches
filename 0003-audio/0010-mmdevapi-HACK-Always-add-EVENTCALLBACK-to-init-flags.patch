@@ -1,4 +1,4 @@
-From 684447b1cb08a0fad9ad8423b89c4cd1ea0e2f4f Mon Sep 17 00:00:00 2001
+From 1411cf50627f3dc58061fecd16592f13077e9763 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 3 Nov 2025 10:35:17 -0800
 Subject: [PATCH 10/12] mmdevapi: HACK: Always add EVENTCALLBACK to init flags.

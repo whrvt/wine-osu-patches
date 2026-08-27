@@ -1,7 +1,7 @@
-From c05f4bef46978f210d45c9a6992bbdc06585bf75 Mon Sep 17 00:00:00 2001
+From 11ad22a7fc184419f8d7d17de06dd1f1e41c1996 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 07:23:38 -0700
-Subject: [PATCH 09/17] winex11: Force disable glXWaitForSbcOML (AMD) on
+Subject: [PATCH 09/20] winex11: Force disable glXWaitForSbcOML (AMD) on
  Wayland to circumvent Xwayland locking FPS to the monitor's refresh rate.
 
 It will prevent ingame vsync from working properly, but the environment variable

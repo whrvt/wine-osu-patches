@@ -1,7 +1,7 @@
-From cf165dfcd1b797fc57a6a793b3e2d906b1cbc61d Mon Sep 17 00:00:00 2001
+From 58ad7c92f67476c7cdd9bc46e90c42eeaf589b03 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sun, 23 Aug 2026 01:48:34 +0200
-Subject: [PATCH 17/17] winex11: Look up the XInputExtension opcode at startup.
+Subject: [PATCH 17/20] winex11: Look up the XInputExtension opcode at startup.
 
 ---
  dlls/winex11.drv/x11drv_main.c | 33 +++++++++++++++++++++++++++++++--

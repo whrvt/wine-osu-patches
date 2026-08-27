@@ -1,4 +1,4 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 42eceafc1479d84b4206e161105279d2ea1d8e75 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 26 Aug 2026 21:40:00 +0200
 Subject: [PATCH 3/3] Revert "secur32: HACK: Add %NO_SHUFFLE_EXTENSIONS to
@@ -9,9 +9,11 @@ This reverts commit cb50ee2f25521aa7a11b07c3fcedcf9db73798a5.
  dlls/secur32/schannel_gnutls.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/dlls/secur32/schannel_gnutls.c b/dlls/secur32/schannel_gnutls.c
+index 49e5b2cf03c..947c591051d 100644
 --- a/dlls/secur32/schannel_gnutls.c
 +++ b/dlls/secur32/schannel_gnutls.c
-@@ -434,7 +434,7 @@
+@@ -434,7 +434,7 @@ static int pull_timeout(gnutls_transport_ptr_t transport, unsigned int timeout)
  
  static NTSTATUS set_priority(schan_credentials *cred, gnutls_session_t session)
  {

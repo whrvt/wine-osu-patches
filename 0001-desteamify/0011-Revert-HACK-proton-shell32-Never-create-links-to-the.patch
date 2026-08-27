@@ -1,7 +1,7 @@
-From dd8d27c3c077c21c8ebfad810b5cba2b59f20a3b Mon Sep 17 00:00:00 2001
+From 4fd2fbac56a696ac7c0607c726ba3348588f3a47 Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Thu, 23 Apr 2026 00:54:55 +0300
-Subject: [PATCH 11/14] Revert "HACK: proton: shell32: Never create links to
+Subject: [PATCH 11/16] Revert "HACK: proton: shell32: Never create links to
  the user's home dirs."
 
 This reverts commit d6c34d05dd44c1bb4364d1611bbc4b12ea9e7df3.

@@ -1,4 +1,4 @@
-From 36588ee75ec239101698b8f84f34182829b15373 Mon Sep 17 00:00:00 2001
+From b8ffe0da7790fd28d9cd79ab9f3e910e7da5a0a5 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Michael=20M=C3=BCller?= <michael@fds-team.de>
 Date: Sat, 20 Dec 2014 23:10:38 +0100
 Subject: [PATCH 5/6] Add licenses for fonts as separate files.

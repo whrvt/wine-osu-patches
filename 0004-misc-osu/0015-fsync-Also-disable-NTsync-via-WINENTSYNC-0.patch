@@ -1,0 +1,26 @@
+From c7b416be276e26320c689c391522279a7272771c Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Fri, 17 Apr 2026 05:03:11 +0200
+Subject: [PATCH 15/15] fsync: Also disable NTsync via WINENTSYNC=0.
+
+---
+ server/inproc_sync.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/server/inproc_sync.c b/server/inproc_sync.c
+index a7020ef8fcd..4b63cc60580 100644
+--- a/server/inproc_sync.c
++++ b/server/inproc_sync.c
+@@ -50,7 +50,8 @@ int get_inproc_device_fd(void)
+     static int fd = -2;
+     if (fd == -2)
+     {
+-        if (getenv( "PROTON_NO_NTSYNC" ) && atoi(getenv( "PROTON_NO_NTSYNC" )))
++        if ((getenv( "PROTON_NO_NTSYNC" ) && atoi(getenv( "PROTON_NO_NTSYNC" ))) ||
++            (getenv( "WINENTSYNC" ) && !atoi(getenv( "WINENTSYNC" ))))
+             fd = -1;
+         else
+             fd = open( "/dev/ntsync", O_CLOEXEC | O_RDONLY );
+-- 
+2.55.0
+

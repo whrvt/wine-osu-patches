@@ -1,4 +1,4 @@
-From 7c8c46004cc173227fb19c5ac6647a047bb6ba08 Mon Sep 17 00:00:00 2001
+From 46c15f4a5c9a52770b373bae31f71a1a53cd97d6 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 26 Aug 2026 18:48:22 +0200
 Subject: [PATCH 01/12] winepulse.drv: Revert "Process streams timer updates
