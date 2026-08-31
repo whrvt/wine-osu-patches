@@ -1,0 +1,84 @@
+From f8f9f85b9c43390841c5a594cb8f3138bc32ea74 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Sun, 23 Aug 2026 01:48:34 +0200
+Subject: [PATCH] winex11: Look up the XInputExtension opcode at startup.
+
+---
+ dlls/winex11.drv/x11drv_main.c | 33 +++++++++++++++++++++++++++++++--
+ 1 file changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+index f9d3d1b67bf..a070a0692d9 100644
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -40,6 +40,9 @@
+ #ifdef HAVE_X11_EXTENSIONS_XRENDER_H
+ #include <X11/extensions/Xrender.h>
+ #endif
++#ifdef HAVE_X11_EXTENSIONS_XINPUT_H
++#include <X11/extensions/XInput.h>
++#endif
+ 
+ #include "ntstatus.h"
+ 
+@@ -84,6 +87,10 @@ int xrender_error_base = 0;
+ char *process_name = NULL;
+ pthread_key_t x11drv_thread_data_key = 0;
+ 
++#ifdef HAVE_X11_EXTENSIONS_XINPUT_H
++static int xinput_opcode = 0;   /* major opcode of XInputExtension */
++#endif
++
+ static x11drv_error_callback err_callback;   /* current callback for error */
+ static Display *err_callback_display;        /* display callback is set for */
+ static void *err_callback_arg;               /* error callback argument */
+@@ -228,8 +235,10 @@ static inline BOOL ignore_error( Display *display, XErrorEvent *event )
+     }
+ 
+ #ifdef HAVE_X11_EXTENSIONS_XINPUT_H
+-    if (event->request_code == 131 /* XInputExtension */ &&
+-        event->minor_code   == 3   /* X_OpenDevice */)
++    /* query the major opcode of an extension since it seems to be assigned by the server at runtime */
++    if (xinput_opcode &&
++        event->request_code == xinput_opcode &&
++        event->minor_code   == 3 /* X_OpenDevice */)
+     {
+         return TRUE;
+     }
+@@ -628,6 +637,23 @@ static void init_visuals( Display *display, int screen )
+            default_visual.visualid, default_visual.class, argb_visual.visualid );
+ }
+ 
++#ifdef HAVE_X11_EXTENSIONS_XINPUT_H
++/***********************************************************************
++ *           x11drv_xinput_init
++ *
++ * Retrieve the major opcode of XInputExtension.
++ */
++static void x11drv_xinput_init( Display *display )
++{
++    int event_base, error_base;
++
++    if (!XQueryExtension( display, "XInputExtension", &xinput_opcode, &event_base, &error_base ))
++        xinput_opcode = 0;
++
++    TRACE( "XInput extension major opcode %d\n", xinput_opcode );
++}
++#endif
++
+ /***********************************************************************
+  *           X11DRV process initialisation routine
+  */
+@@ -682,6 +708,9 @@ NTSTATUS __wine_unix_lib_init(void)
+     X11DRV_XComposite_Init();
+ #endif
+     x11drv_xinput2_load();
++#ifdef HAVE_X11_EXTENSIONS_XINPUT_H
++    x11drv_xinput_init( display );
++#endif
+ 
+     x11drv_init_keyboard( gdi_display );
+     if (use_xim) use_xim = xim_init( input_style );
+-- 
+2.55.0
+
