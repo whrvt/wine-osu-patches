@@ -1,0 +1,97 @@
+From a085495de1e0bb17ae014a243da565c3db0b6be8 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Sat, 15 Aug 2026 21:35:00 -0400
+Subject: [PATCH 55/59] winewayland: Mark other process windows as offscreen.
+
+---
+ dlls/winewayland.drv/wayland_surface.c | 19 +++++++++++++++++--
+ dlls/winewayland.drv/waylanddrv.h      |  1 +
+ dlls/winewayland.drv/window.c          |  9 +++++++--
+ 3 files changed, 25 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 3cc35b5d725..b8fe20eb91c 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -1441,17 +1441,32 @@ static void wayland_client_surface_detach(struct client_surface *client)
+     }
+ }
+ 
++BOOL wayland_client_surface_update_offscreen(struct wayland_client_surface *surface)
++{
++    HWND hwnd = surface->client.hwnd, toplevel = NtUserGetAncestor(hwnd, GA_ROOT);
++    LONG offscreen = FALSE;
++    DWORD pid;
++
++    if (NtUserGetWindowThread(toplevel, &pid) && pid != GetCurrentProcessId())
++        offscreen = TRUE;
++
++    /* TODO: Check for window clipping and shape */
++
++    return InterlockedExchange(&surface->client.offscreen, offscreen) != offscreen;
++}
++
+ static void wayland_client_surface_update(struct client_surface *client)
+ {
+     struct wayland_client_surface *surface = impl_from_client_surface(client);
+     HWND hwnd = client->hwnd, toplevel = NtUserGetAncestor(hwnd, GA_ROOT);
+     struct wayland_win_data *data;
++    BOOL offscreen_changed = wayland_client_surface_update_offscreen(surface);
+ 
+     if (!(data = wayland_win_data_get(hwnd))) return;
+ 
+-    if (data->client_surface != surface)
++    if (data->client_surface != surface || offscreen_changed)
+     {
+-        if (toplevel && NtUserIsWindowVisible(hwnd))
++        if (toplevel && !client->offscreen && NtUserIsWindowVisible(hwnd))
+             wayland_client_surface_attach(surface, toplevel);
+         else
+             wayland_client_surface_attach(surface, NULL);
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 0bf965b30f8..51e0a6234dc 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -499,6 +499,7 @@ void wayland_win_data_release(struct wayland_win_data *data);
+ 
+ struct wayland_client_surface *get_client_surface(HWND hwnd);
+ void set_client_surface(HWND hwnd, struct wayland_client_surface *client);
++BOOL wayland_client_surface_update_offscreen(struct wayland_client_surface *surface);
+ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffer, HRGN damage_region);
+ struct wayland_shm_buffer *get_window_surface_contents(HWND hwnd);
+ void ensure_window_surface_contents(HWND hwnd);
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index b9db8833cb6..ffe3a90ce6d 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -283,7 +283,10 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *dat
+         break;
+     }
+ 
+-    if (visible && client) wayland_client_surface_attach(client, data->hwnd);
++    if (visible && client && !client->client.offscreen)
++        wayland_client_surface_attach(client, data->hwnd);
++    else if (client && client->client.offscreen)
++        wayland_client_surface_attach(client, NULL);
+ 
+     /* Size/position changes affect the effective pointer constraint, so update
+      * it as needed. */
+@@ -1007,6 +1010,8 @@ void set_client_surface(HWND hwnd, struct wayland_client_surface *new_client)
+     /* ownership is shared with the callers, the last caller to release
+      * its reference will also destroy it and clear our pointer. */
+ 
++    if (new_client) wayland_client_surface_update_offscreen(new_client);
++
+     if (!(data = wayland_win_data_get(hwnd))) return;
+ 
+     if (new_client != data->client_surface)
+@@ -1016,7 +1021,7 @@ void set_client_surface(HWND hwnd, struct wayland_client_surface *new_client)
+ 
+         if ((data->client_surface = new_client))
+         {
+-            if (toplevel && NtUserIsWindowVisible(hwnd))
++            if (toplevel && !new_client->client.offscreen && NtUserIsWindowVisible(hwnd))
+                 wayland_client_surface_attach(new_client, toplevel);
+             else
+                 wayland_client_surface_attach(new_client, NULL);

@@ -1,0 +1,25 @@
+From 5019a356bf560fe6a18ccae5a952d1774582408b Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 7 Sep 2026 17:34:35 +0200
+Subject: [PATCH 49/59] winewayland: Don't add the decoration offsets to an
+ empty configure.
+
+Taken from Proton-EM.
+---
+ dlls/winewayland.drv/window.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 70bcf95b6a3..0512f1a067f 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -676,7 +676,8 @@ static void wayland_configure_window(HWND hwnd)
+                (surface->window.window_rect.right - surface->window.rect.right);
+     offset_y = (surface->window.rect.top - surface->window.window_rect.top) +
+                (surface->window.window_rect.bottom - surface->window.rect.bottom);
+-    if (surface->processing.decor == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
++    if (width && height &&
++        surface->processing.decor == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
+     {
+         rect.right += offset_x;
+         rect.bottom += offset_y;

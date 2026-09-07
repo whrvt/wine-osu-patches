@@ -3,7 +3,10 @@ From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 7 Sep 2026 18:57:42 +0200
 Subject: [PATCH] winepipewire.drv: Use WINE_AUDIO_QUANTUM, keeping
  WINE_PIPEWIRE_QUANTUM as a fallback.
+
 ---
+ dlls/winepipewire.drv/pipewire.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
 index ff2a8ef5b3b..c17ec3202c1 100644
