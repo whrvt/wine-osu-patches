@@ -1,0 +1,43 @@
+From 69f95a4a3a744c3dbbd08f8bf81fdbfd526788a3 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 7 Sep 2026 16:58:13 +0200
+Subject: [PATCH 2/2] HACK: winealsa.drv: Allow overriding the default ALSA
+ device with WINE_ALSA_DEVICE.
+
+Needed to make up for steamrt missing PipeWire's ALSA plugin, this way we can
+point it to a PCM bundled with wine-osu and defined through ALSA_CONFIG_PATH.
+---
+ dlls/winealsa.drv/alsa.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winealsa.drv/alsa.c b/dlls/winealsa.drv/alsa.c
+index 120f79added..10880146ff9 100644
+--- a/dlls/winealsa.drv/alsa.c
++++ b/dlls/winealsa.drv/alsa.c
+@@ -478,6 +478,12 @@ static WCHAR *alsa_get_card_name(int card)
+     return ret;
+ }
+ 
++static const char *alsa_default_name(void)
++{
++    const char *name = getenv("WINE_ALSA_DEVICE");
++    return name && name[0] ? name : "default";
++}
++
+ static NTSTATUS alsa_get_endpoint_ids(void *args)
+ {
+     static const WCHAR defaultW[] = {'d','e','f','a','u','l','t',0};
+@@ -492,8 +498,8 @@ static NTSTATUS alsa_get_endpoint_ids(void *args)
+     endpoints_info.num = endpoints_info.size = 0;
+     endpoints_info.endpoints = NULL;
+ 
+-    if(alsa_try_open("default", params->flow))
+-        endpoints_add(&endpoints_info, construct_device_id(params->flow, defaultW, NULL), strdup("default"));
++    if(alsa_try_open(alsa_default_name(), params->flow))
++        endpoints_add(&endpoints_info, construct_device_id(params->flow, defaultW, NULL), strdup(alsa_default_name()));
+ 
+     get_reg_devices(params->flow, &endpoints_info);
+ 
+-- 
+2.55.0
+
