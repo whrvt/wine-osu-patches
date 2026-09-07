@@ -1,0 +1,38 @@
+From 46097c4f3f165015daa470cc3e8f12aaeecf5b8e Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 7 Sep 2026 19:42:32 +0200
+Subject: [PATCH] winepipewire.drv: Fallback to the default channel mask for
+ AUX channels.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index c17ec3202c1..b88e9f662e4 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -335,11 +335,21 @@ static UINT spa_position_to_mask_bit(uint32_t pos)
+     }
+ }
+ 
++static UINT get_channel_mask(unsigned int channels);
++
+ static UINT positions_to_mask(const uint32_t *pos, uint32_t channels)
+ {
+-    UINT mask = 0, i;
++    UINT mask = 0, i, bits = 0;
++
+     for (i = 0; i < channels; i++)
+-        mask |= spa_position_to_mask_bit(pos[i]);
++    {
++        UINT bit = spa_position_to_mask_bit(pos[i]);
++        if (bit && !(mask & bit)) bits++;
++        mask |= bit;
++    }
++
++    if (bits != channels) mask = get_channel_mask(channels);
++
+     return mask;
+ }
+ 
