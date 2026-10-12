@@ -1,0 +1,28 @@
+From 76069681e7fc829a5ed56042a505033fef949af1 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Tue, 30 Jun 2026 04:52:58 +0200
+Subject: [PATCH] HACK: winewayland: Enable EGL tearing by default
+
+Enable EGL tearing whenever the compositor exposes the tearing-control
+protocol. WAYLANDDRV_EGL_TEARING=0 can be used to disable it.
+---
+ dlls/winewayland.drv/wayland.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland.c b/dlls/winewayland.drv/wayland.c
+index b71b109ef52..562644af28f 100644
+--- a/dlls/winewayland.drv/wayland.c
++++ b/dlls/winewayland.drv/wayland.c
+@@ -138,8 +138,7 @@ static int use_egl_tearing(void)
+ 
+     if (enabled == -1)
+     {
+-        enabled = (env = getenv("WAYLANDDRV_EGL_TEARING")) &&
+-                    !strcmp(env, "1");
++        enabled = !(env = getenv("WAYLANDDRV_EGL_TEARING")) || strcmp(env, "0");
+     }
+ 
+     return enabled;
+-- 
+2.56.0
+
