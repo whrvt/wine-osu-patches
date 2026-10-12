@@ -1,0 +1,30 @@
+From 8e5a9e9556d5aa8790472bcbdf862aad52115a84 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:33 +0200
+Subject: [PATCH] winepipewire.drv: Overwrite an inherited PIPEWIRE_MODULE_DIR.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 461fc5a2120..2f924a7b5fd 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -899,8 +899,12 @@ static void pipewire_set_plugin_dirs(void)
+     snprintf(path, sizeof(path), "%s/spa-0.2", libdir);
+     setenv("SPA_PLUGIN_DIR", path, 1);
+     snprintf(path, sizeof(path), "%s/pipewire-0.3", libdir);
++    /* Overwrite: reaching here means no usable SPA_PLUGIN_DIR was inherited,
++     * so an inherited module dir is unverified and may be foreign-arch.  Both
++     * must come from the same libdir.  An explicitly configured pair keeps
++     * its values through the early return above. */
+     if (!access(path, F_OK))
+-        setenv("PIPEWIRE_MODULE_DIR", path, 0);
++        setenv("PIPEWIRE_MODULE_DIR", path, 1);
+     TRACE("derived SPA plugin dir from %s\n", libdir);
+ }
+ 
+-- 
+2.56.0
+

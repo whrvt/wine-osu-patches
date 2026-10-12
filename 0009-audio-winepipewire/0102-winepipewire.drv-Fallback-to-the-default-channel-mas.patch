@@ -1,4 +1,4 @@
-From 46097c4f3f165015daa470cc3e8f12aaeecf5b8e Mon Sep 17 00:00:00 2001
+From 0337234e391f7a2a511afe5202348d752263823d Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 7 Sep 2026 19:42:32 +0200
 Subject: [PATCH] winepipewire.drv: Fallback to the default channel mask for
@@ -9,10 +9,10 @@ Subject: [PATCH] winepipewire.drv: Fallback to the default channel mask for
  1 file changed, 12 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
-index c17ec3202c1..b88e9f662e4 100644
+index 1cb41c48ce9..015a4b9e2b2 100644
 --- a/dlls/winepipewire.drv/pipewire.c
 +++ b/dlls/winepipewire.drv/pipewire.c
-@@ -335,11 +335,21 @@ static UINT spa_position_to_mask_bit(uint32_t pos)
+@@ -649,11 +649,21 @@ static UINT spa_position_to_mask_bit(uint32_t pos)
      }
  }
  
@@ -36,3 +36,6 @@ index c17ec3202c1..b88e9f662e4 100644
      return mask;
  }
  
+-- 
+2.56.0
+

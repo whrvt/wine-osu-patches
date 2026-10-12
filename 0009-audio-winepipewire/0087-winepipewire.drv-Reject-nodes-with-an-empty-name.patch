@@ -1,0 +1,29 @@
+From fca6579bf15e7b7462173dbce6d85b4d590d7199 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:27 +0200
+Subject: [PATCH] winepipewire.drv: Reject nodes with an empty name.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 5392c1a4ec0..e9000c413ee 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1323,7 +1323,11 @@ static void on_probe_registry_global(void *data, uint32_t id, uint32_t permissio
+         const char *dev_id = spa_dict_lookup(props, PW_KEY_DEVICE_ID);
+         struct probe_node *pn;
+ 
+-        if (!media_class || !node_name)
++        /* An empty node.name aliases the synthetic default endpoint's
++         * placeholder, so both would enumerate with an empty device string
++         * and find_device would only ever reach the first.  winepulse rejects
++         * the same case (pulse.c:757). */
++        if (!media_class || !node_name || !node_name[0])
+             return;
+         if (strcmp(media_class, "Audio/Sink") && strcmp(media_class, "Audio/Source"))
+             return;
+-- 
+2.56.0
+

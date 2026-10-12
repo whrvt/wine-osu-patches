@@ -1,0 +1,37 @@
+From a6f149cba850482db91f5f97a479eafb76739c2e Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:25 +0200
+Subject: [PATCH] winepipewire.drv: Reject out-of-range sample rates.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 55f218a3b13..5392c1a4ec0 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2023,6 +2023,11 @@ static HRESULT pipewire_info_from_waveformat(struct pipewire_stream *stream, con
+     UINT mask = 0, i = 0, j;
+ 
+     memset(info, 0, sizeof(*info));
++    if (!fmt->nSamplesPerSec || fmt->nSamplesPerSec > PW_MAX_RATE)
++    {
++        WARN("Unsupported sample rate %u.\n", fmt->nSamplesPerSec);
++        return AUDCLNT_E_UNSUPPORTED_FORMAT;
++    }
+     info->rate = fmt->nSamplesPerSec;
+ 
+     switch (fmt->wFormatTag)
+@@ -4265,7 +4270,7 @@ static NTSTATUS pipewire_set_sample_rate(void *args)
+      * pa_stream_update_sample_rate; mirror winepulse's observable failure
+      * code for rates the resampler cannot honor (the negated comparison
+      * also catches NaN). */
+-    if (!(params->rate >= 1.0f && params->rate <= 384000.0f))
++    if (!(params->rate >= 1.0f && params->rate <= (float)PW_MAX_RATE))
+     {
+         WARN("Unsupported sample rate %u.\n", (unsigned)params->rate);
+         hr = E_OUTOFMEMORY;
+-- 
+2.56.0
+

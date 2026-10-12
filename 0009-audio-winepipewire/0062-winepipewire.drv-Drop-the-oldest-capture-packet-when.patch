@@ -1,0 +1,60 @@
+From 9ebc02df2040c4845a631dd08e2c95dc94e6a3d2 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 11:16:24 +0200
+Subject: [PATCH] winepipewire.drv: Drop the oldest capture packet when the
+ list is full.
+
+When the application stops collecting, the packet free list empties and the
+timer thread has to overwrite a packet that is still waiting to be read.  It
+recycled the oldest and marked the successor, except when the oldest already
+carried a discontinuity, in which case it overwrote the newest packet instead
+and marked nothing.
+
+That branch discards the freshest audio, keeps the stale backlog, and leaves
+the gap invisible: the application is handed old audio followed by a much
+later packet with nothing to say the two are not adjacent.  It also clears a
+discontinuity the application has not read yet.
+
+Always recycle the oldest and always move the flag to its successor.  Where
+the oldest already carried a flag, the gap it described merges with the new
+one and the successor's flag covers both.  The free list is empty on this
+path, so the successor always exists.
+
+Driven with a wpw_capoverrun mode that starves the application rather than the
+ring, which is what empties the free list: 21 unflagged gaps per run before
+this on both arches, none after.
+
+Inherited from winepulse, which has the same branch at pulse.c:1643-1647.
+---
+ dlls/winepipewire.drv/pipewire.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 347ec59038a..d07e1d13034 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2428,13 +2428,14 @@ static void pipewire_read(struct pipewire_stream *stream)
+                 __atomic_store_n(&slot->word, CAP_WORD(seq, CAP_FULL), __ATOMIC_RELEASE);
+                 return;
+             }
+-            if (!p->discont)
+-            {
+-                next = (ACPacket *)p->entry.next;
+-                next->discont = 1;
+-            }
+-            else
+-                p = (ACPacket *)list_tail(&stream->packet_filled_head);
++            /* Recycle the oldest packet, matching the ring below, and move
++             * the discontinuity onto its successor, which is the packet that
++             * gaps.  Recycling the newest instead would discard the freshest
++             * audio, leave the gap unmarked and clear a flag the application
++             * has not read.  The free list is empty here, so the successor
++             * always exists. */
++            next = (ACPacket *)p->entry.next;
++            next->discont = 1;
+         }
+         else
+         {
+-- 
+2.56.0
+

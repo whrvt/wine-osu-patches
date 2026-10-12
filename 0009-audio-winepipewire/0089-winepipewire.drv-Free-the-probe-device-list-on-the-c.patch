@@ -1,0 +1,70 @@
+From 7e6008c7869c9153aa3484b4857bb16eb7118d07 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:30 +0200
+Subject: [PATCH] winepipewire.drv: Free the probe device list on the core
+ error path.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 28 +++++++++++++++-------------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index af8195b7fa8..51217c624e3 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1694,6 +1694,8 @@ static NTSTATUS pipewire_test_connect(void *args)
+     struct test_connect_params *params = args;
+     struct probe p;
+     struct probe_node *pn, *next;
++    struct probe_device *pd, *pdnext;
++    BOOL failed;
+ 
+     free_device_lists();
+     list_init(&g_render_devices);
+@@ -1754,14 +1756,14 @@ static NTSTATUS pipewire_test_connect(void *args)
+     pw_context_destroy(p.context);
+     pw_thread_loop_destroy(p.loop);
+ 
+-    if (p.core_error && list_empty(&p.nodes))
+-    {
++    /* Both probe lists are freed on every path: the error return below used
++     * to sit above the cleanup and leak p.devices. */
++    failed = p.core_error && list_empty(&p.nodes);
++    if (failed)
+         WARN("PipeWire core reported an error during the probe\n");
+-        return STATUS_SUCCESS;
+-    }
+-
+-    /* The pw loop is fully stopped: safe to do Wine string conversion. */
+-    build_device_cache(&p);
++    else
++        /* The pw loop is fully stopped: safe to do Wine string conversion. */
++        build_device_cache(&p);
+ 
+     LIST_FOR_EACH_ENTRY_SAFE(pn, next, &p.nodes, struct probe_node, entry)
+     {
+@@ -1771,15 +1773,15 @@ static NTSTATUS pipewire_test_connect(void *args)
+         free(pn->nick);
+         free(pn);
+     }
++    LIST_FOR_EACH_ENTRY_SAFE(pd, pdnext, &p.devices, struct probe_device, entry)
+     {
+-        struct probe_device *pd, *pdnext;
+-        LIST_FOR_EACH_ENTRY_SAFE(pd, pdnext, &p.devices, struct probe_device, entry)
+-        {
+-            list_remove(&pd->entry);
+-            free(pd);
+-        }
++        list_remove(&pd->entry);
++        free(pd);
+     }
+ 
++    if (failed)
++        return STATUS_SUCCESS;
++
+     TRACE("probe for %s: %u sinks default=%s, %u sources default=%s, rate=%u\n",
+           debugstr_w(params->name), list_count(&g_render_devices), debugstr_a(g_default_sink),
+           list_count(&g_capture_devices), debugstr_a(g_default_source), p.clock_rate);
+-- 
+2.56.0
+

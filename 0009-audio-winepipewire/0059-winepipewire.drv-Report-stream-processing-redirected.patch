@@ -1,0 +1,49 @@
+From 7c3b109e1f3462b92d77a300cba0b299785b7e91 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 00:07:07 +0200
+Subject: [PATCH] winepipewire.drv: Report stream processing redirected off the
+ driver loop.
+
+node.loop.class can be set globally through PIPEWIRE_PROPS or a client.conf
+stream.rules entry, which dispatches the process callback on a data thread
+instead of the driver's thread loop.  The loop lock then serializes nothing,
+and the failure mode is silent corruption rather than an error.
+
+This is a diagnostic, not a mitigation: the driver keeps running, because
+refusing would break audio for a configuration the driver does not control.
+---
+ dlls/winepipewire.drv/pipewire.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index a417f8c7acb..550f5af7428 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1896,6 +1896,24 @@ static HRESULT pipewire_stream_connect(struct pipewire_stream *stream, const cha
+         }
+     }
+ 
++    /* Diagnostic only.  node.loop.class can be redirected by PIPEWIRE_PROPS or
++     * a client.conf stream.rules entry, which moves the process callback off
++     * the thread loop and out from under the lock that serializes it against
++     * the control paths.  Warn once per process; the condition is a
++     * configuration, not a property of an individual stream. */
++    if (pw_stream_get_data_loop(stream->pw) != pw_thread_loop_get_loop(pw_loop_global))
++    {
++        static BOOL reported;
++
++        if (!reported)
++        {
++            reported = TRUE;
++            ERR("Stream processing was redirected off the driver loop by "
++                "node.loop.class; this configuration is not validated and can "
++                "corrupt audio.\n");
++        }
++    }
++
+     for (tries = 0; tries < 10; tries++)
+     {
+         st = pw_stream_get_state(stream->pw, NULL);
+-- 
+2.56.0
+

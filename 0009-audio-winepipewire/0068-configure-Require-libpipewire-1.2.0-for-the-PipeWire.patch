@@ -1,0 +1,63 @@
+From f1075d6b322504484221275eca5b8abc98619404 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 19:08:01 +0200
+Subject: [PATCH] configure: Require libpipewire 1.2.0 for the PipeWire driver.
+
+The check accepted any libpipewire-0.3 declaring pw_stream_get_time_n, which
+has existed since 0.3.50.  The driver needs newer API than that, so configure
+would enable it against a library it cannot build against, turning a clean
+"PipeWire won't be supported" notice into a hard build failure.
+
+The floor is pw_stream_get_data_loop and struct pw_loop::name, both of which
+arrived in 1.2.0; everything else the driver touches is 0.3.x or older.  Probe
+both rather than assume they travel together.  stream.h annotates
+pw_stream_get_data_loop as "Since 1.1.0", but it is absent from the 1.1.0 tag
+and lands in 1.1.81.
+
+Probe declarations rather than constrain the pkg-config module.
+WINE_PACKAGE_FLAGS interpolates its module argument unquoted into a backtick
+command, so a ">=" constraint would be read by the shell as a redirection.
+Probing also keeps working when the flags are supplied by hand.
+
+1.2.0 is low enough for the Steam runtime, which ships 1.4.2 and is where this
+driver runs under Proton.  Distributions are comfortably above it: Debian 13
+ships 1.4.2, Fedora 43 1.4.8, Ubuntu 25.10 1.4.7, CachyOS 1.6.8.  Only
+steamrt3 sniper, at 0.3.65, falls below, and Proton 11 does not use it.
+---
+ configure.ac | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index f7f213bdfdc..c3198504878 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1727,11 +1727,24 @@ then
+     WINE_PACKAGE_FLAGS(PIPEWIRE,[libpipewire-0.3],,,,
+         [AC_CHECK_HEADERS([pipewire/pipewire.h],,[PIPEWIRE_LIBS=""])
+          AS_IF([test -n "$PIPEWIRE_LIBS"],
+-            [AC_CHECK_DECL([pw_stream_get_time_n],,[PIPEWIRE_LIBS=""],
++            [dnl The newest APIs the driver uses are pw_stream_get_data_loop and
++             dnl struct pw_loop::name, both from 1.2.0; everything else it
++             dnl touches is 0.3.x or older.  The floor is the minimum API the
++             dnl driver consumes, not the version its ship vehicle carries, so
++             dnl steamrt4's 1.4.2 clears it with room for a runtime downgrade.
++             dnl
++             dnl It does exclude native builds on Ubuntu 22.04 and 24.04 LTS
++             dnl and derivatives, Debian 12 without backports, openSUSE Leap
++             dnl 15.5 and 15.6, and steamrt3 sniper at 0.3.65.  Each gets the
++             dnl notice below and a disabled driver, not a broken build.
++             AC_CHECK_DECL([pw_stream_get_data_loop],,[PIPEWIRE_LIBS=""],
++                [[#include <pipewire/pipewire.h>]])])
++         AS_IF([test -n "$PIPEWIRE_LIBS"],
++            [AC_CHECK_MEMBER([struct pw_loop.name],,[PIPEWIRE_LIBS=""],
+                 [[#include <pipewire/pipewire.h>]])])])
+ fi
+ WINE_NOTICE_WITH(pipewire, [test -z "$PIPEWIRE_LIBS"],
+-        [libpipewire-0.3 ${notice_platform}development files not found, PipeWire won't be supported.],
++        [libpipewire-0.3 1.2.0 or later ${notice_platform}development files not found, PipeWire won't be supported.],
+         [enable_winepipewire_drv])
+ 
+ dnl **** Check for FFmpeg ****
+-- 
+2.56.0
+

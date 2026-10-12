@@ -1,0 +1,41 @@
+From f1c1f0939259b5f57563e0f8d28c13fdee61d474 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Thu, 6 Aug 2026 20:30:09 +0200
+Subject: [PATCH] winepipewire.drv: Give streams a generic media name.
+
+libpipewire defaults media.name to the pw_stream_new name, so passing the
+application name reported it twice, once as application.name and once as
+media.name. winepulse names its streams the same generic way.
+---
+ dlls/winepipewire.drv/pipewire.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 4c20ed66e39..4965cb9451a 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2466,6 +2466,8 @@ static HRESULT pipewire_stream_connect(struct pipewire_stream *stream, const cha
+     enum pw_stream_state st;
+     char *app;
+     int tries;
++    static LONG stream_number;
++    char media_name[32];
+ 
+     props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio",
+                               PW_KEY_MEDIA_CATEGORY,
+@@ -2503,7 +2505,11 @@ static HRESULT pipewire_stream_connect(struct pipewire_stream *stream, const cha
+          (device && device[0] && device_is_sink(device))))
+         pw_properties_set(props, PW_KEY_STREAM_CAPTURE_SINK, "true");
+ 
+-    stream->pw = pw_stream_new(pw_core_global, app ? app : "winepipewire", props);
++    /* libpipewire copies this into media.name, which applets print next to
++     * application.name, so the app name here would show up twice. */
++    snprintf(media_name, sizeof(media_name), "audio stream #%d",
++             (int)InterlockedIncrement(&stream_number));
++    stream->pw = pw_stream_new(pw_core_global, media_name, props);
+     free(app);
+     if (!stream->pw)
+     {
+-- 
+2.56.0
+

@@ -1,7 +1,7 @@
-From 92f0e84ac7b04621fc477b7fbc21ab817042acc0 Mon Sep 17 00:00:00 2001
+From 9cafeeebd4a94e730f0d4376be9f47434e8de162 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 11:09:24 +0200
-Subject: [PATCH 22/39] winepipewire.drv: Add stream lifecycle, error, and xrun
+Subject: [PATCH] winepipewire.drv: Add stream lifecycle, error, and xrun
  logging.
 
 ---
@@ -293,5 +293,5 @@ index 10ad1ac9484..3d2d415519b 100644
      return STATUS_SUCCESS;
  }
 -- 
-2.55.0
+2.56.0
 

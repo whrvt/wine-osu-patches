@@ -1,0 +1,30 @@
+From 979f18de945630dd4d3f32090d62cd13478c13a1 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:31 +0200
+Subject: [PATCH] winepipewire.drv: Open the SPA probe file with O_CLOEXEC and
+ O_NONBLOCK.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 51217c624e3..461fc5a2120 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -837,7 +837,11 @@ static BOOL spa_plugin_dir_usable(const char *dir)
+     int fd, n;
+ 
+     snprintf(path, sizeof(path), "%s/support/libspa-support.so", dir);
+-    if ((fd = open(path, O_RDONLY)) < 0)
++    /* O_CLOEXEC: process_attach can run with application threads already
++     * fork+exec'ing.  O_NONBLOCK: the path comes from the environment, and
++     * opening a FIFO would otherwise block the first mmdevapi unix call
++     * forever instead of failing closed. */
++    if ((fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK)) < 0)
+         return FALSE;
+     n = read(fd, ident, sizeof(ident));
+     close(fd);
+-- 
+2.56.0
+

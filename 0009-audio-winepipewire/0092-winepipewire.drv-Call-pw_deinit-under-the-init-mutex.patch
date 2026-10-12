@@ -1,0 +1,28 @@
+From fdc48e46ab37c1d87cdc3e2b737d45bcbd170e20 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:34 +0200
+Subject: [PATCH] winepipewire.drv: Call pw_deinit() under the init mutex.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 2f924a7b5fd..0a8395bab53 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1109,8 +1109,10 @@ static NTSTATUS pipewire_main_loop_stop(void *args)
+         pw_thread_loop_destroy(pw_loop_global);
+         pw_loop_global = NULL;
+     }
+-    pthread_mutex_unlock(&pw_init_mutex);
++    /* Inside the mutex: a concurrent main_loop_start would otherwise be in
++     * pw_thread_loop_new/pw_context_new while this unloads the SPA plugins. */
+     pw_deinit();
++    pthread_mutex_unlock(&pw_init_mutex);
+     return STATUS_SUCCESS;
+ }
+ 
+-- 
+2.56.0
+

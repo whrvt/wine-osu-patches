@@ -1,0 +1,29 @@
+From 32dbf0248952a963ef8161ca235f794fa086f254 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:22 +0200
+Subject: [PATCH] winepipewire.drv: Fix the buffer size check in ReleaseBuffer.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 54e8baa7581..a3baca8543d 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -3882,8 +3882,10 @@ static NTSTATUS pipewire_release_render_buffer(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (params->written_frames * stream->frame_size >
+-        (stream->locked >= 0 ? stream->locked : -stream->locked))
++    /* UINT64: the product is UINT32 x UINT32 and a wrapped value would pass
++     * the guard, so a huge written_frames could commit a tiny byte count. */
++    if ((UINT64)params->written_frames * stream->frame_size >
++        (UINT64)(stream->locked >= 0 ? stream->locked : -stream->locked))
+     {
+         pw_thread_loop_unlock(pw_loop_global);
+         params->result = AUDCLNT_E_INVALID_SIZE;
+-- 
+2.56.0
+

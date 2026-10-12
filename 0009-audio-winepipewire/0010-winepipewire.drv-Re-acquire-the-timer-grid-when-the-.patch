@@ -1,8 +1,8 @@
-From 606e1f69e8104563d6fc8670673a62cbf64e61f3 Mon Sep 17 00:00:00 2001
+From 821a4148b427cf86fc13df922a3a46c7ba6bbb8a Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 10/39] winepipewire.drv: Re-acquire the timer grid when the
- graph clock stalls or jumps.
+Subject: [PATCH] winepipewire.drv: Re-acquire the timer grid when the graph
+ clock stalls or jumps.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 44 +++++++++++++++++++-------------
@@ -69,5 +69,5 @@ index 34af9e5195c..948f8372904 100644
          }
  
 -- 
-2.55.0
+2.56.0
 

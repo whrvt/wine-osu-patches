@@ -1,7 +1,7 @@
-From f7c8f0660141f6211f40e898a9b5be9ed6c81900 Mon Sep 17 00:00:00 2001
+From 68cdbaa3c9ace62a34b2e46f6b9c0e53ed56259e Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 00:06:47 +0200
-Subject: [PATCH 02/39] mmdevapi: Prefer the PipeWire driver when a daemon is
+Subject: [PATCH] mmdevapi: Prefer the PipeWire driver when a daemon is
  available.
 
 ---
@@ -22,5 +22,5 @@ index 70eace863e1..c9573ec75d6 100644
      HKEY key;
      WCHAR reg_list[256], *p, *next, *driver_list = default_list;
 -- 
-2.55.0
+2.56.0
 

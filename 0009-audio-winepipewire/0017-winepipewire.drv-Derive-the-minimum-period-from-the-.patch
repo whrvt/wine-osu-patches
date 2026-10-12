@@ -1,8 +1,8 @@
-From 9472f823068e09c9c9ace2b264f9ee8d92a80641 Mon Sep 17 00:00:00 2001
+From 42350bd986612d7715ce2f92f76e23f119b6d7b8 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 17:27:33 +0200
-Subject: [PATCH 17/39] winepipewire.drv: Derive the minimum period from the
- graph quantum floor.
+Subject: [PATCH] winepipewire.drv: Derive the minimum period from the graph
+ quantum floor.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 41 ++++++++++++++++++++++++++++----
@@ -110,5 +110,5 @@ index 32d7334f267..3bc9467fbb3 100644
              {
                  def->fmt = def_src->fmt;
 -- 
-2.55.0
+2.56.0
 

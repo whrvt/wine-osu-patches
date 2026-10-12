@@ -1,0 +1,49 @@
+From 15b0570bc8f26662ec75fe851407eb6001e2552d Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 21:07:25 +0200
+Subject: [PATCH] winepipewire.drv: Activate the stream before attaching it to
+ the timer period.
+
+A failed set_active after add_stream_to_period left the stream linked into
+the period with started still FALSE, so the timer could signal its event
+handle without a successful Start.
+---
+ dlls/winepipewire.drv/pipewire.c | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index f54f62b7712..6cd15dad17e 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2275,20 +2275,23 @@ static NTSTATUS pipewire_start(void *args)
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (FAILED(params->result = pipewire_add_stream_to_period(stream)))
++    if (pw_stream_set_active(stream->pw, true) < 0)
+     {
++        /* mirrors pulse_start's failed-uncork path */
++        WARN("pw_stream_set_active failed for stream %p.\n", stream);
++        params->result = E_FAIL;
+         pw_thread_loop_unlock(pw_loop_global);
+         return STATUS_SUCCESS;
+     }
+ 
+-    if (pw_stream_set_active(stream->pw, true) < 0)
++    if (FAILED(params->result = pipewire_add_stream_to_period(stream)))
+     {
+-        /* mirrors pulse_start's failed-uncork path */
+-        WARN("pw_stream_set_active failed for stream %p.\n", stream);
+-        params->result = E_FAIL;
++        if (pw_stream_set_active(stream->pw, false) < 0)
++            WARN("pw_stream_set_active(false) rollback failed for stream %p.\n", stream);
+         pw_thread_loop_unlock(pw_loop_global);
+         return STATUS_SUCCESS;
+     }
++
+     stream->started = TRUE;
+     pw_thread_loop_unlock(pw_loop_global);
+     return STATUS_SUCCESS;
+-- 
+2.56.0
+

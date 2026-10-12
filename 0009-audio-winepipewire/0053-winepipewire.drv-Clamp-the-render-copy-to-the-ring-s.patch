@@ -1,0 +1,30 @@
+From 2666f1ec434dbb1bc55993473c7bac640513f6b4 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sat, 25 Jul 2026 23:59:26 +0200
+Subject: [PATCH] winepipewire.drv: Clamp the render copy to the ring size.
+
+copy_from_ring wraps at most once, so a byte count larger than the ring reads
+past the allocation.  The count is bounded today, but the bound depends on
+producer accounting that the process callback cannot verify.
+---
+ dlls/winepipewire.drv/pipewire.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index a26abca2556..9a4e7298124 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1719,7 +1719,10 @@ static void on_stream_process(void *data)
+ 
+         if (stream->started)
+         {
++            /* copy_from_ring wraps once, so a count above the ring size
++             * would read past the allocation. */
+             n = min(need_bytes, __atomic_load_n(&stream->pa_held_bytes, __ATOMIC_ACQUIRE));
++            n = min(n, stream->real_bufsize_bytes);
+             copy_from_ring(d->data, stream->local_buffer, stream->real_bufsize_bytes,
+                            stream->pa_offs_bytes, n);
+             apply_volume(stream, d->data, n);
+-- 
+2.56.0
+

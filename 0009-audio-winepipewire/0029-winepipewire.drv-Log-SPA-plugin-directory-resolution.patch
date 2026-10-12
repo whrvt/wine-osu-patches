@@ -1,7 +1,7 @@
-From 8d4bb2b2549f8f11f04fa5b9e200c246eed3b0d7 Mon Sep 17 00:00:00 2001
+From 5f379fe0c8a3b353048cab28c03d19176bfbb3a9 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Tue, 23 Jun 2026 14:45:21 +0200
-Subject: [PATCH 29/39] winepipewire.drv: Log SPA plugin directory resolution
+Subject: [PATCH] winepipewire.drv: Log SPA plugin directory resolution
  problems at warn level.
 
 ---
@@ -49,5 +49,5 @@ index 82d55e3448a..5513c097194 100644
      }
  
 -- 
-2.55.0
+2.56.0
 

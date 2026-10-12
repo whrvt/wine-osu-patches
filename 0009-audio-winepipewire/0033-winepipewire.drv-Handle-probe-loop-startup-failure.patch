@@ -1,7 +1,7 @@
-From 984e905ab0ddf19ddc601503c73eb66031a5ddf4 Mon Sep 17 00:00:00 2001
+From a4ce93e1360e322f1636d72ef1bea57a38283cdc Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 20:30:17 +0200
-Subject: [PATCH 33/39] winepipewire.drv: Handle probe loop startup failure.
+Subject: [PATCH] winepipewire.drv: Handle probe loop startup failure.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 8 +++++++-
@@ -27,5 +27,5 @@ index dc841817458..1d62adb0fb6 100644
  
      if (!(p.core = pw_context_connect(p.context, NULL, 0)))
 -- 
-2.55.0
+2.56.0
 

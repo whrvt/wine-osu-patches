@@ -1,8 +1,8 @@
-From 2203f5a444655c5ef549bff97ee61bf252963bb5 Mon Sep 17 00:00:00 2001
+From 3cc0dd9f346197ee122314c9c4a5cdc4ad519921 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sat, 11 Jul 2026 00:29:00 +0200
-Subject: [PATCH 37/39] winepipewire.drv: Process render streams on the
- realtime thread.
+Subject: [PATCH] winepipewire.drv: Process render streams on the realtime
+ thread.
 
 Set PW_STREAM_FLAG_RT_PROCESS for render streams so control-loop work cannot delay the graph callback. Make pa_offs_bytes atomic because the callback now runs concurrently with application-side resyncs.
 ---
@@ -112,5 +112,5 @@ index d2ecc2efcc6..4460bec4de3 100644
      __atomic_store_n(&stream->pa_held_bytes, 0, __ATOMIC_RELEASE);
      stream->period_bytes =
 -- 
-2.55.0
+2.56.0
 

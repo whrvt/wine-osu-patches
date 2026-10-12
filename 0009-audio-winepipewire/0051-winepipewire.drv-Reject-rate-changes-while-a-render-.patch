@@ -1,0 +1,33 @@
+From bf131ae966a2befa596a4c427f626919e62abf78 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sat, 25 Jul 2026 23:58:29 +0200
+Subject: [PATCH] winepipewire.drv: Reject rate changes while a render buffer
+ is checked out.
+
+SetSampleRate resets the ring offsets and clears the whole buffer while the
+application may still hold a pointer handed out by GetBuffer, so ReleaseBuffer
+then accounts the written bytes at the wrong ring position.  Reset already
+rejects this case; do the same here.
+---
+ dlls/winepipewire.drv/pipewire.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 7f5525d45a2..c9f2f26eaec 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2977,6 +2977,11 @@ static NTSTATUS pipewire_set_sample_rate(void *args)
+         hr = E_NOTIMPL;
+         goto exit;
+     }
++    if (stream->locked)
++    {
++        hr = AUDCLNT_E_BUFFER_OPERATION_PENDING;
++        goto exit;
++    }
+ 
+     /* PulseAudio rejects rates outside [1, 48000 * 8] in
+      * pa_stream_update_sample_rate; mirror winepulse's observable failure
+-- 
+2.56.0
+

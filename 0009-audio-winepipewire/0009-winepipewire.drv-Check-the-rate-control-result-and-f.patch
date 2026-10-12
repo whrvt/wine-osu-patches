@@ -1,7 +1,7 @@
-From 005f53b8c8b636b29bc238136cd828ce7ba88349 Mon Sep 17 00:00:00 2001
+From 9fa7c9f0233811252618f520986c1af5194c31de Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 09/39] winepipewire.drv: Check the rate control result and fix
+Subject: [PATCH] winepipewire.drv: Check the rate control result and fix
  repeated SetSampleRate calls.
 
 ---
@@ -46,5 +46,5 @@ index adad177caaa..34af9e5195c 100644
      pw_stream_flush(stream->pw, false);
  
 -- 
-2.55.0
+2.56.0
 

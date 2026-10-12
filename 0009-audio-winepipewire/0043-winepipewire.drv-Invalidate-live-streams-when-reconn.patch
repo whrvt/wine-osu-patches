@@ -1,0 +1,108 @@
+From b332f9df448dc24bb9953af0195e180cfe0c7cc0 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 21:45:34 +0200
+Subject: [PATCH] winepipewire.drv: Invalidate live streams when reconnecting
+ the core.
+
+Disconnecting a dead core while clients still hold pw_stream objects leaves
+those streams dangling. Track live streams on a global list and, on reconnect,
+destroy each stream's pw_stream under the loop lock, mark it invalidated, then
+open a fresh core so a replacement IAudioClient can be created before the old
+one is released.
+---
+ dlls/winepipewire.drv/pipewire.c | 34 ++++++++++++++++++++++++++++++--
+ 1 file changed, 32 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 6cd15dad17e..a2b7990e278 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -130,6 +130,7 @@ struct pipewire_stream
+     struct list packet_filled_head;
+ 
+     char *device;
++    struct list entry;          /* g_streams */
+     struct list period_entry;
+     struct pipewire_period *period;
+ };
+@@ -177,6 +178,8 @@ static struct spa_hook core_listener;
+ static BOOL core_listener_added;
+ static BOOL core_dead;
+ 
++static struct list g_streams = LIST_INIT(g_streams); /* loop-lock protected */
++
+ static pthread_mutex_t pw_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+ 
+ static struct list g_render_devices = LIST_INIT(g_render_devices);
+@@ -626,6 +629,29 @@ static HRESULT pipewire_connect(const WCHAR *appname)
+ 
+     if (pw_core_global)
+     {
++        /* Existing streams still hold pw_stream objects on this core.
++         * Destroy those objects under the loop lock and mark the Wine-side
++         * streams invalidated so a fresh core can be opened for new clients.
++         * The app recovers by releasing the old IAudioClient after creating
++         * its replacement (standard device-lost order). */
++        if (!list_empty(&g_streams))
++        {
++            struct pipewire_stream *stream;
++            unsigned int n = 0;
++
++            LIST_FOR_EACH_ENTRY(stream, &g_streams, struct pipewire_stream, entry)
++                n++;
++            WARN("core dead: invalidating %u live stream(s) and reconnecting.\n", n);
++            LIST_FOR_EACH_ENTRY(stream, &g_streams, struct pipewire_stream, entry)
++            {
++                if (!stream->pw)
++                    continue;
++                spa_hook_remove(&stream->stream_listener);
++                pw_stream_destroy(stream->pw);
++                stream->pw = NULL;
++            }
++        }
++
+         if (core_listener_added)
+         {
+             spa_hook_remove(&core_listener);
+@@ -1958,6 +1984,7 @@ exit:
+ 
+     if (SUCCEEDED(hr))
+     {
++        list_add_tail(&g_streams, &stream->entry);
+         *params->channel_count = stream->info.channels;
+         *params->stream = (stream_handle)(UINT_PTR)stream;
+         TRACE("created stream %p, %u channels.\n", stream, stream->info.channels);
+@@ -2000,9 +2027,11 @@ static NTSTATUS pipewire_release_stream(void *args)
+     }
+     if (stream->pw)
+     {
++        spa_hook_remove(&stream->stream_listener);
+         pw_stream_destroy(stream->pw);
+         stream->pw = NULL;
+     }
++    list_remove(&stream->entry);
+     pw_thread_loop_unlock(pw_loop_global);
+ 
+     if (dead_period)
+@@ -2096,7 +2125,8 @@ static void pipewire_period_timer_loop(void *args)
+         pw_thread_loop_lock(pw_loop_global);
+         delay.QuadPart = -(INT64)period->period_usec * 10;
+ 
+-        if (period->timer_stream && !period->timer_stream->started)
++        if (period->timer_stream &&
++            (!period->timer_stream->started || !period->timer_stream->pw))
+         {
+             period->timer_stream = NULL;
+             period->grid_valid = FALSE;
+@@ -2105,7 +2135,7 @@ static void pipewire_period_timer_loop(void *args)
+         {
+             LIST_FOR_EACH_ENTRY(stream, &period->streams, struct pipewire_stream, period_entry)
+             {
+-                if (stream->started)
++                if (stream->started && stream->pw)
+                 {
+                     period->timer_stream = stream;
+                     period->grid_valid = FALSE;
+-- 
+2.56.0
+

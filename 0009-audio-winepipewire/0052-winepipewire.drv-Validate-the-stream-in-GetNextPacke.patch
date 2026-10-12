@@ -1,0 +1,32 @@
+From dbfe21d882b3de99019e24c2e4b6d8ac29328a6b Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sat, 25 Jul 2026 23:58:58 +0200
+Subject: [PATCH] winepipewire.drv: Validate the stream in GetNextPacketSize.
+
+Every other entry point rejects a stream whose pw_stream was destroyed by the
+core reconnect path; this one reported stale packet counts instead of
+AUDCLNT_E_DEVICE_INVALIDATED.
+---
+ dlls/winepipewire.drv/pipewire.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index c9f2f26eaec..a26abca2556 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2854,6 +2854,12 @@ static NTSTATUS pipewire_get_next_packet_size(void *args)
+     struct pipewire_stream *stream = handle_get_stream(params->stream);
+ 
+     pw_thread_loop_lock(pw_loop_global);
++    if (!stream_valid(stream))
++    {
++        pw_thread_loop_unlock(pw_loop_global);
++        params->result = AUDCLNT_E_DEVICE_INVALIDATED;
++        return STATUS_SUCCESS;
++    }
+     pipewire_capture_padding(stream);
+     if (stream->locked_ptr)
+         *params->frames = stream->period_bytes / stream->frame_size;
+-- 
+2.56.0
+

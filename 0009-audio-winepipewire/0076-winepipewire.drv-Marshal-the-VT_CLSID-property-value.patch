@@ -1,0 +1,25 @@
+From 4e5316553705e7f18e531c384a14075cf6fea62f Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 2 Aug 2026 22:05:04 +0200
+Subject: [PATCH] winepipewire.drv: Marshal the VT_CLSID property value under
+ WoW64.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 0f4f7825faa..884b70648b0 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -4508,6 +4508,7 @@ static NTSTATUS pipewire_wow64_get_prop_value(void *args)
+             value32->ulVal = value.ulVal;
+             break;
+         case VT_LPWSTR:
++        case VT_CLSID:
+             value32->ptr = params32->buffer;
+             break;
+         default:
+-- 
+2.56.0
+

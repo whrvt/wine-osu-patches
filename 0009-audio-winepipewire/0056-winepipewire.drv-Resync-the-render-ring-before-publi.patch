@@ -1,0 +1,44 @@
+From df3f42294b35290a4936aabee84ae022172f2f4c Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 00:04:03 +0200
+Subject: [PATCH] winepipewire.drv: Resync the render ring before publishing
+ new bytes.
+
+The overflow path published the overfull count and repaired it afterwards, so
+the process callback could observe it in between and consume that many bytes
+against a stale read offset.  Check first and publish once.
+
+The resync itself still writes pa_offs_bytes, which the callback owns; that
+remains serialized by the loop lock for as long as the callback is dispatched
+on it.
+---
+ dlls/winepipewire.drv/pipewire.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 445d3f726f3..b0417e4aea1 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2707,12 +2707,18 @@ static NTSTATUS pipewire_release_render_buffer(void *args)
+         pipewire_wrap_buffer(stream, buffer, written_bytes);
+ 
+     stream->held_bytes += written_bytes;
+-    if (__atomic_add_fetch(&stream->pa_held_bytes, written_bytes, __ATOMIC_RELEASE) > stream->real_bufsize_bytes)
++    /* Resync before publishing.  Adding first would briefly expose an
++     * overfull pa_held_bytes, and the process callback would consume that
++     * many bytes against a stale pa_offs_bytes before the repair landed. */
++    if (__atomic_load_n(&stream->pa_held_bytes, __ATOMIC_RELAXED) + written_bytes >
++        stream->real_bufsize_bytes)
+     {
+         WARN("%p PipeWire buffer overflow.\n", stream);
+         stream->pa_offs_bytes = stream->lcl_offs_bytes;
+         __atomic_store_n(&stream->pa_held_bytes, stream->held_bytes, __ATOMIC_RELEASE);
+     }
++    else
++        __atomic_add_fetch(&stream->pa_held_bytes, written_bytes, __ATOMIC_RELEASE);
+     stream->clock_written += written_bytes;
+     stream->locked = 0;
+ 
+-- 
+2.56.0
+

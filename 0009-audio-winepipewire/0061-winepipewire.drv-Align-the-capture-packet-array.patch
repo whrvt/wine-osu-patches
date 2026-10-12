@@ -1,0 +1,85 @@
+From d372e09d199ca6d04f19af8fd089c8277b61b91d Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 11:11:29 +0200
+Subject: [PATCH] winepipewire.drv: Align the capture packet array.
+
+The packet array is placed directly after the audio in the same allocation, at
+local_buffer + real_bufsize_bytes.  That offset is a multiple of period_bytes,
+and the frame size is 1 byte for 8 bit mono, 3 for packed 24 bit mono and 6
+for packed 24 bit stereo.  mmdevapi hands the client's format straight to the
+driver in shared mode, so those all arrive here and the array then starts on
+an odd address while ACPacket holds list pointers.  Observed misalignments
+were 1, 2, 3, 4, 5 and 7 bytes across those formats.
+
+x86 fixes unaligned loads up in hardware, which is why this has never been
+seen, but it is undefined in C and faults on targets that do not.
+
+Round the offset up and refuse the stream if the result is still unaligned,
+rather than building a list through misaligned nodes.
+
+Inherited from winepulse, which places the array the same way at pulse.c:1357
+and pulse.c:1362 and has the same defect.
+---
+ dlls/winepipewire.drv/pipewire.c | 24 +++++++++++++++++++++---
+ 1 file changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 8281b6cd0e6..347ec59038a 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -209,6 +209,10 @@ typedef struct _ACPacket
+     UINT32 discont;
+ } ACPacket;
+ 
++/* As for the slot array: an aligned base only keeps every element aligned if
++ * the stride is a whole number of alignments. */
++C_ASSERT(sizeof(ACPacket) % _Alignof(ACPacket) == 0);
++
+ struct pw_phys_device
+ {
+     struct list entry;
+@@ -2172,7 +2176,7 @@ static NTSTATUS pipewire_create_stream(void *args)
+     else
+     {
+         UINT32 capture_packets, unalign;
+-        SIZE_T slots_offs;
++        SIZE_T slots_offs, packets_offs;
+ 
+         if ((unalign = bufsize_bytes % stream->period_bytes))
+             bufsize_bytes += stream->period_bytes - unalign;
+@@ -2180,16 +2184,30 @@ static NTSTATUS pipewire_create_stream(void *args)
+         stream->real_bufsize_bytes = bufsize_bytes;
+         capture_packets = stream->real_bufsize_bytes / stream->period_bytes;
+ 
+-        size = stream->real_bufsize_bytes + capture_packets * sizeof(ACPacket);
++        /* The packet array follows the audio, so it needs the same rounding
++         * the slot array gets: real_bufsize_bytes is a multiple of
++         * period_bytes, which is a frame count times a frame size that can be
++         * 1, 3 or 6 bytes for packed 8 and 24 bit formats.  ACPacket holds
++         * list pointers, so a misaligned array is undefined and faults on
++         * targets that do not fix up unaligned loads. */
++        packets_offs = (stream->real_bufsize_bytes + _Alignof(ACPacket) - 1) &
++                       ~(SIZE_T)(_Alignof(ACPacket) - 1);
++        size = packets_offs + capture_packets * sizeof(ACPacket);
+         if (NtAllocateVirtualMemory(GetCurrentProcess(), (void **)&stream->local_buffer,
+                                     zero_bits, &size, MEM_COMMIT, PAGE_READWRITE))
+         {
+             WARN("Out of memory allocating capture buffer (%lu bytes).\n", (unsigned long)size);
+             hr = E_OUTOFMEMORY;
+         }
++        else if ((UINT_PTR)((char *)stream->local_buffer + packets_offs) & (_Alignof(ACPacket) - 1))
++        {
++            WARN("Capture packet array misaligned at %p.\n",
++                 (char *)stream->local_buffer + packets_offs);
++            hr = E_FAIL;
++        }
+         else
+         {
+-            ACPacket *cur_packet = (ACPacket *)((char *)stream->local_buffer + stream->real_bufsize_bytes);
++            ACPacket *cur_packet = (ACPacket *)((char *)stream->local_buffer + packets_offs);
+             BYTE *data = stream->local_buffer;
+             silence_buffer(stream->info.format, stream->local_buffer, stream->real_bufsize_bytes);
+             for (i = 0; i < capture_packets; ++i, ++cur_packet)
+-- 
+2.56.0
+

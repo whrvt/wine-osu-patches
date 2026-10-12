@@ -1,8 +1,7 @@
-From 25f92fca26d4d84dab6ad29aca03332977a4f7dd Mon Sep 17 00:00:00 2001
+From ba40c2da34d9c4eebf261f529dcb06d2d44af97d Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 12/39] winepipewire.drv: Clamp capture chunks to the buffer
- size.
+Subject: [PATCH] winepipewire.drv: Clamp capture chunks to the buffer size.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 5 +++--
@@ -25,5 +24,5 @@ index 7c732f2fbd9..f806fa7c69d 100644
  
              if (n > stream->capture_ring_size)
 -- 
-2.55.0
+2.56.0
 

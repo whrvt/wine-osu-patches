@@ -1,7 +1,7 @@
-From 3ed30545b48f92fa93b61ae376c340fe3cbca322 Mon Sep 17 00:00:00 2001
+From 290802b94079af957d2db1206d807bf1d9ebbb8d Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 14:07:31 +0200
-Subject: [PATCH 11/39] winepipewire.drv: Handle main loop startup failure.
+Subject: [PATCH] winepipewire.drv: Handle main loop startup failure.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 15 ++++++++++++++-
@@ -41,5 +41,5 @@ index 948f8372904..7c732f2fbd9 100644
      {
          params->result = AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED;
 -- 
-2.55.0
+2.56.0
 

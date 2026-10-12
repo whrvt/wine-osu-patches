@@ -1,0 +1,43 @@
+From c88947b554545b7507dd4182d5f12375731ace4c Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 21:20:34 +0200
+Subject: [PATCH] winepipewire.drv: Make the timer quit flag an atomic.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index c88ed5b0b8e..352663f13f3 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -163,7 +163,7 @@ struct pipewire_period
+     UINT64 period_usec;
+     struct list streams;
+     HANDLE timer_thread;
+-    BOOL please_quit;
++    LONG please_quit; /* atomic: release_stream store-release, timer load-acquire */
+     struct pipewire_stream *timer_stream;
+     UINT64 last_time;
+     BOOL grid_valid;
+@@ -2022,7 +2022,7 @@ static NTSTATUS pipewire_release_stream(void *args)
+         if (list_empty(&period->streams))
+         {
+             list_remove(&period->entry);
+-            period->please_quit = TRUE;
++            __atomic_store_n(&period->please_quit, 1, __ATOMIC_RELEASE);
+             dead_period = period;
+         }
+     }
+@@ -2117,7 +2117,7 @@ static void pipewire_period_timer_loop(void *args)
+ 
+     delay.QuadPart = -(INT64)period->period_usec * 10;
+ 
+-    while (!period->please_quit)
++    while (!__atomic_load_n(&period->please_quit, __ATOMIC_ACQUIRE))
+     {
+         int have_now = 0;
+ 
+-- 
+2.56.0
+

@@ -1,7 +1,7 @@
-From cb1892458b31c37620887befb4459e2007880233 Mon Sep 17 00:00:00 2001
+From 3b69263dc136f44a88a0d4e7976701468b53acd7 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 20:29:46 +0200
-Subject: [PATCH 31/39] mmdevapi: Ignore an oversized WINE_AUDIO_DRIVER value.
+Subject: [PATCH] mmdevapi: Ignore an oversized WINE_AUDIO_DRIVER value.
 
 ---
  dlls/mmdevapi/main.c | 4 +++-
@@ -26,5 +26,5 @@ index b54db650505..871e5b62a4b 100644
      else if(RegOpenKeyW(HKEY_CURRENT_USER, drv_keyW, &key) == ERROR_SUCCESS){
          DWORD size = sizeof(reg_list);
 -- 
-2.55.0
+2.56.0
 

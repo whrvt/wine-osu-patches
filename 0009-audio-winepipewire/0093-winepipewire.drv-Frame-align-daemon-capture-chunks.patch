@@ -1,0 +1,37 @@
+From c254790375f576220776819cdc1191eab1594e14 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:36 +0200
+Subject: [PATCH] winepipewire.drv: Frame-align daemon capture chunks.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 0a8395bab53..bad2c083668 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2443,6 +2443,20 @@ static void on_stream_process(void *data)
+             const BYTE *src = (const BYTE *)d->data + offs;
+             SIZE_T n = avail;
+ 
++            /* Framing is relative to the start of the valid region, so only
++             * the length matters.  cap_w_fill is producer-private and carried
++             * across callbacks, so one chunk that is not a whole number of
++             * frames would rotate every later frame across channels for the
++             * life of the stream.  Drop the partial tail and report it rather
++             * than silently rotating.  Must precede the ring clamp below,
++             * which subtracts a length from src. */
++            if (n % stream->frame_size)
++            {
++                n -= n % stream->frame_size;
++                __atomic_add_fetch(&stream->bad_buffer_count, 1, __ATOMIC_RELAXED);
++                stream->cap_lost = TRUE;
++            }
++
+             /* A chunk larger than the whole ring can only be represented by
+              * its tail, which is the newest audio in it. */
+             if (n > stream->capture_ring_size)
+-- 
+2.56.0
+

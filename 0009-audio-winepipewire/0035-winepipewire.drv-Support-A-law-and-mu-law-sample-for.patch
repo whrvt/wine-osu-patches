@@ -1,8 +1,7 @@
-From e6a498c00742b8cd1e2544993aa0097cdd6ad6db Mon Sep 17 00:00:00 2001
+From 3693bbe74d4e5189290034fad76193a18770667e Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 20:38:28 +0200
-Subject: [PATCH 35/39] winepipewire.drv: Support A-law and mu-law sample
- formats.
+Subject: [PATCH] winepipewire.drv: Support A-law and mu-law sample formats.
 
 ---
  dlls/winepipewire.drv/mult.h     | 2010 ++++++++++++++++++++++++++++++
@@ -2101,5 +2100,5 @@ index 18d2759fdb4..c78f2e68c0e 100644
          break;
      }
 -- 
-2.55.0
+2.56.0
 

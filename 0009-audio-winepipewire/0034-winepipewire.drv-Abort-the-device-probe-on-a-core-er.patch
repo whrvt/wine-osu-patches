@@ -1,8 +1,7 @@
-From 688f2efa4336a5f3899c29879483eb636c16e171 Mon Sep 17 00:00:00 2001
+From 88cc5da3282e31ddacb0af72468a7da52d4973e4 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 20:30:45 +0200
-Subject: [PATCH 34/39] winepipewire.drv: Abort the device probe on a core
- error.
+Subject: [PATCH] winepipewire.drv: Abort the device probe on a core error.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 21 +++++++++++++++++++++
@@ -63,5 +62,5 @@ index 1d62adb0fb6..18d2759fdb4 100644
      build_device_cache(&p);
  
 -- 
-2.55.0
+2.56.0
 

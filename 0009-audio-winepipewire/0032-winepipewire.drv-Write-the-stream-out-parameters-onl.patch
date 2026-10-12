@@ -1,8 +1,8 @@
-From 62cddf49ec03176495ee6ac1e3d48dbc5fee59eb Mon Sep 17 00:00:00 2001
+From dd2c39aa1f04277498866bb57cc10ef97cf0c819 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 20:29:58 +0200
-Subject: [PATCH 32/39] winepipewire.drv: Write the stream out parameters only
- on success.
+Subject: [PATCH] winepipewire.drv: Write the stream out parameters only on
+ success.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 7 ++++---
@@ -35,5 +35,5 @@ index 5513c097194..dc841817458 100644
          WARN("failed: %#x.\n", (unsigned)hr);
      pw_thread_loop_unlock(pw_loop_global);
 -- 
-2.55.0
+2.56.0
 

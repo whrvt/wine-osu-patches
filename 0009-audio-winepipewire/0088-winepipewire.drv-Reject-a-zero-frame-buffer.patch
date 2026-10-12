@@ -1,0 +1,36 @@
+From fe50f9944f9694b52259b3b7dca5a7f5a1bc8c6f Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 14:13:28 +0200
+Subject: [PATCH] winepipewire.drv: Reject a zero-frame buffer.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index e9000c413ee..af8195b7fa8 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -2944,14 +2944,16 @@ static NTSTATUS pipewire_create_stream(void *args)
+         {
+             frames = ((UINT64)params->duration * stream->info.rate + 9999999) / 10000000;
+             /* get_buffer_size and the ring cursors narrow the frame count to
+-             * UINT32, so a buffer only fits if the count does too. */
+-            ok = frames <= UINT32_MAX;
++             * UINT32, so a buffer only fits if the count does too.  Zero is
++             * rejected here too: it would leave real_bufsize_bytes at 0 and
++             * the ring cursors divide by that. */
++            ok = frames && frames <= UINT32_MAX;
+         }
+         if (ok)
+             ok = size_mul((SIZE_T)frames, stream->frame_size, &bufsize_bytes);
+         if (!ok)
+         {
+-            WARN("Buffer duration %lld hns at %u Hz is too large.\n",
++            WARN("Buffer duration %lld hns at %u Hz is out of range.\n",
+                  (long long)params->duration, stream->info.rate);
+             hr = E_OUTOFMEMORY;
+             goto exit;
+-- 
+2.56.0
+

@@ -1,0 +1,40 @@
+From 96d5f9a7166148d391425cbc0593116184a60bb4 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Mon, 3 Aug 2026 10:54:09 +0200
+Subject: [PATCH] winepipewire.drv: Correct PipeWire version comments.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 37a3fba365a..4c20ed66e39 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1089,9 +1089,8 @@ struct probe_node
+     enum pw_device_bus bus;
+ };
+ 
+-/* Vendor/product ids live on the Device object, not the node.  PipeWire
+- * 1.6.8 carries them only on the bound device's info.props, not on the
+- * registry global, so the probe binds each device and reads them from its
++/* Vendor/product ids live on the Device object, not the node.  Registry
++ * globals omit them, so the probe binds each device and reads them from its
+  * info event. */
+ struct probe_device
+ {
+@@ -4117,9 +4116,8 @@ static NTSTATUS pipewire_set_sample_rate(void *args)
+     ratio = params->rate / (float)stream->rate_connected;
+     if (pw_stream_set_control(stream->pw, SPA_PROP_rate, 1, &ratio, 0) < 0)
+     {
+-        /* needs PipeWire >= 1.2.6 and an active adaptive resampler.  The ring
+-         * is empty and every cursor agrees on that, so the stream is coherent
+-         * at the old rate; only the buffered audio is gone. */
++        /* The ring is already empty.  On failure the cursors still describe
++         * the old rate and the buffered audio is gone. */
+         WARN("pw_stream_set_control(rate) failed for stream %p.\n", stream);
+         hr = E_NOTIMPL;
+         goto exit;
+-- 
+2.56.0
+

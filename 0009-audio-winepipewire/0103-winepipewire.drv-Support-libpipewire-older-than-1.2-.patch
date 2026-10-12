@@ -1,0 +1,140 @@
+From 9a87750377aac14d22a0b263b0c025783b113a85 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 12 Oct 2026 04:39:55 +0200
+Subject: [PATCH] winepipewire.drv: Support libpipewire older than 1.2 and
+ enable RT by default.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 41 ++++++++++++++++++++++++++++----
+ 1 file changed, 36 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index 015a4b9e2b2..8ac04cda67f 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -174,6 +174,7 @@ struct pipewire_stream
+ 
+     struct pw_stream *pw;
+     struct spa_hook stream_listener;
++    BOOL rt_process;
+     struct spa_audio_info_raw info;
+     UINT32 frame_size;
+     UINT32 rate_connected; /* negotiated stream rate; SPA_PROP_rate is absolute vs this */
+@@ -306,6 +307,9 @@ struct pipewire_period
+ 
+ static struct pw_thread_loop *pw_loop_global;
+ static struct pw_context *pw_ctx;
++
++static struct pw_loop *(*p_pw_stream_get_data_loop)(struct pw_stream *stream);
++static BOOL loop_has_name;
+ static struct pw_core *pw_core_global;
+ static struct spa_hook core_listener;
+ static BOOL core_listener_added;
+@@ -909,11 +913,24 @@ static void pipewire_set_plugin_dirs(void)
+ static NTSTATUS pipewire_process_attach(void *args)
+ {
+     const char *rt = getenv("WINEPIPEWIRE_RT");
++    int major, minor;
+     struct timespec ts;
+     UINT64 rnd = 0;
+ 
+     pipewire_set_plugin_dirs();
+     pw_init(NULL, NULL);
++    if (sscanf(pw_get_library_version(), "%d.%d", &major, &minor) == 2 &&
++        (major > 1 || (major == 1 && minor >= 2)))
++    {
++        void *handle = dlopen("libpipewire-0.3.so.0", RTLD_NOW | RTLD_NOLOAD);
++
++        if (handle)
++        {
++            p_pw_stream_get_data_loop = dlsym(handle, "pw_stream_get_data_loop");
++            dlclose(handle);
++        }
++        loop_has_name = p_pw_stream_get_data_loop != NULL;
++    }
+     TRACE("PipeWire %s, header %s\n", pw_get_library_version(), pw_get_headers_version());
+ 
+     /* First unix call the driver receives (mmdevapi/main.c:94), so the token
+@@ -927,7 +944,7 @@ static NTSTATUS pipewire_process_attach(void *args)
+     if (!dispatch_token)
+         dispatch_token = 1;
+ 
+-    rt_render = rt && !strcmp(rt, "1");
++    rt_render = !rt || strcmp(rt, "0");
+     /* Only what was asked for.  What actually happens is not known until a
+      * stream connects and the data loop can be compared, so the line that a
+      * crash report is read against is emitted there, not here. */
+@@ -2643,6 +2660,15 @@ static void rt_gate_report(UINT64 soft, UINT64 hard, BOOL late)
+             (unsigned long long)dispatch_token);
+ }
+ 
++static struct pw_loop *stream_data_loop(struct pipewire_stream *stream)
++{
++    if (p_pw_stream_get_data_loop)
++        return p_pw_stream_get_data_loop(stream->pw);
++    if (stream->rt_process)
++        return pw_data_loop_get_loop(pw_context_get_data_loop(pw_ctx));
++    return pw_thread_loop_get_loop(pw_loop_global);
++}
++
+ /* Certify where the process callback actually ended up.  RT_PROCESS asks for
+  * the data thread, but node.loop.class from PIPEWIRE_PROPS or a client.conf
+  * stream.rules entry decides independently, in both directions, so report the
+@@ -2658,7 +2684,7 @@ static void rt_gate_report(UINT64 soft, UINT64 hard, BOOL late)
+  * anything needing action is at ERR.  Called with the loop lock held. */
+ static void report_dispatch_mode(struct pipewire_stream *stream, BOOL rt_render)
+ {
+-    struct pw_loop *dl = pw_stream_get_data_loop(stream->pw);
++    struct pw_loop *dl = stream_data_loop(stream);
+     const struct pw_properties *sprops = pw_stream_get_properties(stream->pw);
+     const char *async = sprops ? pw_properties_get(sprops, PW_KEY_NODE_ASYNC) : NULL;
+     const BOOL want_data = rt_render && stream->dataflow == eRender;
+@@ -2680,7 +2706,10 @@ static void report_dispatch_mode(struct pipewire_stream *stream, BOOL rt_render)
+     flow = stream->dataflow == eRender ? "render" : "capture";
+     req = want_data ? "data-thread" : "driver-loop";
+     eff = got_data ? "data-thread" : "driver-loop";
+-    name = dl && dl->name ? dl->name : "?";
++    if (loop_has_name)
++        name = dl && dl->name ? dl->name : "?";
++    else
++        name = got_data ? "data-loop" : "main-loop";
+ 
+     if (want_data != got_data)
+     {
+@@ -2717,7 +2746,7 @@ static void report_dispatch_mode(struct pipewire_stream *stream, BOOL rt_render)
+             "flag: the callback is on the data thread, but the scheduling "
+             "the flag asks for must not be assumed for this run.  "
+             "session=%016llx\n", (unsigned long long)dispatch_token);
+-    else if (!want_data && !async_on)
++    else if (!want_data && !async_on && loop_has_name)
+         ERR("audio dispatch: libpipewire sets node.async for a stream "
+             "without RT_PROCESS, so the property being %s means an "
+             "override cleared it.  The callback runs on the driver loop, "
+@@ -2837,6 +2866,7 @@ static HRESULT pipewire_stream_connect(struct pipewire_stream *stream, const cha
+                 flags |= PW_STREAM_FLAG_RT_PROCESS;
+         }
+ 
++        stream->rt_process = !!(flags & PW_STREAM_FLAG_RT_PROCESS);
+         rc = pw_stream_connect(stream->pw, dir, PW_ID_ANY, flags, params, 1);
+         if (rc < 0)
+         {
+@@ -2858,6 +2888,7 @@ static HRESULT pipewire_stream_connect(struct pipewire_stream *stream, const cha
+         {
+             rt_gate_report(rt_soft, rt_hard, TRUE);
+             rt_render = FALSE;
++            stream->rt_process = FALSE;
+             rc = pw_stream_disconnect(stream->pw);
+             if (rc < 0)
+             {
+@@ -3680,7 +3711,7 @@ static int stream_loop_locked(struct pipewire_stream *stream, spa_invoke_func_t
+ {
+     struct pw_loop *data_loop;
+ 
+-    if (!stream->pw || !(data_loop = pw_stream_get_data_loop(stream->pw)))
++    if (!stream->pw || !(data_loop = stream_data_loop(stream)))
+         return -ENODEV;
+ 
+     if (data_loop == pw_thread_loop_get_loop(pw_loop_global))
+-- 
+2.56.0
+

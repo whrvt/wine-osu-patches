@@ -1,8 +1,8 @@
-From bd27414c6cc3391a1a44d8d18fbc1600c74d940a Mon Sep 17 00:00:00 2001
+From 974509534b8096a7fccd32b1bf55eabcb56482b9 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 18:35:34 +0200
-Subject: [PATCH 24/39] winepipewire.drv: Resync the device cursor on render
- buffer overflow.
+Subject: [PATCH] winepipewire.drv: Resync the device cursor on render buffer
+ overflow.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 6 +++---
@@ -26,5 +26,5 @@ index 3d2d415519b..543bfd3b891 100644
      stream->clock_written += written_bytes;
      stream->locked = 0;
 -- 
-2.55.0
+2.56.0
 

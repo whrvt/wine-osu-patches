@@ -1,0 +1,40 @@
+From 563a70718405e5e5f86888ad6d6596a74be75b93 Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Wed, 15 Jul 2026 18:59:17 +0200
+Subject: [PATCH] winepipewire.drv: Validate dequeued buffer metadata in the
+ process callback.
+
+---
+ dlls/winepipewire.drv/pipewire.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index d2ecc2efcc6..9aa02ee064f 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1607,7 +1607,8 @@ static void on_stream_process(void *data)
+     if (!(b = pw_stream_dequeue_buffer(stream->pw)))
+         return;
+     buf = b->buffer;
+-    if (!buf->n_datas || !(d = &buf->datas[0])->data)
++    if (!buf || !buf->n_datas || !buf->datas ||
++        !(d = &buf->datas[0])->data || !d->chunk)
+     {
+         pw_stream_queue_buffer(stream->pw, b);
+         return;
+@@ -1618,9 +1619,10 @@ static void on_stream_process(void *data)
+         UINT32 maxsize = d->maxsize;
+         UINT32 req_frames, need_bytes, n;
+ 
+-        req_frames = b->requested ? (UINT32)b->requested : maxsize / stream->frame_size;
+-        if (req_frames * stream->frame_size > maxsize)
++        if (!b->requested || b->requested > maxsize / stream->frame_size)
+             req_frames = maxsize / stream->frame_size;
++        else
++            req_frames = (UINT32)b->requested;
+         need_bytes = req_frames * stream->frame_size;
+ 
+         if (stream->started)
+-- 
+2.56.0
+

@@ -1,8 +1,8 @@
-From 2ecb973b6ea3839cc06f6f56d7e0e014f6ca5826 Mon Sep 17 00:00:00 2001
+From 58fe40ae666b969b9f4a6d116bc9d510915adb7a Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 10:07:23 +0200
-Subject: [PATCH 05/39] winepipewire.drv: Synchronize streams sharing a device
- and period.
+Subject: [PATCH] winepipewire.drv: Synchronize streams sharing a device and
+ period.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 218 ++++++++++++++++++++++---------
@@ -379,5 +379,5 @@ index b60aed3bb40..6da18d509a5 100644
  }
  
 -- 
-2.55.0
+2.56.0
 

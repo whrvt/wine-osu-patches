@@ -1,7 +1,7 @@
-From f5ea65f6be591d43b1a47b1a6d579eb4d6553c86 Mon Sep 17 00:00:00 2001
+From 5d0b49be48abbde0d4696096bb7230d41c00befc Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Wed, 8 Jul 2026 21:28:02 +0200
-Subject: [PATCH 36/39] winepipewire.drv: Report application names to PipeWire.
+Subject: [PATCH] winepipewire.drv: Report application names to PipeWire.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 34 ++++++++++++++++++++++++++------
@@ -93,5 +93,5 @@ index c78f2e68c0e..d2ecc2efcc6 100644
          params->result = hr;
          pw_thread_loop_unlock(pw_loop_global);
 -- 
-2.55.0
+2.56.0
 

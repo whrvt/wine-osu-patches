@@ -1,8 +1,8 @@
-From 177f469ee05b9e7b7285493d0d49b8472049d3c3 Mon Sep 17 00:00:00 2001
+From dcf978a11e38cff3599a11295370fb138e41bd70 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 14 Jun 2026 13:59:10 +0200
-Subject: [PATCH 23/39] mmdevapi: Read the audio driver list from
- WINE_AUDIO_DRIVER when set.
+Subject: [PATCH] mmdevapi: Read the audio driver list from WINE_AUDIO_DRIVER
+ when set.
 
 ---
  dlls/mmdevapi/main.c | 4 +++-
@@ -24,5 +24,5 @@ index c9573ec75d6..a5ea0a3292e 100644
  
          if(RegQueryValueExW(key, L"Audio", 0, NULL, (BYTE*)reg_list, &size) == ERROR_SUCCESS){
 -- 
-2.55.0
+2.56.0
 

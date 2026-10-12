@@ -1,0 +1,46 @@
+From fbed211c6f4352335a653a5d384e3e655cf7633e Mon Sep 17 00:00:00 2001
+From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 17:54:56 +0200
+Subject: [PATCH] winepipewire.drv: Report a discarded malformed capture
+ buffer.
+
+A dequeued buffer that fails metadata validation is counted and requeued, so
+its audio is dropped.  Nothing recorded the loss: no sequence is consumed and
+the flag was left clear, so the next packet reached the application looking
+contiguous.  That was the last path in the capture chain that could lose audio
+without saying so.
+
+Charge it to the next slot published, like the clamp and the all-slots-held
+drop.  Capture only; the same validation guards the render path, where a
+missed cycle is an underrun rather than lost input.
+
+This is inspection-only.  Reaching it needs the server to hand over a buffer
+with no datas, a null data pointer or a null chunk, which no probe here can
+provoke without patching PipeWire, and bad_buffer_count has stayed at zero in
+every run.
+---
+ dlls/winepipewire.drv/pipewire.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
+index d07e1d13034..3ecab8fd397 100644
+--- a/dlls/winepipewire.drv/pipewire.c
++++ b/dlls/winepipewire.drv/pipewire.c
+@@ -1811,6 +1811,14 @@ static void on_stream_process(void *data)
+         !(d = &buf->datas[0])->data || !d->chunk)
+     {
+         __atomic_add_fetch(&stream->bad_buffer_count, 1, __ATOMIC_RELAXED);
++        if (stream->dataflow == eCapture)
++        {
++            /* The buffer is discarded, so audio was lost.  Charge it to the
++             * next slot published, the same as a clamp or an all-slots-held
++             * drop; without this the application sees the gap with nothing to
++             * explain it.  Producer-private, so a plain store is right. */
++            stream->cap_lost = TRUE;
++        }
+         pw_stream_queue_buffer(stream->pw, b);
+         return;
+     }
+-- 
+2.56.0
+

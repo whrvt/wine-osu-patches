@@ -1,8 +1,8 @@
-From 56900d6d0022a791c4c229600888e8fad83bed42 Mon Sep 17 00:00:00 2001
+From 4baf701bd66d578314acaf7acc1e7b954e9d57df Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Thu, 11 Jun 2026 15:37:02 +0200
-Subject: [PATCH 15/39] winepipewire.drv: Extrapolate the graph clock when
- timing the period grid.
+Subject: [PATCH] winepipewire.drv: Extrapolate the graph clock when timing the
+ period grid.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 28 +++++++++++++++++++++++++---
@@ -56,5 +56,5 @@ index 5754ccab825..df84ffa092d 100644
  
          if (!have_now)
 -- 
-2.55.0
+2.56.0
 

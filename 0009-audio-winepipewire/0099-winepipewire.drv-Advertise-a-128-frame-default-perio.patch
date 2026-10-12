@@ -1,27 +1,27 @@
-From 213cb753134e1d210b8031643803e140c1cf3f11 Mon Sep 17 00:00:00 2001
+From 8de2c3336b9bdd2481bf1d02aa70e5da3171462e Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 13 Jul 2026 21:09:49 +0200
-Subject: [PATCH 39/39] winepipewire.drv: Advertise a 128-frame default period,
+Subject: [PATCH] winepipewire.drv: Advertise a 128-frame default period,
  overridable via WINE_PIPEWIRE_QUANTUM.
 
 ---
- dlls/winepipewire.drv/pipewire.c | 45 +++++++++++++++++++++++++++-----
- 1 file changed, 38 insertions(+), 7 deletions(-)
+ dlls/winepipewire.drv/pipewire.c | 47 ++++++++++++++++++++++++++------
+ 1 file changed, 39 insertions(+), 8 deletions(-)
 
 diff --git a/dlls/winepipewire.drv/pipewire.c b/dlls/winepipewire.drv/pipewire.c
-index 4460bec4de3..ff2a8ef5b3b 100644
+index cae9879f234..6f5b5d20d10 100644
 --- a/dlls/winepipewire.drv/pipewire.c
 +++ b/dlls/winepipewire.drv/pipewire.c
-@@ -456,7 +456,7 @@ static void build_format(WAVEFORMATEXTENSIBLE *fmt, uint32_t rate, uint32_t chan
- 
- static struct pw_phys_device *add_device(struct list *list, const char *pw_name, const char *display,
+@@ -772,7 +772,7 @@ static void build_format(WAVEFORMATEXTENSIBLE *fmt, uint32_t rate, uint32_t chan
+  * frees it on failure. */
+ static struct pw_phys_device *add_device(struct list *list, const char *pw_name, WCHAR *display,
                                           EndpointFormFactor form, uint32_t rate, uint32_t channels, UINT mask,
 -                                         REFERENCE_TIME min_period)
 +                                         REFERENCE_TIME def_period, REFERENCE_TIME min_period)
  {
      size_t len = strlen(pw_name);
-     struct pw_phys_device *dev = malloc(offsetof(struct pw_phys_device, pw_name) + len + 1);
-@@ -471,7 +471,7 @@ static struct pw_phys_device *add_device(struct list *list, const char *pw_name,
+     struct pw_phys_device *dev;
+@@ -788,7 +788,7 @@ static struct pw_phys_device *add_device(struct list *list, const char *pw_name,
      dev->form = form;
      build_format(&dev->fmt, rate, channels, mask);
      dev->channel_mask = dev->fmt.dwChannelMask;
@@ -30,7 +30,7 @@ index 4460bec4de3..ff2a8ef5b3b 100644
      dev->min_period = min_period;
      memcpy(dev->pw_name, pw_name, len + 1);
      list_add_tail(list, &dev->entry);
-@@ -959,7 +959,7 @@ static void probe_roundtrip(struct probe *p)
+@@ -1478,7 +1478,7 @@ static void probe_roundtrip(struct probe *p)
   * default routing).  When the default node is known, mirror its format so
   * the default endpoint advertises the real speaker layout. */
  static void add_default_device(struct list *list, EndpointFormFactor form, const char *match,
@@ -39,7 +39,7 @@ index 4460bec4de3..ff2a8ef5b3b 100644
  {
      struct pw_phys_device *dev, *def_src = NULL, *def;
  
-@@ -977,7 +977,7 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
+@@ -1501,7 +1501,7 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
      }
      def->pw_name[0] = '\0';
      def->form = form;
@@ -48,8 +48,8 @@ index 4460bec4de3..ff2a8ef5b3b 100644
      def->min_period = min_period;
      if (def_src)
      {
-@@ -992,11 +992,30 @@ static void add_default_device(struct list *list, EndpointFormFactor form, const
-     list_add_head(list, &def->entry);
+@@ -1571,11 +1571,30 @@ static void fill_device_path_info(struct pw_phys_device *dev, struct probe *p,
+     dev->container_id = make_container_id(dev->bus, dev->vendor_id, dev->product_id, pn->node_name);
  }
  
 +static uint32_t quantum_override(void)
@@ -76,10 +76,10 @@ index 4460bec4de3..ff2a8ef5b3b 100644
 +    uint32_t override = quantum_override();
      REFERENCE_TIME min_period = 30000;
 +    REFERENCE_TIME def_period = (REFERENCE_TIME)128 * 10000000 / rate;
+     UINT render_idx = 0, capture_idx = 0;
  
      /* IAudioClient3 shared-mode floor.  The graph cannot deliver cycles
-      * below clock.min-quantum (clock.force-quantum pins it outright), and
-@@ -1016,6 +1035,18 @@ static void build_device_cache(struct probe *p)
+@@ -1596,6 +1615,18 @@ static void build_device_cache(struct probe *p)
                p->min_quantum, rate, (int)min_period);
      }
  
@@ -98,12 +98,24 @@ index 4460bec4de3..ff2a8ef5b3b 100644
      lstrcpynA(g_default_sink, p->default_sink, sizeof(g_default_sink));
      lstrcpynA(g_default_source, p->default_source, sizeof(g_default_source));
  
-@@ -1026,11 +1057,11 @@ static void build_device_cache(struct probe *p)
-         uint32_t channels = pn->have_format ? pn->channels : 2;
-         UINT mask = pn->have_format ? positions_to_mask(pn->position, pn->channels)
-                                     : (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT);
--        add_device(list, pn->node_name, pn->display, form, rate, channels, mask, min_period);
-+        add_device(list, pn->node_name, pn->display, form, rate, channels, mask, def_period, min_period);
+@@ -1610,7 +1641,7 @@ static void build_device_cache(struct probe *p)
+         struct pw_phys_device *dev;
+         WCHAR *name = utf8_to_wstr_capped(pn->display, pn->nick, pn->node_name);
+ 
+-        dev = add_device(list, pn->node_name, name, form, rate, channels, mask, min_period);
++        dev = add_device(list, pn->node_name, name, form, rate, channels, mask, def_period, min_period);
+         fill_device_path_info(dev, p, pn, (*idx)++);
+ 
+         /* PipeWire has no separate monitor nodes, so synthesize one capture
+@@ -1624,14 +1655,14 @@ static void build_device_cache(struct probe *p)
+             if (mon)
+             {
+                 struct pw_phys_device *md = add_device(&g_capture_devices, pn->node_name, mon,
+-                                                       LineLevel, rate, channels, mask, min_period);
++                                                       LineLevel, rate, channels, mask, def_period, min_period);
+                 fill_device_path_info(md, p, pn, capture_idx++);
+             }
+         }
      }
  
 -    add_default_device(&g_render_devices, Speakers, g_default_sink, rate, min_period);
@@ -114,5 +126,5 @@ index 4460bec4de3..ff2a8ef5b3b 100644
  
  static void probe_teardown(struct probe *p)
 -- 
-2.55.0
+2.56.0
 

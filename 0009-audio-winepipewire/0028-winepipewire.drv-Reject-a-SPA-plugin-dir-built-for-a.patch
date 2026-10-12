@@ -1,8 +1,8 @@
-From a946d8b808d0ef2b218b1525e91384d7f08e60de Mon Sep 17 00:00:00 2001
+From 0e5b10ef117386488f568876cb340d47b71149f7 Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Tue, 23 Jun 2026 14:10:10 +0200
-Subject: [PATCH 28/39] winepipewire.drv: Reject a SPA plugin dir built for
- another architecture.
+Subject: [PATCH] winepipewire.drv: Reject a SPA plugin dir built for another
+ architecture.
 
 ---
  dlls/winepipewire.drv/pipewire.c | 37 +++++++++++++++++++++++++++-----
@@ -72,5 +72,5 @@ index e62a71bcd81..82d55e3448a 100644
          return;
      if (!realpath(info.dli_fname, libdir))
 -- 
-2.55.0
+2.56.0
 
