@@ -1,14 +1,14 @@
-From ca285894b562aba6c28c7ee07073866acc7daeae Mon Sep 17 00:00:00 2001
+From 79f0b680f35498034ce70e551ed5b732386d9c22 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Mar 2025 03:19:56 -0700
-Subject: [PATCH 088/121] gdiplus: FORCEINLINE header funcs
+Subject: [PATCH] gdiplus: FORCEINLINE header funcs
 
 ---
  dlls/gdiplus/gdiplus_private.h | 22 +++++++++++-----------
  1 file changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/gdiplus/gdiplus_private.h b/dlls/gdiplus/gdiplus_private.h
-index a1ed2cf7dbf..1bf6bd697ad 100644
+index 1db1f47815d..4ef1c312fa8 100644
 --- a/dlls/gdiplus/gdiplus_private.h
 +++ b/dlls/gdiplus/gdiplus_private.h
 @@ -169,22 +169,22 @@ extern GpStatus get_hatch_data(GpHatchStyle hatchstyle, const unsigned char **re
@@ -47,7 +47,7 @@ index a1ed2cf7dbf..1bf6bd697ad 100644
  {
      BYTE b, g, r, a;
      BYTE bg_alpha, fg_alpha;
-@@ -649,14 +649,14 @@ struct memory_buffer
+@@ -650,14 +650,14 @@ struct memory_buffer
      INT size, pos;
  };
  
@@ -64,9 +64,9 @@ index a1ed2cf7dbf..1bf6bd697ad 100644
  {
      if (mbuf->size - mbuf->pos >= size)
      {
-@@ -705,22 +705,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
+@@ -706,22 +706,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
  
- void get_log_fontW(const GpFont *, GpGraphics *, LOGFONTW *);
+ void get_log_fontW(const GpFont *, BOOL, GpGraphics *, LOGFONTW *);
  
 -static inline BOOL image_lock(GpImage *image)
 +static FORCEINLINE BOOL image_lock(GpImage *image)
@@ -92,5 +92,5 @@ index a1ed2cf7dbf..1bf6bd697ad 100644
      rect->X = x;
      rect->Y = y;
 -- 
-2.54.0
+2.56.0
 

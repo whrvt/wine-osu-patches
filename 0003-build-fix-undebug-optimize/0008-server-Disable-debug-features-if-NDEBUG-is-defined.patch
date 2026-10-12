@@ -1,7 +1,7 @@
-From 5ea65eb55022736fee56e30a66b0a7e5619e6ace Mon Sep 17 00:00:00 2001
+From 2263fd730f0089ce6ef14d5d1d28111fac90d88d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 30 Dec 2024 02:14:28 -0800
-Subject: [PATCH 013/121] server: Disable debug features if NDEBUG is defined.
+Subject: [PATCH] server: Disable debug features if NDEBUG is defined.
 
 Co-authored-by: Torge Matthies <openglfreak@googlemail.com>
 ---
@@ -11,10 +11,10 @@ Co-authored-by: Torge Matthies <openglfreak@googlemail.com>
  3 files changed, 16 insertions(+), 3 deletions(-)
 
 diff --git a/server/mapping.c b/server/mapping.c
-index a53b6b68304..2779e833022 100644
+index 7446c706aec..73a0a066f4b 100644
 --- a/server/mapping.c
 +++ b/server/mapping.c
-@@ -1532,7 +1532,9 @@ volatile void *alloc_shared_object( mem_size_t shm_size )
+@@ -1442,7 +1442,9 @@ volatile void *alloc_shared_object( mem_size_t shm_size )
      SHARED_WRITE_BEGIN( &object->obj.shm, object_shm_t )
      {
          /* mark the object data as uninitialized */
@@ -24,7 +24,7 @@ index a53b6b68304..2779e833022 100644
          CONTAINING_RECORD( shared, shared_object_t, shm )->id = ++session.last_object_id;
      }
      SHARED_WRITE_END;
-@@ -1547,7 +1549,9 @@ void free_shared_object( volatile void *object_shm )
+@@ -1457,7 +1459,9 @@ void free_shared_object( volatile void *object_shm )
  
      SHARED_WRITE_BEGIN( &object->obj.shm, object_shm_t )
      {
@@ -35,10 +35,10 @@ index a53b6b68304..2779e833022 100644
      }
      SHARED_WRITE_END;
 diff --git a/server/object.c b/server/object.c
-index a4cbd06f56d..0ea9a53bc21 100644
+index 005f714a450..eb5c9a04c4d 100644
 --- a/server/object.c
 +++ b/server/object.c
-@@ -186,8 +186,6 @@ void close_objects(void)
+@@ -158,8 +158,6 @@ void close_objects(void)
      dump_objects();  /* dump any remaining objects */
  }
  
@@ -47,7 +47,7 @@ index a4cbd06f56d..0ea9a53bc21 100644
  /*****************************************************************/
  
  /* mark a block of memory as not accessible for debugging purposes */
-@@ -217,11 +215,18 @@ void mark_block_uninitialized( void *ptr, size_t size )
+@@ -189,11 +187,18 @@ void mark_block_uninitialized( void *ptr, size_t size )
  #endif
  }
  
@@ -68,7 +68,7 @@ index a4cbd06f56d..0ea9a53bc21 100644
      return ptr;
  }
 diff --git a/server/object.h b/server/object.h
-index 64c81f96ad3..75c1b21ce00 100644
+index 62ffd6faa58..bc6456f53a3 100644
 --- a/server/object.h
 +++ b/server/object.h
 @@ -27,7 +27,9 @@
@@ -81,7 +81,7 @@ index 64c81f96ad3..75c1b21ce00 100644
  
  /* kernel objects */
  
-@@ -142,8 +144,10 @@ struct wait_queue_entry
+@@ -159,8 +161,10 @@ struct wait_queue_entry
      struct thread_wait *wait;
  };
  
@@ -93,5 +93,5 @@ index 64c81f96ad3..75c1b21ce00 100644
  extern void *memdup( const void *data, size_t len ) __WINE_ALLOC_SIZE(2) __WINE_DEALLOC(free);
  extern void *alloc_object( const struct object_ops *ops );
 -- 
-2.54.0
+2.56.0
 

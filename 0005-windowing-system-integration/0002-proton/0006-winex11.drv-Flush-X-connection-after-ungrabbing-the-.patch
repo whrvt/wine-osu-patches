@@ -1,8 +1,7 @@
-From 4e4c3e30043f0a03fba96901d3436b6cfe7b617d Mon Sep 17 00:00:00 2001
+From b2f27b5f684315c2bb2741cfdadec9bd4b3a850c Mon Sep 17 00:00:00 2001
 From: Giovanni Mascellani <gmascellani@codeweavers.com>
 Date: Mon, 15 Mar 2021 12:01:25 -0500
-Subject: [PATCH 050/121] winex11.drv: Flush X connection after ungrabbing the
- pointer.
+Subject: [PATCH] winex11.drv: Flush X connection after ungrabbing the pointer.
 
 CW-Bug-Id: #18169
 CW-Bug-Id: #21879
@@ -11,10 +10,10 @@ CW-Bug-Id: #21879
  1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 186955086ed..1bde747e92e 100644
+index 747df15b8cb..c42c492707e 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
-@@ -554,7 +554,11 @@ void ungrab_clipping_window(void)
+@@ -534,7 +534,11 @@ void ungrab_clipping_window(void)
      TRACE( "no longer clipping\n" );
      if (clip_window_mapped) XUnmapWindow( data->display, clip_window );
      clip_window_mapped = FALSE;
@@ -26,7 +25,7 @@ index 186955086ed..1bde747e92e 100644
 +    }
      clipping_cursor = FALSE;
      data->clipping_cursor = FALSE;
-     x11drv_xinput2_disable( data->display, DefaultRootWindow( data->display ) );
+ 
 -- 
-2.54.0
+2.56.0
 

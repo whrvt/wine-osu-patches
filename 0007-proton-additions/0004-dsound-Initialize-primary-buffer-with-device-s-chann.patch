@@ -1,8 +1,8 @@
-From 82828e014f2f2505cf98eaa2698cf266a6b8ac9e Mon Sep 17 00:00:00 2001
+From e92876ff7f652bd29d77ca3f5d2f64fb908c8faf Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Wed, 15 Jan 2020 10:17:23 -0600
-Subject: [PATCH 067/121] dsound: Initialize primary buffer with device's
- channel layout
+Subject: [PATCH] dsound: Initialize primary buffer with device's channel
+ layout
 
 Fixes surround sound in some games, like Borderlands GOTY and Dead
 Space.
@@ -13,7 +13,7 @@ Space.
  3 files changed, 76 insertions(+), 118 deletions(-)
 
 diff --git a/dlls/dsound/dsound.c b/dlls/dsound/dsound.c
-index d4cc0cdb64b..c8375269beb 100644
+index 8ff186f74a4..9ccde4cb118 100644
 --- a/dlls/dsound/dsound.c
 +++ b/dlls/dsound/dsound.c
 @@ -23,7 +23,6 @@
@@ -36,7 +36,7 @@ index d4cc0cdb64b..c8375269beb 100644
  
      /* 3D listener initial parameters */
      device->ds3dl.dwSize   = sizeof(DS3DLISTENER);
-@@ -1053,116 +1052,3 @@ HRESULT WINAPI DirectSoundCreate8(
+@@ -1054,116 +1053,3 @@ HRESULT WINAPI DirectSoundCreate8(
      return hr;
  }
  
@@ -154,10 +154,10 @@ index d4cc0cdb64b..c8375269beb 100644
 -    }
 -}
 diff --git a/dlls/dsound/dsound_private.h b/dlls/dsound/dsound_private.h
-index c9b8a1b202d..7a2712dddb7 100644
+index a913d7052da..ed00a5c8ef8 100644
 --- a/dlls/dsound/dsound_private.h
 +++ b/dlls/dsound/dsound_private.h
-@@ -201,7 +201,6 @@ HRESULT IKsPrivatePropertySetImpl_Create(REFIID riid, void **ppv);
+@@ -203,7 +203,6 @@ HRESULT IKsPrivatePropertySetImpl_Create(REFIID riid, void **ppv);
  HRESULT DSOUND_Create(REFIID riid, void **ppv);
  HRESULT DSOUND_Create8(REFIID riid, void **ppv);
  HRESULT IDirectSoundImpl_Create(IUnknown *outer_unk, REFIID riid, void **ppv, BOOL has_ds8);
@@ -166,7 +166,7 @@ index c9b8a1b202d..7a2712dddb7 100644
  /* primary.c */
  
 diff --git a/dlls/dsound/primary.c b/dlls/dsound/primary.c
-index bd992f78984..acf0ed30f80 100644
+index 3331b31db15..7e1f3adf3ff 100644
 --- a/dlls/dsound/primary.c
 +++ b/dlls/dsound/primary.c
 @@ -25,6 +25,7 @@
@@ -266,5 +266,5 @@ index bd992f78984..acf0ed30f80 100644
              DSOUND_ParseSpeakerConfig(device);
          } else if (wfe.Format.nChannels > device->num_speakers) {
 -- 
-2.54.0
+2.56.0
 

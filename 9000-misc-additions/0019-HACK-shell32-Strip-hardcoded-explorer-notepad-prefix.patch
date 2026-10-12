@@ -1,8 +1,8 @@
-From 088a846760e13fcf1059855b012ec1b2eae623ed Mon Sep 17 00:00:00 2001
+From 14e2c2ab975854b14ea8c942f4e94814026eedef Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 15 Dec 2024 17:22:38 -0800
-Subject: [PATCH 094/121] HACK: shell32: Strip hardcoded explorer/notepad
- prefix from osu!'s shell open calls.
+Subject: [PATCH] HACK: shell32: Strip hardcoded explorer/notepad prefix from
+ osu!'s shell open calls.
 
 This allows osu! to open the screenshot folder by clicking
 the popup ingame, when WINE_BLOCK_GET_VERSION=1 is used.
@@ -134,7 +134,7 @@ index d2a6d5700d4..1437f402ffe 100644
              sei_tmp.fMask, sei_tmp.hwnd, debugstr_w(sei_tmp.lpVerb),
              debugstr_w(sei_tmp.lpFile), debugstr_w(sei_tmp.lpParameters),
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index f28f5ef53cd..6bd151339e1 100644
+index f4ae7dea7ff..b96a4072d2f 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
 @@ -72,6 +72,7 @@ AddReg=\
@@ -145,7 +145,7 @@ index f28f5ef53cd..6bd151339e1 100644
  
  [DefaultInstall]
  Needs=BaseInstall
-@@ -253,9 +254,6 @@ HKCR,exefile,,2,"Application"
+@@ -257,9 +258,6 @@ HKCR,exefile,,2,"Application"
  HKCR,exefile\DefaultIcon,,2,"%1"
  HKCR,exefile\shell\open\command,,2,"""%1"" %*"
  HKCR,exefile\shell\runas\command,,2,"""%1"" %*"
@@ -155,7 +155,7 @@ index f28f5ef53cd..6bd151339e1 100644
  HKCR,folder\shellex\ContextMenuHandlers,,16
  HKCR,folder\shellnew,"Directory",,""
  HKCR,folder\shellnew,"ItemName",,"@%11%\shell32.dll,-142"
-@@ -302,6 +300,9 @@ HKCR,http\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
+@@ -306,6 +304,9 @@ HKCR,http\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
  HKCR,https\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
  HKCR,mailto\shell\open\command,,2,"""%11%\winebrowser.exe"" ""%1"""
  
@@ -166,5 +166,5 @@ index f28f5ef53cd..6bd151339e1 100644
  HKLM,System\CurrentControlSet\Control\ContentIndex\Language\Neutral,"WBreakerClass",,"{369647e0-17b0-11ce-9950-00aa004bbb1f}"
  HKLM,System\CurrentControlSet\Control\ContentIndex\Language\Neutral,"StemmerClass",,""
 -- 
-2.54.0
+2.56.0
 

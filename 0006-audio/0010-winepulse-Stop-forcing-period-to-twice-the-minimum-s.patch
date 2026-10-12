@@ -1,8 +1,7 @@
-From 933dde66ca0fa72823e3f1d525099d2edf9d3472 Mon Sep 17 00:00:00 2001
+From ff0000e7caafc9fadf856f633ea41270be9a13c1 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sun, 8 Mar 2026 15:17:41 +0100
-Subject: [PATCH 062/121] winepulse: Stop forcing period to twice the minimum
- size.
+Subject: [PATCH] winepulse: Stop forcing period to twice the minimum size.
 
 Since pipewire-1.6, minimum quant value has been increased to 256: no need to multiply it manually anymore.
 
@@ -41,5 +40,5 @@ index b14cbdb763d..45cfb2f4e71 100644
  
      wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
 -- 
-2.54.0
+2.56.0
 

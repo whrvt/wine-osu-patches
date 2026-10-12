@@ -1,7 +1,7 @@
-From bf19c4eda0d1fec04e035a44b088af10f9abc382 Mon Sep 17 00:00:00 2001
+From eb4429a43c0cc3cc26edf38f2cce7db9055360a3 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 7 Sep 2026 16:56:57 +0200
-Subject: [PATCH 1/2] mmdevapi, winealsa.drv, winepulse.drv: Allow forcing the
+Subject: [PATCH] mmdevapi, winealsa.drv, winepulse.drv: Allow forcing the
  audio quantum with WINE_AUDIO_QUANTUM.
 
 e.g. WINE_AUDIO_QUANTUM=64
@@ -142,5 +142,5 @@ index 45cfb2f4e71..a6c00ac7861 100644
      HRESULT hr;
      char *name;
 -- 
-2.55.0
+2.56.0
 

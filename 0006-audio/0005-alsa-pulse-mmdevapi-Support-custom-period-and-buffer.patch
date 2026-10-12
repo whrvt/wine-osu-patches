@@ -1,8 +1,8 @@
-From 093dc080db9db841e52f78bacbdbc6aaddef0a4c Mon Sep 17 00:00:00 2001
+From ebad37e7f7ed990c3d60bdf2a97bc4a936c71211 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 27 Aug 2024 05:03:23 -0700
-Subject: [PATCH 057/121] alsa,pulse,mmdevapi: Support custom period and buffer
- sizes, and respect PulseAudio settings.
+Subject: [PATCH] alsa,pulse,mmdevapi: Support custom period and buffer sizes,
+ and respect PulseAudio settings.
 
 Relevant environment variables are:
 ALSA_EXTRA_PAD (units: usecs*10; default is 40000, can be set to 0, adds extra padding)
@@ -17,7 +17,7 @@ Also, silence pcm.c underrun errors.
  3 files changed, 83 insertions(+), 21 deletions(-)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index d4d3e82b466..719cecbcf0d 100644
+index e22dae1b2dd..9251ead093d 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
 @@ -89,10 +89,12 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
@@ -110,13 +110,13 @@ index d4d3e82b466..719cecbcf0d 100644
      if (!format)
          return E_POINTER;
  
--    period = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
+-    period = MulDiv(period_frames, 10000000, format->nSamplesPerSec);
 +    penv = getenv("STAGING_AUDIO_PERIOD");
 +    if (penv && (periodval = atoi(penv)) >= 0) { // Custom
 +        period = periodval;
 +        TRACE("Audio period set to %d.\n", periodval);
 +    } else { // Default
-+        period = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
++        period = MulDiv(period_frames, 10000000, format->nSamplesPerSec);
 +    }
  
      return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
@@ -255,5 +255,5 @@ index e34b886bdd0..7f9cc93ad9b 100644
      stream->duration = params->duration;
  
 -- 
-2.54.0
+2.56.0
 

@@ -1,4 +1,4 @@
-From 51a4cc0ef94c2e2ac0a9135e1bd31386bac47a1d Mon Sep 17 00:00:00 2001
+From c8a69d343fc85823819a736dc6e03c2d49bb4be2 Mon Sep 17 00:00:00 2001
 From: winebuild <wine@build.dev>
 Date: Mon, 29 Jun 2026 23:10:31 +0200
 Subject: [PATCH] winex11, winewayland: Add an opt-in absolute tablet input
@@ -8,17 +8,17 @@ Avoid pointer grabs, warps, and Wayland constraints that block absolute tablet i
 Enable with WINE_ABS_TABLET or WINE_ENABLE_ABS_TABLET_HACK.
 ---
  dlls/winewayland.drv/wayland_pointer.c | 14 ++++++++++++++
- dlls/winex11.drv/mouse.c               |  6 ++++++
+ dlls/winex11.drv/mouse.c               |  5 +++++
  dlls/winex11.drv/window.c              | 11 +++++++----
  dlls/winex11.drv/x11drv.h              |  2 ++
  dlls/winex11.drv/x11drv_main.c         |  5 +++++
- 5 files changed, 34 insertions(+), 4 deletions(-)
+ 5 files changed, 33 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
-index af404994a44..85e29a11dde 100644
+index 4b0a3322a4c..575ca6858f7 100644
 --- a/dlls/winewayland.drv/wayland_pointer.c
 +++ b/dlls/winewayland.drv/wayland_pointer.c
-@@ -36,6 +36,16 @@
+@@ -37,6 +37,16 @@
  
  WINE_DEFAULT_DEBUG_CHANNEL(cursor);
  
@@ -35,7 +35,7 @@ index af404994a44..85e29a11dde 100644
  /* The cursor-shape-v1 protocol file references the zwp_tablet_tool_v2
   * interface object. Since we don't currently use the tablet protocol,
   * provide a dummy object here to avoid linking errors. */
-@@ -886,6 +896,8 @@ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+@@ -1042,6 +1052,8 @@ static BOOL wayland_pointer_update_constraint(struct wl_surface *wl_surface,
      needs_confine = wl_surface && confine_rect && is_visible && !force_lock &&
                      pointer->wl_pointer;
  
@@ -44,21 +44,21 @@ index af404994a44..85e29a11dde 100644
      if (!needs_confine && pointer->zwp_confined_pointer_v1)
      {
          TRACE("Unconfining from hwnd=%p\n", pointer->constraint_hwnd);
-@@ -1010,6 +1022,8 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
- {
+@@ -1169,6 +1181,8 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
      struct wayland_pointer *pointer = &process_wayland.pointer;
+     POINT pt = {.x = x, .y = y}, surface_pt;
  
 +    if (abs_tablet_hack_enabled()) return TRUE;
 +
-     pthread_mutex_lock(&pointer->mutex);
-     if (pointer->zwp_relative_pointer_v1)
-     {
+     /* It doesn't make sense to warp a locked pointer, and
+      * reapply_cursor_clippping may not lead to a pClipCursor under all conditions.
+      * Therefore, we need pointer warp handling here but only when the pointer is not locked. */
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 80588d503b5..69244999332 100644
+index c42c492707e..1be99e07a1b 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
-@@ -494,6 +494,8 @@ static BOOL grab_clipping_window( const RECT *clip )
-         return TRUE;
+@@ -479,6 +479,8 @@ static BOOL grab_clipping_window( const RECT *clip )
+         pXISelectEvents( data->display, DefaultRootWindow( data->display ), &data->root_events, 1 );
      }
  
 +    if (is_xwayland && abs_tablet_hack) return TRUE;
@@ -66,7 +66,7 @@ index 80588d503b5..69244999332 100644
      TRACE( "clipping to %s win %lx\n", wine_dbgstr_rect(clip), clip_window );
  
      if (!data->clipping_cursor && clip_window_mapped) XUnmapWindow( data->display, clip_window );
-@@ -1487,6 +1489,9 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
+@@ -1449,6 +1451,9 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
          return FALSE;
      }
  
@@ -76,19 +76,11 @@ index 80588d503b5..69244999332 100644
      if (!clipping_cursor &&
          XGrabPointer( data->display, root_window, False,
                        PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
-@@ -1705,6 +1710,7 @@ BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
-         TRACE( "pos %d,%d old serial %lu, ignoring\n", event->x, event->y, event->serial );
-         return FALSE;
-     }
-+
-     map_event_coords( hwnd, event->window, event->root, event->x_root, event->y_root, &input );
-     send_mouse_input( hwnd, event->window, event->state, &input );
-     return TRUE;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index d2eaea26582..4861a1c3c85 100644
+index 3ec077d779e..30468b90f79 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -3159,10 +3159,13 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags, HWND previous )
+@@ -3157,10 +3157,13 @@ void X11DRV_SetCapture( HWND hwnd, UINT flags, HWND previous )
          if (!(data = get_win_data( hwnd ))) return;
          if (data->whole_window)
          {
@@ -107,10 +99,10 @@ index d2eaea26582..4861a1c3c85 100644
          release_win_data( data );
      }
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 77c411a6bf5..bbb3be5553c 100644
+index 3789d9cecda..d90af633d31 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -478,6 +478,8 @@ extern XPixmapFormatValues **pixmap_formats;
+@@ -480,6 +480,8 @@ extern XPixmapFormatValues **pixmap_formats;
  extern Window root_window;
  extern BOOL clipping_cursor;
  extern BOOL keyboard_grabbed;
@@ -120,10 +112,10 @@ index 77c411a6bf5..bbb3be5553c 100644
  extern BOOL usexrandr;
  extern BOOL usexvidmode;
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index d9eb5512b20..743b0d020cd 100644
+index e341986050d..4fa645bb810 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
-@@ -72,6 +72,8 @@ BOOL use_take_focus = TRUE;
+@@ -75,6 +75,8 @@ BOOL use_take_focus = TRUE;
  BOOL use_primary_selection = FALSE;
  BOOL use_system_cursors = TRUE;
  BOOL grab_fullscreen = FALSE;
@@ -132,7 +124,7 @@ index d9eb5512b20..743b0d020cd 100644
  BOOL managed_mode = TRUE;
  BOOL private_color_map = FALSE;
  int custom_fps = 0;
-@@ -688,6 +690,9 @@ NTSTATUS __wine_unix_lib_init(void)
+@@ -714,6 +716,9 @@ NTSTATUS __wine_unix_lib_init(void)
  #ifdef SONAME_LIBXCOMPOSITE
      X11DRV_XComposite_Init();
  #endif
@@ -140,8 +132,8 @@ index d9eb5512b20..743b0d020cd 100644
 +    abs_tablet_hack = atoi( getenv( "WINE_ABS_TABLET" ) ?:
 +                            getenv( "WINE_ENABLE_ABS_TABLET_HACK" ) ?: "0" ) != 0;
      x11drv_xinput2_load();
- 
-     x11drv_init_keyboard( gdi_display );
+ #ifdef HAVE_X11_EXTENSIONS_XINPUT_H
+     x11drv_xinput_init( display );
 -- 
-2.54.0
+2.56.0
 

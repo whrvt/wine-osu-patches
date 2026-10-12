@@ -1,8 +1,7 @@
-From 3704c176c49110c362b663088c93749697ce224c Mon Sep 17 00:00:00 2001
+From 4bb1dcd2e53c65bc492d1c9bf814b67ca30bcd70 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 4 Nov 2025 15:03:26 +0100
-Subject: [PATCH 001/121] Revert "ntdll: Only clear 64K of the initial thread
- stack."
+Subject: [PATCH] Revert "ntdll: Only clear 64K of the initial thread stack."
 
 This reverts commit 871a52cb8b2d9688dbc100284843aa14a31d6ba0.
 Fixes osu! freezing on winewayland on KDE >= 6.5.
@@ -25,10 +24,10 @@ index 8a9a77532ee..cbda80c5bcc 100644
                     "movl %edi,%esp\n\t"
                     "xorl %eax,%eax\n\t"
 diff --git a/dlls/ntdll/signal_x86_64.c b/dlls/ntdll/signal_x86_64.c
-index 29fadc72242..04dd6fb99e7 100644
+index b94e4a23a99..3de18373a09 100644
 --- a/dlls/ntdll/signal_x86_64.c
 +++ b/dlls/ntdll/signal_x86_64.c
-@@ -1020,7 +1020,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
+@@ -1021,7 +1021,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                     "movq %rcx,%rbx\n\t"        /* context */
                     /* clear the thread stack */
                     "andq $~0xfff,%rcx\n\t"     /* round down to page size */
@@ -38,5 +37,5 @@ index 29fadc72242..04dd6fb99e7 100644
                     "subq %rdi,%rcx\n\t"
                     "xorl %eax,%eax\n\t"
 -- 
-2.54.0
+2.56.0
 

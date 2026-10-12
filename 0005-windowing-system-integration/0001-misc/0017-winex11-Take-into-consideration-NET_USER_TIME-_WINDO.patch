@@ -1,8 +1,8 @@
-From 5f0b71b25ea059a3d3bd5ec3a98d08ee47d10145 Mon Sep 17 00:00:00 2001
+From 6cdb8959c32a2df44d28ce645eb38264c466fec3 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 4 Apr 2025 14:13:44 -0700
-Subject: [PATCH 043/121] winex11: Take into consideration
- NET_USER_TIME{,_WINDOW} for NET_ACTIVE_WINDOW support.
+Subject: [PATCH] winex11: Take into consideration NET_USER_TIME{,_WINDOW} for
+ NET_ACTIVE_WINDOW support.
 
 NET_ACTIVE_WINDOW relies on it.
 ---
@@ -12,10 +12,10 @@ NET_ACTIVE_WINDOW relies on it.
  3 files changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 5ba53af6dc4..eca1b4c781d 100644
+index 11e459cc6b4..7bcd9bba6e7 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
-@@ -645,7 +645,7 @@ static void set_focus( Display *display, HWND focus, Time time )
+@@ -498,7 +498,7 @@ static void set_focus( Display *display, HWND focus, Time time )
  
      TRACE( "setting foreground window to %p\n", focus );
  
@@ -24,7 +24,7 @@ index 5ba53af6dc4..eca1b4c781d 100644
      {
          NtUserSetForegroundWindowInternal( focus );
  
-@@ -898,7 +898,7 @@ static void focus_out( Display *display , HWND hwnd )
+@@ -758,7 +758,7 @@ static void focus_out( Display *display , HWND hwnd )
      /* don't reset the foreground window, if the window which is
         getting the focus is a Wine window */
  
@@ -34,10 +34,10 @@ index 5ba53af6dc4..eca1b4c781d 100644
          /* Abey : 6-Oct-99. Check again if the focus out window is the
             Foreground window, because in most cases the messages sent
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index e8e6cd9b0ef..59c44f65d50 100644
+index 20a1ed51cee..90589c8a813 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2061,7 +2061,7 @@ void set_net_active_window( HWND hwnd, HWND previous )
+@@ -2072,7 +2072,7 @@ void set_net_active_window( HWND hwnd, HWND previous )
      Window window;
      XEvent xev;
  
@@ -47,10 +47,10 @@ index e8e6cd9b0ef..59c44f65d50 100644
      if (data->pending_state.net_active_window == window) return;
      if (window_set_pending_activate( hwnd, &withdrawn )) return;
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 2e7d7521ca6..f292d4b3756 100644
+index 3690685b54f..fa3a0f2b583 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -740,6 +740,11 @@ extern void net_supported_init( struct x11drv_thread_data *data );
+@@ -743,6 +743,11 @@ extern void net_supported_init( struct x11drv_thread_data *data );
  extern void net_supporting_wm_check_init( struct x11drv_thread_data *data );
  extern BOOL is_net_supported( Atom atom );
  
@@ -63,5 +63,5 @@ index 2e7d7521ca6..f292d4b3756 100644
  extern void window_set_user_time( struct x11drv_win_data *data, Time time, BOOL init );
  extern UINT get_window_net_wm_state( Display *display, Window window );
 -- 
-2.54.0
+2.56.0
 

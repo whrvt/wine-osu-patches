@@ -1,7 +1,7 @@
-From 540c711dc26706a903a35743cdb8250a1cba0167 Mon Sep 17 00:00:00 2001
+From 784bf355aebc643da1c20f747ccd55c187405a1e Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:03:53 +0200
-Subject: [PATCH 076/121] windowscodecs: Add 8bpp-copy-support.
+Subject: [PATCH] windowscodecs: Add 8bpp-copy-support.
 
 Rebase of old patch.
 ---
@@ -9,7 +9,7 @@ Rebase of old patch.
  1 file changed, 61 insertions(+)
 
 diff --git a/dlls/windowscodecs/converter.c b/dlls/windowscodecs/converter.c
-index 1783e0eb7ac..93f58607f8d 100644
+index 356c80a5e40..1b2682d2498 100644
 --- a/dlls/windowscodecs/converter.c
 +++ b/dlls/windowscodecs/converter.c
 @@ -1265,6 +1265,67 @@ static HRESULT copypixels_to_24bppBGR(struct FormatConverter *This, const WICRec
@@ -81,5 +81,5 @@ index 1783e0eb7ac..93f58607f8d 100644
          if (prc)
          {
 -- 
-2.54.0
+2.56.0
 

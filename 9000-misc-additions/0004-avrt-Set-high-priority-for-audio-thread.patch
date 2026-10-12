@@ -1,7 +1,7 @@
-From 698d70f750a8651c799a96b7d0610341d800e3b5 Mon Sep 17 00:00:00 2001
+From be7d828825747f9dcc3eda27bffd814e8aa09a8b Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:08:02 +0200
-Subject: [PATCH 079/121] avrt: Set high priority for audio thread.
+Subject: [PATCH] avrt: Set high priority for audio thread.
 
 ---
  dlls/avrt/main.c | 7 +++++--
@@ -33,5 +33,5 @@ index 68af35c891a..b7912888590 100644
  }
  
 -- 
-2.54.0
+2.56.0
 

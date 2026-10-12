@@ -1,15 +1,14 @@
-From 29c3b96201be5ad39ff4eac49eb9699285cab0c9 Mon Sep 17 00:00:00 2001
+From 87b38a86f67d762d07a307397f013de012ef135e Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 3 Nov 2025 10:35:17 -0800
-Subject: [PATCH 061/121] mmdevapi: HACK: Always add EVENTCALLBACK to init
- flags.
+Subject: [PATCH] mmdevapi: HACK: Always add EVENTCALLBACK to init flags.
 
 ---
  dlls/mmdevapi/client.c | 1 +
  1 file changed, 1 insertion(+)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index 06d08887bc2..3ce20cbc731 100644
+index 5147072399f..c3077ea9330 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
 @@ -716,6 +716,7 @@ static HRESULT WINAPI client_Initialize(IAudioClient3 *iface, AUDCLNT_SHAREMODE
@@ -21,5 +20,5 @@ index 06d08887bc2..3ce20cbc731 100644
      TRACE("(%p)->(%x, %lx, %s, %s, %p, %s)\n", This, mode, flags, wine_dbgstr_longlong(duration),
                                                 wine_dbgstr_longlong(period), fmt,
 -- 
-2.54.0
+2.56.0
 

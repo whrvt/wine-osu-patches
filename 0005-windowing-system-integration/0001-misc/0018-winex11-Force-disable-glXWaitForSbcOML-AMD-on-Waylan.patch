@@ -1,8 +1,8 @@
-From 8c4e7769ab620dd82fa3e3c8eea654d6efde14e0 Mon Sep 17 00:00:00 2001
+From 8a833fe63e6f127cdfec1f2d0a9365ef4992fb09 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 07:23:38 -0700
-Subject: [PATCH 044/121] winex11: Force disable glXWaitForSbcOML (AMD) on
- Wayland to circumvent Xwayland locking FPS to the monitor's refresh rate.
+Subject: [PATCH] winex11: Force disable glXWaitForSbcOML (AMD) on Wayland to
+ circumvent Xwayland locking FPS to the monitor's refresh rate.
 
 It will prevent ingame vsync from working properly, but the environment variable
 vblank_mode != 0 can override-disable this behavior.
@@ -13,10 +13,10 @@ vblank_mode != 0 can override-disable this behavior.
  3 files changed, 22 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index eca1b4c781d..1b37c4db105 100644
+index 7bcd9bba6e7..8fdd3361fc7 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
-@@ -1525,8 +1525,9 @@ static void handle_xembed_protocol( HWND hwnd, XClientMessageEvent *event )
+@@ -1392,8 +1392,9 @@ static void handle_xembed_protocol( HWND hwnd, XClientMessageEvent *event )
  /**********************************************************************
   *              handle_dnd_protocol
   */
@@ -27,7 +27,7 @@ index eca1b4c781d..1b37c4db105 100644
      unsigned long count, remaining;
      Window root, child;
      int root_x, root_y, format;
-@@ -1565,8 +1566,9 @@ static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
+@@ -1432,8 +1433,9 @@ static void handle_dnd_protocol( HWND hwnd, XClientMessageEvent *event )
   *
   * Handle an XdndEnter event.
   */
@@ -38,7 +38,7 @@ index eca1b4c781d..1b37c4db105 100644
      struct format_entry *data;
      unsigned long count = 0;
      Atom *xdndtypes;
-@@ -1666,8 +1668,9 @@ static long drop_effect_to_xdnd_action( UINT effect )
+@@ -1533,8 +1535,9 @@ static long drop_effect_to_xdnd_action( UINT effect )
  }
  
  
@@ -49,7 +49,7 @@ index eca1b4c781d..1b37c4db105 100644
      XClientMessageEvent e;
      POINT point;
      UINT effect;
-@@ -1697,8 +1700,9 @@ static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
+@@ -1564,8 +1567,9 @@ static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )
  }
  
  
@@ -61,7 +61,7 @@ index eca1b4c781d..1b37c4db105 100644
      UINT effect;
  
 diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
-index 9926209a1ca..7a210278998 100644
+index 8b9f6b072bd..cb1bc15487a 100644
 --- a/dlls/winex11.drv/opengl.c
 +++ b/dlls/winex11.drv/opengl.c
 @@ -733,7 +733,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
@@ -75,10 +75,10 @@ index 9926209a1ca..7a210278998 100644
      }
  
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index f292d4b3756..3c46a387fd7 100644
+index fa3a0f2b583..35c0f23a4b6 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -1016,7 +1016,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+@@ -1019,7 +1019,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
      dst->bottom = min( src1->bottom, src2->bottom );
      return !IsRectEmpty( dst );
  }
@@ -99,5 +99,5 @@ index f292d4b3756..3c46a387fd7 100644
  
  extern HKEY open_hkcu_key( const char *name );
 -- 
-2.54.0
+2.56.0
 

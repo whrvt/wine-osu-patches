@@ -1,7 +1,7 @@
-From fcfb3303501031be4a521c41f238348d1dc1e12f Mon Sep 17 00:00:00 2001
+From db3e28460b11f28c772a6d8238d2132a14d9e7c1 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 15 May 2020 13:01:26 +0200
-Subject: [PATCH 068/121] d3d10core: Implement D3D10CoreRegisterLayers.
+Subject: [PATCH] d3d10core: Implement D3D10CoreRegisterLayers.
 
 ---
  dlls/d3d10core/d3d10core_main.c | 4 +++-
@@ -27,5 +27,5 @@ index 904a8afaadc..50caafb015a 100644
  
  HRESULT WINAPI D3D10CoreCreateDevice(IDXGIFactory *factory, IDXGIAdapter *adapter,
 -- 
-2.54.0
+2.56.0
 

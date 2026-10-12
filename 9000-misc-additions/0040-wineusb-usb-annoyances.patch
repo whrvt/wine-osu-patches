@@ -1,7 +1,7 @@
-From cab03cc5cc02fc1694ab2fec3bbc8112cd405866 Mon Sep 17 00:00:00 2001
+From 351311de185983e4506b43676022684cd82837fa Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:29:50 +0200
-Subject: [PATCH 115/121] wineusb usb annoyances
+Subject: [PATCH] wineusb usb annoyances
 
 ---
  dlls/winebus.sys/bus_udev.c | 8 +++++++-
@@ -10,10 +10,10 @@ Subject: [PATCH 115/121] wineusb usb annoyances
  3 files changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winebus.sys/bus_udev.c b/dlls/winebus.sys/bus_udev.c
-index b307124c3be..aed2fafca37 100644
+index c636550d30c..9b240c47a90 100644
 --- a/dlls/winebus.sys/bus_udev.c
 +++ b/dlls/winebus.sys/bus_udev.c
-@@ -1377,6 +1377,12 @@ static void udev_add_device(struct udev_device *dev, int fd)
+@@ -1390,6 +1390,12 @@ static void udev_add_device(struct udev_device *dev, int fd)
          return;
      }
  
@@ -26,7 +26,7 @@ index b307124c3be..aed2fafca37 100644
      if ((desc.is_hidraw = !strcmp(subsystem, "hidraw")) && !hidraw_device_create(dev, fd, devnode, desc)) return;
      if (!strcmp(subsystem, "input") && !lnxev_device_create(dev, fd, devnode, desc)) return;
      close(fd);
-@@ -1758,7 +1764,7 @@ NTSTATUS udev_bus_init(void *args)
+@@ -1783,7 +1789,7 @@ NTSTATUS udev_bus_init(void *args)
  
      if (monitor_fd < 0 && !(udev_monitor = create_monitor(&monitor_fd)))
      {
@@ -36,16 +36,16 @@ index b307124c3be..aed2fafca37 100644
      }
  
 diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
-index 7d38058f294..4d8d8bf097c 100644
+index 679b6d3d4c8..e59a65e877c 100644
 --- a/dlls/winebus.sys/main.c
 +++ b/dlls/winebus.sys/main.c
-@@ -1193,7 +1193,7 @@ static void bus_options_init(void)
+@@ -1185,7 +1185,7 @@ static void bus_options_init(void)
  {
      options.disable_sdl = !check_bus_option(L"Enable SDL", 1);
      if (options.disable_sdl) TRACE("SDL devices disabled in registry\n");
 -    options.disable_hidraw = check_bus_option(L"DisableHidraw", 0);
 +    options.disable_hidraw = check_bus_option(L"DisableHidraw", 1);
-     if (options.disable_hidraw) TRACE("UDEV hidraw devices disabled in registry\n");
+     if (options.disable_hidraw) TRACE("IOHID and UDEV hidraw devices disabled in registry\n");
      options.disable_input = check_bus_option(L"DisableInput", 0);
      if (options.disable_input) TRACE("UDEV input devices disabled in registry\n");
 diff --git a/dlls/wineusb.sys/wineusb.c b/dlls/wineusb.sys/wineusb.c
@@ -62,5 +62,5 @@ index 806c197e18a..b2f635b0c31 100644
      }
  
 -- 
-2.54.0
+2.56.0
 

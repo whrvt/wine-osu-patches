@@ -1,4 +1,4 @@
-From f8f9f85b9c43390841c5a594cb8f3138bc32ea74 Mon Sep 17 00:00:00 2001
+From d3ab01814b6f8ffc903e9b8d09051fbc86b50135 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sun, 23 Aug 2026 01:48:34 +0200
 Subject: [PATCH] winex11: Look up the XInputExtension opcode at startup.
@@ -8,7 +8,7 @@ Subject: [PATCH] winex11: Look up the XInputExtension opcode at startup.
  1 file changed, 31 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index f9d3d1b67bf..a070a0692d9 100644
+index c53b93f7f89..47220e7adff 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
 @@ -40,6 +40,9 @@
@@ -32,7 +32,7 @@ index f9d3d1b67bf..a070a0692d9 100644
  static x11drv_error_callback err_callback;   /* current callback for error */
  static Display *err_callback_display;        /* display callback is set for */
  static void *err_callback_arg;               /* error callback argument */
-@@ -228,8 +235,10 @@ static inline BOOL ignore_error( Display *display, XErrorEvent *event )
+@@ -230,8 +237,10 @@ static inline BOOL ignore_error( Display *display, XErrorEvent *event )
      }
  
  #ifdef HAVE_X11_EXTENSIONS_XINPUT_H
@@ -45,7 +45,7 @@ index f9d3d1b67bf..a070a0692d9 100644
      {
          return TRUE;
      }
-@@ -628,6 +637,23 @@ static void init_visuals( Display *display, int screen )
+@@ -630,6 +639,23 @@ static void init_visuals( Display *display, int screen )
             default_visual.visualid, default_visual.class, argb_visual.visualid );
  }
  
@@ -69,7 +69,7 @@ index f9d3d1b67bf..a070a0692d9 100644
  /***********************************************************************
   *           X11DRV process initialisation routine
   */
-@@ -682,6 +708,9 @@ NTSTATUS __wine_unix_lib_init(void)
+@@ -684,6 +710,9 @@ NTSTATUS __wine_unix_lib_init(void)
      X11DRV_XComposite_Init();
  #endif
      x11drv_xinput2_load();
@@ -78,7 +78,7 @@ index f9d3d1b67bf..a070a0692d9 100644
 +#endif
  
      x11drv_init_keyboard( gdi_display );
-     if (use_xim) use_xim = xim_init( input_style );
+     x11drv_init_mouse( gdi_display );
 -- 
-2.55.0
+2.56.0
 

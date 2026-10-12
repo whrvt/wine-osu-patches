@@ -1,8 +1,8 @@
-From 69f95a4a3a744c3dbbd08f8bf81fdbfd526788a3 Mon Sep 17 00:00:00 2001
+From ce88bd6ab6e55dc25826532545b6c72f27ec0b37 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 7 Sep 2026 16:58:13 +0200
-Subject: [PATCH 2/2] HACK: winealsa.drv: Allow overriding the default ALSA
- device with WINE_ALSA_DEVICE.
+Subject: [PATCH] HACK: winealsa.drv: Allow overriding the default ALSA device
+ with WINE_ALSA_DEVICE.
 
 Needed to make up for steamrt missing PipeWire's ALSA plugin, this way we can
 point it to a PCM bundled with wine-osu and defined through ALSA_CONFIG_PATH.
@@ -39,5 +39,5 @@ index 120f79added..10880146ff9 100644
      get_reg_devices(params->flow, &endpoints_info);
  
 -- 
-2.55.0
+2.56.0
 

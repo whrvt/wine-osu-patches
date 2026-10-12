@@ -1,7 +1,7 @@
-From 11631729ed86b44ff144ced868212a51aacba396 Mon Sep 17 00:00:00 2001
+From 1aa2c4a53bf29b0beefb03fb60430f621d06449b Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:19:07 +0200
-Subject: [PATCH 085/121] kernelbase/wineboot: Downgrade some debug messages.
+Subject: [PATCH] kernelbase/wineboot: Downgrade some debug messages.
 
 ---
  dlls/kernelbase/debug.c      | 2 +-
@@ -9,10 +9,10 @@ Subject: [PATCH 085/121] kernelbase/wineboot: Downgrade some debug messages.
  2 files changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
-index fbd3c8cbaca..0d691e56349 100644
+index fcd8e4d48fd..ba9235e34f9 100644
 --- a/dlls/kernelbase/debug.c
 +++ b/dlls/kernelbase/debug.c
-@@ -862,7 +862,7 @@ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerRegisterRuntimeExceptionModule( const
+@@ -791,7 +791,7 @@ HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerRegisterRuntimeExceptionModule( const
   */
  HRESULT WINAPI /* DECLSPEC_HOTPATCH */ WerSetFlags( DWORD flags )
  {
@@ -22,7 +22,7 @@ index fbd3c8cbaca..0d691e56349 100644
  }
  
 diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
-index aa91d01c92f..ffc6ec30b0a 100644
+index 0a88a981843..495d93076d6 100644
 --- a/programs/wineboot/wineboot.c
 +++ b/programs/wineboot/wineboot.c
 @@ -1306,7 +1306,10 @@ static void process_run_key( HKEY key, const WCHAR *keyname, BOOL delete, BOOL s
@@ -38,5 +38,5 @@ index aa91d01c92f..ffc6ec30b0a 100644
          WINE_TRACE( "Done processing cmd %lu.\n", i );
      }
 -- 
-2.54.0
+2.56.0
 

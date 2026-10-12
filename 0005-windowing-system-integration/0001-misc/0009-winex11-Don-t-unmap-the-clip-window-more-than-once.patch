@@ -1,7 +1,7 @@
-From f5a3723bebe8788d58e7d019b134b9957386aec8 Mon Sep 17 00:00:00 2001
+From 9eda85ff81b61397d16eb8c5caf854f46224e462 Mon Sep 17 00:00:00 2001
 From: Myah Caron <qsniyg@mail.com>
 Date: Wed, 18 Mar 2020 17:24:01 +0100
-Subject: [PATCH 034/121] winex11: Don't unmap the clip window more than once
+Subject: [PATCH] winex11: Don't unmap the clip window more than once
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=48772
 Signed-off-by: Myah Caron <qsniyg@mail.com>
@@ -10,10 +10,10 @@ Signed-off-by: Myah Caron <qsniyg@mail.com>
  1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 094264de1e9..c62a4501503 100644
+index b0760c34092..747df15b8cb 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
-@@ -131,6 +131,7 @@ static const UINT button_up_data[NB_BUTTONS] =
+@@ -132,6 +132,7 @@ static const UINT button_up_data[NB_BUTTONS] =
  XContext cursor_context = 0;
  
  static RECT clip_rect;
@@ -21,7 +21,7 @@ index 094264de1e9..c62a4501503 100644
  static Cursor create_cursor( HANDLE handle );
  
  #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
-@@ -500,11 +501,12 @@ static BOOL grab_clipping_window( const RECT *clip )
+@@ -480,11 +481,12 @@ static BOOL grab_clipping_window( const RECT *clip )
  
      TRACE( "clipping to %s win %lx\n", wine_dbgstr_rect(clip), clip_window );
  
@@ -35,7 +35,7 @@ index 094264de1e9..c62a4501503 100644
  
      /* if the rectangle is shrinking we may get a pointer warp */
      if (!data->clipping_cursor || clip->left > clip_rect.left || clip->top > clip_rect.top ||
-@@ -554,7 +556,8 @@ void ungrab_clipping_window(void)
+@@ -530,7 +532,8 @@ void ungrab_clipping_window(void)
      if (!clip_window) return;
  
      TRACE( "no longer clipping\n" );
@@ -46,5 +46,5 @@ index 094264de1e9..c62a4501503 100644
      clipping_cursor = FALSE;
      data->clipping_cursor = FALSE;
 -- 
-2.54.0
+2.56.0
 

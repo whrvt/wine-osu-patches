@@ -1,7 +1,7 @@
-From 23740d0ff4225b4d5fb756d236a4db0f78b6d712 Mon Sep 17 00:00:00 2001
+From 5ce18d302f242adaa2e8a8120fc312dc10c1109c Mon Sep 17 00:00:00 2001
 From: Haoyang Chen <chenhaoyang@kylinos.cn>
 Date: Tue, 21 Nov 2023 16:24:56 +0800
-Subject: [PATCH 004/121] win32u: Fix calculating viewport size incorrectly.
+Subject: [PATCH] win32u: Fix calculating viewport size incorrectly.
 
 Calling either SetViewportExtEx or SetWindowExtEx
 fixes the viewport(MAPPING_FixIsotropic), but if both are called then it is fixed twice.
@@ -115,5 +115,5 @@ index 8d89b318c2d..246fd88e431 100644
      SIZE      virtual_size;
      UINT      font_code_page;
 -- 
-2.54.0
+2.56.0
 

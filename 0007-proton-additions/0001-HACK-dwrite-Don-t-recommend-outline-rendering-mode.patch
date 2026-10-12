@@ -1,14 +1,14 @@
-From 3da6e970c77e713b1426e8c63c1f8fdd0b9293ee Mon Sep 17 00:00:00 2001
+From 2d0720a1774a0935edd63c9d80d301b4558efa36 Mon Sep 17 00:00:00 2001
 From: Nikolay Sivov <nsivov@codeweavers.com>
 Date: Wed, 8 Mar 2017 20:15:40 +0300
-Subject: [PATCH 064/121] HACK: dwrite: Don't recommend outline rendering mode
+Subject: [PATCH] HACK: dwrite: Don't recommend outline rendering mode
 
 ---
  dlls/dwrite/font.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/dwrite/font.c b/dlls/dwrite/font.c
-index f207bade10e..d225ff42b9a 100644
+index 9544784b8cc..0bef29fc9b1 100644
 --- a/dlls/dwrite/font.c
 +++ b/dlls/dwrite/font.c
 @@ -1251,7 +1251,8 @@ static HRESULT WINAPI dwritefontface_GetRecommendedRenderingMode(IDWriteFontFace
@@ -22,5 +22,5 @@ index f207bade10e..d225ff42b9a 100644
          return S_OK;
      }
 -- 
-2.54.0
+2.56.0
 

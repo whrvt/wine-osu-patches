@@ -1,7 +1,7 @@
-From 5b2f605e3dc87245a69de877662636709163f6e2 Mon Sep 17 00:00:00 2001
+From 4c1842168f318f74776cbd25f855b262bd6e320d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:06:45 +0200
-Subject: [PATCH 077/121] winex11/win32u: Default virtual desktop to 600hz.
+Subject: [PATCH] winex11/win32u: Default virtual desktop to 600hz.
 
 ---
  dlls/win32u/sysparams.c    | 4 ++--
@@ -10,10 +10,10 @@ Subject: [PATCH 077/121] winex11/win32u: Default virtual desktop to 600hz.
  3 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index 239d13df6cc..4681142cfae 100644
+index 617306483ff..0b54289b418 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
-@@ -2111,7 +2111,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
+@@ -2323,7 +2323,7 @@ static SIZE *get_screen_sizes( const DEVMODEW *maximum, const DEVMODEW *modes, U
  static DEVMODEW *get_virtual_modes( const DEVMODEW *initial, const DEVMODEW *maximum,
                                      const DEVMODEW *host_modes, UINT host_modes_count, UINT32 *modes_count )
  {
@@ -22,7 +22,7 @@ index 239d13df6cc..4681142cfae 100644
      DEVMODEW *modes = NULL;
      SIZE *screen_sizes;
      BOOL vertical;
-@@ -2765,7 +2765,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
+@@ -2983,7 +2983,7 @@ static BOOL add_virtual_source( struct device_manager_ctx *ctx )
      if (!read_source_mode( source->key, ENUM_CURRENT_SETTINGS, &current ))
      {
          current = ctx->primary;
@@ -32,10 +32,10 @@ index 239d13df6cc..4681142cfae 100644
          current.dmPelsHeight = initial.dmPelsHeight;
      }
 diff --git a/dlls/wined3d/directx.c b/dlls/wined3d/directx.c
-index 57253248da2..d697cf964f3 100644
+index 06ec77a70e8..ccb973ccf08 100644
 --- a/dlls/wined3d/directx.c
 +++ b/dlls/wined3d/directx.c
-@@ -1841,7 +1841,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d_output *outp
+@@ -1843,7 +1843,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d_output *outp
      if (FAILED(wined3d_output_get_display_mode(output, &mode, NULL)))
          return WINED3DERR_INVALIDCALL;
      if (mode.refresh_rate == DEFAULT_REFRESH_RATE)
@@ -45,7 +45,7 @@ index 57253248da2..d697cf964f3 100644
      freq_per_frame = freq_per_sec.QuadPart / mode.refresh_rate;
      /* Assume 20 scan lines in the vertical blank. */
 diff --git a/dlls/winex11.drv/display.c b/dlls/winex11.drv/display.c
-index 2eaf03001f4..f2c3c22a673 100644
+index 5bd999a50b5..29fd9ecf847 100644
 --- a/dlls/winex11.drv/display.c
 +++ b/dlls/winex11.drv/display.c
 @@ -94,7 +94,7 @@ static BOOL nores_get_modes( x11drv_settings_id id, DWORD flags, struct x11drv_m
@@ -67,5 +67,5 @@ index 2eaf03001f4..f2c3c22a673 100644
  }
  
 -- 
-2.54.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From 91803409fadc8d267a537d483d46083880cb899f Mon Sep 17 00:00:00 2001
+From 547199de64e1790be7de9b3e55659818e0de452c Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:25:18 +0200
-Subject: [PATCH 106/121] winex11: Remove NVIDIA proprietary driver check.
+Subject: [PATCH] winex11: Remove NVIDIA proprietary driver check.
 
 ---
  dlls/winex11.drv/xrandr.c | 10 ----------
@@ -36,5 +36,5 @@ index f764ee45235..13a28fe99ac 100644
      pXRRFreeScreenResources( screen_resources );
      return FALSE;
 -- 
-2.54.0
+2.56.0
 

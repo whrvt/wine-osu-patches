@@ -1,7 +1,7 @@
-From 88cda29a47ad0acc3b2a7ef729778c4d09641dc3 Mon Sep 17 00:00:00 2001
+From 116bb3704be51d997884204cf8297fb71f56e47e Mon Sep 17 00:00:00 2001
 From: Zhiyi Zhang <zzhang@codeweavers.com>
 Date: Fri, 16 Aug 2019 09:46:25 +0000
-Subject: [PATCH 065/121] msctf: Use list to keep thread managers.
+Subject: [PATCH] msctf: Use list to keep thread managers.
 
 Thread managers were stored in thread local storage,
 which have a major flaw that they can't not be released
@@ -286,5 +286,5 @@ index 312b527eb74..1d99f1e8df7 100644
      *ppOut = (IUnknown *)&This->ITfThreadMgrEx_iface;
      return S_OK;
 -- 
-2.54.0
+2.56.0
 

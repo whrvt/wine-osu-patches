@@ -1,8 +1,8 @@
-From 392cd9d261a6fed52b6b77aaf8e872ba2cff4090 Mon Sep 17 00:00:00 2001
+From 1d77fb4770c2ecad0d2faa2ad3f3764f5d5b1342 Mon Sep 17 00:00:00 2001
 From: Zebediah Figura <z.figura12@gmail.com>
 Date: Wed, 20 Jun 2018 15:10:08 -0500
-Subject: [PATCH 070/121] server: Don't check for a hung queue when sending
- low-level hooks.
+Subject: [PATCH] server: Don't check for a hung queue when sending low-level
+ hooks.
 
 Since user32 does this.
 
@@ -12,10 +12,10 @@ This logic is independent of the SMTO_ABORTIFHUNG logic on Windows. In fact, IsH
  1 file changed, 1 deletion(-)
 
 diff --git a/server/queue.c b/server/queue.c
-index 2229223fe5d..a3f954ef713 100644
+index 68701ebdf6c..31ffa67424e 100644
 --- a/server/queue.c
 +++ b/server/queue.c
-@@ -1981,7 +1981,6 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
+@@ -1928,7 +1928,6 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
  
      if (!(hook_thread = get_first_global_hook( desktop, id ))) return 0;
      if (!(queue = hook_thread->queue)) return 0;
@@ -24,5 +24,5 @@ index 2229223fe5d..a3f954ef713 100644
      if (!(msg = mem_alloc( sizeof(*msg) ))) return 0;
  
 -- 
-2.54.0
+2.56.0
 

@@ -1,31 +1,34 @@
-From ec65da05e5687434756c32221b2cfc85466c6920 Mon Sep 17 00:00:00 2001
+From cc02ca10fa736c3350352eac296e0b8093c62dc0 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 8 Sep 2024 02:15:12 -0700
-Subject: [PATCH 114/121] winebus: Fake-load driver if EnableWinebus isn't set
- to 1.
+Subject: [PATCH] winebus: Fake-load driver if EnableWinebus isn't set to 1.
 
 The registry key checked is a DWORD in HKLM\System\CurrentControlSet\Services\winebus.
 
 This is just a simple method to disable winebus/hid/usb without ZwLoadDriver
 complaining about not being able to load the driver.
 ---
- dlls/winebus.sys/main.c | 20 ++++++++++++++++----
- 1 file changed, 16 insertions(+), 4 deletions(-)
+ dlls/winebus.sys/main.c | 24 ++++++++++++++++++++----
+ 1 file changed, 20 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
-index 0132297a4a6..7d38058f294 100644
+index 8be5077e1b4..679b6d3d4c8 100644
 --- a/dlls/winebus.sys/main.c
 +++ b/dlls/winebus.sys/main.c
-@@ -1688,10 +1688,21 @@ static void WINAPI driver_unload(DRIVER_OBJECT *driver)
+@@ -1687,10 +1687,25 @@ static void WINAPI driver_unload(DRIVER_OBJECT *driver)
      NtClose(driver_key);
  }
  
-+static NTSTATUS WINAPI nop_one(void *a)
++static void WINAPI nop_unload(DRIVER_OBJECT *driver)
++{
++}
++
++static NTSTATUS WINAPI nop_dispatch(DEVICE_OBJECT *device, IRP *irp)
 +{
 +    return STATUS_SUCCESS;
 +}
 +
-+static NTSTATUS WINAPI nop_two(void *a, void *b)
++static NTSTATUS WINAPI nop_add_device(DRIVER_OBJECT *driver, DEVICE_OBJECT *pdo)
 +{
 +    return STATUS_SUCCESS;
 +}
@@ -38,7 +41,7 @@ index 0132297a4a6..7d38058f294 100644
  
      TRACE( "(%p, %s)\n", driver, debugstr_w(path->Buffer) );
  
-@@ -1705,10 +1716,11 @@ NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
+@@ -1704,10 +1719,11 @@ NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
  
      driver_obj = driver;
  
@@ -47,13 +50,13 @@ index 0132297a4a6..7d38058f294 100644
 -    driver->DriverExtension->AddDevice = driver_add_device;
 -    driver->DriverUnload = driver_unload;
 +    on = check_bus_option(L"EnableWinebus", FALSE);
-+    driver->MajorFunction[IRP_MJ_PNP] = on ? common_pnp_dispatch : nop_two;
-+    driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = on ? hid_internal_dispatch : nop_two;
-+    driver->DriverExtension->AddDevice = on ? driver_add_device : nop_two;
-+    driver->DriverUnload = on ? driver_unload : nop_one;
++    driver->MajorFunction[IRP_MJ_PNP] = on ? common_pnp_dispatch : nop_dispatch;
++    driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = on ? hid_internal_dispatch : nop_dispatch;
++    driver->DriverExtension->AddDevice = on ? driver_add_device : nop_add_device;
++    driver->DriverUnload = on ? driver_unload : nop_unload;
  
      return STATUS_SUCCESS;
  }
 -- 
-2.54.0
+2.56.0
 

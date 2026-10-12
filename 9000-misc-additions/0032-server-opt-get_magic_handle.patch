@@ -1,17 +1,17 @@
-From 867196f155dfd81ec963453b60c7180c88193ef2 Mon Sep 17 00:00:00 2001
+From df71b74acf780474e7590d71d1ccb92c32c34b5c Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:26:03 +0200
-Subject: [PATCH 107/121] server: opt-get_magic_handle
+Subject: [PATCH] server: opt-get_magic_handle
 
 ---
  server/handle.c | 7 +++++++
  1 file changed, 7 insertions(+)
 
 diff --git a/server/handle.c b/server/handle.c
-index a51a794191c..2216599ff64 100644
+index 1933b2f6a43..8015de046ff 100644
 --- a/server/handle.c
 +++ b/server/handle.c
-@@ -446,6 +446,13 @@ unsigned int close_handle( struct process *process, obj_handle_t handle )
+@@ -430,6 +430,13 @@ unsigned int close_handle( struct process *process, obj_handle_t handle )
  /* retrieve the object corresponding to one of the magic pseudo-handles */
  static inline struct object *get_magic_handle( obj_handle_t handle )
  {
@@ -26,5 +26,5 @@ index a51a794191c..2216599ff64 100644
      {
          case 0xfffffffa:  /* current thread impersonation token pseudo-handle */
 -- 
-2.54.0
+2.56.0
 

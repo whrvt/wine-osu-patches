@@ -1,17 +1,17 @@
-From 1ecb70ecf584bca18d63177b358710f107a3ad3e Mon Sep 17 00:00:00 2001
+From 1f84038d17daa229a833197e04f4b32c84efb5e7 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:33:09 +0200
-Subject: [PATCH 119/121] win32u: Add winstation cache.
+Subject: [PATCH] win32u: Add winstation cache.
 
 ---
  dlls/win32u/winstation.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
 diff --git a/dlls/win32u/winstation.c b/dlls/win32u/winstation.c
-index 3da9acdd3af..e9c01fb3904 100644
+index 3c55a80c5e1..2304db2b336 100644
 --- a/dlls/win32u/winstation.c
 +++ b/dlls/win32u/winstation.c
-@@ -419,19 +419,25 @@ BOOL WINAPI NtUserCloseWindowStation( HWINSTA handle )
+@@ -426,19 +426,25 @@ BOOL WINAPI NtUserCloseWindowStation( HWINSTA handle )
      return ret;
  }
  
@@ -37,7 +37,7 @@ index 3da9acdd3af..e9c01fb3904 100644
      return ret;
  }
  
-@@ -442,6 +448,8 @@ BOOL WINAPI NtUserSetProcessWindowStation( HWINSTA handle )
+@@ -449,6 +455,8 @@ BOOL WINAPI NtUserSetProcessWindowStation( HWINSTA handle )
  {
      BOOL ret;
  
@@ -47,5 +47,5 @@ index 3da9acdd3af..e9c01fb3904 100644
      {
          req->handle = wine_server_obj_handle( handle );
 -- 
-2.54.0
+2.56.0
 

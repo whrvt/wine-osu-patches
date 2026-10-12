@@ -1,7 +1,7 @@
-From 747c53c0b2c070655f4a90a2fe9cabdc1c017fb6 Mon Sep 17 00:00:00 2001
+From 2df8dabd12ada4175a98fcc604184e3b26f6f6c3 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 31 Dec 2024 14:35:39 -0800
-Subject: [PATCH 007/121] headers: Fix compilation with llvm-mingw UCRT if
+Subject: [PATCH] headers: Fix compilation with llvm-mingw UCRT if
  -fgnuc-version>=5.
 
 ---
@@ -25,7 +25,7 @@ index d4758df865f..f52dff469ee 100644
  #endif
  
 diff --git a/libs/faudio/src/FAudio_internal_simd.c b/libs/faudio/src/FAudio_internal_simd.c
-index 7b7997b2ad0..6c830d9a239 100644
+index 27a130495ae..dd6f9bb9162 100644
 --- a/libs/faudio/src/FAudio_internal_simd.c
 +++ b/libs/faudio/src/FAudio_internal_simd.c
 @@ -69,6 +69,10 @@
@@ -40,5 +40,5 @@ index 7b7997b2ad0..6c830d9a239 100644
  #define HAVE_SSE2_INTRINSICS 1
  #endif
 -- 
-2.54.0
+2.56.0
 

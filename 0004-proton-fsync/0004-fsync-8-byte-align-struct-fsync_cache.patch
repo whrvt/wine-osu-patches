@@ -1,7 +1,7 @@
-From 6a69503aee4a5c36ea024c76fd70e4e8b5cf4eef Mon Sep 17 00:00:00 2001
+From 6e7ba535eeecadc14577e9fba34bf33d293e91c3 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Sun, 12 Apr 2026 13:42:46 -0600
-Subject: [PATCH 023/121] fsync: 8-byte align 'struct fsync_cache'.
+Subject: [PATCH] fsync: 8-byte align 'struct fsync_cache'.
 
 ---
  dlls/ntdll/unix/fsync.c | 2 +-
@@ -21,5 +21,5 @@ index 962ee595887..d89fcda722c 100644
      enum fsync_type type;
      unsigned int shm_idx;
 -- 
-2.54.0
+2.56.0
 

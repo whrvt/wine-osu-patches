@@ -1,8 +1,7 @@
-From 462658f795c856b3b3cb9f77c092cb1e306c0fc2 Mon Sep 17 00:00:00 2001
+From 64b0edc7230e2035e6513c0c90a1e20bd49a9d0d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 16 Mar 2025 17:31:41 -0700
-Subject: [PATCH 059/121] dsound: Divide default buffer length by a factor of
- 8.
+Subject: [PATCH] dsound: Divide default buffer length by a factor of 8.
 
 ---
  dlls/dsound/dsound_main.c | 2 +-
@@ -22,5 +21,5 @@ index e2b9b81beef..0b5c3f42b81 100644
  /*
   * Get a config key from either the app-specific or the default config
 -- 
-2.54.0
+2.56.0
 

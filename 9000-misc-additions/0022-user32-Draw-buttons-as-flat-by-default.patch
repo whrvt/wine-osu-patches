@@ -1,7 +1,7 @@
-From 2fb11584519434d8fc69b965a635af7934f4c63d Mon Sep 17 00:00:00 2001
+From 3ac8766f926ec3b05eb80014a30ceedc13a9f549 Mon Sep 17 00:00:00 2001
 From: Joshua Ashton <joshua@froggi.es>
 Date: Thu, 16 Jul 2020 10:18:31 +0100
-Subject: [PATCH 097/121] user32: Draw buttons as flat by default
+Subject: [PATCH] user32: Draw buttons as flat by default
 
 Signed-off-by: Joshua Ashton <joshua@froggi.es>
 ---
@@ -40,5 +40,5 @@ index a8f3a0af84b..5f3d9dd51b7 100644
      oldDrawMode = SetROP2(hdc, R2_NOT);
      oldBkMode = SetBkMode(hdc, TRANSPARENT);
 -- 
-2.54.0
+2.56.0
 

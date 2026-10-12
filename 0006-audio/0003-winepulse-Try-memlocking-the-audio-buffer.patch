@@ -1,7 +1,7 @@
-From cb9c29dd20ffa2bdb22c25f71041a5396b09e3ba Mon Sep 17 00:00:00 2001
+From 5fe7ebf5d8f6684cb1942390170adaec69a98c72 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:21:12 -0700
-Subject: [PATCH 055/121] winepulse: Try memlocking the audio buffer.
+Subject: [PATCH] winepulse: Try memlocking the audio buffer.
 
 But allow disabling it with WINE_PULSE_MEMLOCK=0.
 ---
@@ -74,5 +74,5 @@ index 332c550579f..a901b1175af 100644
  }
  
 -- 
-2.54.0
+2.56.0
 

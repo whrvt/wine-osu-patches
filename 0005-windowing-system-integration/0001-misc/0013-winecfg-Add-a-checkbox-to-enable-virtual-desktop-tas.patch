@@ -1,8 +1,7 @@
-From 700033f2582415155be63ea771ffb4b34708ab08 Mon Sep 17 00:00:00 2001
+From b081877d331134b4225e74c713f02f25c2a4cb4e Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 10 Dec 2024 22:12:41 +0100
-Subject: [PATCH 039/121] winecfg: Add a checkbox to enable virtual desktop
- taskbar.
+Subject: [PATCH] winecfg: Add a checkbox to enable virtual desktop taskbar.
 
 Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=57515
 ---
@@ -176,5 +175,5 @@ index 9db8da5a4f4..9680972b842 100644
                          case IDC_ENABLE_DECORATED: on_enable_decorated_clicked(hDlg); break;
  			case IDC_FULLSCREEN_GRAB:  on_fullscreen_grab_clicked(hDlg); break;
 -- 
-2.54.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From b327cd65d4b9a2130f6c7746856cf454faf9d0da Mon Sep 17 00:00:00 2001
+From 373ae320d9d343f615d8d54b700ad2700544d914 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 29 Aug 2025 11:19:36 -0700
-Subject: [PATCH 060/121] pulse,mmdevapi: Some simplifications and stability
+Subject: [PATCH] pulse,mmdevapi: Some simplifications and stability
  improvements to the low latency patches.
 
 ---
@@ -10,7 +10,7 @@ Subject: [PATCH 060/121] pulse,mmdevapi: Some simplifications and stability
  2 files changed, 36 insertions(+), 60 deletions(-)
 
 diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
-index 719cecbcf0d..06d08887bc2 100644
+index 9251ead093d..5147072399f 100644
 --- a/dlls/mmdevapi/client.c
 +++ b/dlls/mmdevapi/client.c
 @@ -89,9 +89,6 @@ static inline struct audio_client *impl_from_IAudioStreamVolume(IAudioStreamVolu
@@ -82,8 +82,8 @@ index 719cecbcf0d..06d08887bc2 100644
      if (FAILED(hr = get_periods(This, &def_period, &min_period)))
          return hr;
  
--    *default_period_frames = def_period * format->nSamplesPerSec / (REFERENCE_TIME)10000000;
--    *min_period_frames     = min_period * format->nSamplesPerSec / (REFERENCE_TIME)10000000;
+-    *default_period_frames = MulDiv(def_period, format->nSamplesPerSec, 10000000);
+-    *min_period_frames     = MulDiv(min_period, format->nSamplesPerSec, 10000000);
 -    *max_period_frames     = *default_period_frames;
 +    *default_period_frames = ((def_period * format->nSamplesPerSec) + (REFERENCE_TIME)9999999) / (REFERENCE_TIME)10000000;
 +    *min_period_frames     = ((min_period * format->nSamplesPerSec) + (REFERENCE_TIME)9999999) / (REFERENCE_TIME)10000000;
@@ -108,9 +108,9 @@ index 719cecbcf0d..06d08887bc2 100644
 -        period = periodval;
 -        TRACE("Audio period set to %d.\n", periodval);
 -    } else { // Default
--        period = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
+-        period = MulDiv(period_frames, 10000000, format->nSamplesPerSec);
 -    }
-+    period = period_frames * (REFERENCE_TIME)10000000 / format->nSamplesPerSec;
++    period = MulDiv(period_frames, 10000000, format->nSamplesPerSec);
  
      return stream_init(This, FALSE, AUDCLNT_SHAREMODE_SHARED, flags, 0, period, format, session_guid);
  }
@@ -185,5 +185,5 @@ index ca438140f7b..b14cbdb763d 100644
      stream->duration = params->duration;
  
 -- 
-2.54.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From 5b4cc225b307a27502ba8ec82f01dd05b14f5278 Mon Sep 17 00:00:00 2001
+From b42250efa3cdbf45f97f9b771ba86d26869857d4 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 4 Nov 2024 01:25:35 -0800
-Subject: [PATCH 087/121] add an env var to force disable rawinput.
+Subject: [PATCH] add an env var to force disable rawinput.
 
 ---
  dlls/win32u/rawinput.c       | 15 +++++++++++++++
@@ -50,10 +50,10 @@ index f33a9b56aeb..89ad959ecd2 100644
  
      TRACE( "devices %p, device_count %p, device_size %u\n", devices, device_count, device_size );
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index c217aa9ead6..0bd5008cc2c 100644
+index 2c92515a01c..5e620d54809 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
-@@ -439,6 +439,17 @@ static inline const char *debugstr_color( COLORREF color )
+@@ -460,6 +460,17 @@ static inline const char *debugstr_color( COLORREF color )
      return wine_dbg_sprintf( "RGB(%02x,%02x,%02x)", GetRValue(color), GetGValue(color), GetBValue(color) );
  }
  
@@ -72,10 +72,10 @@ index c217aa9ead6..0bd5008cc2c 100644
  {
      dst->left   = max( src1->left, src2->left );
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 3c46a387fd7..c3f9b9bf8ab 100644
+index 35c0f23a4b6..558ba1b7e15 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -1043,6 +1043,17 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
+@@ -1046,6 +1046,17 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
      while (len--) *dst++ = (unsigned char)*src++;
  }
  
@@ -94,5 +94,5 @@ index 3c46a387fd7..c3f9b9bf8ab 100644
  {
      WCHAR *p = dst;
 -- 
-2.54.0
+2.56.0
 

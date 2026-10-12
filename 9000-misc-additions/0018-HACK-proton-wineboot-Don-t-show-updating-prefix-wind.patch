@@ -1,18 +1,17 @@
-From 72a910f14b4f72e590275f99c444a7d554cc4b32 Mon Sep 17 00:00:00 2001
+From d147c16162c37bab7f4eff3f64709e2c5840b2dd Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Mon, 22 Jan 2018 14:35:51 -0600
-Subject: [PATCH 093/121] HACK: proton: wineboot: Don't show "updating prefix"
- window.
+Subject: [PATCH] HACK: proton: wineboot: Don't show "updating prefix" window.
 
 ---
  programs/wineboot/wineboot.c | 60 ------------------------------------
  1 file changed, 60 deletions(-)
 
 diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
-index ffc6ec30b0a..21a8910c6f6 100644
+index 495d93076d6..4805430c95d 100644
 --- a/programs/wineboot/wineboot.c
 +++ b/programs/wineboot/wineboot.c
-@@ -1480,64 +1480,6 @@ static BOOL start_services_process(void)
+@@ -1498,64 +1498,6 @@ static BOOL start_services_process(void)
      return TRUE;
  }
  
@@ -77,7 +76,7 @@ index ffc6ec30b0a..21a8910c6f6 100644
  static HANDLE start_rundll32( const WCHAR *inf_path, const WCHAR *install, WORD machine )
  {
      WCHAR app[MAX_PATH + ARRAY_SIZE(L"\\rundll32.exe" )];
-@@ -1685,7 +1627,6 @@ static void update_wineprefix( BOOL force )
+@@ -1704,7 +1646,6 @@ static void update_wineprefix( BOOL force )
  
          if ((process = start_rundll32( inf_path, L"PreInstall", IMAGE_FILE_MACHINE_TARGET_HOST )))
          {
@@ -85,7 +84,7 @@ index ffc6ec30b0a..21a8910c6f6 100644
              for (;;)
              {
                  if (process)
-@@ -1706,7 +1647,6 @@ static void update_wineprefix( BOOL force )
+@@ -1725,7 +1666,6 @@ static void update_wineprefix( BOOL force )
                      process = start_rundll32( inf_path, L"Wow64Install", machines[count].Machine );
                  count++;
              }
@@ -94,5 +93,5 @@ index ffc6ec30b0a..21a8910c6f6 100644
          install_root_pnp_devices();
          update_user_profile();
 -- 
-2.54.0
+2.56.0
 

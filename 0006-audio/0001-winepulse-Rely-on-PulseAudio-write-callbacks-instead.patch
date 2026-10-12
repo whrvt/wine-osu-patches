@@ -1,8 +1,8 @@
-From f9b8248051470eb05728102b2ebe4d996a122ee9 Mon Sep 17 00:00:00 2001
+From e4422b130c3a703a369aaa8be163dab0fb7e54fb Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
-Subject: [PATCH 053/121] winepulse: Rely on PulseAudio write callbacks instead
- of a timer loop.
+Subject: [PATCH] winepulse: Rely on PulseAudio write callbacks instead of a
+ timer loop.
 
 Reverting a patch from Andrew Eikum.
 ---
@@ -1009,5 +1009,5 @@ index 2e8e7156269..4553f9a528f 100644
  exit:
      pulse_unlock();
 -- 
-2.54.0
+2.56.0
 

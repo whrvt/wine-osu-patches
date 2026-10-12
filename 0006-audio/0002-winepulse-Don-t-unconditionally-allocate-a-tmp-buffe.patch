@@ -1,8 +1,7 @@
-From 49a6ac1e8963234f4ce79cee2f29eae0cc58307c Mon Sep 17 00:00:00 2001
+From 3ae5070b77754baad08319fde0d8a1068196e41c Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:15:33 -0700
-Subject: [PATCH 054/121] winepulse: Don't unconditionally allocate a tmp
- buffer.
+Subject: [PATCH] winepulse: Don't unconditionally allocate a tmp buffer.
 
 ---
  dlls/winepulse.drv/pulse.c | 11 ++++++++---
@@ -31,5 +30,5 @@ index 4553f9a528f..332c550579f 100644
          else {
              WARN("Capture device support is unavailable with this version of wine.\n");
 -- 
-2.54.0
+2.56.0
 

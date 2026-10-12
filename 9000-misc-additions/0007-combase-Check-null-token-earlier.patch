@@ -1,7 +1,7 @@
-From e7595e48bd58f14a107cd696f8a25759de7862d7 Mon Sep 17 00:00:00 2001
+From 6c12eaf60a11e842bbefeb4853c267dae491f83d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 11:21:17 -0700
-Subject: [PATCH 082/121] combase: Check null token earlier.
+Subject: [PATCH] combase: Check null token earlier.
 
 ---
  dlls/combase/combase.c | 5 ++---
@@ -27,5 +27,5 @@ index 94e256f7cc1..defadea8063 100644
      {
          ERR("apartment not initialised\n");
 -- 
-2.54.0
+2.56.0
 

@@ -1,8 +1,7 @@
-From a1f8dae4167224bb9a81fc83ad651ede599a3cac Mon Sep 17 00:00:00 2001
+From ece8b883ad6ae6f2e50f58ce4b6d86ce1e825563 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 15 Feb 2022 17:20:40 +0300
-Subject: [PATCH 020/121] fsync: Add WINE_FSYNC_SIMULATE_SCHED_QUANTUM config
- option.
+Subject: [PATCH] fsync: Add WINE_FSYNC_SIMULATE_SCHED_QUANTUM config option.
 
 And auto enable it for Uplay laucher.
 
@@ -13,10 +12,10 @@ CW-Bug-Id: #20155
  2 files changed, 11 insertions(+)
 
 diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
-index 460888b95df..11be65122e8 100644
+index bd888b9928b..d12217e57fa 100644
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -75,6 +75,7 @@ static const WCHAR bootstrapW[] = {'W','I','N','E','B','O','O','T','S','T','R','
+@@ -76,6 +76,7 @@ static const WCHAR bootstrapW[] = {'W','I','N','E','B','O','O','T','S','T','R','
  int main_argc = 0;
  char **main_argv = NULL;
  WCHAR **main_wargv = NULL;
@@ -24,7 +23,7 @@ index 460888b95df..11be65122e8 100644
  
  static LCID user_lcid, system_lcid;
  static LANGID user_ui_language;
-@@ -824,6 +825,7 @@ static void init_locale(void)
+@@ -826,6 +827,7 @@ static void init_locale(void)
  void init_environment(void)
  {
      USHORT *case_table;
@@ -32,7 +31,7 @@ index 460888b95df..11be65122e8 100644
  
      init_unix_codepage();
      init_locale();
-@@ -833,6 +835,14 @@ void init_environment(void)
+@@ -835,6 +837,14 @@ void init_environment(void)
          uctable = case_table + 2;
          lctable = case_table + case_table[1] + 2;
      }
@@ -48,10 +47,10 @@ index 460888b95df..11be65122e8 100644
  
  
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index ef1d9ef5005..b30c82af39b 100644
+index 9b6401ee37d..74e6baaad9f 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -212,6 +212,7 @@ extern BOOL is_prefix_bootstrap;
+@@ -222,6 +222,7 @@ extern ULONG session_id;
  extern int main_argc;
  extern char **main_argv;
  extern WCHAR **main_wargv;
@@ -60,5 +59,5 @@ index ef1d9ef5005..b30c82af39b 100644
  extern unsigned int supported_machines_count;
  extern USHORT supported_machines[8];
 -- 
-2.54.0
+2.56.0
 

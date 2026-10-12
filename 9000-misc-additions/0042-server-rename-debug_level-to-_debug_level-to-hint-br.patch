@@ -1,8 +1,8 @@
-From 24ef88cd53d710625808de391e097389b3f7da32 Mon Sep 17 00:00:00 2001
+From e68000bdfba2e146ad41017236d631d9e24d5b20 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:32:40 +0200
-Subject: [PATCH 117/121] server: rename debug_level to _debug_level to hint
- branch predictor
+Subject: [PATCH] server: rename debug_level to _debug_level to hint branch
+ predictor
 
 ---
  dlls/ntdll/unix/server.c | 2 +-
@@ -13,10 +13,10 @@ Subject: [PATCH 117/121] server: rename debug_level to _debug_level to hint
  5 files changed, 12 insertions(+), 7 deletions(-)
 
 diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index b7717bce067..139d5f56a7d 100644
+index d7b100a979f..1324b0854b4 100644
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
-@@ -1729,7 +1729,7 @@ size_t server_init_process(void)
+@@ -1729,7 +1729,7 @@ void server_init_process( struct thread_data *data )
          req->unix_tid    = get_unix_tid();
          req->reply_fd    = reply_pipe;
          req->wait_fd     = data->wait_fd[1];
@@ -51,10 +51,10 @@ index ee0e8addecb..f8214e5d3cb 100644
      case 'f':
          foreground = 1;
 diff --git a/server/object.h b/server/object.h
-index 75c1b21ce00..fcb01e8e542 100644
+index bc6456f53a3..8b38d0833dc 100644
 --- a/server/object.h
 +++ b/server/object.h
-@@ -346,7 +346,12 @@ extern struct object *create_symlink( struct object *root, const struct unicode_
+@@ -361,7 +361,12 @@ extern struct object *create_symlink( struct object *root, struct unicode_str na
  /* global variables */
  
    /* command-line options */
@@ -69,10 +69,10 @@ index 75c1b21ce00..fcb01e8e542 100644
  extern timeout_t master_socket_timeout;
  extern const char *server_argv0;
 diff --git a/server/protocol.def b/server/protocol.def
-index 02a65f73283..a240e7d0d43 100644
+index 0e711eaf92a..3a6155d5369 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -1179,7 +1179,7 @@ typedef volatile struct
+@@ -1194,7 +1194,7 @@ typedef volatile struct
  @REQ(init_first_thread)
      int          unix_pid;     /* Unix pid of new process */
      int          unix_tid;     /* Unix tid of new thread */
@@ -82,10 +82,10 @@ index 02a65f73283..a240e7d0d43 100644
      int          wait_fd;      /* fd for blocking calls pipe */
      unsigned int page_size;    /* client page size */
 diff --git a/server/thread.c b/server/thread.c
-index 3e059462f06..97779c178e4 100644
+index 2e99a3b9410..080f4286ef8 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -1804,7 +1804,7 @@ DECL_HANDLER(init_first_thread)
+@@ -1763,7 +1763,7 @@ DECL_HANDLER(init_first_thread)
  
      set_thread_base_priority( current, current->base_priority );
  
@@ -95,5 +95,5 @@ index 3e059462f06..97779c178e4 100644
      reply->pid          = get_process_id( process );
      reply->tid          = get_thread_id( current );
 -- 
-2.54.0
+2.56.0
 

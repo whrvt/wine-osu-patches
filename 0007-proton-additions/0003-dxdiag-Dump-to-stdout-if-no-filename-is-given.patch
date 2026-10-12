@@ -1,7 +1,7 @@
-From 5530be846e5c804f65d20032b9876bcecd63f2c2 Mon Sep 17 00:00:00 2001
+From 24b60568e641dcd0008015c5e527331cbce3e740 Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Mon, 23 Sep 2019 13:29:16 -0500
-Subject: [PATCH 066/121] dxdiag: Dump to stdout if no filename is given
+Subject: [PATCH] dxdiag: Dump to stdout if no filename is given
 
 ---
  programs/dxdiag/main.c   |  8 +++++++-
@@ -56,5 +56,5 @@ index a8eb733ba4b..63d091395b0 100644
  
      V_VT(&destVar) = VT_BSTR;
 -- 
-2.54.0
+2.56.0
 

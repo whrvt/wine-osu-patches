@@ -1,7 +1,7 @@
-From a29988be93c54384826407364ee42fa33f42e2ee Mon Sep 17 00:00:00 2001
+From ca54ecfd9c3acdf1a0d1b801cdb5700068debe66 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 01:27:43 +0200
-Subject: [PATCH 002/121] Revert "ntdll: Switch to CLOCK_BOOTTIME for monotonic
+Subject: [PATCH] Revert "ntdll: Switch to CLOCK_BOOTTIME for monotonic
  counters when available."
 
 This reverts commit 3d373e452388b60bea9dca6d5c4cf3f8b20a0c54.
@@ -11,7 +11,7 @@ This reverts commit 3d373e452388b60bea9dca6d5c4cf3f8b20a0c54.
  2 files changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
-index fbf054e9d93..febbd21401c 100644
+index 829c7128b14..ed87a461185 100644
 --- a/dlls/ntdll/unix/sync.c
 +++ b/dlls/ntdll/unix/sync.c
 @@ -96,8 +96,8 @@ static inline ULONGLONG monotonic_counter(void)
@@ -26,10 +26,10 @@ index fbf054e9d93..febbd21401c 100644
  #endif
      if (!clock_gettime( CLOCK_MONOTONIC, &ts ))
 diff --git a/server/request.c b/server/request.c
-index fd09ca2ccc4..82b71de1cc8 100644
+index 5135ed50cfd..de7ff24549d 100644
 --- a/server/request.c
 +++ b/server/request.c
-@@ -514,8 +514,8 @@ timeout_t monotonic_counter(void)
+@@ -494,8 +494,8 @@ timeout_t monotonic_counter(void)
      return mach_continuous_time() * timebase.numer / timebase.denom / 100;
  #elif defined(HAVE_CLOCK_GETTIME)
      struct timespec ts;
@@ -41,5 +41,5 @@ index fd09ca2ccc4..82b71de1cc8 100644
  #endif
      if (!clock_gettime( CLOCK_MONOTONIC, &ts ))
 -- 
-2.54.0
+2.56.0
 

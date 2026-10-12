@@ -1,8 +1,7 @@
-From 83e981c16bc2e9c5fac4de257e224e8b09fd658f Mon Sep 17 00:00:00 2001
+From ac4a4cf048b6e8db3e456e04dd7a4b85031234ab Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 3 Dec 2024 12:46:56 +0100
-Subject: [PATCH 027/121] win32u: Add a new driver entry to check window
- manager name.
+Subject: [PATCH] win32u: Add a new driver entry to check window manager name.
 
 ---
  dlls/win32u/driver.c      | 12 ++++++++++++
@@ -12,10 +11,10 @@ Subject: [PATCH 027/121] win32u: Add a new driver entry to check window
  4 files changed, 20 insertions(+)
 
 diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
-index 27259fd8506..7b6af5ffd86 100644
+index 4598ac715bf..326dacbfdfd 100644
 --- a/dlls/win32u/driver.c
 +++ b/dlls/win32u/driver.c
-@@ -786,6 +786,11 @@ static void nulldrv_FlashWindowEx( FLASHWINFO *info )
+@@ -785,6 +785,11 @@ static void nulldrv_FlashWindowEx( FLASHWINFO *info )
  {
  }
  
@@ -56,10 +55,10 @@ index 27259fd8506..7b6af5ffd86 100644
      SET_USER_FUNC(ProcessEvents);
      SET_USER_FUNC(ReleaseDC);
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
-index d5b4fdbf0aa..3e18e605206 100644
+index cf032cb3bf9..ccd5af4a066 100644
 --- a/dlls/winex11.drv/init.c
 +++ b/dlls/winex11.drv/init.c
-@@ -676,6 +676,7 @@ static const struct user_driver_funcs x11drv_funcs =
+@@ -639,6 +639,7 @@ static const struct user_driver_funcs x11drv_funcs =
      .pDesktopWindowProc = X11DRV_DesktopWindowProc,
      .pDestroyWindow = X11DRV_DestroyWindow,
      .pFlashWindowEx = X11DRV_FlashWindowEx,
@@ -68,10 +67,10 @@ index d5b4fdbf0aa..3e18e605206 100644
      .pProcessEvents = X11DRV_ProcessEvents,
      .pReleaseDC = X11DRV_ReleaseDC,
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index cd0f8d2ad0e..ef52c1b6b2e 100644
+index 3eb40f8185c..60a04c049a3 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -3772,6 +3772,12 @@ void net_supported_init( struct x11drv_thread_data *data )
+@@ -3779,6 +3779,12 @@ void net_supported_init( struct x11drv_thread_data *data )
      }
  }
  
@@ -85,10 +84,10 @@ index cd0f8d2ad0e..ef52c1b6b2e 100644
  {
      init_recursive_mutex( &win_data_mutex );
 diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
-index 630e035a589..a6037d7f013 100644
+index 4d7d71c6bbf..4bbc80c169c 100644
 --- a/include/wine/gdi_driver.h
 +++ b/include/wine/gdi_driver.h
-@@ -400,6 +400,7 @@ struct user_driver_funcs
+@@ -410,6 +410,7 @@ struct user_driver_funcs
      LRESULT (*pDesktopWindowProc)(HWND,UINT,WPARAM,LPARAM);
      void    (*pDestroyWindow)(HWND);
      void    (*pFlashWindowEx)(FLASHWINFO*);
@@ -97,5 +96,5 @@ index 630e035a589..a6037d7f013 100644
      BOOL    (*pProcessEvents)(DWORD);
      void    (*pReleaseDC)(HWND,HDC);
 -- 
-2.54.0
+2.56.0
 

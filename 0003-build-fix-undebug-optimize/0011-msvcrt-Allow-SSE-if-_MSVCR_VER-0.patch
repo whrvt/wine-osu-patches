@@ -1,14 +1,14 @@
-From 14e5c61ead3e34564b36d44a645f0800bd447b68 Mon Sep 17 00:00:00 2001
+From da1dac820f7b146e89f69f0c11fdbe6db0e39ac0 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 31 Jan 2025 13:46:42 -0800
-Subject: [PATCH 016/121] msvcrt: Allow SSE if _MSVCR_VER == 0.
+Subject: [PATCH] msvcrt: Allow SSE if _MSVCR_VER == 0.
 
 ---
  dlls/msvcrt/math.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/msvcrt/math.c b/dlls/msvcrt/math.c
-index 8ea434c2176..0150d01fbaf 100644
+index 98d3a35a275..a5cf1bdfd2d 100644
 --- a/dlls/msvcrt/math.c
 +++ b/dlls/msvcrt/math.c
 @@ -71,7 +71,7 @@ static BOOL sse2_enabled;
@@ -21,5 +21,5 @@ index 8ea434c2176..0150d01fbaf 100644
  #else
      sse2_enabled = sse2_supported;
 -- 
-2.54.0
+2.56.0
 

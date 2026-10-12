@@ -1,7 +1,7 @@
-From f79e1b2de1124c3dc807fa2f7b24e8c188a93c25 Mon Sep 17 00:00:00 2001
+From 90de254327ce5b6469449b5b80853f366a7cea3b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 13 Dec 2024 19:58:02 -0800
-Subject: [PATCH 104/121] ntdll: Silence HeapEnableTerminationOnCorruption.
+Subject: [PATCH] ntdll: Silence HeapEnableTerminationOnCorruption.
 
 ---
  dlls/ntdll/heap.c | 6 ++++++
@@ -26,7 +26,7 @@ index feee54e0285..9d9b1d3634e 100644
      default:
          FIXME( "HEAP_INFORMATION_CLASS %u not implemented!\n", info_class );
 diff --git a/include/winnt.h b/include/winnt.h
-index baa8fab4bcd..817f9ceae65 100644
+index daf9b42f677..693c8a68351 100644
 --- a/include/winnt.h
 +++ b/include/winnt.h
 @@ -1050,6 +1050,7 @@ NTSYSAPI WORD         WINAPI RtlQueryDepthSList(PSLIST_HEADER);
@@ -38,5 +38,5 @@ index baa8fab4bcd..817f9ceae65 100644
  
  /* Processor feature flags.  */
 -- 
-2.54.0
+2.56.0
 

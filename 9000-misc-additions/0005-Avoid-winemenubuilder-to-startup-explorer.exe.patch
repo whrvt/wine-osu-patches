@@ -1,7 +1,7 @@
-From 297b679df483fba4dc3af1089d8bc8f06af0a7a8 Mon Sep 17 00:00:00 2001
+From f447a3d83c238bb68bc2dd7296254673f80df5d2 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Sat, 12 Dec 2020 22:36:59 +0100
-Subject: [PATCH 080/121] Avoid winemenubuilder to startup explorer.exe.
+Subject: [PATCH] Avoid winemenubuilder to startup explorer.exe.
 
 Because its session seems not interactive and fails later
 to create windows.
@@ -13,7 +13,7 @@ to create windows.
  2 files changed, 30 insertions(+)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index 843bedb3ea3..aaa91ba795b 100644
+index 2922063106f..98c89c9498a 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
 @@ -26,6 +26,7 @@
@@ -24,7 +24,7 @@ index 843bedb3ea3..aaa91ba795b 100644
  #include "wine/server.h"
  
  WINE_DEFAULT_DEBUG_CHANNEL(win);
-@@ -3039,6 +3040,24 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+@@ -3062,6 +3063,24 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
                        guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7] );
              NtAddAtom( bufferW, asciiz_to_unicode( bufferW, buffer ) - sizeof(WCHAR), &atom );
              NtUserSetProp( hwnd, wine_display_device_guidW, ULongToHandle( atom ) );
@@ -50,10 +50,10 @@ index 843bedb3ea3..aaa91ba795b 100644
          return TRUE;
      }
 diff --git a/programs/winemenubuilder/winemenubuilder.c b/programs/winemenubuilder/winemenubuilder.c
-index 553a47b8806..01d3c10945f 100644
+index 281e02f63d4..70526b89e9f 100644
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
-@@ -2885,6 +2885,17 @@ int PASCAL wWinMain (HINSTANCE hInstance, HINSTANCE prev, LPWSTR cmdline, int sh
+@@ -2882,6 +2882,17 @@ int PASCAL wWinMain (HINSTANCE hInstance, HINSTANCE prev, LPWSTR cmdline, int sh
      if (!init_xdg())
          return 1;
  
@@ -72,5 +72,5 @@ index 553a47b8806..01d3c10945f 100644
      if (FAILED(hr))
      {
 -- 
-2.54.0
+2.56.0
 

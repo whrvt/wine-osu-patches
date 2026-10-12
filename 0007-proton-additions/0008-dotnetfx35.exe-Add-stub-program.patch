@@ -1,45 +1,24 @@
-From 6f8ebe9ab5650f5a6d907dde7ad626f5c1018379 Mon Sep 17 00:00:00 2001
+From 771aa5404af57f5bee341d4d30b1b0de190ffc0b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 16 Oct 2020 23:37:09 +0200
-Subject: [PATCH 071/121] dotnetfx35.exe: Add stub program.
+Subject: [PATCH] dotnetfx35.exe: Add stub program.
 
 This makes it possible to override native dotnetfx35 installer, which
 is broken in an unfixable way. Recent Windows versions also bypass its
 execution somehow.
 ---
- configure                       |  2 ++
  configure.ac                    |  1 +
  programs/dotnetfx35/Makefile.in |  7 +++++++
  programs/dotnetfx35/main.c      | 32 ++++++++++++++++++++++++++++++++
- 4 files changed, 42 insertions(+)
+ 3 files changed, 40 insertions(+)
  create mode 100644 programs/dotnetfx35/Makefile.in
  create mode 100644 programs/dotnetfx35/main.c
 
-diff --git a/configure b/configure
-index 2cf1a766c0e..f5df51cbea2 100755
---- a/configure
-+++ b/configure
-@@ -1729,6 +1729,7 @@ enable_control
- enable_cscript
- enable_dism
- enable_dllhost
-+enable_dotnetfx35
- enable_dplaysvr
- enable_dpnsvr
- enable_dpvsetup
-@@ -23273,6 +23274,7 @@ wine_fn_config_makefile programs/control enable_control
- wine_fn_config_makefile programs/cscript enable_cscript
- wine_fn_config_makefile programs/dism enable_dism
- wine_fn_config_makefile programs/dllhost enable_dllhost
-+wine_fn_config_makefile programs/dotnetfx35 enable_dotnetfx35
- wine_fn_config_makefile programs/dplaysvr enable_dplaysvr
- wine_fn_config_makefile programs/dpnsvr enable_dpnsvr
- wine_fn_config_makefile programs/dpvsetup enable_dpvsetup
 diff --git a/configure.ac b/configure.ac
-index b9d40a01904..7381d0135da 100644
+index 3bd99f6bf67..854f4dbe783 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3584,6 +3584,7 @@ WINE_CONFIG_MAKEFILE(programs/control)
+@@ -3598,6 +3598,7 @@ WINE_CONFIG_MAKEFILE(programs/control)
  WINE_CONFIG_MAKEFILE(programs/cscript)
  WINE_CONFIG_MAKEFILE(programs/dism)
  WINE_CONFIG_MAKEFILE(programs/dllhost)
@@ -99,5 +78,5 @@ index 00000000000..cd6df5bcf41
 +    return 0;
 +}
 -- 
-2.54.0
+2.56.0
 

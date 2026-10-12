@@ -1,8 +1,7 @@
-From 9519201cd800078b0aad471d7d7b890a5217d238 Mon Sep 17 00:00:00 2001
+From 855eeeea6242a813303147d6bf7088f255d2fd5c Mon Sep 17 00:00:00 2001
 From: Giovanni Mascellani <gmascellani@codeweavers.com>
 Date: Mon, 7 Dec 2020 09:49:53 +0100
-Subject: [PATCH 047/121] winex11.drv: Dump keysyms and translations for all
- keys.
+Subject: [PATCH] winex11.drv: Dump keysyms and translations for all keys.
 
 Dump all we can see about the user keyboard, so that their +keyboard
 logs can be used to fix layout tables.
@@ -15,10 +14,10 @@ CW-Bug-Id: #16793
  1 file changed, 13 insertions(+)
 
 diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
-index 07b85aa1efb..8499b6efe81 100644
+index 87e1161700f..bca14a0b1c4 100644
 --- a/dlls/winex11.drv/keyboard.c
 +++ b/dlls/winex11.drv/keyboard.c
-@@ -1785,6 +1785,19 @@ static unsigned int detect_keyboard_layout( Display *display, XModifierKeymap *m
+@@ -1846,6 +1846,19 @@ static unsigned int detect_keyboard_layout( Display *display, XModifierKeymap *m
            state = xkb_group << 13 | (i & 1 ? ShiftMask : 0) | (i & 2 ? altgr_mod : 0);
            if (!XkbLookupKeySym( display, keyc, state, &dummy, &keysym )) continue;
            ckey[keyc][i] = keysym_to_char(keysym);
@@ -39,5 +38,5 @@ index 07b85aa1efb..8499b6efe81 100644
    }
  
 -- 
-2.54.0
+2.56.0
 

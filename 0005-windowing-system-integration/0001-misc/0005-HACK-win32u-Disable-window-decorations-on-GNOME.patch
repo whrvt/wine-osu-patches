@@ -1,7 +1,7 @@
-From 4e4bdefea480faf86ba2653af8e491732c946d22 Mon Sep 17 00:00:00 2001
+From 5a8e9a6d93fde3c89338c00828700e076371369b Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 25 Feb 2026 13:08:14 +0100
-Subject: [PATCH 030/121] HACK: win32u: Disable window decorations on GNOME.
+Subject: [PATCH] HACK: win32u: Disable window decorations on GNOME.
 
 Window decorations seems to be the root cause of game/shell crashes after alt-tab
 on GNOME: disabling them to prevent such issues.
@@ -10,10 +10,10 @@ on GNOME: disabling them to prevent such issues.
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 55a11d0586d..c15b9b93c5c 100644
+index 16466d067fa..2dbad43dd4b 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -1997,7 +1997,8 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
+@@ -2143,7 +2143,8 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
      RECT visible_rect, rect = {0};
  
      if (get_present_rect( hwnd, &rect, get_thread_dpi() )) return rect;
@@ -21,8 +21,8 @@ index 55a11d0586d..c15b9b93c5c 100644
 +    if (IsRectEmpty( &rects->window ) || EqualRect( &rects->window, &rects->client ) ||
 +        shaped || !decorated_mode || user_driver->pHasWindowManager( "Mutter" )) return rects->window;
      if (!user_driver->pGetWindowStyleMasks( hwnd, style, ex_style, &style_mask, &ex_style_mask )) return rects->window;
-     if (!NtUserAdjustWindowRect( &rect, style & style_mask, FALSE, ex_style & ex_style_mask, dpi )) return rects->window;
+     if (!adjust_window_rect( &rect, style & style_mask, FALSE, ex_style & ex_style_mask, round_dpi( dpi ) )) return rects->window;
  
 -- 
-2.54.0
+2.56.0
 

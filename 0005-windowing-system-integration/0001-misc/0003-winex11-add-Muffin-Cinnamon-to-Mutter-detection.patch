@@ -1,7 +1,7 @@
-From c5c8fd905e81df84158d9f30fd75845e2be18d55 Mon Sep 17 00:00:00 2001
+From ad0f3379d0aa1633dee921c27ee9c350a2fed7f7 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 4 Mar 2025 15:43:59 +0000
-Subject: [PATCH 028/121] winex11: add Muffin (Cinnamon) to Mutter detection
+Subject: [PATCH] winex11: add Muffin (Cinnamon) to Mutter detection
 
 Without this addition, every Mutter-specific workaround will fail to apply to Cinnamon's
 compositor Muffin, which is nothing but a Mutter fork.
@@ -10,10 +10,10 @@ compositor Muffin, which is nothing but a Mutter fork.
  1 file changed, 1 insertion(+)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index ef52c1b6b2e..bc18632aba2 100644
+index 60a04c049a3..6ae4fdf155c 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -3751,6 +3751,7 @@ void net_supporting_wm_check_init( struct x11drv_thread_data *data )
+@@ -3758,6 +3758,7 @@ void net_supporting_wm_check_init( struct x11drv_thread_data *data )
               get_window_wm_name( data->display, window, &data->window_manager ))
      {
          if (!strcmp( data->window_manager, "GNOME Shell" )) strcpy( data->window_manager, "Mutter" );
@@ -22,5 +22,5 @@ index ef52c1b6b2e..bc18632aba2 100644
      }
  }
 -- 
-2.54.0
+2.56.0
 

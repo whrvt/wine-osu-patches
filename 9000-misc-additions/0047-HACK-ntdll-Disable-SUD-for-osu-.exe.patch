@@ -1,4 +1,4 @@
-From 330f923145cf948daf2c90175018bb4dd90c019c Mon Sep 17 00:00:00 2001
+From ad9ce850f76cb98b9ef20cefed79982895d610fc Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 31 Aug 2026 21:37:39 +0200
 Subject: [PATCH] HACK: ntdll: Disable SUD for osu!.exe.
@@ -8,7 +8,7 @@ Subject: [PATCH] HACK: ntdll: Disable SUD for osu!.exe.
  1 file changed, 18 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index e612e5e0d3e..553ec6a13a5 100644
+index d7d19eb465a..9de321cc4b4 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
 @@ -2174,6 +2174,22 @@ static BOOL handle_syscall_trap( struct thread_data *data, ucontext_t *sigcontex
@@ -34,7 +34,7 @@ index e612e5e0d3e..553ec6a13a5 100644
  /***********************************************************************
   *           check_invalid_gsbase
   *
-@@ -2904,7 +2920,8 @@ void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
+@@ -2904,7 +2920,8 @@ __attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, voi
          arch_prctl( ARCH_GET_FS, &thread_data->pthread_teb );
          alloc_fs_sel( fs32_sel >> 3, get_wow_teb( teb ));
      }
@@ -45,5 +45,5 @@ index e612e5e0d3e..553ec6a13a5 100644
          WARN_(seh)( "could not enable syscall user dispatch\n" );
  #elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
 -- 
-2.55.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From 84bc70dac3177cf1ba159dab235e830f673eb7ff Mon Sep 17 00:00:00 2001
+From 3c4e58cb00a10c44e84d7ec403f6fdfc7b17dbc5 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 27 Dec 2024 11:45:15 -0800
-Subject: [PATCH 100/121] kernelbase: Add AppPolicyGetClrCompat stub.
+Subject: [PATCH] kernelbase: Add AppPolicyGetClrCompat stub.
 
 ---
  dlls/kernelbase/kernelbase.spec |  2 +-
@@ -10,7 +10,7 @@ Subject: [PATCH 100/121] kernelbase: Add AppPolicyGetClrCompat stub.
  3 files changed, 22 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
-index 556c3013c92..d421ca7cc7e 100644
+index 97e3897b3c3..672078a1e4c 100644
 --- a/dlls/kernelbase/kernelbase.spec
 +++ b/dlls/kernelbase/kernelbase.spec
 @@ -42,7 +42,7 @@
@@ -47,7 +47,7 @@ index 8c37e5da1ab..98d70486ea9 100644
   *          AppPolicyGetMediaFoundationCodecLoading (KERNELBASE.@)
   */
 diff --git a/include/appmodel.h b/include/appmodel.h
-index fba40d3f2ed..efdcfe66216 100644
+index d9744c25738..ebf5f4c5061 100644
 --- a/include/appmodel.h
 +++ b/include/appmodel.h
 @@ -62,6 +62,13 @@
@@ -73,5 +73,5 @@ index fba40d3f2ed..efdcfe66216 100644
  LONG WINAPI AppPolicyGetProcessTerminationMethod(HANDLE token, AppPolicyProcessTerminationMethod *policy);
  LONG WINAPI AppPolicyGetShowDeveloperDiagnostic(HANDLE token, AppPolicyShowDeveloperDiagnostic *policy);
 -- 
-2.54.0
+2.56.0
 

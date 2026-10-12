@@ -1,7 +1,7 @@
-From 09cbd163b7421c42e2507e8295d9e07de46a8b35 Mon Sep 17 00:00:00 2001
+From 8e1f3cafa68ca000c9f7af7b7429f5ec382cf978 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Mon, 22 Jul 2024 18:17:42 -0600
-Subject: [PATCH 112/121] win32u: Account for overhang in background fill in
+Subject: [PATCH] win32u: Account for overhang in background fill in
  NtGdiExtTextOutW().
 
 CW-Bug-Id: #23750
@@ -10,10 +10,10 @@ CW-Bug-Id: #23750
  1 file changed, 38 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/win32u/font.c b/dlls/win32u/font.c
-index eb589443ede..d3f1a53b8a5 100644
+index 286822f98f3..63980ccba39 100644
 --- a/dlls/win32u/font.c
 +++ b/dlls/win32u/font.c
-@@ -5795,11 +5795,12 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
+@@ -5796,11 +5796,12 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
      INT char_extra;
      SIZE sz;
      RECT rc;
@@ -27,7 +27,7 @@ index eb589443ede..d3f1a53b8a5 100644
  
      if (!dc) return FALSE;
      if (count > INT_MAX) return FALSE;
-@@ -5946,12 +5947,22 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
+@@ -5947,12 +5948,22 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
              deltas[i].y = desired[1].y - width.y;
  
              width = desired[1];
@@ -50,7 +50,7 @@ index eb589443ede..d3f1a53b8a5 100644
  
          NtGdiGetTextExtentExW( hdc, str, count, 0, NULL, NULL, &sz, !!(flags & ETO_GLYPH_INDEX) );
          desired[0].x = desired[0].y = 0;
-@@ -5961,13 +5972,31 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
+@@ -5962,13 +5973,31 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
          desired[1].x -= desired[0].x;
          desired[1].y -= desired[0].y;
  
@@ -87,7 +87,7 @@ index eb589443ede..d3f1a53b8a5 100644
          width = desired[1];
      }
  
-@@ -6022,12 +6051,12 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
+@@ -6023,12 +6052,12 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
          if(!((flags & ETO_CLIPPED) && (flags & ETO_OPAQUE)))
          {
              if(!(flags & ETO_OPAQUE) || !lprect ||
@@ -104,5 +104,5 @@ index eb589443ede..d3f1a53b8a5 100644
                  text_box.bottom = y + tm.tmDescent;
  
 -- 
-2.54.0
+2.56.0
 

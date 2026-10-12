@@ -1,7 +1,7 @@
-From fa3f578b71f1c81ce012e37666eeb2ac30ebb23b Mon Sep 17 00:00:00 2001
+From b278919c8cb491dc45d7de58c8b0e9ff2e1496ce Mon Sep 17 00:00:00 2001
 From: Torge Matthies <openglfreak@googlemail.com>
 Date: Sat, 26 Mar 2022 17:04:26 +0100
-Subject: [PATCH 019/121] include: Use __builtin_expect for debug macros.
+Subject: [PATCH] include: Use __builtin_expect for debug macros.
 
 ---
  include/wine/debug.h | 25 ++++++++++++++++++++-----
@@ -60,5 +60,5 @@ index 8328524ddb9..835ed04841a 100644
  #define __WINE_DPRINTF(dbcl,dbch) \
    do { if(__WINE_GET_DEBUGGING(dbcl,(dbch))) { \
 -- 
-2.54.0
+2.56.0
 
