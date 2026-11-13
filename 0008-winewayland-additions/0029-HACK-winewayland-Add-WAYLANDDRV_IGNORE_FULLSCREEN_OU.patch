@@ -1,0 +1,44 @@
+From ea5a647e9a806d971ea375f456c8b7f044032df1 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 12 Oct 2026 16:52:18 +0200
+Subject: [PATCH] HACK: winewayland: Add WAYLANDDRV_IGNORE_FULLSCREEN_OUTPUT to
+ fullscreen without an output.
+
+---
+ dlls/winewayland.drv/window.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index edfd7e4834f..c9e2568a85b 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -239,6 +239,17 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *dat
+     return TRUE;
+ }
+ 
++static int wayland_ignore_fullscreen_output(void)
++{
++    static int cached = -1;
++    const char *env;
++
++    if (cached == -1)
++        cached = (env = getenv("WAYLANDDRV_IGNORE_FULLSCREEN_OUTPUT")) && !strcmp(env, "1");
++
++    return cached;
++}
++
+ static void wayland_surface_update_state_toplevel(struct wayland_surface *surface)
+ {
+     const RECT *rect = &surface->window.rect;
+@@ -298,7 +309,7 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
+                     goto skip_fullscreen;
+             }
+ 
+-            xdg_toplevel_set_fullscreen(surface->xdg_toplevel, output);
++            xdg_toplevel_set_fullscreen(surface->xdg_toplevel, wayland_ignore_fullscreen_output() ? NULL : output);
+             surface->requested_output = output;
+ 
+             skip_fullscreen:
+-- 
+2.56.0
+

@@ -1,0 +1,124 @@
+From f22d5edfe4f2bb04b3fe8cbb2370f8f8f12a5aa4 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty <etaash.mathamsetty@gmail.com>
+Date: Tue, 7 Jul 2026 22:44:51 -0400
+Subject: [PATCH] winewayland: Introduce reference counting for wayland_output.
+
+---
+ dlls/winewayland.drv/wayland.c        |  2 +-
+ dlls/winewayland.drv/wayland_output.c | 36 ++++++++++++++++++++++-----
+ dlls/winewayland.drv/waylanddrv.h     |  5 +++-
+ 3 files changed, 35 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland.c b/dlls/winewayland.drv/wayland.c
+index 118ee2d6945..daaf7026964 100644
+--- a/dlls/winewayland.drv/wayland.c
++++ b/dlls/winewayland.drv/wayland.c
+@@ -253,7 +253,7 @@ static void registry_handle_global_remove(void *data, struct wl_registry *regist
+         if (output->global_id == id)
+         {
+             TRACE("removing output->name=%s\n", output->current.name);
+-            wayland_output_destroy(output);
++            wayland_output_remove(output);
+             return;
+         }
+     }
+diff --git a/dlls/winewayland.drv/wayland_output.c b/dlls/winewayland.drv/wayland_output.c
+index f76881a1770..4726dac00b0 100644
+--- a/dlls/winewayland.drv/wayland_output.c
++++ b/dlls/winewayland.drv/wayland_output.c
+@@ -315,6 +315,9 @@ BOOL wayland_output_create(uint32_t id, uint32_t version)
+         goto err;
+     }
+ 
++    /* reference held by the output list, surfaces may hold more */
++    output->ref = 1;
++
+     output->wl_output = wl_registry_bind(process_wayland.wl_registry, id,
+                                          &wl_output_interface,
+                                          version < 2 ? version : 2);
+@@ -350,7 +353,7 @@ BOOL wayland_output_create(uint32_t id, uint32_t version)
+     return TRUE;
+ 
+ err:
+-    if (output) wayland_output_destroy(output);
++    if (output) wayland_output_release(output);
+     return FALSE;
+ }
+ 
+@@ -361,24 +364,45 @@ static void wayland_output_state_deinit(struct wayland_output_state *state)
+ }
+ 
+ /**********************************************************************
+- *          wayland_output_destroy
++ *          wayland_output_remove
+  *
+- *  Destroys a wayland_output.
++ *  Removes a wayland_output from the output list, drops the list reference
++ *  and updates the display devices.
+  */
+-void wayland_output_destroy(struct wayland_output *output)
++void wayland_output_remove(struct wayland_output *output)
+ {
+     pthread_mutex_lock(&process_wayland.output_mutex);
+     wl_list_remove(&output->link);
+     pthread_mutex_unlock(&process_wayland.output_mutex);
+ 
++    wayland_output_release(output);
++
++    maybe_init_display_devices();
++}
++
++/**********************************************************************
++ *          wayland_output_add_ref
++ */
++void wayland_output_add_ref(struct wayland_output *output)
++{
++    InterlockedIncrement(&output->ref);
++}
++
++/**********************************************************************
++ *          wayland_output_release
++ *
++ *  Drops a reference, destroying the wayland_output with the last one.
++ */
++void wayland_output_release(struct wayland_output *output)
++{
++    if (InterlockedDecrement(&output->ref)) return;
++
+     wayland_output_state_deinit(&output->pending);
+     wayland_output_state_deinit(&output->current);
+     if (output->zxdg_output_v1)
+         zxdg_output_v1_destroy(output->zxdg_output_v1);
+     wl_output_destroy(output->wl_output);
+     free(output);
+-
+-    maybe_init_display_devices();
+ }
+ 
+ /**********************************************************************
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 210831d3915..5f54aedbc4c 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -255,6 +255,7 @@ struct wayland_output
+     struct zxdg_output_v1 *zxdg_output_v1;
+     uint32_t global_id;
+     unsigned int pending_flags;
++    LONG ref;
+     struct wayland_output_state pending;
+     struct wayland_output_state current;
+ };
+@@ -355,7 +356,9 @@ BOOL wayland_process_init(void);
+  */
+ 
+ BOOL wayland_output_create(uint32_t id, uint32_t version);
+-void wayland_output_destroy(struct wayland_output *output);
++void wayland_output_add_ref(struct wayland_output *output);
++void wayland_output_release(struct wayland_output *output);
++void wayland_output_remove(struct wayland_output *output);
+ void wayland_output_use_xdg_extension(struct wayland_output *output);
+ struct wayland_output *wayland_output_for_rect(const RECT *rect);
+ 
+-- 
+2.56.0
+

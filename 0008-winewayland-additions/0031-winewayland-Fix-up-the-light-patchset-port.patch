@@ -1,0 +1,74 @@
+From a95502b3fe09ef724a035bab8cfeaa75e20d4a45 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Fri, 13 Nov 2026 22:55:44 +0100
+Subject: [PATCH] winewayland: Fix up the light patchset port.
+
+---
+ dlls/winewayland.drv/display.c         |  3 +--
+ dlls/winewayland.drv/wayland_surface.c | 10 ++++++++++
+ dlls/winewayland.drv/waylanddrv.h      |  1 +
+ dlls/winewayland.drv/window.c          |  1 +
+ 4 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winewayland.drv/display.c b/dlls/winewayland.drv/display.c
+index 5fb952cfa01..80e9b7b9c7a 100644
+--- a/dlls/winewayland.drv/display.c
++++ b/dlls/winewayland.drv/display.c
+@@ -200,8 +200,7 @@ static void output_info_array_zero_primary(struct wl_array *output_info_array)
+             UINT64 score = (UINT64)mode->height *
+                         (UINT64)mode->width * ((UINT64)(mode->refresh + 500) / 1000)
+                         - (INT64)(info->output->logical_x / 100)
+-                        - (INT64)(info->output->logical_y / 100)
+-                        + (UINT64)info->output->max_cll;
++                        - (INT64)(info->output->logical_y / 100);
+ 
+             if (score > max_score)
+             {
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 49c48a6dc69..3a0cd29bded 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -420,6 +420,16 @@ void wayland_surface_destroy(struct wayland_surface *surface)
+ 
+     wayland_surface_clear_role(surface);
+ 
++    {
++        struct surface_output_entry *pos, *tmp;
++        wl_list_for_each_safe(pos, tmp, &surface->output_list, entry)
++        {
++            wl_list_remove(&pos->entry);
++            wayland_output_release(pos->output);
++            free(pos);
++        }
++    }
++
+     if (surface->wp_alpha_modifier_surface_v1)
+     {
+         wp_alpha_modifier_surface_v1_destroy(surface->wp_alpha_modifier_surface_v1);
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 5aa6cb98174..b6328cb6334 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -273,6 +273,7 @@ struct wayland_surface_config
+ struct wayland_window_config
+ {
+     RECT rect;
++    RECT client_rect;
+     enum wayland_surface_config_state state;
+     /* The scale (i.e., normalized dpi) the window is rendering at. */
+     double scale;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index c9e2568a85b..50e2bf6f29a 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -139,6 +139,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
+     DWORD style;
+ 
+     conf->rect = data->rects.visible;
++    conf->client_rect = data->rects.client;
+     style = NtUserGetWindowLongW(data->hwnd, GWL_STYLE);
+ 
+     TRACE("window=%s style=%#x\n", wine_dbgstr_rect(&conf->rect), style);
+-- 
+2.56.0
+

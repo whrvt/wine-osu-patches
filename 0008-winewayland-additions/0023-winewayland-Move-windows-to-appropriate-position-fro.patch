@@ -1,0 +1,260 @@
+From 8537b02eaef1e636fdf812db2ce90a129b4e349d Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Fri, 4 Sep 2026 18:44:43 -0500
+Subject: [PATCH] winewayland: Move windows to appropriate position from output
+ enter/leave events.
+
+---
+ dlls/winewayland.drv/display.c         | 24 +++++++++
+ dlls/winewayland.drv/wayland_surface.c | 69 +++++++++++++++++++++++++-
+ dlls/winewayland.drv/waylanddrv.h      | 10 +++-
+ dlls/winewayland.drv/waylanddrv_main.c |  1 +
+ dlls/winewayland.drv/window.c          | 49 ++++++++++++++++++
+ 5 files changed, 151 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winewayland.drv/display.c b/dlls/winewayland.drv/display.c
+index f49fa2a3a5e..5fb952cfa01 100644
+--- a/dlls/winewayland.drv/display.c
++++ b/dlls/winewayland.drv/display.c
+@@ -392,6 +392,30 @@ struct wayland_output *wayland_output_for_rect(const RECT *window_rect)
+     return best;
+ }
+ 
++/* Get the position of an output in the win32 (raw) virtual screen.
++ * Locking is done externally, output_mutex must be held. */
++BOOL wayland_output_get_origin(struct wayland_output *output, POINT *origin)
++{
++    struct wl_array output_info_array;
++    struct output_info *output_info;
++    BOOL found = FALSE;
++
++    wl_array_init(&output_info_array);
++    output_info_array_init(&output_info_array);
++
++    wl_array_for_each(output_info, &output_info_array)
++    {
++        if (output_info->output != &output->current) continue;
++        origin->x = output_info->x;
++        origin->y = output_info->y;
++        found = TRUE;
++        break;
++    }
++
++    wl_array_release(&output_info_array);
++    return found;
++}
++
+ /***********************************************************************
+  *      UpdateDisplayDevices (WAYLAND.@)
+  */
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 1c54856b94d..29440093a5d 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -123,6 +123,71 @@ void color_management_init(void)
+     TRACE("Initialized image descriptors, scRGB %p BT.2100 %p\n", scrgb_desc, bt2100_desc);
+ }
+ 
++static void wayland_surface_handle_enter(void *private, struct wl_surface *wl_surface,
++                                         struct wl_output *wl_output)
++{
++    HWND hwnd = private;
++    struct wayland_win_data *data;
++    struct wayland_surface *surface;
++    struct surface_output_entry *output_entry;
++    struct wayland_output *output = wl_output_get_user_data(wl_output);
++
++    TRACE("hwnd=%p name=%s\n", hwnd, debugstr_a(output->current.name));
++
++    if (!(data = wayland_win_data_get(hwnd))) return;
++    if (!(surface = data->wayland_surface)) goto err;
++    if (!wayland_surface_is_toplevel(surface)) goto err;
++    if (!(output_entry = calloc(1, sizeof(*output_entry)))) goto err;
++
++    wl_list_init(&output_entry->entry);
++    output_entry->output = output;
++    wayland_output_add_ref(output_entry->output);
++    wl_list_insert(&surface->output_list, &output_entry->entry);
++
++    wayland_win_data_release(data);
++    NtUserPostMessage(hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0);
++    return;
++err:
++    wayland_win_data_release(data);
++}
++
++static void wayland_surface_handle_leave(void *private, struct wl_surface *wl_surface,
++                                         struct wl_output *wl_output)
++{
++    HWND hwnd = private;
++    struct wayland_win_data *data;
++    struct wayland_surface *surface;
++    struct surface_output_entry *pos, *tmp;
++    struct wayland_output *output = wl_output_get_user_data(wl_output);
++
++    TRACE("hwnd=%p name=%s\n", hwnd, debugstr_a(output->current.name));
++
++    if (!(data = wayland_win_data_get(hwnd))) return;
++    if (!(surface = data->wayland_surface)) goto err;
++    if (!wayland_surface_is_toplevel(surface)) goto err;
++
++    wl_list_for_each_safe(pos, tmp, &surface->output_list, entry)
++    {
++        if (output == pos->output)
++        {
++            wl_list_remove(&pos->entry);
++            wayland_output_release(pos->output);
++            free(pos);
++        }
++    }
++
++    wayland_win_data_release(data);
++    NtUserPostMessage(hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0);
++    return;
++err:
++    wayland_win_data_release(data);
++}
++
++static const struct wl_surface_listener wayland_surface_listener = {
++    wayland_surface_handle_enter,
++    wayland_surface_handle_leave,
++};
++
+ static void xdg_surface_handle_configure(void *private, struct xdg_surface *xdg_surface,
+                                          uint32_t serial)
+ {
+@@ -285,13 +350,15 @@ struct wayland_surface *wayland_surface_create(HWND hwnd)
+     TRACE("surface=%p\n", surface);
+ 
+     surface->hwnd = hwnd;
++    wl_list_init(&surface->output_list);
++
+     surface->wl_surface = wl_compositor_create_surface(process_wayland.wl_compositor);
+     if (!surface->wl_surface)
+     {
+         ERR("Failed to create wl_surface Wayland surface\n");
+         goto err;
+     }
+-    wl_surface_set_user_data(surface->wl_surface, hwnd);
++    wl_surface_add_listener(surface->wl_surface, &wayland_surface_listener, hwnd);
+ 
+     surface->wp_viewport =
+         wp_viewporter_get_viewport(process_wayland.wp_viewporter,
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index 5f54aedbc4c..e5bd895f085 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -309,6 +309,12 @@ struct wayland_shm_buffer
+     HRGN damage_region;
+ };
+ 
++struct surface_output_entry
++{
++    struct wl_list entry;
++    struct wayland_output *output;
++};
++
+ struct wayland_surface
+ {
+     HWND hwnd;
+@@ -336,7 +342,7 @@ struct wayland_surface
+         };
+     };
+     struct wp_alpha_modifier_surface_v1 *wp_alpha_modifier_surface_v1;
+-
++    struct wl_list output_list;
+     struct wayland_surface_config pending, requested, processing, current;
+     BOOL resizing;
+     enum wayland_surface_ensure_type ensured_contents;
+@@ -360,6 +366,7 @@ void wayland_output_add_ref(struct wayland_output *output);
+ void wayland_output_release(struct wayland_output *output);
+ void wayland_output_remove(struct wayland_output *output);
+ void wayland_output_use_xdg_extension(struct wayland_output *output);
++BOOL wayland_output_get_origin(struct wayland_output *output, POINT *origin);
+ struct wayland_output *wayland_output_for_rect(const RECT *rect);
+ 
+ /**********************************************************************
+@@ -513,6 +520,7 @@ UINT WAYLAND_UpdateDisplayDevices(const struct gdi_device_manager *device_manage
+ LRESULT WAYLAND_WindowMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UINT swp_flags,
+                               const struct window_rects *new_rects, struct window_surface *surface);
++BOOL WAYLAND_GetWindowStateUpdates(HWND hwnd, UINT *state_cmd, UINT *swp_flags, RECT *rect, HWND *foreground);
+ BOOL WAYLAND_WindowPosChanging(HWND hwnd, UINT swp_flags, BOOL shaped, const struct window_rects *rects);
+ struct client_surface *WAYLAND_CreateClientSurface(HWND hwnd, int pixel_format, BOOL raw);
+ BOOL WAYLAND_CreateWindowSurface(HWND hwnd, BOOL layered, const RECT *surface_rect, struct window_surface **surface);
+diff --git a/dlls/winewayland.drv/waylanddrv_main.c b/dlls/winewayland.drv/waylanddrv_main.c
+index 275a3907f92..43bac2f4288 100644
+--- a/dlls/winewayland.drv/waylanddrv_main.c
++++ b/dlls/winewayland.drv/waylanddrv_main.c
+@@ -47,6 +47,7 @@ static const struct user_driver_funcs waylanddrv_funcs =
+     .pSetWindowIcons = WAYLAND_SetWindowIcons,
+     .pSetWindowStyle = WAYLAND_SetWindowStyle,
+     .pSetWindowText = WAYLAND_SetWindowText,
++    .pGetWindowStateUpdates = WAYLAND_GetWindowStateUpdates,
+     .pSysCommand = WAYLAND_SysCommand,
+     .pUpdateLayeredWindow = WAYLAND_UpdateLayeredWindow,
+     .pUpdateDisplayDevices = WAYLAND_UpdateDisplayDevices,
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 8a125a1f882..edfd7e4834f 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -829,6 +829,55 @@ void WAYLAND_UpdateLayeredWindow(HWND hwnd, BYTE alpha, UINT flags)
+     wayland_win_data_release(data);
+ }
+ 
++/***********************************************************************
++ *           WAYLAND_GetWindowStateUpdates
++ *
++ * Moves toplevel windows to the output the compositor placed them on, so
++ * that the win32 window position and monitor match the host placement.
++ */
++BOOL WAYLAND_GetWindowStateUpdates(HWND hwnd, UINT *state_cmd, UINT *swp_flags,
++                                   RECT *rect, HWND *foreground)
++{
++    DWORD style = NtUserGetWindowLongW(hwnd, GWL_STYLE);
++    struct surface_output_entry *output_entry;
++    struct wayland_surface *surface;
++    struct wayland_win_data *data;
++    BOOL ret = FALSE;
++
++    /* called again with NULL parameters to unlock the host state, nothing to do */
++    if (!state_cmd) return FALSE;
++
++    if (!(style & WS_VISIBLE)) return FALSE;
++    if ((style & (WS_POPUP | WS_CHILD)) == WS_CHILD) return FALSE;
++    if (style & (WS_DISABLED | WS_MINIMIZE)) return FALSE;
++
++    if (!(data = wayland_win_data_get(hwnd))) return FALSE;
++
++    if ((surface = data->wayland_surface) && wayland_surface_is_toplevel(surface) &&
++        !wl_list_empty(&surface->output_list) &&
++        /* the output hint syncs the win32u position to the toplevel position */
++        !(surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN))
++    {
++        POINT origin;
++
++        output_entry = wl_container_of(surface->output_list.next, output_entry, entry);
++
++        pthread_mutex_lock(&process_wayland.output_mutex);
++        ret = wayland_output_get_origin(output_entry->output, &origin);
++        pthread_mutex_unlock(&process_wayland.output_mutex);
++
++        if (ret)
++        {
++            *swp_flags = SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOZORDER | SWP_NOACTIVATE;
++            SetRect(rect, origin.x, origin.y, origin.x + 1, origin.y + 1);
++            TRACE("Moving hwnd=%p to %s\n", hwnd, wine_dbgstr_rect(rect));
++        }
++    }
++
++    wayland_win_data_release(data);
++    return ret;
++}
++
+ BOOL set_window_surface_contents(HWND hwnd, struct wayland_shm_buffer *shm_buffer, HRGN damage_region)
+ {
+     struct wayland_surface *wayland_surface;
+-- 
+2.56.0
+

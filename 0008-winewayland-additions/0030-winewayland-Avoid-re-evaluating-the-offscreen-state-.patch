@@ -1,0 +1,94 @@
+From 2d216cba3f7b761784811535d98145a543c45b6a Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Fri, 13 Nov 2026 22:52:06 +0100
+Subject: [PATCH] winewayland: Avoid re-evaluating the offscreen state on every
+ swap.
+
+---
+ dlls/winewayland.drv/wayland_surface.c | 30 +++++++++++++++++++++++---
+ dlls/winewayland.drv/waylanddrv.h      |  3 +++
+ 2 files changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 5485694065c..49c48a6dc69 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -1390,11 +1390,28 @@ static LONG force_use_offscreen(void)
+     return ret;
+ }
+ 
++#define CLIPPING_CHECK_INTERVAL_MS 100
++
++static BOOL needs_client_window_clipping_cached(struct wayland_client_surface *surface, HWND hwnd)
++{
++    DWORD now = NtGetTickCount();
++
++    if (!surface->clipping_checked || now - surface->clipping_check_time >= CLIPPING_CHECK_INTERVAL_MS)
++    {
++        surface->needs_clipping = NtUserGetWindowRelative(hwnd, GW_CHILD) && needs_client_window_clipping(hwnd);
++        surface->clipping_check_time = now;
++        surface->clipping_checked = TRUE;
++    }
++
++    return surface->needs_clipping;
++}
++
+ static void wayland_client_surface_update_offscreen(struct wayland_client_surface *surface)
+ {
+     HWND hwnd = surface->client.hwnd, toplevel = NtUserGetAncestor(hwnd, GA_ROOT);
+     struct wayland_win_data *data;
+     LONG offscreen = force_use_offscreen();
++    BOOL layered_attribs_set = FALSE;
+     DWORD flags;
+     BYTE alpha;
+ 
+@@ -1402,15 +1419,17 @@ static void wayland_client_surface_update_offscreen(struct wayland_client_surfac
+     else
+     {
+         if (data->shaped) offscreen = TRUE;
++        layered_attribs_set = data->layered_attribs_set;
+         wayland_win_data_release(data);
+     }
+ 
+-    if (!offscreen && NtUserGetLayeredWindowAttributes(toplevel, NULL, &alpha, &flags) &&
++    if (!offscreen && layered_attribs_set &&
++        NtUserGetLayeredWindowAttributes(toplevel, NULL, &alpha, &flags) &&
+         (flags & LWA_ALPHA) && alpha != 0xff)
+         offscreen = TRUE;
+ 
+-    if (!offscreen && NtUserGetWindowRelative(hwnd, GW_CHILD))
+-        offscreen = needs_client_window_clipping(hwnd);
++    if (!offscreen)
++        offscreen = needs_client_window_clipping_cached(surface, hwnd);
+ 
+     InterlockedExchange(&surface->client.offscreen, offscreen);
+ }
+@@ -1601,6 +1620,11 @@ void set_client_surface(HWND hwnd, struct wayland_client_surface *new_client)
+     /* ownership is shared with the callers, the last caller to release
+      * its reference will also destroy it and clear our pointer. */
+ 
++    if (!(data = wayland_win_data_get(hwnd))) return;
++    old_client = data->client_surface;
++    wayland_win_data_release(data);
++    if (new_client && new_client == old_client) return;
++
+     if (new_client)
+     {
+         wayland_client_surface_update_offscreen(new_client);
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index b0600f34e0b..5aa6cb98174 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -295,6 +295,9 @@ struct wayland_client_surface
+     struct wp_viewport *wp_viewport;
+     struct wp_color_management_surface_v1 *color_management;
+     struct wp_tearing_control_v1 *wp_tearing_control_v1;
++    DWORD clipping_check_time;
++    BOOL clipping_checked;
++    BOOL needs_clipping;
+ };
+ 
+ extern struct wayland_client_surface *impl_from_client_surface(struct client_surface *client);
+-- 
+2.56.0
+

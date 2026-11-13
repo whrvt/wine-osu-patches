@@ -1,0 +1,121 @@
+From 69fe49ed5e9d661ddde9a74e0227a7cdcd1d4eb3 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Sat, 18 Jul 2026 03:04:24 -0400
+Subject: [PATCH] winewayland: Resolve some fractional scaling race conditions.
+
+---
+ dlls/winewayland.drv/wayland_surface.c | 16 ++++++++++------
+ dlls/winewayland.drv/window.c          |  7 ++-----
+ 2 files changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index bf20959069a..643394ed50d 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -177,6 +177,9 @@ static void xdg_toplevel_handle_configure(void *private,
+     uint32_t *state;
+     enum wayland_surface_config_state config_state = 0;
+     struct wayland_win_data *data;
++    RECT rect;
++
++    SetRect(&rect, 0, 0, width, height);
+ 
+     wl_array_for_each(state, states)
+     {
+@@ -202,17 +205,17 @@ static void xdg_toplevel_handle_configure(void *private,
+         }
+     }
+ 
+-    TRACE("hwnd=%p %dx%d,%#x\n", hwnd, width, height, config_state);
+-
+     if (!(data = wayland_win_data_get(hwnd))) return;
+ 
+     if ((surface = data->wayland_surface) && wayland_surface_is_toplevel(surface))
+     {
+-        SetRect(&surface->pending.rect, 0, 0, width, height);
++        surface->pending.rect = rect = map_rect_from_surface(surface, rect);
+         surface->pending.state = config_state;
+     }
+ 
+     wayland_win_data_release(data);
++
++    TRACE("hwnd=%p %s,%#x\n", hwnd, wine_dbgstr_rect(&rect), config_state);
+ }
+ 
+ static void xdg_toplevel_handle_close(void *data, struct xdg_toplevel *xdg_toplevel)
+@@ -710,8 +713,6 @@ static void wayland_surface_reconfigure_geometry(struct wayland_surface *surface
+     {
+         wayland_surface_get_rect_in_monitor(surface, &rect);
+ 
+-        rect = map_rect_to_surface(surface, rect);
+-
+         /* If the window rect in the monitor is smaller than required,
+          * fall back to an appropriately sized rect at the top-left. */
+         if ((surface->current.state & WAYLAND_SURFACE_CONFIG_STATE_MAXIMIZED) &&
+@@ -734,6 +735,8 @@ static void wayland_surface_reconfigure_geometry(struct wayland_surface *surface
+         OffsetRect(&rect, -rect.left, -rect.top);
+     }
+ 
++    rect = map_rect_to_surface(surface, rect);
++
+     TRACE("hwnd=%p geometry=%s\n", surface->hwnd, wine_dbgstr_rect(&rect));
+ 
+     if (!IsRectEmpty(&rect))
+@@ -888,7 +891,7 @@ static void wayland_surface_reconfigure_subsurface(struct wayland_surface *surfa
+ BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
+ {
+     struct wayland_window_config *window = &surface->window;
+-    RECT rect = map_rect_to_surface(surface, surface->window.rect);
++    RECT rect = surface->window.rect;
+ 
+     TRACE("hwnd=%p window=%s,%#x processing=%s,%#x current=%s,%#x\n",
+           surface->hwnd, wine_dbgstr_rect(&rect), window->state,
+@@ -909,6 +912,7 @@ BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
+         break;
+     }
+ 
++    rect = map_rect_to_surface(surface, rect);
+     wayland_surface_reconfigure_size(surface, rect.right - rect.left, rect.bottom - rect.top);
+ 
+     return TRUE;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 0b083182900..a96337d7e73 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -506,7 +506,7 @@ static void wayland_configure_window(HWND hwnd)
+     BOOL needs_exit_size_move = FALSE;
+     BOOL restoring_from_minimize = FALSE;
+     struct wayland_win_data *data;
+-    RECT rect, surface_rect;
++    RECT rect;
+ 
+     if (!(data = wayland_win_data_get(hwnd))) return;
+     if (!(surface = data->wayland_surface))
+@@ -565,14 +565,12 @@ static void wayland_configure_window(HWND hwnd)
+         flags |= SWP_FRAMECHANGED;
+     }
+ 
+-    surface_rect = map_rect_to_surface(surface, surface->window.rect);
+-
+     /* If the window is already fullscreen and its size is compatible with what
+      * the compositor is requesting, don't force a resize, since some applications
+      * are very insistent on a particular fullscreen size (which may not match
+      * the monitor size). */
+     if ((surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) &&
+-        wayland_surface_config_is_compatible(&surface->processing, surface_rect,
++        wayland_surface_config_is_compatible(&surface->processing, surface->window.rect,
+                                              surface->window.state))
+     {
+         flags |= SWP_NOSIZE;
+@@ -601,7 +599,6 @@ static void wayland_configure_window(HWND hwnd)
+     }
+ 
+     SetRect(&rect, 0, 0, width, height);
+-    rect = map_rect_from_surface(surface, rect);
+     OffsetRect(&rect, data->rects.window.left, data->rects.window.top);
+ 
+     wayland_win_data_release(data);
+-- 
+2.56.0
+
