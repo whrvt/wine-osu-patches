@@ -1,4 +1,4 @@
-From b6f5cefb3c86d3a4fe57e333e41c0459ca5866af Mon Sep 17 00:00:00 2001
+From afda6c22e3380c86c41c4b61f7e209cd67d27876 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Wed, 1 Jul 2026 19:12:54 -0400
@@ -11,7 +11,7 @@ Subject: [PATCH] winewayland: Implement exclusive fullscreen ensure contents.
  3 files changed, 94 insertions(+), 61 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index b32a43f7531..a0faf27012d 100644
+index 9b6bcb5dbd6..ce19a825526 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -315,6 +315,7 @@ struct wayland_surface *wayland_surface_create(HWND hwnd)
@@ -30,8 +30,8 @@ index b32a43f7531..a0faf27012d 100644
  
      wl_display_flush(process_wayland.wl_display);
  }
-@@ -1287,6 +1289,86 @@ static void wayland_client_surface_update(struct client_surface *client)
-     wayland_win_data_release(data);
+@@ -1284,6 +1286,86 @@ static void wayland_client_surface_update(struct client_surface *client)
+         wayland_client_surface_attach(surface, NULL, NULL);
  }
  
 +static void dummy_buffer_release(void *data, struct wl_buffer *buffer)
@@ -117,7 +117,7 @@ index b32a43f7531..a0faf27012d 100644
  static void wayland_client_surface_present(struct client_surface *client, HDC hdc)
  {
      struct wayland_client_surface *surface = impl_from_client_surface(client);
-@@ -1298,7 +1380,7 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
+@@ -1295,7 +1377,7 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
  
      if ((wayland_surface = data->wayland_surface))
      {
@@ -126,7 +126,7 @@ index b32a43f7531..a0faf27012d 100644
  
          /* Handle any processed configure request, to ensure the related
           * surface state is applied by the compositor. */
-@@ -1459,65 +1541,6 @@ done:
+@@ -1456,65 +1538,6 @@ done:
      wayland_win_data_release(toplevel_data);
  }
  

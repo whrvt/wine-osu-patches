@@ -1,4 +1,4 @@
-From cf0580ed56bd15a04c0d8bdb2516c73ee53bf6f8 Mon Sep 17 00:00:00 2001
+From d175cac66234140518b34b062cc488cf76f49ef4 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Sun, 16 Aug 2026 16:33:51 -0400
@@ -10,10 +10,10 @@ Subject: [PATCH] win32u: Implement copying to window surface for opengl.
  2 files changed, 39 insertions(+), 7 deletions(-)
 
 diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
-index 8073e92c7d9..d2212fdcc81 100644
+index 288ad091917..2e84003e12f 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -445,10 +445,47 @@ static void opengl_drawable_flush( struct opengl_drawable *drawable, int interva
+@@ -449,10 +449,47 @@ static void opengl_drawable_flush( struct opengl_drawable *drawable, int interva
      if (flags) drawable->funcs->flush( drawable, flags );
  }
  
@@ -54,7 +54,7 @@ index 8073e92c7d9..d2212fdcc81 100644
 +
  static BOOL opengl_drawable_swap( struct opengl_drawable *drawable )
  {
-     if (!is_client_surface_window( drawable->client, 0 )) return FALSE;
+     if (get_client_surface_window( drawable->client ) == NULL) return FALSE;
      client_surface_update( drawable->client );
 +    if (drawable->client->offscreen && !user_driver->dc_funcs.pPutImage)
 +        opengl_update_toplevel_contents( drawable );
@@ -62,10 +62,10 @@ index 8073e92c7d9..d2212fdcc81 100644
  }
  
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 5307b4a3db7..3ce055a52d3 100644
+index 91a61f9a083..062b5587a53 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -1747,13 +1747,8 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
+@@ -1744,13 +1744,8 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
  
      TRACE("%s %p\n", debugstr_client_surface(client), hdc);
  

@@ -1,4 +1,4 @@
-From 997a73c4e06ac374ff664fb9e834a7ff15792604 Mon Sep 17 00:00:00 2001
+From 14750a3ae74a4fa0a89f293673163da4880f1b7c Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Tue, 11 Aug 2026 13:57:57 -0400
@@ -11,7 +11,7 @@ Based on patches by Paul Gofman and Jactry Zeng.
  2 files changed, 240 insertions(+), 24 deletions(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index 6ed5b772320..4f7dbffd9fc 100644
+index 705f3551948..81facc79536 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
 @@ -128,21 +128,6 @@ struct source
@@ -36,7 +36,7 @@ index 6ed5b772320..4f7dbffd9fc 100644
  struct monitor
  {
      LONG refcount;
-@@ -2007,6 +1992,191 @@ static BOOL write_monitor_to_registry( struct monitor *monitor, const BYTE *edid
+@@ -2014,6 +1999,191 @@ static BOOL write_monitor_to_registry( struct monitor *monitor, const BYTE *edid
      return TRUE;
  }
  
@@ -228,7 +228,7 @@ index 6ed5b772320..4f7dbffd9fc 100644
  static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
  {
      struct device_manager_ctx *ctx = param;
-@@ -2014,6 +2184,8 @@ static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
+@@ -2021,6 +2191,8 @@ static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
      struct source *source;
      char buffer[MAX_PATH];
      char monitor_id_string[16];
@@ -237,7 +237,7 @@ index 6ed5b772320..4f7dbffd9fc 100644
  
      assert( !list_empty( &sources ) );
      source = LIST_ENTRY( list_tail( &sources ), struct source, entry );
-@@ -2028,7 +2200,16 @@ static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
+@@ -2035,7 +2207,16 @@ static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
  
      TRACE( "%u %s %s\n", monitor->id, wine_dbgstr_rect(&gdi_monitor->rc_monitor), wine_dbgstr_rect(&gdi_monitor->rc_work) );
  
@@ -255,7 +255,7 @@ index 6ed5b772320..4f7dbffd9fc 100644
      if (monitor->edid_info.flags & MONITOR_INFO_HAS_MONITOR_ID)
          strcpy( monitor_id_string, monitor->edid_info.monitor_id_string );
      else
-@@ -2038,18 +2219,19 @@ static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
+@@ -2045,18 +2226,19 @@ static void add_monitor( const struct gdi_monitor *gdi_monitor, void *param )
      snprintf( monitor->path, sizeof(monitor->path), "DISPLAY\\%s\\%04X&%04X", monitor_id_string, source->id, monitor->id );
      set_reg_ascii_value( source->key, buffer, monitor->path );
  
@@ -284,10 +284,10 @@ index 6ed5b772320..4f7dbffd9fc 100644
  
  static UINT add_screen_size( SIZE *sizes, UINT count, SIZE size )
 diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
-index 270add6b8b5..41f99be1df2 100644
+index 284b18077b8..a12d3470122 100644
 --- a/include/wine/gdi_driver.h
 +++ b/include/wine/gdi_driver.h
-@@ -341,12 +341,46 @@ struct pci_id
+@@ -346,12 +346,46 @@ struct pci_id
      UINT16 revision;
  };
  

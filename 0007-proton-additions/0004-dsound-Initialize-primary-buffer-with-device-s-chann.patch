@@ -1,4 +1,4 @@
-From e92876ff7f652bd29d77ca3f5d2f64fb908c8faf Mon Sep 17 00:00:00 2001
+From c80229f85bf631906080eb8df405343a540e3c45 Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Wed, 15 Jan 2020 10:17:23 -0600
 Subject: [PATCH] dsound: Initialize primary buffer with device's channel
@@ -13,7 +13,7 @@ Space.
  3 files changed, 76 insertions(+), 118 deletions(-)
 
 diff --git a/dlls/dsound/dsound.c b/dlls/dsound/dsound.c
-index 8ff186f74a4..9ccde4cb118 100644
+index f0703984a1d..fd96b5ac994 100644
 --- a/dlls/dsound/dsound.c
 +++ b/dlls/dsound/dsound.c
 @@ -23,7 +23,6 @@
@@ -154,10 +154,10 @@ index 8ff186f74a4..9ccde4cb118 100644
 -    }
 -}
 diff --git a/dlls/dsound/dsound_private.h b/dlls/dsound/dsound_private.h
-index a913d7052da..ed00a5c8ef8 100644
+index fc894b006d8..c3c1e0df0ad 100644
 --- a/dlls/dsound/dsound_private.h
 +++ b/dlls/dsound/dsound_private.h
-@@ -203,7 +203,6 @@ HRESULT IKsPrivatePropertySetImpl_Create(REFIID riid, void **ppv);
+@@ -186,7 +186,6 @@ HRESULT IKsPrivatePropertySetImpl_Create(REFIID riid, void **ppv);
  HRESULT DSOUND_Create(REFIID riid, void **ppv);
  HRESULT DSOUND_Create8(REFIID riid, void **ppv);
  HRESULT IDirectSoundImpl_Create(IUnknown *outer_unk, REFIID riid, void **ppv, BOOL has_ds8);

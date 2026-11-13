@@ -1,4 +1,4 @@
-From 15263c9a5c4596e5cf8ffc6f4033c789ce7ae4a7 Mon Sep 17 00:00:00 2001
+From 0bb3b7e4c935579cc07a6c10412ae1516cad571b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 6 Feb 2025 08:30:08 -0800
 Subject: [PATCH] include: Prefer builtin atomics.
@@ -14,10 +14,10 @@ https://github.com/gcc-mirror/gcc/commit/d8c40eff56f69877b33c697ded756d50fde90c2
  1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/include/winnt.h b/include/winnt.h
-index d77e06faa9d..daf9b42f677 100644
+index 88fa1dc5b16..0b516613066 100644
 --- a/include/winnt.h
 +++ b/include/winnt.h
-@@ -7970,7 +7970,7 @@ static FORCEINLINE LONGLONG WINAPI InterlockedXorRelease64( LONGLONG volatile *d
+@@ -8464,7 +8464,7 @@ static FORCEINLINE LONGLONG WINAPI InterlockedXorRelease64( LONGLONG volatile *d
  
  #endif  /* defined(__arm__) || defined(__aarch64__) */
  
@@ -26,7 +26,7 @@ index d77e06faa9d..daf9b42f677 100644
  /* On x86, Support old GCC with either no or buggy (GCC BZ#81316) __atomic_* support */
  #define __WINE_ATOMIC_LOAD_ACQUIRE(ptr, ret) do { C_ASSERT(sizeof(*(ptr)) <= sizeof(void *)); *(ret) = *(ptr); __asm__ __volatile__( "" ::: "memory" ); } while (0)
  #define __WINE_ATOMIC_LOAD_RELAXED(ptr, ret) do { C_ASSERT(sizeof(*(ptr)) <= sizeof(void *)); *(ret) = *(ptr); } while (0)
-@@ -7993,7 +7993,7 @@ static FORCEINLINE LONG ReadAcquire( LONG const volatile *src )
+@@ -8501,7 +8501,7 @@ static FORCEINLINE LONG ReadAcquire( LONG const volatile *src )
  static FORCEINLINE LONG64 ReadAcquire64( LONG64 const volatile *src )
  {
      LONG64 value;
@@ -35,7 +35,7 @@ index d77e06faa9d..daf9b42f677 100644
      __asm__ __volatile__( "fildq %1\n\tfistpq %0" : "=m" (value) : "m" (*src) : "memory", "st" );
  #else
      __WINE_ATOMIC_LOAD_ACQUIRE( src, &value );
-@@ -8011,7 +8011,7 @@ static FORCEINLINE LONG ReadNoFence( LONG const volatile *src )
+@@ -8533,7 +8533,7 @@ static FORCEINLINE LONG ReadNoFence( LONG const volatile *src )
  static FORCEINLINE LONG64 ReadNoFence64( LONG64 const volatile *src )
  {
      LONG64 value;
@@ -44,7 +44,7 @@ index d77e06faa9d..daf9b42f677 100644
      __asm__ __volatile__( "fildq %1\n\tfistpq %0" : "=m" (value) : "m" (*src) : "memory", "st" );
  #else
      __WINE_ATOMIC_LOAD_RELAXED( src, &value );
-@@ -8026,7 +8026,7 @@ static FORCEINLINE void WriteRelease( LONG volatile *dest, LONG value )
+@@ -8558,7 +8558,7 @@ static FORCEINLINE void WriteRelease( LONG volatile *dest, LONG value )
  
  static FORCEINLINE void WriteRelease64( LONG64 volatile *dest, LONG64 value )
  {
@@ -53,7 +53,7 @@ index d77e06faa9d..daf9b42f677 100644
      __asm__ __volatile__( "fildq %1\n\tfistpq %0" : "=m" (*dest) : "m" (value) : "memory", "st" );
  #else
      __WINE_ATOMIC_STORE_RELEASE( dest, &value );
-@@ -8040,7 +8040,7 @@ static FORCEINLINE void WriteNoFence( LONG volatile *dest, LONG value )
+@@ -8582,7 +8582,7 @@ static FORCEINLINE void WriteNoFence( LONG volatile *dest, LONG value )
  
  static FORCEINLINE void WriteNoFence64( LONG64 volatile *dest, LONG64 value )
  {

@@ -1,4 +1,4 @@
-From add3cb5fb9173d360c7255381849f72290d7366f Mon Sep 17 00:00:00 2001
+From 29a32a8c6dfcf51324f7421524e4ecd6a1050e1d Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty <etaash.mathamsetty@gmail.com>
 Date: Mon, 1 Jun 2026 03:20:43 -0400
 Subject: [PATCH] winewayland: Implement xdg-popup for unmanaged windows.
@@ -31,7 +31,7 @@ index 118ee2d6945..ee5d60c3fdf 100644
      }
      else if (strcmp(interface, "wl_shm") == 0)
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index a0faf27012d..2b2aad0106c 100644
+index ce19a825526..d9393ca1630 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -123,11 +123,21 @@ void color_management_init(void)
@@ -457,7 +457,7 @@ index a0faf27012d..2b2aad0106c 100644
      }
  
      wayland_surface_reconfigure_size(surface, rect.right - rect.left, rect.bottom - rect.top);
-@@ -1335,7 +1424,7 @@ static void wayland_surface_ensure_contents(struct wayland_surface *surface, BOO
+@@ -1332,7 +1421,7 @@ static void wayland_surface_ensure_contents(struct wayland_surface *surface, BOO
      switch (needs_contents)
      {
      case WAYLAND_SURFACE_ENSURED_FLUSH:

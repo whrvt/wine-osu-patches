@@ -1,4 +1,4 @@
-From bffe928b489efc6c63df1e6c06fbca8a6c74bf57 Mon Sep 17 00:00:00 2001
+From 452be803ff9b4e3f0706cba21a06e30bc9e347f2 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 02:00:00 +0200
 Subject: [PATCH] ntdll: Fix compilation with link-time optimizations.
@@ -26,10 +26,10 @@ index 36175b0dcb9..75acdf01e15 100644
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
-index 576f76bd7ea..faa9e0e84d5 100644
+index 02b6d57ec10..7eb019f5914 100644
 --- a/dlls/ntdll/unix/signal_arm64.c
 +++ b/dlls/ntdll/unix/signal_arm64.c
-@@ -1613,7 +1613,7 @@ void syscall_dispatcher_return_slowpath(void)
+@@ -1627,7 +1627,7 @@ void syscall_dispatcher_return_slowpath(void)
  /***********************************************************************
   *           init_syscall_frame
   */
@@ -39,10 +39,10 @@ index 576f76bd7ea..faa9e0e84d5 100644
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
-index 2a420990f75..bd03b577e0e 100644
+index 0b54c0591c5..3d6b61dc9e0 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
-@@ -2449,7 +2449,7 @@ void signal_init_process( TEB *teb )
+@@ -2421,7 +2421,7 @@ void signal_init_process( TEB *teb )
  /***********************************************************************
   *           init_syscall_frame
   */
@@ -52,10 +52,10 @@ index 2a420990f75..bd03b577e0e 100644
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index f807caa4319..684c9d66ecb 100644
+index 7bff70baaae..861d4f8bcd5 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -2885,7 +2885,7 @@ void signal_init_process( TEB *teb )
+@@ -2845,7 +2845,7 @@ void signal_init_process( TEB *teb )
  /***********************************************************************
   *           init_syscall_frame
   */
@@ -65,7 +65,7 @@ index f807caa4319..684c9d66ecb 100644
      struct thread_data *data = get_thread_data();
      struct syscall_frame *frame = get_syscall_frame( data );
 diff --git a/loader/preloader.c b/loader/preloader.c
-index 7a5e799cdc0..63bc19bc7c6 100644
+index 4808ebb754f..14b83384f01 100644
 --- a/loader/preloader.c
 +++ b/loader/preloader.c
 @@ -178,7 +178,7 @@ void __bb_init_func(void) { return; }

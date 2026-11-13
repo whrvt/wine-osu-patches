@@ -1,4 +1,4 @@
-From 6cdb8959c32a2df44d28ce645eb38264c466fec3 Mon Sep 17 00:00:00 2001
+From 96bcd7e7d47d56967bcbd816bab5ed56e4a08675 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 4 Apr 2025 14:13:44 -0700
 Subject: [PATCH] winex11: Take into consideration NET_USER_TIME{,_WINDOW} for
@@ -47,10 +47,10 @@ index 20a1ed51cee..90589c8a813 100644
      if (data->pending_state.net_active_window == window) return;
      if (window_set_pending_activate( hwnd, &withdrawn )) return;
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 3690685b54f..fa3a0f2b583 100644
+index 736924a96fb..cec86510edf 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -743,6 +743,11 @@ extern void net_supported_init( struct x11drv_thread_data *data );
+@@ -744,6 +744,11 @@ extern void net_supported_init( struct x11drv_thread_data *data );
  extern void net_supporting_wm_check_init( struct x11drv_thread_data *data );
  extern BOOL is_net_supported( Atom atom );
  

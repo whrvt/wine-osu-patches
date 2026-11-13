@@ -1,4 +1,4 @@
-From cc02ca10fa736c3350352eac296e0b8093c62dc0 Mon Sep 17 00:00:00 2001
+From 325646711dd564e5b5f9db560300ea79536cd21d Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 8 Sep 2024 02:15:12 -0700
 Subject: [PATCH] winebus: Fake-load driver if EnableWinebus isn't set to 1.
@@ -12,10 +12,10 @@ complaining about not being able to load the driver.
  1 file changed, 20 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
-index 8be5077e1b4..679b6d3d4c8 100644
+index 97ca2716309..f8b6007cd78 100644
 --- a/dlls/winebus.sys/main.c
 +++ b/dlls/winebus.sys/main.c
-@@ -1687,10 +1687,25 @@ static void WINAPI driver_unload(DRIVER_OBJECT *driver)
+@@ -1746,10 +1746,25 @@ static void WINAPI driver_unload(DRIVER_OBJECT *driver)
      NtClose(driver_key);
  }
  
@@ -41,7 +41,7 @@ index 8be5077e1b4..679b6d3d4c8 100644
  
      TRACE( "(%p, %s)\n", driver, debugstr_w(path->Buffer) );
  
-@@ -1704,10 +1719,11 @@ NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
+@@ -1763,10 +1778,11 @@ NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
  
      driver_obj = driver;
  

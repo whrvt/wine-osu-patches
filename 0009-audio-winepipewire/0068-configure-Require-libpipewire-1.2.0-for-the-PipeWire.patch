@@ -1,4 +1,4 @@
-From f1075d6b322504484221275eca5b8abc98619404 Mon Sep 17 00:00:00 2001
+From 45cc3fc5ec7da4efd2658e7252789535a68f6dba Mon Sep 17 00:00:00 2001
 From: M0n7y5 <17201053+M0n7y5@users.noreply.github.com>
 Date: Sun, 26 Jul 2026 19:08:01 +0200
 Subject: [PATCH] configure: Require libpipewire 1.2.0 for the PipeWire driver.
@@ -28,10 +28,10 @@ steamrt3 sniper, at 0.3.65, falls below, and Proton 11 does not use it.
  1 file changed, 15 insertions(+), 2 deletions(-)
 
 diff --git a/configure.ac b/configure.ac
-index f7f213bdfdc..c3198504878 100644
+index e822ab5b4f6..cea5e66e7ec 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1727,11 +1727,24 @@ then
+@@ -1742,11 +1742,24 @@ then
      WINE_PACKAGE_FLAGS(PIPEWIRE,[libpipewire-0.3],,,,
          [AC_CHECK_HEADERS([pipewire/pipewire.h],,[PIPEWIRE_LIBS=""])
           AS_IF([test -n "$PIPEWIRE_LIBS"],

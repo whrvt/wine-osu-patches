@@ -1,4 +1,4 @@
-From e4422b130c3a703a369aaa8be163dab0fb7e54fb Mon Sep 17 00:00:00 2001
+From ffaa010eac95a89f1b4ab6f2bb591eb574654bd1 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 2 Sep 2024 16:27:50 -0700
 Subject: [PATCH] winepulse: Rely on PulseAudio write callbacks instead of a
@@ -10,7 +10,7 @@ Reverting a patch from Andrew Eikum.
  1 file changed, 332 insertions(+), 315 deletions(-)
 
 diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
-index 2e8e7156269..4553f9a528f 100644
+index 3c1998c519e..4cfeb9f9d5f 100644
 --- a/dlls/winepulse.drv/pulse.c
 +++ b/dlls/winepulse.drv/pulse.c
 @@ -65,7 +65,6 @@ struct pulse_stream
@@ -403,7 +403,7 @@ index 2e8e7156269..4553f9a528f 100644
 -
 -        if (stream->started)
 -        {
--            LARGE_INTEGER stamp, freq;
+-            LARGE_INTEGER stamp;
 -            ACPacket *p, *next;
 -
 -            if (!(p = (ACPacket*)list_head(&stream->packet_free_head)))
@@ -420,8 +420,8 @@ index 2e8e7156269..4553f9a528f 100644
 -            {
 -                stream->held_bytes += stream->period_bytes;
 -            }
--            NtQueryPerformanceCounter(&stamp, &freq);
--            p->qpcpos = (stamp.QuadPart * (INT64)10000000) / freq.QuadPart;
+-            NtQueryPerformanceCounter(&stamp, NULL);
+-            p->qpcpos = stamp.QuadPart;
 -            p->discont = 0;
 -            list_remove(&p->entry);
 -            list_add_tail(&stream->packet_filled_head, &p->entry);
@@ -429,7 +429,7 @@ index 2e8e7156269..4553f9a528f 100644
 -            dst = p->data;
 +    while (bytes >= stream->capture_period) {
 +        ACPacket *p, *next;
-+        LARGE_INTEGER stamp, freq;
++        LARGE_INTEGER stamp;
 +        BYTE *dst, *src;
 +        size_t src_len, copy, rem = stream->capture_period;
 +        if (!(p = (ACPacket*)list_head(&stream->packet_free_head))) {
@@ -445,8 +445,8 @@ index 2e8e7156269..4553f9a528f 100644
 +            stream->pad += stream->capture_period;
 +            assert(stream->pad <= stream->bufsize_bytes);
          }
-+        NtQueryPerformanceCounter(&stamp, &freq);
-+        p->qpcpos = (stamp.QuadPart * (INT64)10000000) / freq.QuadPart;
++        NtQueryPerformanceCounter(&stamp, NULL);
++        p->qpcpos = stamp.QuadPart;
 +        p->discont = 0;
 +        list_remove(&p->entry);
 +        list_add_tail(&stream->packet_filled_head, &p->entry);

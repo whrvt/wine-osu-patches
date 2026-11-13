@@ -1,4 +1,4 @@
-From 79f0b680f35498034ce70e551ed5b732386d9c22 Mon Sep 17 00:00:00 2001
+From fe4dd8eb1052755ef08f1aad5287d2e5594b4d81 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Mar 2025 03:19:56 -0700
 Subject: [PATCH] gdiplus: FORCEINLINE header funcs
@@ -8,7 +8,7 @@ Subject: [PATCH] gdiplus: FORCEINLINE header funcs
  1 file changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/dlls/gdiplus/gdiplus_private.h b/dlls/gdiplus/gdiplus_private.h
-index 1db1f47815d..4ef1c312fa8 100644
+index c96c7924b28..ba77edc74d3 100644
 --- a/dlls/gdiplus/gdiplus_private.h
 +++ b/dlls/gdiplus/gdiplus_private.h
 @@ -169,22 +169,22 @@ extern GpStatus get_hatch_data(GpHatchStyle hatchstyle, const unsigned char **re
@@ -47,7 +47,7 @@ index 1db1f47815d..4ef1c312fa8 100644
  {
      BYTE b, g, r, a;
      BYTE bg_alpha, fg_alpha;
-@@ -650,14 +650,14 @@ struct memory_buffer
+@@ -652,14 +652,14 @@ struct memory_buffer
      INT size, pos;
  };
  
@@ -64,7 +64,7 @@ index 1db1f47815d..4ef1c312fa8 100644
  {
      if (mbuf->size - mbuf->pos >= size)
      {
-@@ -706,22 +706,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
+@@ -708,22 +708,22 @@ GpStatus gdip_format_string(GpGraphics *graphics, HDC hdc,
  
  void get_log_fontW(const GpFont *, BOOL, GpGraphics *, LOGFONTW *);
  

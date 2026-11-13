@@ -1,4 +1,4 @@
-From 756facf7b6cdd7d69e37d3dfea84332b6bde2248 Mon Sep 17 00:00:00 2001
+From 97af621ed35ddb1c99762c7ee1d4c570f0cd4ad5 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Tue, 18 Aug 2026 17:13:52 -0400
@@ -11,13 +11,13 @@ Subject: [PATCH] HACK: win32u: Implement cross process rendering for OpenGL.
  3 files changed, 91 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
-index 93bcc8b9521..1a3cbf127f2 100644
+index 7849fb2c793..2d04cb2b165 100644
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -2265,6 +2265,27 @@ static LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPAR
-     case WM_WINE_UPDATEWINDOWSTATE:
-         update_window_state( hwnd );
-         return 0;
+@@ -2271,6 +2271,27 @@ static LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPAR
+         return present_opengl_swapchain( hwnd, wparam, lparam );
+     case WM_WINE_SWAPCHAIN_DESTROY:
+         return destroy_opengl_swapchain( hwnd, wparam );
 +    case WM_WINE_UPDATE_WIN_CONTENTS:
 +    {
 +        RECT client;
@@ -43,10 +43,10 @@ index 93bcc8b9521..1a3cbf127f2 100644
          set_window_pixel_format( hwnd, wparam, lparam );
          return 0;
 diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
-index d2212fdcc81..b185d1c7fbd 100644
+index 2e84003e12f..d60c48e7ce7 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -450,14 +450,16 @@ static void opengl_update_toplevel_contents( struct opengl_drawable *draw )
+@@ -454,14 +454,16 @@ static void opengl_update_toplevel_contents( struct opengl_drawable *draw )
      struct client_surface *surface = draw->client;
      const struct opengl_funcs *funcs = &display_funcs;
      HWND hwnd = surface->hwnd;
@@ -67,7 +67,7 @@ index d2212fdcc81..b185d1c7fbd 100644
  
      info.bmiHeader.biSize = sizeof(info.bmiHeader);
      info.bmiHeader.biWidth = client.right - client.left;
-@@ -465,7 +467,58 @@ static void opengl_update_toplevel_contents( struct opengl_drawable *draw )
+@@ -469,7 +471,58 @@ static void opengl_update_toplevel_contents( struct opengl_drawable *draw )
      info.bmiHeader.biPlanes = 1;
      info.bmiHeader.biBitCount = 32;
      info.bmiHeader.biCompression = BI_RGB;
@@ -127,7 +127,7 @@ index d2212fdcc81..b185d1c7fbd 100644
  
      funcs->p_glBindFramebuffer( GL_READ_FRAMEBUFFER, draw->draw_fbo );
      funcs->p_glReadBuffer( GL_BACK );
-@@ -473,10 +526,21 @@ static void opengl_update_toplevel_contents( struct opengl_drawable *draw )
+@@ -477,10 +530,21 @@ static void opengl_update_toplevel_contents( struct opengl_drawable *draw )
                             GL_UNSIGNED_BYTE, bits );
      funcs->p_glBindFramebuffer( GL_READ_FRAMEBUFFER, 0 );
  
@@ -150,7 +150,7 @@ index d2212fdcc81..b185d1c7fbd 100644
  }
  
 diff --git a/include/ntuser.h b/include/ntuser.h
-index be41b33adfd..567afb3622a 100644
+index ad0eccb0519..ea1d108beb5 100644
 --- a/include/ntuser.h
 +++ b/include/ntuser.h
 @@ -638,6 +638,7 @@ enum wine_internal_message
@@ -159,8 +159,8 @@ index be41b33adfd..567afb3622a 100644
      WM_WINE_UPDATEWINDOWSTATE,
 +    WM_WINE_UPDATE_WIN_CONTENTS,
      WM_WINE_TRACKMOUSEEVENT,
-     WM_WINE_SETPIXELFORMAT,
-     WM_WINE_FIRST_DRIVER_MSG = 0x80001000,  /* range of messages reserved for the USER driver */
+     WM_WINE_SWAPCHAIN_CREATE,
+     WM_WINE_SWAPCHAIN_PRESENT,
 -- 
 2.56.0
 

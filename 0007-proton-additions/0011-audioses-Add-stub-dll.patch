@@ -1,4 +1,4 @@
-From 5f2ea483b725dc86addabbe801d9e1b1e5cbfdac Mon Sep 17 00:00:00 2001
+From e7c312ad45d1610b0df9d680b6485cb82afa800e Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 5 Jan 2022 13:31:14 +0300
 Subject: [PATCH] audioses: Add stub dll.
@@ -13,10 +13,10 @@ CW-Bug-Id: #19918
  create mode 100644 dlls/audioses/audioses.spec
 
 diff --git a/configure.ac b/configure.ac
-index 854f4dbe783..82d0e9d6886 100644
+index 5f0d727faa8..c9a197706d4 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -2501,6 +2501,7 @@ WINE_CONFIG_MAKEFILE(dlls/atl90)
+@@ -2433,6 +2433,7 @@ WINE_CONFIG_MAKEFILE(dlls/atl90)
  WINE_CONFIG_MAKEFILE(dlls/atlthunk)
  WINE_CONFIG_MAKEFILE(dlls/atlthunk/tests)
  WINE_CONFIG_MAKEFILE(dlls/atmlib)

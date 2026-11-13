@@ -1,4 +1,4 @@
-From c8a69d343fc85823819a736dc6e03c2d49bb4be2 Mon Sep 17 00:00:00 2001
+From b9f239a2672e1b1acb9cc223764823f801c8e3b1 Mon Sep 17 00:00:00 2001
 From: winebuild <wine@build.dev>
 Date: Mon, 29 Jun 2026 23:10:31 +0200
 Subject: [PATCH] winex11, winewayland: Add an opt-in absolute tablet input
@@ -99,10 +99,10 @@ index 3ec077d779e..30468b90f79 100644
          release_win_data( data );
      }
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 3789d9cecda..d90af633d31 100644
+index 573ffab017d..75f9d963810 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -480,6 +480,8 @@ extern XPixmapFormatValues **pixmap_formats;
+@@ -481,6 +481,8 @@ extern XPixmapFormatValues **pixmap_formats;
  extern Window root_window;
  extern BOOL clipping_cursor;
  extern BOOL keyboard_grabbed;

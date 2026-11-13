@@ -1,4 +1,4 @@
-From 5445371a111ed4be7ea65fe71c18d503ba1cf65b Mon Sep 17 00:00:00 2001
+From 9a80dac6762beb8a392d8cde24528aaeee616c7b Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Fri, 17 Apr 2026 22:19:40 +0200
 Subject: [PATCH] makedep: Quiet bison warnings.
@@ -8,10 +8,10 @@ Subject: [PATCH] makedep: Quiet bison warnings.
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 04baabeb703..79abf274d3c 100644
+index a5393b3db28..da1e82dc5e6 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3095,13 +3095,13 @@ static void output_source_y( struct makefile *make, struct incl_file *source, co
+@@ -3097,13 +3097,13 @@ static void output_source_y( struct makefile *make, struct incl_file *source, co
      if (find_include_file( make, header ))
      {
          output( "%s: %s\n", obj_dir_path( make, header ), source->filename );

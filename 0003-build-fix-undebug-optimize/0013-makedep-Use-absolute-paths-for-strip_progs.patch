@@ -1,4 +1,4 @@
-From 9b69fe5a5407273cdb69e1953e1d59339201ada0 Mon Sep 17 00:00:00 2001
+From 735aac95aca96c1eb8642fa73beff72dbb5cd09a Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 3 Mar 2025 03:13:50 -0800
 Subject: [PATCH] makedep: Use absolute paths for strip_progs.
@@ -8,10 +8,10 @@ Subject: [PATCH] makedep: Use absolute paths for strip_progs.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 210012bb4a5..2fe779b0c8e 100644
+index 467c53fd3c9..dc8620a7447 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -5192,7 +5192,7 @@ int main( int argc, char *argv[] )
+@@ -5214,7 +5214,7 @@ int main( int argc, char *argv[] )
          arch_dirs[arch] = strmake( "%s-windows/", archs.str[arch] );
          arch_install_dirs[arch] = strmake( "$(libdir)/wine/%s-windows", archs.str[arch] );
          strip_progs[arch] = strmake( "--strip-program=\"%s --builtin --strip-cmd=%s\"",

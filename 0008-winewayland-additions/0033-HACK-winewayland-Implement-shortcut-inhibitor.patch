@@ -1,4 +1,4 @@
-From 46a182a541fd0271d126ecb3aae2a452fd9432cf Mon Sep 17 00:00:00 2001
+From 70c7db92d71f60b0329cb5d5cce0c013630c72c1 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Fri, 1 May 2026 16:19:01 -0500
@@ -192,7 +192,7 @@ index 6e51e1d6917..d29348bdc77 100644
  
  static void registry_handle_global_remove(void *data, struct wl_registry *registry,
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index c283dcbd641..e4c23e833fd 100644
+index ec4caa0db8b..ed5451a95b5 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -768,6 +768,13 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
@@ -209,7 +209,7 @@ index c283dcbd641..e4c23e833fd 100644
          if (surface->zxdg_toplevel_decoration_v1)
          {
              zxdg_toplevel_decoration_v1_destroy(surface->zxdg_toplevel_decoration_v1);
-@@ -1910,3 +1917,42 @@ void wayland_surface_activate(struct wayland_surface *surface)
+@@ -1907,3 +1914,42 @@ void wayland_surface_activate(struct wayland_surface *surface)
          xdg_activation_token_v1_commit(token);
      }
  }

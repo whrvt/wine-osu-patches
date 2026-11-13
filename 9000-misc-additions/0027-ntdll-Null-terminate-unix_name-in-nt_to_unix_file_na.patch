@@ -1,4 +1,4 @@
-From 33fdcbdf3c06d4217116b6fe808a41b3e0355696 Mon Sep 17 00:00:00 2001
+From 7d2f66e18b59f545029d23ac6459af016c94cbfe Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sun, 29 Jun 2025 09:31:03 -0700
 Subject: [PATCH] ntdll: Null-terminate unix_name in nt_to_unix_file_name.
@@ -12,10 +12,10 @@ Otherwise we can print garbage data like L"Reference" not found in .'ï¿½ï¿½ï¿½'ï
  1 file changed, 1 insertion(+)
 
 diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
-index cf98a25a04d..e3c7d0d0993 100644
+index f2e6e5cb113..39be5e407ab 100644
 --- a/dlls/ntdll/unix/file.c
 +++ b/dlls/ntdll/unix/file.c
-@@ -3857,6 +3857,7 @@ static NTSTATUS nt_to_unix_file_name_internal( OBJECT_ATTRIBUTES *attr, UNICODE_
+@@ -3536,6 +3536,7 @@ static NTSTATUS nt_to_unix_file_name_internal( OBJECT_ATTRIBUTES *attr, UNICODE_
      unix_len = name_len * 3 + MAX_DIR_ENTRY_LEN + 3;
      if (!(unix_name = malloc( unix_len ))) return STATUS_NO_MEMORY;
      unix_name[0] = '.';

@@ -1,4 +1,4 @@
-From 4bb1dcd2e53c65bc492d1c9bf814b67ca30bcd70 Mon Sep 17 00:00:00 2001
+From 5f953de9229b9c07071330c6d91db6f675de0784 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Tue, 4 Nov 2025 15:03:26 +0100
 Subject: [PATCH] Revert "ntdll: Only clear 64K of the initial thread stack."
@@ -24,10 +24,10 @@ index 8a9a77532ee..cbda80c5bcc 100644
                     "movl %edi,%esp\n\t"
                     "xorl %eax,%eax\n\t"
 diff --git a/dlls/ntdll/signal_x86_64.c b/dlls/ntdll/signal_x86_64.c
-index b94e4a23a99..3de18373a09 100644
+index 6d8d364988b..6130ce97970 100644
 --- a/dlls/ntdll/signal_x86_64.c
 +++ b/dlls/ntdll/signal_x86_64.c
-@@ -1021,7 +1021,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
+@@ -1088,7 +1088,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                     "movq %rcx,%rbx\n\t"        /* context */
                     /* clear the thread stack */
                     "andq $~0xfff,%rcx\n\t"     /* round down to page size */

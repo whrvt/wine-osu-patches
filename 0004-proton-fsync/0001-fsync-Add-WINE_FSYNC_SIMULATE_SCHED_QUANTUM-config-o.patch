@@ -1,4 +1,4 @@
-From ece8b883ad6ae6f2e50f58ce4b6d86ce1e825563 Mon Sep 17 00:00:00 2001
+From bb915ca8a933c8ca5f87968ee37603875c0d0400 Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Tue, 15 Feb 2022 17:20:40 +0300
 Subject: [PATCH] fsync: Add WINE_FSYNC_SIMULATE_SCHED_QUANTUM config option.
@@ -12,10 +12,10 @@ CW-Bug-Id: #20155
  2 files changed, 11 insertions(+)
 
 diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
-index bd888b9928b..d12217e57fa 100644
+index 78de98f150f..35a34569bee 100644
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -76,6 +76,7 @@ static const WCHAR bootstrapW[] = {'W','I','N','E','B','O','O','T','S','T','R','
+@@ -77,6 +77,7 @@ static const WCHAR bootstrapW[] = {'W','I','N','E','B','O','O','T','S','T','R','
  int main_argc = 0;
  char **main_argv = NULL;
  WCHAR **main_wargv = NULL;
@@ -23,7 +23,7 @@ index bd888b9928b..d12217e57fa 100644
  
  static LCID user_lcid, system_lcid;
  static LANGID user_ui_language;
-@@ -826,6 +827,7 @@ static void init_locale(void)
+@@ -827,6 +828,7 @@ static void init_locale(void)
  void init_environment(void)
  {
      USHORT *case_table;
@@ -31,7 +31,7 @@ index bd888b9928b..d12217e57fa 100644
  
      init_unix_codepage();
      init_locale();
-@@ -835,6 +837,14 @@ void init_environment(void)
+@@ -836,6 +838,14 @@ void init_environment(void)
          uctable = case_table + 2;
          lctable = case_table + case_table[1] + 2;
      }
@@ -47,10 +47,10 @@ index bd888b9928b..d12217e57fa 100644
  
  
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index 9b6401ee37d..74e6baaad9f 100644
+index 829db1e3e22..201ab08a10e 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -222,6 +222,7 @@ extern ULONG session_id;
+@@ -223,6 +223,7 @@ extern ULONG64 mitigation_options[2];
  extern int main_argc;
  extern char **main_argv;
  extern WCHAR **main_wargv;

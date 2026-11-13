@@ -1,4 +1,4 @@
-From bc205e2ea042032a66e902a4208ef9200b3437c1 Mon Sep 17 00:00:00 2001
+From 559883e7743278ab31a0150fdbf258729d32ec25 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 16 Aug 2024 01:29:41 -0700
 Subject: [PATCH] add WINE_WAYLAND_DISPLAY_INDEX
@@ -8,7 +8,7 @@ Subject: [PATCH] add WINE_WAYLAND_DISPLAY_INDEX
  1 file changed, 32 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_output.c b/dlls/winewayland.drv/wayland_output.c
-index 901d1fa320e..dade1fc755e 100644
+index 75c1981f9b5..9d7c81dbc0b 100644
 --- a/dlls/winewayland.drv/wayland_output.c
 +++ b/dlls/winewayland.drv/wayland_output.c
 @@ -64,6 +64,27 @@ static int wayland_output_mode_cmp_rb(const void *key,
@@ -57,7 +57,7 @@ index 901d1fa320e..dade1fc755e 100644
      }
  
      if (output->pending.flags & WAYLAND_OUTPUT_LOGICAL_WH)
-@@ -270,6 +298,7 @@ static void output_handle_done(void *data, struct wl_output *wl_output)
+@@ -276,6 +304,7 @@ static void output_handle_done(void *data, struct wl_output *wl_output)
      if (!output->zxdg_output_v1 ||
          zxdg_output_v1_get_version(output->zxdg_output_v1) >= 3)
      {
@@ -65,7 +65,7 @@ index 901d1fa320e..dade1fc755e 100644
          wayland_output_done(output);
      }
  }
-@@ -333,6 +362,7 @@ static void zxdg_output_v1_handle_done(void *data,
+@@ -339,6 +368,7 @@ static void zxdg_output_v1_handle_done(void *data,
      if (zxdg_output_v1_get_version(zxdg_output_v1) < 3)
      {
          struct wayland_output *output = data;

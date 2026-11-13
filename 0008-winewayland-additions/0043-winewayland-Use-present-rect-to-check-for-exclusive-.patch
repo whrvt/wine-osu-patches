@@ -1,4 +1,4 @@
-From 78a1178aed91fd49ac7687e9806c8e41fc177268 Mon Sep 17 00:00:00 2001
+From 83c408c1fb586d60f94977fc196786df5c0f8c2d Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Thu, 2 Jul 2026 02:22:00 -0400
@@ -6,12 +6,12 @@ Subject: [PATCH] winewayland: Use present rect to check for exclusive
  fullscreen.
 
 ---
- dlls/winewayland.drv/wayland_surface.c | 50 +++++++++++++++++++++++---
- dlls/winewayland.drv/window.c          | 30 ----------------
- 2 files changed, 45 insertions(+), 35 deletions(-)
+ dlls/winewayland.drv/wayland_surface.c | 51 +++++++++++++++++++++++---
+ dlls/winewayland.drv/window.c          | 30 ---------------
+ 2 files changed, 45 insertions(+), 36 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index e15a825cc3e..d9757ccb083 100644
+index 40c7effaf8a..b9632cf0c19 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -1477,6 +1477,12 @@ static void wayland_client_surface_detach(struct client_surface *client)
@@ -27,16 +27,17 @@ index e15a825cc3e..d9757ccb083 100644
  static void wayland_client_surface_update(struct client_surface *client)
  {
      struct wayland_client_surface *surface = impl_from_client_surface(client);
-@@ -1485,7 +1491,7 @@ static void wayland_client_surface_update(struct client_surface *client)
+@@ -1484,8 +1490,7 @@ static void wayland_client_surface_update(struct client_surface *client)
      BOOL visible = FALSE;
  
      TRACE("%s\n", debugstr_client_surface(client));
--    if(toplevel) visible = NtUserIsWindowVisible(hwnd);
+-
+-    if (toplevel) visible = NtUserIsWindowVisible(hwnd);
 +    if (toplevel) visible = is_client_visible(hwnd);
-     if (!(data = wayland_win_data_get(hwnd))) return;
  
      if (toplevel && visible)
-@@ -1514,17 +1520,21 @@ static const struct wl_buffer_listener dummy_buffer_listener =
+         wayland_client_surface_attach(surface, toplevel, &client->monitor_rect);
+@@ -1511,17 +1516,21 @@ static const struct wl_buffer_listener dummy_buffer_listener =
   * Ensure that the wayland surface has up-to-date contents, by committing
   * a dummy buffer if necessary.
   */
@@ -61,7 +62,7 @@ index e15a825cc3e..d9757ccb083 100644
      /* overwrite the window contents with a transparent buffer for a few reasons:
       * 1. fullscreen window black background
       * 2. avoid alpha blending between client surface and toplevel */
-@@ -1587,7 +1597,7 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
+@@ -1584,7 +1593,7 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
  
      if ((wayland_surface = data->wayland_surface))
      {
@@ -70,7 +71,7 @@ index e15a825cc3e..d9757ccb083 100644
  
          /* Handle any processed configure request, to ensure the related
           * surface state is applied by the compositor. */
-@@ -1643,6 +1653,36 @@ static BOOL wayland_client_surface_set_color_space(struct client_surface *client
+@@ -1640,6 +1649,36 @@ static BOOL wayland_client_surface_set_color_space(struct client_surface *client
      return desc || color_space == -1;
  }
  

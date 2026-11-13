@@ -1,4 +1,4 @@
-From 10145b360d3f62332d95205824369f9f434075a0 Mon Sep 17 00:00:00 2001
+From 08ef4e84533ae6029e6fa22569364180f2385f66 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Tue, 21 Jul 2026 18:37:03 -0400
@@ -12,7 +12,7 @@ See mahkoh(slash)jay(slash)issues(slash)1124#issuecomment-5039483751
  2 files changed, 21 insertions(+), 8 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index ff04ccad1d9..5f93d6e56d7 100644
+index 802f9709bd7..61b58083bd2 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -1045,7 +1045,7 @@ static void wayland_surface_reconfigure_size(struct wayland_surface *surface,
@@ -48,7 +48,7 @@ index ff04ccad1d9..5f93d6e56d7 100644
  }
  
  /**********************************************************************
-@@ -1786,6 +1787,8 @@ struct client_surface *WAYLAND_CreateClientSurface(HWND hwnd, int pixel_format,
+@@ -1782,6 +1783,8 @@ struct client_surface *WAYLAND_CreateClientSurface(HWND hwnd, int pixel_format,
          }
      }
  
@@ -57,7 +57,7 @@ index ff04ccad1d9..5f93d6e56d7 100644
      return &client->client;
  
  err:
-@@ -1806,6 +1809,7 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
+@@ -1802,6 +1805,7 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
              client->wl_subsurface = NULL;
          }
  
@@ -65,7 +65,7 @@ index ff04ccad1d9..5f93d6e56d7 100644
          client->toplevel = 0;
          return;
      }
-@@ -1826,6 +1830,12 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
+@@ -1822,6 +1826,12 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
                                              surface->wl_surface);
          if (!client->wl_subsurface) goto done;
  
@@ -78,7 +78,7 @@ index ff04ccad1d9..5f93d6e56d7 100644
          /* Present contents independently of the parent surface. */
          wl_subsurface_set_desync(client->wl_subsurface);
  
-@@ -1834,9 +1844,11 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
+@@ -1830,9 +1840,11 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND t
          TRACE("Created subsurface for toplevel=%p\n", toplevel);
      }
  

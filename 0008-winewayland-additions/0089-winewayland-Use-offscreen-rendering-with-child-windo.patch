@@ -1,4 +1,4 @@
-From d553dc41fba88fcb577b1ad34fa2a8a38ad30806 Mon Sep 17 00:00:00 2001
+From 113b416c4c7e9ec2f577f0790b547678a003a830 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Sat, 15 Aug 2026 23:21:59 -0400
@@ -10,7 +10,7 @@ Subject: [PATCH] winewayland: Use offscreen rendering with child window
  1 file changed, 35 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 14c43a3dbe1..b7240356e61 100644
+index 93ef583b48a..1faee0f7814 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -1506,6 +1506,31 @@ static BOOL is_client_visible(HWND hwnd)
@@ -57,7 +57,7 @@ index 14c43a3dbe1..b7240356e61 100644
  
      InterlockedExchange(&surface->client.offscreen, offscreen);
  }
-@@ -1634,6 +1662,12 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
+@@ -1631,6 +1659,12 @@ static void wayland_client_surface_present(struct client_surface *client, HDC hd
  
      TRACE("%s %p\n", debugstr_client_surface(client), hdc);
  

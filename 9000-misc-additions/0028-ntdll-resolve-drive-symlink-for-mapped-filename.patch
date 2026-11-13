@@ -1,4 +1,4 @@
-From fe5ed099c2db87fa00d723e1b32891a2923c5fe4 Mon Sep 17 00:00:00 2001
+From 3f0521953d1d78d59ac0a503e91c8706ae8d323d Mon Sep 17 00:00:00 2001
 From: Matias Zuniga <matias.nicolas.zc@gmail.com>
 Date: Fri, 10 Sep 2021 19:25:02 -0300
 Subject: [PATCH] ntdll: resolve drive symlink for mapped filename
@@ -13,10 +13,10 @@ Signed-off-by: Matias Zuniga <matias.nicolas.zc@gmail.com>
  1 file changed, 89 insertions(+), 8 deletions(-)
 
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index 16224cbb5e6..27c0dc89e4a 100644
+index 97dcb492392..8e33f0dfa9b 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -130,6 +130,8 @@ struct file_view
+@@ -121,6 +121,8 @@ struct file_view
      unsigned int  protect;       /* protection for all pages at allocation time and SEC_* flags */
  };
  
@@ -25,7 +25,7 @@ index 16224cbb5e6..27c0dc89e4a 100644
  /* per-page protection flags */
  #define VPROT_READ       0x01
  #define VPROT_WRITE      0x02
-@@ -6121,34 +6123,113 @@ static NTSTATUS get_working_set_ex( HANDLE process, LPCVOID addr,
+@@ -5866,34 +5868,113 @@ static NTSTATUS get_working_set_ex( HANDLE process, LPCVOID addr,
      return STATUS_SUCCESS;
  }
  

@@ -1,4 +1,4 @@
-From 767396198f69a873a2acbcaf381e1fe08a60847a Mon Sep 17 00:00:00 2001
+From ca8459c26c17ce9aa205b68b2ba8a09eb3e6ab57 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Mon, 7 Sep 2026 14:15:34 -0500
@@ -11,10 +11,10 @@ Subject: [PATCH] winewayland: Move flash window to its own helper.
  3 files changed, 42 insertions(+), 27 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 3ce055a52d3..02e3405cfa4 100644
+index 062b5587a53..b1a192fca2d 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -2101,21 +2101,39 @@ static void xdg_activation_token_handle_done(void *user_data,
+@@ -2098,21 +2098,39 @@ static void xdg_activation_token_handle_done(void *user_data,
      struct wayland_win_data *data;
      struct wayland_surface *surface;
  
@@ -62,7 +62,7 @@ index 3ce055a52d3..02e3405cfa4 100644
  {
      struct wayland_seat *seat = &process_wayland.seat;
      struct xdg_activation_token_v1 *token;
-@@ -2126,9 +2144,9 @@ void wayland_surface_activate(struct wayland_surface *surface, BOOL activate)
+@@ -2123,9 +2141,9 @@ void wayland_surface_activate(struct wayland_surface *surface, BOOL activate)
      if (!wayland_surface_is_toplevel(surface)) return;
  
      /* fall back to the per process activation token */
@@ -74,7 +74,7 @@ index 3ce055a52d3..02e3405cfa4 100644
          free(process_activate_token);
          process_activate_token = NULL;
          return;
-@@ -2141,13 +2159,11 @@ void wayland_surface_activate(struct wayland_surface *surface, BOOL activate)
+@@ -2138,13 +2156,11 @@ void wayland_surface_activate(struct wayland_surface *surface, BOOL activate)
      }
  
      pthread_mutex_lock(&seat->mutex);

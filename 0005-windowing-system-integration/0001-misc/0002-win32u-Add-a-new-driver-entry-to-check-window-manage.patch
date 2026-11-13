@@ -1,4 +1,4 @@
-From ac4a4cf048b6e8db3e456e04dd7a4b85031234ab Mon Sep 17 00:00:00 2001
+From 8fb0351c729705aeb7fdec75cecc3dd5d3c715ae Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Tue, 3 Dec 2024 12:46:56 +0100
 Subject: [PATCH] win32u: Add a new driver entry to check window manager name.
@@ -11,7 +11,7 @@ Subject: [PATCH] win32u: Add a new driver entry to check window manager name.
  4 files changed, 20 insertions(+)
 
 diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
-index 4598ac715bf..326dacbfdfd 100644
+index 0328cd5ca74..bb40509c757 100644
 --- a/dlls/win32u/driver.c
 +++ b/dlls/win32u/driver.c
 @@ -785,6 +785,11 @@ static void nulldrv_FlashWindowEx( FLASHWINFO *info )
@@ -84,10 +84,10 @@ index 3eb40f8185c..60a04c049a3 100644
  {
      init_recursive_mutex( &win_data_mutex );
 diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
-index 4d7d71c6bbf..4bbc80c169c 100644
+index 1b431fe125f..cf671e710b6 100644
 --- a/include/wine/gdi_driver.h
 +++ b/include/wine/gdi_driver.h
-@@ -410,6 +410,7 @@ struct user_driver_funcs
+@@ -415,6 +415,7 @@ struct user_driver_funcs
      LRESULT (*pDesktopWindowProc)(HWND,UINT,WPARAM,LPARAM);
      void    (*pDestroyWindow)(HWND);
      void    (*pFlashWindowEx)(FLASHWINFO*);

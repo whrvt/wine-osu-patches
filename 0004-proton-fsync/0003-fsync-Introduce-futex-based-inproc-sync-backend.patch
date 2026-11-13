@@ -1,4 +1,4 @@
-From 9b2e6539a2cb3173e8b8dda469f40b0aabac4b5f Mon Sep 17 00:00:00 2001
+From 2cdfa9b82276773e1b62962330f3847c76ab360b Mon Sep 17 00:00:00 2001
 From: Paul Gofman <pgofman@codeweavers.com>
 Date: Wed, 17 Dec 2025 18:37:14 -0600
 Subject: [PATCH] fsync: Introduce futex-based inproc sync backend.
@@ -51,10 +51,10 @@ rather than the full alternative sync primitives implementation.
  create mode 100644 server/fsync.h
 
 diff --git a/configure.ac b/configure.ac
-index b0c6034851e..3bd99f6bf67 100644
+index a6642998027..93d42d6a943 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -731,6 +731,7 @@ AC_CHECK_HEADERS(\
+@@ -738,6 +738,7 @@ AC_CHECK_HEADERS(\
  	linux/errqueue.h \
  	linux/filter.h \
  	linux/fs.h \
@@ -63,10 +63,10 @@ index b0c6034851e..3bd99f6bf67 100644
  	linux/hidraw.h \
  	linux/input.h \
 diff --git a/dlls/ntdll/Makefile.in b/dlls/ntdll/Makefile.in
-index 9a15bc319a4..0a419e3751e 100644
+index 4c43b77134c..0145ed4f03d 100644
 --- a/dlls/ntdll/Makefile.in
 +++ b/dlls/ntdll/Makefile.in
-@@ -54,6 +54,7 @@ SOURCES = \
+@@ -53,6 +53,7 @@ SOURCES = \
  	unix/debug.c \
  	unix/env.c \
  	unix/file.c \
@@ -1356,7 +1356,7 @@ index 00000000000..cc12907fb6a
 +    return fsync_enabled;
 +}
 diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index 0d5aa450e44..d7b100a979f 100644
+index 026c7d0dcf9..91be1263378 100644
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
 @@ -84,6 +84,8 @@
@@ -1368,7 +1368,7 @@ index 0d5aa450e44..d7b100a979f 100644
  WINE_DEFAULT_DEBUG_CHANNEL(server);
  WINE_DECLARE_DEBUG_CHANNEL(syscall);
  
-@@ -1739,7 +1741,12 @@ void server_init_process( struct thread_data *data )
+@@ -1740,7 +1742,12 @@ void server_init_process( struct thread_data *data )
              startup_info_size = reply->info_size;
              server_start_time = reply->server_start;
              supported_machines_count = wine_server_reply_size( reply ) / sizeof(*supported_machines);
@@ -1383,7 +1383,7 @@ index 0d5aa450e44..d7b100a979f 100644
                  inproc_device_fd = wine_server_receive_fd( &handle );
                  assert( handle == reply->inproc_device );
 diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
-index ed87a461185..af9f1219bc5 100644
+index b8facc6e85d..733eaae650b 100644
 --- a/dlls/ntdll/unix/sync.c
 +++ b/dlls/ntdll/unix/sync.c
 @@ -72,6 +72,8 @@
@@ -1535,7 +1535,7 @@ index ed87a461185..af9f1219bc5 100644
             we never return STATUS_NO_YIELD_PERFORMED */
          if ((status = server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout )) == STATUS_TIMEOUT)
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index 39ca52f3815..81b49ab5bb0 100644
+index 1e4a5676698..a2a10ae6469 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
 @@ -123,6 +123,7 @@ struct thread_data
@@ -1558,7 +1558,7 @@ index 39ca52f3815..81b49ab5bb0 100644
  /* thread private data, stored in NtCurrentTeb()->GdiTebBatch */
  struct teb_data
  {
-@@ -260,6 +266,7 @@ extern unsigned int server_select( const union select_op *select_op, data_size_t
+@@ -261,6 +267,7 @@ extern unsigned int server_select( const union select_op *select_op, data_size_t
                                     timeout_t abs_timeout, struct context_data *context, struct user_apc *user_apc );
  extern unsigned int server_wait( const union select_op *select_op, data_size_t size, UINT flags,
                                   const LARGE_INTEGER *timeout );
@@ -1567,10 +1567,10 @@ index 39ca52f3815..81b49ab5bb0 100644
  extern unsigned int server_queue_process_apc( HANDLE process, const union apc_call *call,
                                                union apc_result *result );
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index 9dabc178834..16224cbb5e6 100644
+index 73ab4383ad4..97dcb492392 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -4061,6 +4061,7 @@ static struct thread_data *init_thread_data( void *ptr )
+@@ -3742,6 +3742,7 @@ static struct thread_data *init_thread_data( void *ptr )
      data->wait_fd[0] = -1;
      data->wait_fd[1] = -1;
      data->alert_fd   = -1;
@@ -2205,7 +2205,7 @@ index 46419a09cb4..7f3930ed31f 100644
      set_current_time();
      init_signals();
 diff --git a/server/process.c b/server/process.c
-index f1a8c065c76..0a0428da9bb 100644
+index 510faf190ed..bd81b765a3f 100644
 --- a/server/process.c
 +++ b/server/process.c
 @@ -64,6 +64,8 @@
@@ -2226,10 +2226,10 @@ index f1a8c065c76..0a0428da9bb 100644
      free( process->rawinput_devices );
      free( process->dir_cache );
 diff --git a/server/protocol.def b/server/protocol.def
-index 937cd4fb8e6..f30bb55849b 100644
+index 97d072c802c..a95fd5e58d2 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -4230,6 +4230,7 @@ enum inproc_sync_type
+@@ -4227,6 +4227,7 @@ enum inproc_sync_type
  @REPLY
      int           type;         /* inproc sync type */
      unsigned int access;        /* handle access rights */
@@ -2237,7 +2237,7 @@ index 937cd4fb8e6..f30bb55849b 100644
  @END
  
  
-@@ -4237,6 +4238,7 @@ enum inproc_sync_type
+@@ -4234,6 +4235,7 @@ enum inproc_sync_type
  @REQ(get_inproc_alert_fd)
  @REPLY
      obj_handle_t handle;        /* alert fd is in flight with this handle */
@@ -2245,7 +2245,7 @@ index 937cd4fb8e6..f30bb55849b 100644
  @END
  
  
-@@ -4362,3 +4364,24 @@ enum inproc_sync_type
+@@ -4377,3 +4379,24 @@ enum inproc_sync_type
  @REPLY
      client_ptr_t  target_root;                /* root IDCompositionVisual pointer for the target created from this shared visual */
  @END
@@ -2271,7 +2271,7 @@ index 937cd4fb8e6..f30bb55849b 100644
 +@REPLY
 +@END
 diff --git a/server/thread.c b/server/thread.c
-index 9518c1d13b8..7df857d5333 100644
+index 3628baf4b29..390564b04e8 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -60,6 +60,8 @@
@@ -2283,7 +2283,7 @@ index 9518c1d13b8..7df857d5333 100644
  
  /* thread queues */
  
-@@ -1770,7 +1772,11 @@ DECL_HANDLER(init_first_thread)
+@@ -1786,7 +1788,11 @@ DECL_HANDLER(init_first_thread)
      set_reply_data( supported_machines,
                      min( supported_machines_count * sizeof(unsigned short), get_reply_max_size() ));
  
@@ -2296,7 +2296,7 @@ index 9518c1d13b8..7df857d5333 100644
      {
          reply->inproc_device = get_process_id( process ) | 1;
          send_client_fd( process, fd, reply->inproc_device );
-@@ -2407,6 +2413,7 @@ DECL_HANDLER(get_inproc_alert_fd)
+@@ -2423,6 +2429,7 @@ DECL_HANDLER(get_inproc_alert_fd)
      int fd;
  
      if ((fd = get_inproc_sync_fd( current->alert_sync )) < 0) set_error( STATUS_INVALID_PARAMETER );

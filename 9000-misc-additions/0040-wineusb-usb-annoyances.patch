@@ -1,4 +1,4 @@
-From 351311de185983e4506b43676022684cd82837fa Mon Sep 17 00:00:00 2001
+From 214fde7d242ca7d52dee384086db18064b2301e2 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Sat, 18 Apr 2026 01:29:50 +0200
 Subject: [PATCH] wineusb usb annoyances
@@ -10,23 +10,23 @@ Subject: [PATCH] wineusb usb annoyances
  3 files changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winebus.sys/bus_udev.c b/dlls/winebus.sys/bus_udev.c
-index c636550d30c..9b240c47a90 100644
+index 21b51276379..1e9ac255078 100644
 --- a/dlls/winebus.sys/bus_udev.c
 +++ b/dlls/winebus.sys/bus_udev.c
-@@ -1390,6 +1390,12 @@ static void udev_add_device(struct udev_device *dev, int fd)
-         return;
-     }
+@@ -1413,6 +1413,12 @@ static void udev_add_device(struct udev_device *dev, int fd)
+ 
+     if (desc.bus_type == BUS_TYPE_USB) get_device_usb_info(dev, &desc);
  
 +    if (desc.vid == 0x31e3) /* prevents usb_main_loop crashing when a keyboard key is pressed (wooting/linux firmware bug?) */
 +    {
-+        close(fd);
 +        FIXME("not adding Wooting device\n");
++        goto failed;
 +    }
-+   
++
      if ((desc.is_hidraw = !strcmp(subsystem, "hidraw")) && !hidraw_device_create(dev, fd, devnode, desc)) return;
      if (!strcmp(subsystem, "input") && !lnxev_device_create(dev, fd, devnode, desc)) return;
-     close(fd);
-@@ -1783,7 +1789,7 @@ NTSTATUS udev_bus_init(void *args)
+ 
+@@ -1808,7 +1814,7 @@ NTSTATUS udev_bus_init(void *args)
  
      if (monitor_fd < 0 && !(udev_monitor = create_monitor(&monitor_fd)))
      {
@@ -36,10 +36,10 @@ index c636550d30c..9b240c47a90 100644
      }
  
 diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
-index 679b6d3d4c8..e59a65e877c 100644
+index f8b6007cd78..60c641e0dc7 100644
 --- a/dlls/winebus.sys/main.c
 +++ b/dlls/winebus.sys/main.c
-@@ -1185,7 +1185,7 @@ static void bus_options_init(void)
+@@ -1244,7 +1244,7 @@ static void bus_options_init(void)
  {
      options.disable_sdl = !check_bus_option(L"Enable SDL", 1);
      if (options.disable_sdl) TRACE("SDL devices disabled in registry\n");

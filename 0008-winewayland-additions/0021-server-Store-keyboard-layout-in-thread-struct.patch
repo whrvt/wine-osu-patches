@@ -1,4 +1,4 @@
-From 354b5e2f0980a998ede0d8ce03feea2ee2359836 Mon Sep 17 00:00:00 2001
+From e5da048b4c1447fcff5a8124908f5f478c7d988d Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Thu, 27 Nov 2025 16:38:54 -0600
@@ -12,10 +12,10 @@ Subject: [PATCH] server: Store keyboard layout in thread struct.
  4 files changed, 35 insertions(+)
 
 diff --git a/server/protocol.def b/server/protocol.def
-index f30bb55849b..0e711eaf92a 100644
+index a95fd5e58d2..fb11f30d041 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -3090,6 +3090,18 @@ enum coords_relative
+@@ -3112,6 +3112,18 @@ enum coords_relative
      obj_handle_t   handle;        /* handle to the desktop */
  @END
  
@@ -35,7 +35,7 @@ index f30bb55849b..0e711eaf92a 100644
  /* Set the thread current desktop */
  @REQ(set_thread_desktop)
 diff --git a/server/thread.c b/server/thread.c
-index 7df857d5333..2e99a3b9410 100644
+index 390564b04e8..2ad876c8eec 100644
 --- a/server/thread.c
 +++ b/server/thread.c
 @@ -380,6 +380,7 @@ static inline void init_thread_structure( struct thread *thread )

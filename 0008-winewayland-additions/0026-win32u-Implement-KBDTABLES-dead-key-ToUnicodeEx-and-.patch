@@ -1,4 +1,4 @@
-From bf7a44469a16cff1a16526a3af68b6c337dac1e3 Mon Sep 17 00:00:00 2001
+From 6ac04527ca8106e8419d9c6a419e75a5be8b1351 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 21 Jun 2024 13:29:40 +0200
 Subject: [PATCH] win32u: Implement KBDTABLES dead key ToUnicodeEx and
@@ -135,10 +135,10 @@ index 670e72d2986..843f5f325cd 100644
  
  /**********************************************************************
 diff --git a/dlls/win32u/ntuser_private.h b/dlls/win32u/ntuser_private.h
-index a13c01c3ffe..33057cd1fc3 100644
+index ab1e0cf2531..b8f0ed1b924 100644
 --- a/dlls/win32u/ntuser_private.h
 +++ b/dlls/win32u/ntuser_private.h
-@@ -126,6 +126,7 @@ struct user_thread_info
+@@ -127,6 +127,7 @@ struct user_thread_info
      INPUT                         mouse_motion;           /* accumulated hardware mouse motion */
      HWND                          mouse_hwnd;             /* hardware mouse motion target window */
      struct hardware_msg_data     *rawinput;               /* Current rawinput message data */

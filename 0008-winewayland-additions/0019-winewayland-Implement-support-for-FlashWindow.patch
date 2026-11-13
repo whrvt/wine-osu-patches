@@ -1,4 +1,4 @@
-From 129f5e78f18a8b7f428ec5840ede30678cbdc227 Mon Sep 17 00:00:00 2001
+From 5461f3415e7ea2eeb2d07798a29e3b05583513f1 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Mon, 9 Jun 2025 09:07:33 -0400
@@ -54,10 +54,10 @@ index 58597679f88..6e51e1d6917 100644
  
      return TRUE;
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 490d88247c1..c283dcbd641 100644
+index b730bf17412..ec4caa0db8b 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -1866,3 +1866,47 @@ void wayland_surface_set_opacity(struct wayland_surface *surface, BYTE alpha, UI
+@@ -1863,3 +1863,47 @@ void wayland_surface_set_opacity(struct wayland_surface *surface, BYTE alpha, UI
          wl_display_flush(process_wayland.wl_display);
      }
  }

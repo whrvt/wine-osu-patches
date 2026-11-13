@@ -1,4 +1,4 @@
-From 070ffcabb2150c93beb2dec4b974c7e30bcaf203 Mon Sep 17 00:00:00 2001
+From f8dfd17d077ce24cc9b01255244655f87da65a99 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:22:08 +0200
 Subject: [PATCH] appwiz: Add env. vars to skip mono/gecko installation.
@@ -8,7 +8,7 @@ Subject: [PATCH] appwiz: Add env. vars to skip mono/gecko installation.
  1 file changed, 10 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/appwiz.cpl/addons.c b/dlls/appwiz.cpl/addons.c
-index a01fd0f091d..50bd80f6694 100644
+index 1b5aa1929eb..cb8b70049ed 100644
 --- a/dlls/appwiz.cpl/addons.c
 +++ b/dlls/appwiz.cpl/addons.c
 @@ -79,6 +79,7 @@ typedef struct {
@@ -39,7 +39,7 @@ index a01fd0f091d..50bd80f6694 100644
      }
  };
  
-@@ -758,11 +761,16 @@ static INT_PTR CALLBACK installer_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
+@@ -760,11 +763,16 @@ static INT_PTR CALLBACK installer_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
  
  BOOL install_addon(addon_t addon_type)
  {

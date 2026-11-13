@@ -1,4 +1,4 @@
-From e68000bdfba2e146ad41017236d631d9e24d5b20 Mon Sep 17 00:00:00 2001
+From 6c9632228d50cda7f493b13118c88223712a295e Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Sat, 18 Apr 2026 01:32:40 +0200
 Subject: [PATCH] server: rename debug_level to _debug_level to hint branch
@@ -13,10 +13,10 @@ Subject: [PATCH] server: rename debug_level to _debug_level to hint branch
  5 files changed, 12 insertions(+), 7 deletions(-)
 
 diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
-index d7b100a979f..1324b0854b4 100644
+index 91be1263378..9d3662b4264 100644
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
-@@ -1729,7 +1729,7 @@ void server_init_process( struct thread_data *data )
+@@ -1730,7 +1730,7 @@ void server_init_process( struct thread_data *data )
          req->unix_tid    = get_unix_tid();
          req->reply_fd    = reply_pipe;
          req->wait_fd     = data->wait_fd[1];
@@ -69,10 +69,10 @@ index bc6456f53a3..8b38d0833dc 100644
  extern timeout_t master_socket_timeout;
  extern const char *server_argv0;
 diff --git a/server/protocol.def b/server/protocol.def
-index 0e711eaf92a..3a6155d5369 100644
+index fb11f30d041..aee80e2f6b6 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -1194,7 +1194,7 @@ typedef volatile struct
+@@ -1203,7 +1203,7 @@ typedef volatile struct
  @REQ(init_first_thread)
      int          unix_pid;     /* Unix pid of new process */
      int          unix_tid;     /* Unix tid of new thread */
@@ -82,10 +82,10 @@ index 0e711eaf92a..3a6155d5369 100644
      int          wait_fd;      /* fd for blocking calls pipe */
      unsigned int page_size;    /* client page size */
 diff --git a/server/thread.c b/server/thread.c
-index 2e99a3b9410..080f4286ef8 100644
+index 2ad876c8eec..421a7804d81 100644
 --- a/server/thread.c
 +++ b/server/thread.c
-@@ -1763,7 +1763,7 @@ DECL_HANDLER(init_first_thread)
+@@ -1779,7 +1779,7 @@ DECL_HANDLER(init_first_thread)
  
      set_thread_base_priority( current, current->base_priority );
  

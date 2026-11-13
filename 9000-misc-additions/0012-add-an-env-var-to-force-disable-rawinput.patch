@@ -1,4 +1,4 @@
-From b42250efa3cdbf45f97f9b771ba86d26869857d4 Mon Sep 17 00:00:00 2001
+From e0a83ad080f7ab6531b4e32577f3d9cf3ebe6e52 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Mon, 4 Nov 2024 01:25:35 -0800
 Subject: [PATCH] add an env var to force disable rawinput.
@@ -10,10 +10,10 @@ Subject: [PATCH] add an env var to force disable rawinput.
  3 files changed, 37 insertions(+)
 
 diff --git a/dlls/win32u/rawinput.c b/dlls/win32u/rawinput.c
-index f33a9b56aeb..89ad959ecd2 100644
+index 1430d357297..f39ad86c66a 100644
 --- a/dlls/win32u/rawinput.c
 +++ b/dlls/win32u/rawinput.c
-@@ -326,6 +326,11 @@ static struct device *find_device_from_handle( HANDLE handle, BOOL refresh )
+@@ -348,6 +348,11 @@ static struct device *find_device_from_handle( HANDLE handle, BOOL refresh )
   */
  UINT WINAPI NtUserGetRawInputDeviceList( RAWINPUTDEVICELIST *device_list, UINT *device_count, UINT size )
  {
@@ -25,7 +25,7 @@ index f33a9b56aeb..89ad959ecd2 100644
      unsigned int count = 0;
      struct device *device;
  
-@@ -660,6 +665,11 @@ static void register_rawinput_device( const RAWINPUTDEVICE *device )
+@@ -682,6 +687,11 @@ static void register_rawinput_device( const RAWINPUTDEVICE *device )
   */
  BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT device_count, UINT device_size )
  {
@@ -37,7 +37,7 @@ index f33a9b56aeb..89ad959ecd2 100644
      struct rawinput_device *server_devices;
      RAWINPUTDEVICE *new_registered_devices;
      SIZE_T size;
-@@ -750,6 +760,11 @@ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT d
+@@ -772,6 +782,11 @@ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT d
   */
  UINT WINAPI NtUserGetRegisteredRawInputDevices( RAWINPUTDEVICE *devices, UINT *device_count, UINT device_size )
  {
@@ -50,10 +50,10 @@ index f33a9b56aeb..89ad959ecd2 100644
  
      TRACE( "devices %p, device_count %p, device_size %u\n", devices, device_count, device_size );
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index 2c92515a01c..5e620d54809 100644
+index 16493b600a2..3a0aa6b59fa 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
-@@ -460,6 +460,17 @@ static inline const char *debugstr_color( COLORREF color )
+@@ -475,6 +475,17 @@ static inline const char *debugstr_color( COLORREF color )
      return wine_dbg_sprintf( "RGB(%02x,%02x,%02x)", GetRValue(color), GetGValue(color), GetBValue(color) );
  }
  
@@ -72,10 +72,10 @@ index 2c92515a01c..5e620d54809 100644
  {
      dst->left   = max( src1->left, src2->left );
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 35c0f23a4b6..558ba1b7e15 100644
+index 17788ba3bc2..0c8b3404769 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -1046,6 +1046,17 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
+@@ -1047,6 +1047,17 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
      while (len--) *dst++ = (unsigned char)*src++;
  }
  

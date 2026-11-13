@@ -1,4 +1,4 @@
-From 8a833fe63e6f127cdfec1f2d0a9365ef4992fb09 Mon Sep 17 00:00:00 2001
+From 483b2964a3e6ed1d85c88b4a83f553d70f36462b Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Tue, 10 Sep 2024 07:23:38 -0700
 Subject: [PATCH] winex11: Force disable glXWaitForSbcOML (AMD) on Wayland to
@@ -61,10 +61,10 @@ index 7bcd9bba6e7..8fdd3361fc7 100644
      UINT effect;
  
 diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
-index 8b9f6b072bd..cb1bc15487a 100644
+index ed7d52ccf19..2b1d57677c4 100644
 --- a/dlls/winex11.drv/opengl.c
 +++ b/dlls/winex11.drv/opengl.c
-@@ -733,7 +733,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
+@@ -732,7 +732,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
  
      if (has_extension( glxExtensions, "GLX_OML_sync_control" ))
      {
@@ -75,10 +75,10 @@ index 8b9f6b072bd..cb1bc15487a 100644
      }
  
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index fa3a0f2b583..35c0f23a4b6 100644
+index cec86510edf..17788ba3bc2 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -1019,7 +1019,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
+@@ -1020,7 +1020,19 @@ static inline BOOL intersect_rect( RECT *dst, const RECT *src1, const RECT *src2
      dst->bottom = min( src1->bottom, src2->bottom );
      return !IsRectEmpty( dst );
  }

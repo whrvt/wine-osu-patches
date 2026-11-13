@@ -1,4 +1,4 @@
-From 29c1a94e4a6f9a58da8d93bc302f1915ebe914de Mon Sep 17 00:00:00 2001
+From 3f093afae3b909afbfc8c440c8c0b0bc376e4fe6 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Fri, 17 Apr 2026 20:35:31 -0500
@@ -186,7 +186,7 @@ index 437989fda3e..f80ab20cd4c 100644
  
      return TRUE;
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 19707f34fbe..cef832e1efd 100644
+index dbaaae763db..0e2ad51ecc1 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -1350,6 +1350,8 @@ static void wayland_client_surface_destroy(struct client_surface *client)
@@ -198,7 +198,7 @@ index 19707f34fbe..cef832e1efd 100644
      if (surface->wp_viewport)
          wp_viewport_destroy(surface->wp_viewport);
      if (surface->wl_subsurface)
-@@ -1588,6 +1590,21 @@ struct client_surface *WAYLAND_CreateClientSurface(HWND hwnd, int pixel_format,
+@@ -1585,6 +1587,21 @@ struct client_surface *WAYLAND_CreateClientSurface(HWND hwnd, int pixel_format,
          goto err;
      }
  

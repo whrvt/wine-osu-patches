@@ -1,4 +1,4 @@
-From 592b68c130c11ef87126ff0d76963f927793681a Mon Sep 17 00:00:00 2001
+From 68da0ac3be1b8e495a1e3ef809f671fca9cee175 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Sat, 18 Jul 2026 02:21:38 -0400
@@ -13,10 +13,10 @@ Works around driver limitations.
  4 files changed, 55 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/opengl.c b/dlls/win32u/opengl.c
-index 5267f75b711..8073e92c7d9 100644
+index bd9b635ebd4..288ad091917 100644
 --- a/dlls/win32u/opengl.c
 +++ b/dlls/win32u/opengl.c
-@@ -1540,10 +1540,19 @@ static BOOL egldrv_context_activate( struct opengl_context *context, struct open
+@@ -1625,10 +1625,19 @@ static BOOL egldrv_context_activate( struct opengl_context *context, struct open
  {
      const struct opengl_funcs *funcs = &display_funcs;
      const struct egl_platform *egl = &display_egl;
@@ -38,7 +38,7 @@ index 5267f75b711..8073e92c7d9 100644
  
  static void egldrv_pbuffer_destroy( struct opengl_drawable *drawable )
 diff --git a/dlls/winewayland.drv/opengl.c b/dlls/winewayland.drv/opengl.c
-index b9d56f8c9ea..e9de0a4d133 100644
+index fb45cf1f62e..1c0e227068b 100644
 --- a/dlls/winewayland.drv/opengl.c
 +++ b/dlls/winewayland.drv/opengl.c
 @@ -104,6 +104,8 @@ static BOOL wayland_opengl_surface_create(struct client_surface *client, int for
@@ -107,7 +107,7 @@ index b9d56f8c9ea..e9de0a4d133 100644
  
      return TRUE;
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index e5f7823a3d5..c0ffc790021 100644
+index 41eeb8b4214..aecbdef6699 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
 @@ -1481,6 +1481,10 @@ static void wayland_client_surface_destroy(struct client_surface *client)

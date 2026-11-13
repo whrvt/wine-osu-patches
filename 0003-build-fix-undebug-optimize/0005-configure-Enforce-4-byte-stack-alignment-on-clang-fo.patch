@@ -1,4 +1,4 @@
-From 9373456f7b3f3e34e048d1af0d0d336d814526e8 Mon Sep 17 00:00:00 2001
+From 827e27e6fa0b864aba46eca7e8db8f4a45201f5a Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 22 Nov 2024 10:31:07 -0800
 Subject: [PATCH] configure: Enforce 4-byte stack alignment on clang for PE
@@ -12,10 +12,10 @@ https://linux.kernel.narkive.com/y7hAplfS/patch-x86-build-specify-stack-alignmen
  1 file changed, 1 insertion(+)
 
 diff --git a/configure.ac b/configure.ac
-index b63f3c391c9..0e7bdc99eb3 100644
+index fc62f55d3f5..14668d58a7d 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -620,6 +620,7 @@ Please install mingw-w64, clang/llvm-dlltool/lld, or llvm-mingw.])
+@@ -624,6 +624,7 @@ Please install mingw-w64, clang/llvm-dlltool/lld, or llvm-mingw.])
  
      case $wine_arch in
        i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])

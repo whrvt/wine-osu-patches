@@ -1,4 +1,4 @@
-From 0385a822103e57c6c153d3852ab30a2a138ec4b7 Mon Sep 17 00:00:00 2001
+From cd996d6c34ec26c3e042433e3d1e4a8514052a05 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Fri, 18 Sep 2026 17:59:37 -0500
@@ -9,10 +9,10 @@ Subject: [PATCH] winewayland: always unref the dummy buffer immediately.
  1 file changed, 2 insertions(+)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 989070d1a9c..c32e5fdc8ba 100644
+index c05294b1891..acfa0b1bd05 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -1730,6 +1730,8 @@ static BOOL wayland_surface_ensure_contents(struct wayland_surface *surface, BOO
+@@ -1727,6 +1727,8 @@ static BOOL wayland_surface_ensure_contents(struct wayland_surface *surface, BOO
                             dummy_shm_buffer);
  
      wayland_surface_attach_shm(surface, dummy_shm_buffer, damage);

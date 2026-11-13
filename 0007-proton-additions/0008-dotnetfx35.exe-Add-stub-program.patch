@@ -1,4 +1,4 @@
-From 771aa5404af57f5bee341d4d30b1b0de190ffc0b Mon Sep 17 00:00:00 2001
+From 921e7f16e9f342f223171e001b6e67f7fae479be Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Fri, 16 Oct 2020 23:37:09 +0200
 Subject: [PATCH] dotnetfx35.exe: Add stub program.
@@ -15,10 +15,10 @@ execution somehow.
  create mode 100644 programs/dotnetfx35/main.c
 
 diff --git a/configure.ac b/configure.ac
-index 3bd99f6bf67..854f4dbe783 100644
+index 93d42d6a943..5f0d727faa8 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3598,6 +3598,7 @@ WINE_CONFIG_MAKEFILE(programs/control)
+@@ -3535,6 +3535,7 @@ WINE_CONFIG_MAKEFILE(programs/control)
  WINE_CONFIG_MAKEFILE(programs/cscript)
  WINE_CONFIG_MAKEFILE(programs/dism)
  WINE_CONFIG_MAKEFILE(programs/dllhost)

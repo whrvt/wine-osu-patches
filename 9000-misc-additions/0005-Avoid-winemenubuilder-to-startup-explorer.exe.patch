@@ -1,4 +1,4 @@
-From f447a3d83c238bb68bc2dd7296254673f80df5d2 Mon Sep 17 00:00:00 2001
+From f6c468beaabcff8483335e3cf4f74546be3a1617 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Sat, 12 Dec 2020 22:36:59 +0100
 Subject: [PATCH] Avoid winemenubuilder to startup explorer.exe.
@@ -50,10 +50,10 @@ index 2922063106f..98c89c9498a 100644
          return TRUE;
      }
 diff --git a/programs/winemenubuilder/winemenubuilder.c b/programs/winemenubuilder/winemenubuilder.c
-index 281e02f63d4..70526b89e9f 100644
+index bed26d54bca..5e2776b43a9 100644
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
-@@ -2882,6 +2882,17 @@ int PASCAL wWinMain (HINSTANCE hInstance, HINSTANCE prev, LPWSTR cmdline, int sh
+@@ -2884,6 +2884,17 @@ int PASCAL wWinMain (HINSTANCE hInstance, HINSTANCE prev, LPWSTR cmdline, int sh
      if (!init_xdg())
          return 1;
  

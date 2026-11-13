@@ -1,4 +1,4 @@
-From ea5b65635c19f06ebde1a53d595dc4dd7fc5fdf1 Mon Sep 17 00:00:00 2001
+From a704f5fef6df8d0f51ac3903f6f3a4e3b027da08 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Wed, 29 Jan 2025 23:57:29 -0800
 Subject: [PATCH] makedep: Use absolute paths for the compile_commands
@@ -10,10 +10,10 @@ Subject: [PATCH] makedep: Use absolute paths for the compile_commands
  2 files changed, 59 insertions(+), 1 deletion(-)
 
 diff --git a/tools/makedep.c b/tools/makedep.c
-index 79abf274d3c..210012bb4a5 100644
+index da1e82dc5e6..467c53fd3c9 100644
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -818,6 +818,33 @@ static char *get_line( FILE *file )
+@@ -820,6 +820,33 @@ static char *get_line( FILE *file )
      }
  }
  
@@ -57,7 +57,7 @@ index 79abf274d3c..210012bb4a5 100644
          output( "\",\n" );
          output( "    \"file\": \"%s\",\n", cmd->source );
 diff --git a/tools/tools.h b/tools/tools.h
-index 8a121fd57c7..50aaccea2c0 100644
+index 69ce404503a..a1f7328b7c3 100644
 --- a/tools/tools.h
 +++ b/tools/tools.h
 @@ -416,6 +416,37 @@ static inline char *build_relative_path( const char *base, const char *from, con

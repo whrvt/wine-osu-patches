@@ -1,4 +1,4 @@
-From 10a075c34d3ebe69db3999a78796624da8f2c72d Mon Sep 17 00:00:00 2001
+From 247779391e252ad2a4e90e4a2e2fd513725ed7ec Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Wed, 1 Oct 2025 12:52:35 -0500
@@ -15,12 +15,12 @@ Co-Authored-By: Rémi Bernon <rbernon@codeweavers.com>
  3 files changed, 187 insertions(+), 8 deletions(-)
 
 diff --git a/configure.ac b/configure.ac
-index 82d0e9d6886..dccd71f70a2 100644
+index c9a197706d4..6aa43c8ff4e 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1440,7 +1440,8 @@ then
-                             [`test -n "$PKG_CONFIG" && $PKG_CONFIG --variable=wayland_scanner wayland-scanner 2>/dev/null`])],
-               [WAYLAND_CLIENT_LIBS=""])])])
+@@ -1447,7 +1447,8 @@ then
+     AC_PATH_PROG(WAYLAND_SCANNER,wayland-scanner,
+                  [`test -n "$PKG_CONFIG" && $PKG_CONFIG --variable=wayland_scanner wayland-scanner 2>/dev/null`])
      WINE_PACKAGE_FLAGS(XKBCOMMON,[xkbcommon],,,,
 -        [AC_CHECK_FUNC(xkb_context_new,[:],[XKBCOMMON_LIBS=""])])
 +        [AC_CHECK_HEADERS([xkbcommon/xkbcommon.h xkbcommon/xkbcommon-compose.h])

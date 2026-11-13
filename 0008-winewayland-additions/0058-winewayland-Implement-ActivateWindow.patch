@@ -1,4 +1,4 @@
-From 15e0a93fb666ab921c1b8da8977919db7087f0f6 Mon Sep 17 00:00:00 2001
+From a6be59d777280dc1490952c6f27a0fae132d5405 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Fri, 17 Jul 2026 03:13:31 -0400
@@ -13,10 +13,10 @@ Finally we do this without hacks :)
  4 files changed, 66 insertions(+), 16 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index ea52bbc7a03..e5f7823a3d5 100644
+index 13759079980..41eeb8b4214 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -1958,7 +1958,6 @@ static void xdg_activation_token_handle_done(void *user_data,
+@@ -1954,7 +1954,6 @@ static void xdg_activation_token_handle_done(void *user_data,
      struct wayland_win_data *data;
      struct wayland_surface *surface;
  
@@ -24,7 +24,7 @@ index ea52bbc7a03..e5f7823a3d5 100644
      if ((data = wayland_win_data_get(hwnd)))
      {
          if ((surface = data->wayland_surface))
-@@ -1966,32 +1965,47 @@ static void xdg_activation_token_handle_done(void *user_data,
+@@ -1962,32 +1961,47 @@ static void xdg_activation_token_handle_done(void *user_data,
          wayland_win_data_release(data);
      }
  

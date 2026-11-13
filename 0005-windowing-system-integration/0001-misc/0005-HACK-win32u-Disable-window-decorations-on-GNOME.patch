@@ -1,4 +1,4 @@
-From 5a8e9a6d93fde3c89338c00828700e076371369b Mon Sep 17 00:00:00 2001
+From beefbae9f1b6771ac4a9e6c57e8e895c0970a72d Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Wed, 25 Feb 2026 13:08:14 +0100
 Subject: [PATCH] HACK: win32u: Disable window decorations on GNOME.
@@ -10,10 +10,10 @@ on GNOME: disabling them to prevent such issues.
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 16466d067fa..2dbad43dd4b 100644
+index c20412e7bf0..3ec0c560714 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -2143,7 +2143,8 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
+@@ -2149,7 +2149,8 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
      RECT visible_rect, rect = {0};
  
      if (get_present_rect( hwnd, &rect, get_thread_dpi() )) return rect;

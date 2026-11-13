@@ -1,4 +1,4 @@
-From d8e0211fcb8be1ae20066439ee1e427ffe04a5a4 Mon Sep 17 00:00:00 2001
+From 7f5d247ddc981477d2207d4dde62fa2a16a9659b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sat, 11 Jan 2025 10:43:59 +0100
 Subject: [PATCH] include: Fix __readfsdword declaration for clang.
@@ -8,10 +8,10 @@ Subject: [PATCH] include: Fix __readfsdword declaration for clang.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/include/winnt.h b/include/winnt.h
-index f61df41616e..d77e06faa9d 100644
+index 508304dedce..88fa1dc5b16 100644
 --- a/include/winnt.h
 +++ b/include/winnt.h
-@@ -2590,7 +2590,7 @@ static FORCEINLINE struct _TEB * WINAPI NtCurrentTeb(void)
+@@ -2720,7 +2720,7 @@ static FORCEINLINE struct _TEB * WINAPI NtCurrentTeb(void)
      return teb;
  }
  #elif defined(__i386__) && defined(_MSC_VER)
