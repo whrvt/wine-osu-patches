@@ -1,4 +1,4 @@
-From b9f239a2672e1b1acb9cc223764823f801c8e3b1 Mon Sep 17 00:00:00 2001
+From 2f4ceca7035f7ede6d4b8bcfcab22af6768a953b Mon Sep 17 00:00:00 2001
 From: winebuild <wine@build.dev>
 Date: Mon, 29 Jun 2026 23:10:31 +0200
 Subject: [PATCH] winex11, winewayland: Add an opt-in absolute tablet input
@@ -6,6 +6,8 @@ Subject: [PATCH] winex11, winewayland: Add an opt-in absolute tablet input
 
 Avoid pointer grabs, warps, and Wayland constraints that block absolute tablet input.
 Enable with WINE_ABS_TABLET or WINE_ENABLE_ABS_TABLET_HACK.
+Based on an original patch by the goat William Horvath.
+
 ---
  dlls/winewayland.drv/wayland_pointer.c | 14 ++++++++++++++
  dlls/winex11.drv/mouse.c               |  5 +++++
@@ -15,7 +17,7 @@ Enable with WINE_ABS_TABLET or WINE_ENABLE_ABS_TABLET_HACK.
  5 files changed, 33 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_pointer.c b/dlls/winewayland.drv/wayland_pointer.c
-index 4b0a3322a4c..575ca6858f7 100644
+index db6270d7296..634469c1f36 100644
 --- a/dlls/winewayland.drv/wayland_pointer.c
 +++ b/dlls/winewayland.drv/wayland_pointer.c
 @@ -37,6 +37,16 @@
@@ -35,7 +37,7 @@ index 4b0a3322a4c..575ca6858f7 100644
  /* The cursor-shape-v1 protocol file references the zwp_tablet_tool_v2
   * interface object. Since we don't currently use the tablet protocol,
   * provide a dummy object here to avoid linking errors. */
-@@ -1042,6 +1052,8 @@ static BOOL wayland_pointer_update_constraint(struct wl_surface *wl_surface,
+@@ -1054,6 +1064,8 @@ static void wayland_pointer_update_constraint(struct wl_surface *wl_surface,
      needs_confine = wl_surface && confine_rect && is_visible && !force_lock &&
                      pointer->wl_pointer;
  
@@ -44,15 +46,15 @@ index 4b0a3322a4c..575ca6858f7 100644
      if (!needs_confine && pointer->zwp_confined_pointer_v1)
      {
          TRACE("Unconfining from hwnd=%p\n", pointer->constraint_hwnd);
-@@ -1169,6 +1181,8 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
+@@ -1165,6 +1177,8 @@ BOOL WAYLAND_SetCursorPos(INT x, INT y)
+ {
      struct wayland_pointer *pointer = &process_wayland.pointer;
-     POINT pt = {.x = x, .y = y}, surface_pt;
  
 +    if (abs_tablet_hack_enabled()) return TRUE;
 +
-     /* It doesn't make sense to warp a locked pointer, and
-      * reapply_cursor_clippping may not lead to a pClipCursor under all conditions.
-      * Therefore, we need pointer warp handling here but only when the pointer is not locked. */
+     pthread_mutex_lock(&pointer->mutex);
+     if (pointer->relative_mode)
+     {
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
 index c42c492707e..1be99e07a1b 100644
 --- a/dlls/winex11.drv/mouse.c
@@ -99,7 +101,7 @@ index 3ec077d779e..30468b90f79 100644
          release_win_data( data );
      }
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 573ffab017d..75f9d963810 100644
+index 37e21902065..7a9f7f56aed 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -481,6 +481,8 @@ extern XPixmapFormatValues **pixmap_formats;
